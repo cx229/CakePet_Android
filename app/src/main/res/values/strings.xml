@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">CakePet</string>
+    <string name="start">启动 / 召回宠物</string>
+    <string name="settings">设置</string>
+</resources>
