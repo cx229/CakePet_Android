@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView android:id="@+id/act_back" android:layout_width="match_parent"
+        android:layout_height="48dp" android:gravity="center_vertical"
+        android:text="‹ 返回" android:textSize="15dp" android:textColor="#888888"/>
+
+    <!-- 行1：静坐 / 炸毛 / 摇头 -->
+    <LinearLayout android:layout_width="match_parent"
+        android:layout_height="56dp" android:orientation="horizontal"
+        android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
+        <TextView android:id="@+id/act_sit_clam" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:text="静坐"
+            android:textSize="16dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/act_puffed" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:text="炸毛"
+            android:textSize="16dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/act_shake_head" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:text="摇头"
+            android:textSize="16dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+    </LinearLayout>
+
+    <!-- 行2：躺平 -->
+    <LinearLayout android:layout_width="match_parent"
+        android:layout_height="56dp" android:orientation="horizontal"
+        android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
+        <TextView android:id="@+id/act_lie" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:text="躺平"
+            android:textSize="16dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+    </LinearLayout>
+
+    <!-- 行3：散步 / 蠕动 -->
+    <LinearLayout android:layout_width="match_parent"
+        android:layout_height="56dp" android:orientation="horizontal"
+        android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
+        <TextView android:id="@+id/act_walk" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:text="散步"
+            android:textSize="16dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/act_wriggle" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:text="蠕动"
+            android:textSize="16dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+    </LinearLayout>
+
+    <!-- 行4：探头 / 美白 / 扒鱼 -->
+    <LinearLayout android:layout_width="match_parent"
+        android:layout_height="56dp" android:orientation="horizontal"
+        android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
+        <TextView android:id="@+id/act_probe_head" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:text="探头"
+            android:textSize="16dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/act_white" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:text="美白"
+            android:textSize="16dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/act_pull_fish" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:text="扒鱼"
+            android:textSize="16dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,26 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.dm
+*.dex
+
+# Gradle / build output
+.gradle/
+/build/
+app/build/
+local.properties
+output-metadata.json
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# Release artifacts (build outputs, not source)
+app/release/
+
+# OS
+Thumbs.db

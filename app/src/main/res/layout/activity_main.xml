@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:padding="32dp">
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+    <ImageView
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:src="@drawable/app_icon"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textSize="28dp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="未授权"
+        android:textSize="16dp"
+        android:layout_marginBottom="24dp"/>
+
+    <LinearLayout
+        android:id="@+id/btn_start"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="52dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/bg_btn_primary"
+        android:paddingVertical="8dp"
+        android:stateListAnimator="@null"
+        android:elevation="4dp"
+        android:layout_marginBottom="14dp">
+        <TextView
+            android:id="@+id/btn_start_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/start"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.02"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="双击「芝麻酥」，摸摸头"
+            android:textSize="8dp"
+            android:textColor="#CCFFFFFF"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/btn_settings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="52dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/bg_btn_outline"
+        android:paddingVertical="8dp"
+        android:stateListAnimator="@null"
+        android:elevation="0dp">
+        <TextView
+            android:id="@+id/btn_settings_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings"
+            android:textColor="#FF000000"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.02"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="看懂了设置，才知道怎么投喂「芝麻酥」"
+            android:textSize="8dp"
+            android:textColor="#80000000"/>
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="存在大于本质，但小鱼干先大于一切"
+        android:textSize="13dp"
+        android:layout_marginTop="32dp"
+        android:gravity="center"/>
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="初心丶CX"
+        android:textSize="12dp"
+        android:textColor="#80000000"
+        android:layout_marginBottom="8dp"
+        android:gravity="center"/>
+</LinearLayout>
