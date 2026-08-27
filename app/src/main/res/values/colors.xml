@@ -7,4 +7,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- 开关关闭态滑块（浅灰，与开启纯黑区分） -->
+    <color name="switch_off_thumb">#FFBDBDBD</color>
 </resources>

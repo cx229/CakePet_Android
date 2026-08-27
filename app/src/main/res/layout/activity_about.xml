@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <!-- 状态栏占位条：纯黑，高度由 Activity 按真实状态栏高度设置，与标题栏连成整体覆盖状态栏 -->
+    <View android:id="@+id/status_bar_spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="#000000" />
+
+    <!-- 标题栏：黑底，紧跟占位条之下，标题文字在状态栏下方完整显示 -->
+    <LinearLayout android:id="@+id/title_bar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#000000">
+
+        <ImageView android:id="@+id/iv_back"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_menu_revert"
+            android:padding="12dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="返回"/>
+
+        <TextView android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="关于"
+            android:textSize="20dp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView android:id="@+id/tv_version"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="版本："
+                android:textSize="16dp" android:layout_marginBottom="12dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="角色：崩铁-刃-芝麻酥"
+                android:textSize="16dp" android:layout_marginBottom="12dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="作者：初心丶CX"
+                android:textSize="16dp" android:layout_marginBottom="12dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="感谢："
+                android:textSize="16dp" android:layout_marginBottom="4dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="部分图片素材：芝麻酥促销（半江离）"
+                android:textSize="16dp" android:layout_marginBottom="4dp" android:layout_marginStart="12dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="部分桌宠逻辑：Shimeji（Kilkakon）"
+                android:textSize="16dp" android:layout_marginStart="12dp"/>
+
+            <!-- ===== 调试（页尾） ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="调试" style="@style/SettingsOptionTitle"
+                android:layout_marginTop="24dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="左下调试信息" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_debug" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="矩形调试层" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_rect" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

@@ -3,17 +3,17 @@ plugins {
 }
 
 android {
-    namespace = "com.example.cakepet"
+    namespace = "com.cx.cakepet"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.cakepet"
-        minSdk = 33
+        applicationId = "com.cx.cakepet"
+        minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 126825
+        versionName = "1.26.8.25"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

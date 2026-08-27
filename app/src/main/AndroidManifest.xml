@@ -4,6 +4,8 @@
 
     <!-- 浮窗权限（安卓核心） -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 长按振动提示（普通权限，安装即授予） -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -13,9 +15,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/app_icon"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/app_icon"
         android:supportsRtl="true"
         android:theme="@style/Theme.CakePet">
 
@@ -30,19 +32,25 @@
 
         <activity
             android:name=".SettingsActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
 
         <activity
-            android:name=".MenuActivity"
+            android:name=".AboutActivity"
             android:exported="false"
-            android:theme="@style/Theme.CakePet.Transparent"
-            tools:ignore="AppLinkUrlError" />
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".RandomSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
 
         <service
             android:name=".PetService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
-            tools:ignore="ForegroundServiceType">
+            tools:ignore="ForegroundServiceType"
+            tools:targetApi="34">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="cakepet_overlay" />
