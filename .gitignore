@@ -1,12 +1,12 @@
 # ===== Gradle / Kotlin / 构建缓存 =====
 .gradle/
-.kotlin/         # Kotlin Gradle 插件缓存（截图中有，必须加）
-build/            # 根目录构建
-**/build         # 所有模块构建
-local.properties # SDK路径，每人不同
+.kotlin/
+build/
+**/build
+local.properties
 
-# ===== Gradle Wrapper / 脚本（这些必须提交，不要加进忽略） =====
-# gradlew, gradlew.bat, gradle/wrapper/ 
+# ===== Gradle Wrapper（需要提交，不要忽略）=====
+# gradlew, gradlew.bat, gradle/wrapper/
 
 # ===== Android 构建产物 =====
 *.apk
@@ -15,7 +15,7 @@ local.properties # SDK路径，每人不同
 *.dex
 *.ap_
 output-metadata.json
-/release
+**/release
 /captures
 .externalNativeBuild
 .cxx
@@ -23,11 +23,10 @@ out/
 
 # ===== Android Studio / IntelliJ =====
 *.iml
-.idea/            # 直接忽略整个文件夹，避免多端冲突
-# 若需共享代码样式，可取消下句注释：!.idea/codeStyles/
+.idea/
 .navigation/
 
-# ===== 日志与临时/草稿文件（适配你的 _ 前缀习惯） =====
+# ===== 日志与临时文件 =====
 *.log
 _*.ps1
 _*.txt
@@ -37,18 +36,18 @@ _*.bak
 
 # ===== 操作系统 =====
 .DS_Store
-Thumbs.db         # Windows 缩略图
+Thumbs.db
 ehthumbs.db
 *.swp
 *.swo
 
-# ===== 签名与密钥（安全） =====
+# ===== 签名与密钥 =====
 *.jks
 *.keystore
 signing.properties
 # keystore.properties
 
-# ===== 第三方服务（视仓库公私决定） =====
+# ===== 第三方服务 =====
 # google-services.json
 # firebase-debug.json
 
