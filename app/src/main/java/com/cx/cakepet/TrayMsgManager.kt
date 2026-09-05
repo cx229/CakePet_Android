@@ -1,7 +1,9 @@
 package com.cx.cakepet
 
 import android.content.Context
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
@@ -69,13 +71,20 @@ class TrayMsgManager(private val context: Context) {
 
         )
 
-        // 空状态持续时长范围（ms）：每条有文字之后必定进入空状态，2-15s 随机
-        private const val EMPTY_MIN_MS = 2000L
-        private const val EMPTY_MAX_MS = 15000L
+        // 文字默认样式（未读取到配置时的兜底值，实际由 applyStyle() 覆盖）
+        private const val DEFAULT_TEXT_SIZE_DP = 10f
+        private const val DEFAULT_TEXT_COLOR = 0xFF333333.toInt()
+
+        // 空白时长边界（秒）：与设置页 RangeSlider 的 1-60s 保持一致，防止脏数据导致随机区间非法
+        private const val EMPTY_LIMIT_MIN_S = 1
+        private const val EMPTY_LIMIT_MAX_S = 60
 
         // 启动后第一条固定文案（程序打开/碎碎念打开时）
         private const val FIRST_TEXT = "喵？！？"
         private const val FIRST_SHOW_MS = 2000L
+
+        // 设置页调整样式时的预览文案（不进轮播池，仅用于即时查看字号/颜色/透明度/偏移效果）
+        private const val PREVIEW_TEXT = "（酥的碎碎念）"
 
         // 摸头（双击）文案：随机显示一条，1-3s 后继续轮播池
         private val PAT_MSGS = listOf("喵喵喵", "喵" ,"喵！","喵？！？",
@@ -129,6 +138,26 @@ class TrayMsgManager(private val context: Context) {
     // Y 偏移（碎碎念偏移），正=向下，负=向上
     private var offsetY = 0f
 
+    // 空白（不显示文字）时长范围（秒），由 applyStyle() 写入
+    private var emptyMinSec = 2
+    private var emptyMaxSec = 15
+
+    // 过渡特效开关（由 applyStyle() 写入）：
+    // flashIn  = 文字闪现，控制空白结束后的「显形」特效
+    // flashOut = 文字闪回，控制文字消失前的「退场」特效
+    @Volatile
+    private var flashIn = true
+    @Volatile
+    private var flashOut = true
+
+    /** 按当前空白时长范围随机出一个空状态时长（ms）；范围非法时钳制，保证 lo <= hi */
+    private fun nextEmptyMs(): Long {
+        val lo = emptyMinSec.coerceIn(EMPTY_LIMIT_MIN_S, EMPTY_LIMIT_MAX_S).toLong()
+        val hi = emptyMaxSec.coerceIn(EMPTY_LIMIT_MIN_S, EMPTY_LIMIT_MAX_S).toLong()
+        val max = maxOf(lo, hi)
+        return lo * 1000L + Random.nextLong(0, max * 1000L - lo * 1000L + 1)
+    }
+
     private val handler = Handler(Looper.getMainLooper())
     private var pendingRunnable: Runnable? = null
     // 退场特效当前排程的 Runnable（用于 cancelDissolve 精确取消，避免 stopLoop 移除后 dissolving 卡死）
@@ -137,6 +166,14 @@ class TrayMsgManager(private val context: Context) {
     // 显形特效进行中：true 时碎碎念正播放“空白→有文字”过渡，与 dissolving 互斥。
     @Volatile
     private var materializing = false
+
+    // 预览态：设置页正在查看样式效果，期间暂停轮播与计时，不参与任何动画。
+    @Volatile
+    private var previewActive = false
+
+    // 宠物整体可见性（由 setVisible 写入）；预览仅在可见时才显示，避免隐藏宠物时文字冒出来。
+    @Volatile
+    private var visible = true
 
     // 显形特效当前排程的 Runnable
     private var materializeRunnable: Runnable? = null
@@ -156,7 +193,8 @@ class TrayMsgManager(private val context: Context) {
 
     private val rotateRunnable = object : Runnable {
         override fun run() {
-            if (!enabled || overrideActive) return
+            // 预览态下忽略轮播：避免预览文字被正常文案覆盖
+            if (!enabled || previewActive || overrideActive) return
             if (dissolving) {
                 // 退场特效进行中：不再自我排程，等 dissolve 末帧自行结束（会复位 dissolving 并继续轮播）
                 return
@@ -170,8 +208,7 @@ class TrayMsgManager(private val context: Context) {
                 showingText = false
                 dissolveThenClear {
                     textView.visibility = android.view.View.INVISIBLE
-                    val emptyMs = EMPTY_MIN_MS + Random.nextLong(0, EMPTY_MAX_MS - EMPTY_MIN_MS + 1)
-                    scheduleNext(emptyMs)
+                    scheduleNext(nextEmptyMs())
                 }
             } else {
                 // 空状态结束 -> 指定一条有文字的（一定非空）
@@ -182,8 +219,8 @@ class TrayMsgManager(private val context: Context) {
 
     init {
         textView = android.widget.TextView(context).apply {
-            setTextColor(0xFF333333.toInt())
-            setTextSize(TypedValue.COMPLEX_UNIT_DIP, 10f) // 6dp 字体
+            setTextColor(DEFAULT_TEXT_COLOR)
+            setTextSize(TypedValue.COMPLEX_UNIT_DIP, DEFAULT_TEXT_SIZE_DP)
             setShadowLayer(2f, 1f, 1f, 0xCCFFFFFF.toInt())
             gravity = android.view.Gravity.CENTER
             visibility = android.view.View.INVISIBLE
@@ -229,9 +266,10 @@ class TrayMsgManager(private val context: Context) {
 
     private fun reposition() {
         // 紧贴屏幕底部，水平居中；仅受 offsetY（碎碎念偏移）影响 Y。
-        // Gravity.BOTTOM 下 y 为负表示离底边的距离；正 offsetY 想下移 -> y 取负。
+        // Gravity.BOTTOM 下：窗口底边 = 容器底边 - y，即 y 为正表示窗口向上抬升、离屏幕底边更远。
+        // 故 offsetY 正 = 向上（与辅助线 showTrayGuide 的 vis.bottom - offset 保持一致）。
         params.x = 0
-        params.y = (-offsetY).toInt()
+        params.y = offsetY.toInt()
         try {
             windowManager.updateViewLayout(textView, params)
         } catch (_: Exception) {
@@ -253,6 +291,13 @@ class TrayMsgManager(private val context: Context) {
     private fun dissolveThenClear(onCleared: () -> Unit) {
         val original = textView.text?.toString() ?: ""
         if (original.isEmpty()) {
+            onCleared()
+            return
+        }
+        // 「文字闪回」关闭：跳过全部退场特效，文字直接消失进入空状态
+        if (!flashOut) {
+            textView.text = ""
+            textView.visibility = android.view.View.INVISIBLE
             onCleared()
             return
         }
@@ -405,6 +450,13 @@ class TrayMsgManager(private val context: Context) {
      */
     private fun materializeThenShow(target: String, onShown: () -> Unit) {
         if (target.isEmpty()) {
+            onShown()
+            return
+        }
+        // 「文字闪现」关闭：跳过全部显形特效，文字直接出现
+        if (!flashIn) {
+            textView.text = target
+            textView.visibility = android.view.View.VISIBLE
             onShown()
             return
         }
@@ -562,6 +614,15 @@ class TrayMsgManager(private val context: Context) {
         }
         enabled = on
         overrideActive = false
+        // 关闭碎碎念时一并退出预览态，避免预览文案残留在屏幕上
+        if (!on) {
+            previewActive = false
+        } else if (previewActive) {
+            // 重新启用时若仍处预览态（设置页未退出），继续保持预览显示
+            textView.text = PREVIEW_TEXT
+            textView.visibility = android.view.View.VISIBLE
+            return
+        }
         if (on) {
             // 启动轮播：首条固定“喵？！？”，之后进入空白再继续轮播池
             showingText = false
@@ -591,8 +652,7 @@ class TrayMsgManager(private val context: Context) {
         showingText = false
         textView.text = ""
         textView.visibility = android.view.View.INVISIBLE
-        val emptyMs = EMPTY_MIN_MS + Random.nextLong(0, EMPTY_MAX_MS - EMPTY_MIN_MS + 1)
-        scheduleNext(emptyMs) // scheduleNext 内部注册 rotateRunnable（空状态结束 -> 有文字）
+        scheduleNext(nextEmptyMs()) // scheduleNext 内部注册 rotateRunnable（空状态结束 -> 有文字）
     }
 
     /**
@@ -600,7 +660,7 @@ class TrayMsgManager(private val context: Context) {
      * 用于“摸头”等短暂事件——摸头结束后下一个一定是文字（不先空白）。
      */
     fun showMomentary(texts: List<String>, minMs: Long, maxMs: Long) {
-        if (!enabled) return
+        if (!enabled || previewActive) return   // 预览期间让位，保持预览文案不被覆盖
         stopLoop()
         overrideActive = true
         showOverrideText(texts[Random.nextInt(texts.size)])
@@ -619,7 +679,7 @@ class TrayMsgManager(private val context: Context) {
      * 用于“提起”（拖拽中）等持续事件——整个提起期间都显示同一类文案。
      */
     fun showHeld(texts: List<String>) {
-        if (!enabled) return
+        if (!enabled || previewActive) return   // 预览期间不接管文案
         stopLoop()
         overrideActive = true
         showOverrideText(texts[Random.nextInt(texts.size)])
@@ -656,7 +716,7 @@ class TrayMsgManager(private val context: Context) {
 
     /** 落地（拖拽结束/被放下）：先结束提起态，随机显示一条落地文案 1-3s，之后进入空白再继续轮播池 */
     fun showLand() {
-        if (!enabled) return
+        if (!enabled || previewActive) return
         stopLoop()
         overrideActive = true
         showOverrideText(LAND_MSGS[Random.nextInt(LAND_MSGS.size)])
@@ -672,7 +732,7 @@ class TrayMsgManager(private val context: Context) {
 
     /** 随机模式触发时：显示“变变变”，持续 2s+(0~3s) 后播放退场特效并继续轮播池。 */
     fun showRandomTrigger() {
-        if (!enabled) return
+        if (!enabled || previewActive) return
         stopLoop()
         overrideActive = true
         showOverrideText("变变变")
@@ -691,14 +751,135 @@ class TrayMsgManager(private val context: Context) {
         reposition()
     }
 
+    /**
+     * 碎碎念文字在**屏幕坐标系**下的实测上下边界（px），返回 [top, bottom]，未布局时为 null。
+     *
+     * 必须用 getLocationOnScreen 实测而非按屏幕矩形推算：
+     * 浮窗以 Gravity.BOTTOM 定位，其「底部」基准是窗口管理器分配给浮窗的容器底边，
+     * 与 PetService.getScreenBounds() 的 bottom 并非同一基准（通常相差导航栏高度）。
+     * 若按屏幕矩形推算，画出的辅助线会整体偏上，与文字实际位置对不上。
+     */
+    fun getTextScreenBounds(): FloatArray? {
+        val h = textView.height
+        if (h <= 0) return null
+        val loc = IntArray(2)
+        textView.getLocationOnScreen(loc)
+        return floatArrayOf(loc[1].toFloat(), (loc[1] + h).toFloat())
+    }
+
+    /**
+     * 碎碎念文字高度的估算值（px），仅在尚未完成布局（height=0）时作为兜底。
+     * 用字体行高（descent - ascent）估算，保证首次进入设置页也能画出两条线。
+     */
+    fun getTextHeightPx(): Float {
+        val measured = textView.height
+        if (measured > 0) return measured.toFloat()
+        val fm = textView.paint.fontMetrics
+        return (fm.descent - fm.ascent)
+    }
+
+    /**
+     * 应用碎碎念样式：字号 / 透明度 / 文字颜色 / 空白时长范围 / 过渡特效开关。
+     * 仅修改 TextView 属性与内部字段，不触碰轮播状态机（不会重启轮播、不打断进行中的动画）。
+     */
+    fun applyStyle(
+        textSizeDp: Float, alpha: Float, color: Int,
+        emptyMinSec: Int, emptyMaxSec: Int,
+        flashIn: Boolean, flashOut: Boolean
+    ) {
+        this.emptyMinSec = emptyMinSec.coerceIn(EMPTY_LIMIT_MIN_S, EMPTY_LIMIT_MAX_S)
+        this.emptyMaxSec = emptyMaxSec.coerceIn(EMPTY_LIMIT_MIN_S, EMPTY_LIMIT_MAX_S)
+        this.flashIn = flashIn
+        this.flashOut = flashOut
+        // 兜底：上限小于下限时抬升上限，避免随机区间非法
+        if (this.emptyMaxSec < this.emptyMinSec) this.emptyMaxSec = this.emptyMinSec
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, textSizeDp.coerceIn(6f, 24f))
+        // 文字透明度独立叠在文字颜色 alpha 上，与背景透明度互不干扰
+        val a = (alpha.coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255)
+        textView.setTextColor(Color.argb(a, Color.red(color), Color.green(color), Color.blue(color)))
+        textView.alpha = 1f
+    }
+
+    // ===== 碎碎念背景 =====
+    private var bgShow = false
+    private var bgColor = 0xFFFFFFFF.toInt()
+    private var bgAlphaPct = 50
+    fun applyBackground(show: Boolean, color: Int, alphaPct: Int) {
+        bgShow = show
+        bgColor = color
+        bgAlphaPct = alphaPct.coerceIn(0, 100)
+        applyBackgroundNow()
+    }
+    private fun applyBackgroundNow() {
+        val dm = context.resources.displayMetrics.density
+        if (!bgShow) {
+            textView.background = null
+            textView.setPadding(0, 0, 0, 0)
+            return
+        }
+        val a = (bgAlphaPct / 100f * 255f).toInt().coerceIn(0, 255)
+        val padX = (14f * dm).toInt()
+        val padY = (8f * dm).toInt()
+        textView.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 10f * dm
+            setColor(Color.argb(a, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)))
+        }
+        textView.setPadding(padX, padY, padX, padY)
+    }
+
+    /**
+     * 空白时长范围变更后的即时生效：仅当当前正处于空状态、且没有退场/显形特效在播时，
+     * 用新的时长范围重排下一次计时。正在显示文字或播放特效时保持原样，
+     * 等本轮自然结束后使用新值，避免打断动画导致状态机卡死。
+     */
+    fun requestEmptyReset() {
+        if (!enabled || previewActive || overrideActive || dissolving || materializing) return
+        if (showingText) return
+        scheduleNext(nextEmptyMs())
+    }
+
+    /**
+     * 预览：显示固定文案「（酥的碎碎念）」，供设置页实时查看字号/颜色/透明度/偏移效果。
+     * 预览期间暂停轮播与进行中的动画，不进入任何计时；重复调用安全。
+     * 若碎碎念未启用、宠物被隐藏，或正被摸头/提起等事件占用，则跳过预览（不打断重要文案）。
+     */
+    fun showPreview() {
+        if (!enabled || !visible || overrideActive) return
+        cancelDissolve()
+        cancelMaterialize()
+        pendingRunnable?.let { handler.removeCallbacks(it) }
+        pendingRunnable = null
+        previewActive = true
+        textView.text = PREVIEW_TEXT
+        textView.visibility = android.view.View.VISIBLE
+    }
+
+    /** 结束预览：清空调入的预览态并恢复轮播（先进入一轮空白，再继续正常文案）。 */
+    fun hidePreview() {
+        if (!previewActive) return
+        previewActive = false
+        if (enabled && visible) {
+            showingText = false
+            textView.text = ""
+            textView.visibility = android.view.View.INVISIBLE
+            resumeAfterEmpty()
+        } else {
+            textView.text = ""
+            textView.visibility = android.view.View.INVISIBLE
+        }
+    }
+
     /** 跟随宠物整体可见性：隐藏时碎碎念也消失，显示时恢复（若启用） */
-    fun setVisible(visible: Boolean) {
+    fun setVisible(v: Boolean) {
+        visible = v
         if (!enabled) {
             textView.visibility = android.view.View.INVISIBLE
             return
         }
-        textView.visibility = if (visible) {
-            if (showingText || overrideActive) android.view.View.VISIBLE else android.view.View.INVISIBLE
+        // 预览态优先保持可见：用户正在设置页看效果，不因可见性变化被打断
+        textView.visibility = if (v) {
+            if (previewActive || showingText || overrideActive) android.view.View.VISIBLE else android.view.View.INVISIBLE
         } else {
             android.view.View.INVISIBLE
         }

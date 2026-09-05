@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 图标视觉源自 app/src/main/assets/icon/more.svg（三点“更多”图标）。
+     Android 布局无法直接引用 assets 下的 svg，故此处使用等价的 VectorDrawable。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <path
+        android:fillColor="#2c2c2c"
+        android:pathData="M4,510 a94,94 0 1,0 188,0 a94,94 0 1,0 -188,0 Z" />
+    <path
+        android:fillColor="#2c2c2c"
+        android:pathData="M417,510 a94,94 0 1,0 188,0 a94,94 0 1,0 -188,0 Z" />
+    <path
+        android:fillColor="#2c2c2c"
+        android:pathData="M830,510 a94,94 0 1,0 188,0 a94,94 0 1,0 -188,0 Z" />
+</vector>

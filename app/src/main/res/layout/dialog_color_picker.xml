@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <!-- ===== 候选颜色（由代码填充 6 个色块） ===== -->
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="候选颜色" style="@style/SettingsOptionSub"/>
+
+    <LinearLayout android:id="@+id/candidate_row"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:layout_marginTop="10dp"/>
+
+    <!-- ===== 色轮取色 ===== -->
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="色轮取色" style="@style/SettingsOptionSub"
+        android:layout_marginTop="18dp"/>
+
+    <com.cx.cakepet.ColorWheelView android:id="@+id/color_wheel"
+        android:layout_width="match_parent" android:layout_height="220dp"
+        android:layout_marginTop="10dp"/>
+
+    <!-- ===== 明暗（明度 Value） ===== -->
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="明暗" style="@style/SettingsOptionSub"
+        android:layout_marginTop="14dp"/>
+
+    <com.google.android.material.slider.Slider
+        android:id="@+id/value_bar"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="0dp"
+        android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"
+        app:thumbColor="@color/black" app:trackColorActive="@color/black"
+        app:trackColorInactive="@color/slider_track_inactive"
+        app:haloColor="@color/slider_halo"/>
+
+    <!-- 明暗渐变参考条：由代码设为「黑 → 当前色相饱和度的纯色」。
+         Material Slider 的轨道仅支持纯色着色，无法做渐变，故单独用一条色带作视觉参考。 -->
+    <View android:id="@+id/value_gradient"
+        android:layout_width="match_parent" android:layout_height="8dp"
+        android:layout_marginTop="2dp"
+        android:background="#FF000000"/>
+
+    <!-- ===== 结果预览 ===== -->
+    <View android:id="@+id/picker_preview"
+        android:layout_width="match_parent" android:layout_height="44dp"
+        android:layout_marginTop="16dp" android:background="#FF333333"/>
+
+    <!-- 现有 RGB 值显示标签：点击可编辑，修改后同步色轮 / 明暗 -->
+    <TextView android:id="@+id/picker_hex"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center" android:textSize="13dp" android:textColor="#333333"
+        android:layout_marginTop="8dp" android:text="#333333"
+        android:clickable="true" android:focusable="true"
+        android:background="?android:attr/selectableItemBackground" android:padding="6dp"/>
+
+</LinearLayout>

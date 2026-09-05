@@ -45,6 +45,11 @@ class PetPhysics {
     var reboundBottom = true
     var reboundLeft = true
     var reboundRight = true
+    // 吸附边缘总开关：false 时完全不吸附（四边子开关失效）。
+    var snapEnabled = true
+    // 反弹总开关：false 时所有碰撞反弹失效（撞墙直接停靠、不反弹、不触发振动回调），
+    // 四边反弹子开关与反弹系数均不再生效。与 snapEnabled 同模式。
+    var reboundEnabled = true
     // 四边吸附开关（独立可选，默认全开）：拖拽松手低速近边时吸附成探头常驻态。
     var snapTop = true
     var snapBottom = true
@@ -182,6 +187,7 @@ class PetPhysics {
      * 顺序：底>顶>左>右（优先底边，符合“脚朝下的默认落地”直觉）。
      */
     fun nearestSnapSide(): Int {
+        if (!snapEnabled) return -1
         if (snapBottom && y >= maxY - snapDist) return 0
         if (snapTop && y <= minY + snapDist) return 3
         if (snapLeft && x <= minX + snapDist) return 1
@@ -345,10 +351,32 @@ class PetPhysics {
             }
         }
 
+        // --- 反弹系数>1 时的“单向速度抑制”（分级阈值） ---
+        // 当反弹系数大于 1（加速反弹，会越弹越快）时，若某轴速度占总速度比例越高，
+        // 该占优轴的反弹系数被压得越低（防止其被无限放大、最终变成单向飞出），
+        // 另一轴不受影响（仍用完整 reboundRatio）。两轴都不超 70% 则都不修正。
+        // 分级：>95% → *0.5；>90% → *0.6；>80% → *0.7；>70% → *0.8。
+        val spForRatio = kotlin.math.sqrt(vx * vx + vy * vy)
+        val xRatio = if (spForRatio > 0f) abs(vx) / spForRatio else 0f
+        val yRatio = if (spForRatio > 0f) abs(vy) / spForRatio else 0f
+        fun axisScale(ratio: Float): Float {
+            if (reboundRatio <= 1f) return 1f
+            return when {
+                // 95% 与 90% 两档额外封顶，避免 reboundRatio 极大时仍被放得过高
+                ratio > 0.95f -> minOf(reboundRatio * 0.5f, 0.75f)
+                ratio > 0.90f -> minOf(reboundRatio * 0.6f, 0.9f)
+                ratio > 0.80f -> reboundRatio * 0.7f
+                ratio > 0.70f -> reboundRatio * 0.8f
+                else -> 1f
+            }
+        }
+        val xScale = axisScale(xRatio)
+        val yScale = axisScale(yRatio)
+
         // --- X 轴移动 + 左右边界反弹 ---
-        stepAxisX(interval)
+        stepAxisX(interval, xScale)
         // --- Y 轴移动 + 上下边界反弹 ---
-        stepAxisY(interval)
+        stepAxisY(interval, yScale)
 
         // --- 速度上限钳制（0-5000）---
         val sp = kotlin.math.sqrt(vx * vx + vy * vy)
@@ -422,7 +450,7 @@ class PetPhysics {
         }
     }
 
-    private fun stepAxisX(interval: Float) {
+    private fun stepAxisX(interval: Float, reboundScale: Float) {
         if (vx == 0f && remX == 0f) return
         // 本帧位移（含上一帧 sub-pixel 余数），位置保持浮点连续，
         // 仅在最终写入浮窗时取整，避免低速时“每几帧才跳 1px”的台阶感。
@@ -433,7 +461,7 @@ class PetPhysics {
         if (vx > 0) {
             // 向右
             if (next >= maxX) {
-                if (reboundRight) {
+                if (reboundEnabled && reboundRight) {
                     x = maxX
                     // 右边无重力且速度极小：停靠静止，不再反弹出微小反向速度（消微抖）。
                     // 注意：有重力时始终反弹并回调，否则左/顶方向（重力推向墙）会被
@@ -445,10 +473,10 @@ class PetPhysics {
                     } else {
                         remX = -(next - maxX)
                         onBounce?.invoke(BOUNCE_RIGHT, vx)
-                        vx = -vx * reboundRatio
+                        vx = -vx * reboundRatio * reboundScale
                     }
                 } else {
-                    // 右边无引力：停靠该边，水平速度清零
+                    // 反弹总开关关闭或右边无引力：停靠该边，水平速度清零（不反弹、不振动）
                     x = maxX
                     remX = 0f
                     vx = 0f
@@ -459,7 +487,7 @@ class PetPhysics {
         } else if (vx < 0) {
             // 向左
             if (next <= minX) {
-                if (reboundLeft) {
+                if (reboundEnabled && reboundLeft) {
                     x = minX
                     if (!gravityLeft && abs(vx) < stillThreshold) {
                         remX = 0f
@@ -467,7 +495,7 @@ class PetPhysics {
                     } else {
                         remX = -(next - minX)
                         onBounce?.invoke(BOUNCE_LEFT, vx)
-                        vx = -vx * reboundRatio
+                        vx = -vx * reboundRatio * reboundScale
                     }
                 } else {
                     x = minX
@@ -483,7 +511,7 @@ class PetPhysics {
         if (x > maxX) { x = maxX; remX = 0f }
     }
 
-    private fun stepAxisY(interval: Float) {
+    private fun stepAxisY(interval: Float, reboundScale: Float) {
         if (vy == 0f && remY == 0f) return
         val move = vy * interval + remY
         remY = 0f
@@ -492,7 +520,7 @@ class PetPhysics {
         if (vy > 0) {
             // 向下
             if (next >= maxY) {
-                if (reboundBottom) {
+                if (reboundEnabled && reboundBottom) {
                     y = maxY
                     // 底边无重力且速度极小：停靠静止，不再反弹出微小反向速度（消微抖）。
                     // 有重力时始终反弹并回调（避免左/顶方向反弹振动失效，见 stepAxisX 说明）。
@@ -502,9 +530,10 @@ class PetPhysics {
                     } else {
                         remY = -(next - maxY)
                         onBounce?.invoke(BOUNCE_BOTTOM, vy)
-                        vy = -vy * reboundRatio
+                        vy = -vy * reboundRatio * reboundScale
                     }
                 } else {
+                    // 反弹总开关关闭或底边无引力：停靠该边，竖直速度清零（不反弹、不振动）
                     y = maxY
                     remY = 0f
                     vy = 0f
@@ -515,7 +544,7 @@ class PetPhysics {
         } else if (vy < 0) {
             // 向上
             if (next <= minY) {
-                if (reboundTop) {
+                if (reboundEnabled && reboundTop) {
                     y = minY
                     if (!gravityTop && abs(vy) < stillThreshold) {
                         remY = 0f
@@ -523,7 +552,7 @@ class PetPhysics {
                     } else {
                         remY = -(next - minY)
                         onBounce?.invoke(BOUNCE_TOP, vy)
-                        vy = -vy * reboundRatio
+                        vy = -vy * reboundRatio * reboundScale
                     }
                 } else {
                     y = minY

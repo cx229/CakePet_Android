@@ -1,14 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:background="@color/cp_bg"
+    android:focusableInTouchMode="true"
+    android:descendantFocusability="afterDescendants">
 
-    <!-- 状态栏占位条：纯黑，高度由 Activity 按真实状态栏高度设置，与标题栏连成整体覆盖状态栏 -->
+    <!-- 状态栏占位条：页面背景底色，高度由 Activity 按真实状态栏高度设置，与标题栏连成整体覆盖状态栏 -->
     <View android:id="@+id/status_bar_spacer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:background="#000000" />
+        android:background="@color/cp_status_bar" />
 
     <!-- 标题栏：黑底，紧跟占位条之下，标题文字在状态栏下方完整显示 -->
     <LinearLayout android:id="@+id/title_bar"
@@ -17,13 +21,15 @@
         android:minHeight="?attr/actionBarSize"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="#000000">
+        android:background="@color/cp_bg">
 
         <ImageView android:id="@+id/iv_back"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@android:drawable/ic_menu_revert"
-            android:padding="12dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title"
+            android:padding="14dp"
             android:layout_gravity="center_vertical"
             android:contentDescription="返回"/>
 
@@ -32,7 +38,7 @@
             android:text="关于"
             android:textSize="20dp"
             android:textStyle="bold"
-            android:textColor="#FFFFFF"/>
+            android:textColor="@color/cp_title"/>
     </LinearLayout>
 
     <ScrollView
@@ -49,21 +55,77 @@
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="版本："
                 android:textSize="16dp" android:layout_marginBottom="12dp"/>
+
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="角色：崩铁-刃-芝麻酥"
-                android:textSize="16dp" android:layout_marginBottom="12dp"/>
+                android:text="作者："
+                android:textSize="16dp" android:layout_marginBottom="4dp"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="作者：初心丶CX"
-                android:textSize="16dp" android:layout_marginBottom="12dp"/>
+                android:text="    初心丶CX、乘舟待屿、兰源、NaHCO3、远否"
+                android:textSize="16dp" android:layout_marginBottom="12dp" android:layout_marginStart="12dp"/>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="角色："
+                android:textSize="16dp" android:layout_marginBottom="4dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="    崩铁-刃-芝麻酥"
+                android:textSize="16dp" android:layout_marginBottom="12dp" android:layout_marginStart="12dp"/>
+
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="感谢："
                 android:textSize="16dp" android:layout_marginBottom="4dp"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="部分图片素材：芝麻酥促销（半江离）"
-                android:textSize="16dp" android:layout_marginBottom="4dp" android:layout_marginStart="12dp"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="部分桌宠逻辑：Shimeji（Kilkakon）"
+                android:text="    芝麻酥促销(半江离)、Shimeji(kilkakon)"
                 android:textSize="16dp" android:layout_marginStart="12dp"/>
+
+            <!-- ===== 夜间模式强制开关 ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="显示" style="@style/SettingsOptionTitle"
+                android:layout_marginTop="24dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="强制打开夜间模式" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_force_night_on" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="强制关闭夜间模式" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_force_night_off" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="使用新资源(芝麻酥)" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_use_new_sprite" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <!-- ===== 数量（实验性，多实例分身） ===== -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="数量（实验性）" style="@style/SettingsOptionSub"/>
+                <TextView android:id="@+id/tv_pet_count" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="1"
+                    android:textSize="16dp" android:textStyle="bold" android:textColor="@color/cp_title"/>
+            </LinearLayout>
+            <SeekBar android:id="@+id/sb_pet_count" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="4dp"
+                android:max="10" android:progress="1"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="仅单个碎碎念" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_single_tray_msg" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
 
             <!-- ===== 调试（页尾） ===== -->
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -81,10 +143,113 @@
                 android:orientation="horizontal" android:gravity="center_vertical"
                 android:layout_marginTop="8dp">
                 <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:text="矩形调试层" style="@style/SettingsOptionSub"/>
-                <Switch android:id="@+id/sw_rect" android:layout_width="wrap_content"
+                    android:layout_weight="1" android:text="显示边界偏移线" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_bound_offset" android:layout_width="wrap_content"
                     android:layout_height="wrap_content"/>
             </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="显示吸附边界" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_snap_offset" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="显示边框(图片窗口+锚点十字)" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_image_border" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="控制边框(命中可视化)" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_control_border" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <!-- ===== 命中模式（三态单选） ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="命中模式" style="@style/SettingsOptionTitle"
+                android:layout_marginTop="16dp"/>
+            <RadioGroup android:id="@+id/rg_hit_mode"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:layout_marginTop="4dp">
+                <RadioButton android:id="@+id/rb_hit_pixel"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="像素（全框 + 透明穿透）"/>
+                <RadioButton android:id="@+id/rb_hit_boundary"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="边界（原矩形命中 · 全框整窗）"/>
+                <RadioButton android:id="@+id/rb_hit_core"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="核心（脚底盒）"/>
+            </RadioGroup>
+            <!-- 核心(脚底盒)命中区尺寸（128 逻辑基数，应用层 ×scale 转像素） -->
+            <LinearLayout android:id="@+id/row_ctrl_box"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:layout_marginTop="8dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="核心宽度（相对128基准尺寸，默认80）" style="@style/SettingsOptionSub"/>
+                    <EditText android:id="@+id/tv_ctrl_box_w" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="80"
+                        android:inputType="number" android:imeOptions="actionDone"
+                        android:minWidth="56dp" android:gravity="end"
+                        android:textSize="16dp" android:textStyle="bold" android:textColor="@color/cp_title"/>
+                </LinearLayout>
+                <SeekBar android:id="@+id/sb_ctrl_box_w" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="4dp"
+                    android:max="256" android:progress="80"/>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="核心高度（相对128基准尺寸，默认80）" style="@style/SettingsOptionSub"/>
+                    <EditText android:id="@+id/tv_ctrl_box_h" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="80"
+                        android:inputType="number" android:imeOptions="actionDone"
+                        android:minWidth="56dp" android:gravity="end"
+                        android:textSize="16dp" android:textStyle="bold" android:textColor="@color/cp_title"/>
+                </LinearLayout>
+                <SeekBar android:id="@+id/sb_ctrl_box_h" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="4dp"
+                    android:max="256" android:progress="80"/>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="核心垂直偏移（相对128基准尺寸，默认0）" style="@style/SettingsOptionSub"/>
+                    <EditText android:id="@+id/tv_ctrl_box_vo" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0"
+                        android:inputType="numberSigned" android:imeOptions="actionDone"
+                        android:minWidth="56dp" android:gravity="end"
+                        android:textSize="16dp" android:textStyle="bold" android:textColor="@color/cp_title"/>
+                </LinearLayout>
+                <SeekBar android:id="@+id/sb_ctrl_box_vo" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="4dp"
+                    android:max="256" android:progress="128"/>
+            </LinearLayout>
+            <LinearLayout android:id="@+id/row_pixel_hit_test"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp" android:background="?attr/selectableItemBackground"
+                android:paddingVertical="4dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="像素级点击测试" style="@style/SettingsOptionSub"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text=">" android:textSize="20dp" android:textColor="@color/cp_hint_dark"
+                    android:layout_marginEnd="4dp"/>
+            </LinearLayout>
+
+            <!-- ===== 无障碍权限（页面最末） ===== -->
+            <TextView android:id="@+id/tv_accessibility"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="无障碍权限：未开启"
+                android:textSize="16dp" android:layout_marginTop="24dp"/>
+
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

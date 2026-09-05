@@ -6,11 +6,43 @@
         <item name="colorPrimaryVariant">@color/purple_700</item>
         <item name="colorOnPrimary">@color/black</item>
         <!-- Secondary brand color. -->
-        <item name="colorSecondary">@color/teal_200</item>
-        <item name="colorSecondaryVariant">@color/teal_200</item>
-        <item name="colorOnSecondary">@color/black</item>
+        <item name="colorSecondary">@color/black</item>
+        <item name="colorSecondaryVariant">@color/black</item>
+        <item name="colorOnSecondary">@color/white</item>
         <!-- Status bar color. -->
         <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <!-- ===== 夜间开关：无论运行期是 SwitchCompat 还是 SwitchMaterial，开启态统一纯黑。 ===== -->
+        <item name="colorSecondary">@color/black</item>
+        <item name="colorSecondaryVariant">@color/black</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorControlActivated">@color/black</item>
+        <item name="colorSwitchThumbNormal">#9AA0A6</item>
+        <item name="android:colorForeground">@color/cp_text</item>
+        <!-- 开关统一黑色（仅作用于 SwitchCompat，覆盖默认 tint） -->
+        <item name="switchStyle">@style/Widget.CakePet.Switch</item>
         <!-- Customize your theme here. -->
+    </style>
+
+    <!-- 设置页/关于页（无 ActionBar）夜间配色：开关/滑块改用浅色强调色 -->
+    <style name="Theme.CakePet.FullscreenTitle" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorSecondary">@color/black</item>
+        <item name="colorSecondaryVariant">@color/black</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorControlActivated">@color/black</item>
+        <item name="colorSwitchThumbNormal">#9AA0A6</item>
+        <item name="android:colorForeground">@color/cp_text</item>
+        <item name="android:statusBarColor">@color/black</item>
+        <item name="switchStyle">@style/Widget.CakePet.Switch</item>
+    </style>
+
+    <!-- 透明主题（长按菜单）夜间配色：开关开启态纯黑 -->
+    <style name="Theme.CakePet.Transparent" parent="Theme.MaterialComponents.DayNight.Dialog">
+        <item name="colorSecondary">@color/black</item>
+        <item name="colorSecondaryVariant">@color/black</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorControlActivated">@color/black</item>
+        <item name="colorSwitchThumbNormal">#9AA0A6</item>
+        <item name="android:colorForeground">@color/cp_text</item>
+        <item name="switchStyle">@style/Widget.CakePet.Switch</item>
     </style>
 </resources>

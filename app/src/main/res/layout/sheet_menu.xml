@@ -8,13 +8,13 @@
     <TextView android:id="@+id/menu_pat" android:layout_width="match_parent"
         android:layout_height="56dp" android:gravity="center_vertical"
         android:layout_margin="4dp" android:paddingStart="12dp"
-        android:text="摸摸头 🐾" android:textSize="17dp" android:textColor="#FF000000"
+        android:text="摸摸头 🐾" android:textSize="17dp" android:textColor="@color/cp_title"
         android:background="@drawable/cell_bg"/>
 
     <TextView android:id="@+id/menu_actions" android:layout_width="match_parent"
         android:layout_height="56dp" android:gravity="center_vertical"
         android:layout_margin="4dp" android:paddingStart="12dp"
-        android:text="动作 ›" android:textSize="17dp" android:textColor="#FF000000"
+        android:text="动作 ›" android:textSize="17dp" android:textColor="@color/cp_title"
         android:background="@drawable/cell_bg"/>
 
     <LinearLayout android:layout_width="match_parent"
@@ -26,7 +26,7 @@
             android:gravity="center_horizontal" android:padding="10dp"
             android:background="@drawable/cell_bg">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="点击穿透" android:textSize="15dp"/>
+                android:text="点击穿透" android:textSize="15dp" android:textColor="@color/cp_title"/>
             <Switch android:id="@+id/sw_clickthrough" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:layout_marginTop="4dp"
                 android:thumbTint="@color/switch_black_selector"
@@ -39,7 +39,7 @@
             android:gravity="center_horizontal" android:padding="10dp"
             android:background="@drawable/cell_bg">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="重力抛掷" android:textSize="15dp"/>
+                android:text="重力抛掷" android:textSize="15dp" android:textColor="@color/cp_title"/>
             <Switch android:id="@+id/sw_gravity" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:layout_marginTop="4dp"
                 android:thumbTint="@color/switch_black_selector"
@@ -52,7 +52,7 @@
             android:gravity="center_horizontal" android:padding="10dp"
             android:background="@drawable/cell_bg">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="体感重力" android:textSize="15dp"/>
+                android:text="体感重力" android:textSize="15dp" android:textColor="@color/cp_title"/>
             <Switch android:id="@+id/sw_tilt" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:layout_marginTop="4dp"
                 android:thumbTint="@color/switch_black_selector"
@@ -66,12 +66,12 @@
         android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
         <TextView android:id="@+id/menu_recall" android:layout_width="0dp"
             android:layout_height="match_parent" android:layout_weight="1"
-            android:layout_margin="4dp" android:gravity="center" android:text="召回"
-            android:textSize="17dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+            android:layout_margin="4dp" android:gravity="center"             android:text="召回"
+            android:textSize="17dp" android:textColor="@color/cp_title" android:background="@drawable/cell_bg"/>
         <TextView android:id="@+id/menu_hide" android:layout_width="0dp"
             android:layout_height="match_parent" android:layout_weight="1"
             android:layout_margin="4dp" android:gravity="center" android:text="隐藏"
-            android:textSize="17dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+            android:textSize="17dp" android:textColor="@color/cp_title" android:background="@drawable/cell_bg"/>
     </LinearLayout>
 
     <LinearLayout android:layout_width="match_parent"
@@ -79,12 +79,12 @@
         android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
         <TextView android:id="@+id/menu_settings" android:layout_width="0dp"
             android:layout_height="match_parent" android:layout_weight="1"
-            android:layout_margin="4dp" android:gravity="center" android:text="设置"
-            android:textSize="17dp" android:textColor="#FF000000" android:background="@drawable/cell_bg"/>
+            android:layout_margin="4dp" android:gravity="center"             android:text="设置"
+            android:textSize="17dp" android:textColor="@color/cp_title" android:background="@drawable/cell_bg"/>
         <TextView android:id="@+id/menu_exit" android:layout_width="0dp"
             android:layout_height="match_parent" android:layout_weight="1"
             android:layout_margin="4dp" android:gravity="center" android:text="退出"
-            android:textColor="#B00020" android:textSize="17dp"
+            android:textColor="@color/cp_danger" android:textSize="17dp"
             android:background="@drawable/cell_bg"/>
     </LinearLayout>
 

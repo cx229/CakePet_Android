@@ -4,7 +4,8 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center_horizontal"
-    android:padding="32dp">
+    android:padding="32dp"
+    android:background="@color/cp_bg">
 
     <Space
         android:layout_width="match_parent"
@@ -50,7 +51,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/start"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/cp_btn_primary_text"
             android:textSize="17sp"
             android:textStyle="bold"
             android:letterSpacing="0.02"/>
@@ -59,7 +60,7 @@
             android:layout_height="wrap_content"
             android:text="双击「芝麻酥」，摸摸头"
             android:textSize="8dp"
-            android:textColor="#CCFFFFFF"/>
+            android:textColor="@color/cp_hint_white"/>
     </LinearLayout>
 
     <LinearLayout
@@ -78,7 +79,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/settings"
-            android:textColor="#FF000000"
+            android:textColor="@color/cp_btn_outline_text"
             android:textSize="16sp"
             android:textStyle="bold"
             android:letterSpacing="0.02"/>
@@ -87,7 +88,7 @@
             android:layout_height="wrap_content"
             android:text="看懂了设置，才知道怎么投喂「芝麻酥」"
             android:textSize="8dp"
-            android:textColor="#80000000"/>
+            android:textColor="@color/cp_hint_dark"/>
     </LinearLayout>
 
     <TextView
@@ -104,11 +105,12 @@
         android:layout_weight="1"/>
 
     <TextView
+        android:id="@+id/tv_author"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="初心丶CX"
         android:textSize="12dp"
-        android:textColor="#80000000"
+        android:textColor="@color/cp_hint_dark"
         android:layout_marginBottom="8dp"
         android:gravity="center"/>
 </LinearLayout>

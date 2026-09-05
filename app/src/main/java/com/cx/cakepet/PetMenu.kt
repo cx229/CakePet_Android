@@ -1,7 +1,10 @@
 package com.cx.cakepet
 
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.PixelFormat
+import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -36,9 +39,31 @@ class PetMenu(
             height = WindowManager.LayoutParams.WRAP_CONTENT
         }
 
+    // 长按菜单是 TYPE_APPLICATION_OVERLAY 浮窗，使用 Service 上下文 inflate；而 AppCompat 的
+    // setDefaultNightMode 只“伪装”Activity 自身的 resources，不会同步到 Service 的全局
+    // resources，因此必须手动用覆盖 Configuration 的方式把 night 状态（系统夜间 + 用户强制开关）
+    // 应用到 inflate 用的 Context，否则浮窗不会跟随夜间模式（尤其是“强制”开关）。
+    private fun nightAwareContext(): Context {
+        val cfg = service.currentConfig()
+        val base = service
+        val systemNight = (base.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+        val night = when {
+            cfg.forceNightOn -> true
+            cfg.forceNightOff -> false
+            else -> systemNight
+        }
+        val cw = ContextThemeWrapper(base, R.style.Theme_CakePet)
+        val config = Configuration(base.resources.configuration)
+        config.uiMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+            if (night) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+        cw.applyOverrideConfiguration(config)
+        return cw
+    }
+
     fun show() {
         if (root != null) return
-        val ctx = service
+        val ctx = nightAwareContext()
         root = FrameLayout(ctx).apply {
             // 顶部圆角卡片背景 + 点击外部关闭
             setBackgroundResource(R.drawable.menu_bg)
@@ -49,8 +74,8 @@ class PetMenu(
                 } else false
             }
         }
-        menuView = buildMenu()
-        actionsView = buildActions().also { it.visibility = View.GONE }
+        menuView = buildMenu(ctx)
+        actionsView = buildActions(ctx).also { it.visibility = View.GONE }
         root!!.addView(menuView)
         root!!.addView(actionsView)
 
@@ -72,8 +97,8 @@ class PetMenu(
         }
     }
 
-    private fun buildMenu(): View {
-        val v = LayoutInflater.from(service).inflate(R.layout.sheet_menu, null)
+    private fun buildMenu(ctx: Context): View {
+        val v = LayoutInflater.from(ctx).inflate(R.layout.sheet_menu, null)
         // 两个开关：点击穿透 / 重力·抛掷（与设置页同数据源，即时生效）
         val cfg = service.currentConfig()
         val swCt = v.findViewById<android.widget.Switch>(R.id.sw_clickthrough)
@@ -119,13 +144,13 @@ class PetMenu(
             service.performAction(MenuActivity.ACTION_HIDE); dismiss()
         }
         v.findViewById<View>(R.id.menu_exit).setOnClickListener {
-            dismiss(); service.stopSelf()
+            dismiss(); service.performAction(MenuActivity.ACTION_EXIT)
         }
         return v
     }
 
-    private fun buildActions(): View {
-        val v = LayoutInflater.from(service).inflate(R.layout.sheet_actions, null)
+    private fun buildActions(ctx: Context): View {
+        val v = LayoutInflater.from(ctx).inflate(R.layout.sheet_actions, null)
         fun bind(id: Int, action: String) {
             v.findViewById<View>(id).setOnClickListener {
                 service.performAction(action); dismiss()

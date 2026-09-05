@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/cp_bg"
+    android:focusableInTouchMode="true"
+    android:descendantFocusability="afterDescendants">
+
+    <!-- 状态栏占位 -->
+    <View android:id="@+id/status_bar_spacer"
+        android:layout_width="match_parent" android:layout_height="0dp"
+        android:background="@color/cp_status_bar"/>
+
+    <!-- 标题栏：与设置页完全一致（黑底 + 返回按钮 + 标题 + 弹性占位） -->
+    <LinearLayout android:id="@+id/title_bar"
+        android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize" android:orientation="horizontal"
+        android:gravity="center_vertical" android:background="@color/cp_bg">
+
+        <ImageView android:id="@+id/iv_back"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:scaleType="fitCenter" app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title" android:padding="14dp"
+            android:layout_gravity="center_vertical" android:contentDescription="返回"/>
+
+        <TextView android:id="@+id/tv_title"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="阈值设置" android:textSize="20dp" android:textStyle="bold"
+            android:textColor="@color/cp_title"/>
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+    </LinearLayout>
+
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:fillViewport="true"
+        android:clipToPadding="false" android:padding="16dp">
+
+        <!-- 模块卡片由 render() 动态生成（与设置页同样的 card_bg 结构） -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:layout_marginStart="0dp" android:layout_marginEnd="0dp">
+
+            <LinearLayout android:id="@+id/container"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical"/>
+
+            <!-- 底部：恢复系统阈值（与设置页底部按钮完全一致：主色+波纹，跟随内容滚动） -->
+            <TextView android:id="@+id/btn_reset_system"
+                android:layout_width="match_parent" android:layout_height="52dp"
+                android:background="@drawable/bg_btn_primary" android:gravity="center"
+                android:textSize="14dp" android:textColor="@color/cp_btn_primary_text"
+                android:text="重置系统阈值"
+                android:layout_marginTop="16dp" android:layout_marginBottom="4dp"/>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

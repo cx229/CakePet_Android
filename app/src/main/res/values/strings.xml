@@ -2,4 +2,6 @@
     <string name="app_name">CakePet</string>
     <string name="start">启动 / 召回宠物</string>
     <string name="settings">设置</string>
+    <string name="accessibility_service_label">CakePet</string>
+    <string name="accessibility_service_description">CakePet 桌宠无障碍能力（桌宠交互增强）。</string>
 </resources>

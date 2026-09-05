@@ -1,0 +1,225 @@
+{
+  "forceBottomCenterAnchor": false,
+  "standbyPool": ["sit_clam", "sit_puffed", "wriggle", "probe_head", "shake_head", "lie", "walk_white", "walk", "pull_fish"],
+  "staticPool": ["sit_clam", "sit_puffed", "probe_head", "shake_head", "lie", "walk_white"],
+  "modes": {
+    "sit_clam": {
+      "label": "静坐",
+      "fallback": "sit_clam-1.png",
+      "loop": true,
+      "timeNext": {"enabled": true, "min": 3000, "max": 25000, "prob": 1.0},
+      "nextMode": null,
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "sit_clam-1.png", "next": 1, "delay": [120, 10000], "anchorY": 1},
+        {"res": "sit_clam-2.png", "next": 2, "delay": [120, 160], "anchorY": 1},
+        {"res": "sit_clam-3.png", "next": 3, "delay": [120, 160], "anchorY": 1},
+        {"res": "sit_clam-2.png", "next": 0, "delay": [120, 160], "anchorY": 1}
+      ]
+    },
+    "sit_puffed": {
+      "label": "炸毛",
+      "fallback": "sit_puffed-1.png",
+      "loop": true,
+      "timeNext": {"enabled": true, "min": 3000, "max": 25000, "prob": 1.0},
+      "nextMode": null,
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "sit_puffed-1.png", "next": 1, "delay": [120, 10000], "anchorY": 1},
+        {"res": "sit_puffed-2.png", "next": 2, "delay": [120, 160], "anchorY": 1},
+        {"res": "sit_puffed-3.png", "next": 3, "delay": [120, 160], "anchorY": 1},
+        {"res": "sit_puffed-4.png", "next": 4, "delay": [120, 160], "anchorY": 1},
+        {"res": "sit_puffed-2.png", "next": 0, "delay": [120, 160], "anchorY": 1}
+      ]
+    },
+    "pat_head": {
+      "label": "摸摸头",
+      "fallback": "sit_clam-1.png",
+      "loop": false,
+      "timeNext": {"enabled": true, "min": 3000, "max": 4000, "prob": 0.95},
+      "nextMode": "shake_head",
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "pat_head-1.png", "next": 1, "delay": [105, 110], "anchorY": 1},
+        {"res": "pat_head-2.png", "next": 2, "delay": [100, 110], "anchorY": 1},
+        {"res": "pat_head-3.png", "next": 3, "delay": [100, 110], "anchorY": 1},
+        {"res": "pat_head-4.png", "next": 4, "delay": [105, 110], "anchorY": 1},
+        {"res": "pat_head-5.png", "next": 1, "delay": [105, 110], "anchorY": 1}
+      ]
+    },
+    "shake_head": {
+      "label": "摇头",
+      "fallback": "sit_clam-1.png",
+      "loop": false,
+      "timeNext": {"enabled": true, "min": 1000, "max": 2000, "prob": 1.0},
+      "nextMode": "sit_puffed",
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "shake_head-1.png", "next": 1, "delay": [140, 180], "anchorY": 1},
+        {"res": "shake_head-2.png", "next": 0, "delay": [140, 180], "anchorY": 1}
+      ]
+    },
+    "jump_down": {
+      "label": "落地",
+      "fallback": "sit_clam-1.png",
+      "loop": false,
+      "timeNext": {"enabled": false},
+      "nextMode": "walk",
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "jump_down-1.png", "next": 1, "delay": [50, 70], "anchorX": 64, "anchorY": 1},
+        {"res": "jump_down-2.png", "next": 2, "delay": [80, 90], "anchorX": 64, "anchorY": 1},
+        {"res": "jump_down-3.png", "next": null, "delay": [200, 250], "anchorX": 64, "anchorY": 1}
+      ]
+    },
+    "lift_up": {
+      "label": "提起",
+      "fallback": "sit_clam-1.png",
+      "loop": true,
+      "timeNext": {"enabled": false},
+      "nextMode": null,
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "lift_up-1.png", "next": 1, "delay": [340, 370], "anchorY": 43},
+        {"res": "lift_up-2.png", "next": 0, "delay": [340, 370], "anchorY": 43},
+        {"res": "lift_up-3.png", "next": 0, "delay": 200, "anchorY": 43},
+        {"res": "lift_up-4.png", "next": 1, "delay": 200, "anchorY": 43},
+        {"res": "lift_up-5.png", "next": 2, "delay": 300, "anchorY": 43},
+        {"res": "lift_up-6.png", "next": 3, "delay": 300, "anchorY": 43}
+      ]
+    },
+    "roll": {
+      "label": "滚动",
+      "fallback": "roll-6.png",
+      "loop": true,
+      "timeNext": {"enabled": false},
+      "nextMode": null,
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "roll-1.png", "next": 1, "delay": [140, 180], "anchorX": 45, "anchorY": 15},
+        {"res": "roll-2.png", "next": 2, "delay": [140, 180], "anchorX": 45, "anchorY": 15},
+        {"res": "roll-3.png", "next": 3, "delay": [140, 180], "anchorX": 45, "anchorY": 15},
+        {"res": "roll-4.png", "next": 4, "delay": [140, 180], "anchorX": 45, "anchorY": 15},
+        {"res": "roll-5.png", "next": 5, "delay": [140, 180], "anchorX": 45, "anchorY": 15},
+        {"res": "roll-6.png", "next": 0, "delay": [140, 180], "anchorX": 45, "anchorY": 15}
+      ]
+    },
+    "walk": {
+      "label": "走路",
+      "fallback": "walk-1.png",
+      "loop": true,
+      "timeNext": {"enabled": true, "min": 1000, "max": 10000, "prob": 0.5},
+      "nextMode": null,
+      "walkSpeed": 90,
+      "frames": [
+        {"res": "walk-1.png", "next": 1, "delay": 100, "anchorX": 47, "anchorY": 1},
+        {"res": "walk-2.png", "next": 2, "delay": 100, "anchorX": 47, "anchorY": 1},
+        {"res": "walk-3.png", "next": 0, "delay": 100, "anchorX": 47, "anchorY": 1}
+      ]
+    },
+    "walk_white": {
+      "label": "美白",
+      "fallback": "sit_clam-1.png",
+      "loop": false,
+      "timeNext": {"enabled": false},
+      "nextMode": null,
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "walk_white-1.png", "next": 1, "delay": [200, 300], "anchorX": 47, "anchorY": 1},
+        {"res": "walk_white-2.png", "next": 2, "delay": [200, 300], "anchorX": 47, "anchorY": 1},
+        {"res": "walk_white-3.png", "next": 3, "delay": [200, 300], "anchorX": 47, "anchorY": 1},
+        {"res": "walk_white-4.png", "next": 4, "delay": [200, 300], "anchorX": 47, "anchorY": 1},
+        {"res": "walk_white-5.png", "next": null, "delay": [5000, 10000], "anchorX": 47, "anchorY": 1}
+      ]
+    },
+    "wriggle": {
+      "label": "蠕动",
+      "fallback": "sit_clam-1.png",
+      "loop": true,
+      "timeNext": {"enabled": true, "min": 3000, "max": 4000, "prob": 0.5},
+      "nextMode": null,
+      "walkSpeed": 45,
+      "frames": [
+        {"res": "wriggle-1.png", "next": 1, "delay": [250, 300], "anchorX": 54, "anchorY": 1},
+        {"res": "wriggle-2.png", "next": 0, "delay": [250, 300], "anchorX": 54, "anchorY": 1}
+      ]
+    },
+    "probe_head": {
+      "label": "探头",
+      "fallback": "sit_clam-1.png",
+      "loop": false,
+      "timeNext": {"enabled": true, "min": 5000, "max": 10000, "prob": 0.5},
+      "nextMode": "sit_clam",
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "probe_head-1.png", "next": 1, "delay": [1000, 5000], "anchorY": 16},
+        {"res": "probe_head-2.png", "next": 0, "delay": [150, 300], "anchorY": 16}
+      ]
+    },
+    "snap_head": {
+      "label": "吸附探头",
+      "fallback": "sit_clam-1.png",
+      "loop": true,
+      "timeNext": {"enabled": false, "prob": 0.0},
+      "nextMode": null,
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "probe_head-1.png", "next": 1, "delay": [1000, 5000], "anchorY": 16},
+        {"res": "probe_head-2.png", "next": 0, "delay": [150, 300], "anchorY": 16}
+      ]
+    },
+    "snap_pat_head": {
+      "label": "吸附探头摸摸头",
+      "fallback": "probe_head-1.png",
+      "loop": false,
+      "timeNext": {"enabled": true, "min": 5000, "max": 10000, "prob": 0.5},
+      "nextMode": "snap_head",
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "probe_head-1.png", "next": 1, "delay": [1000, 5000], "anchorY": 16},
+        {"res": "probe_head-2.png", "next": 0, "delay": [150, 300], "anchorY": 16}
+      ]
+    },
+    "lie": {
+      "label": "趴着",
+      "fallback": "wriggle-1.png",
+      "loop": false,
+      "timeNext": {"enabled": false},
+      "nextMode": null,
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "wriggle-1.png", "next": null, "delay": [3000, 7000], "anchorX": 54, "anchorY": 1}
+      ]
+    },
+    "portal": {
+      "label": "传送门",
+      "fallback": "sit_clam-1.png",
+      "loop": false,
+      "timeNext": {"enabled": false},
+      "nextMode": "sit_clam",
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "sit_clam-1.png", "next": null, "delay": 3000, "anchorY": -28}
+      ]
+    },
+    "pull_fish": {
+      "label": "扒鱼",
+      "fallback": "sit_clam-1.png",
+      "loop": false,
+      "timeNext": {"enabled": false},
+      "nextMode": "lie",
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "pull_fish-1.png", "next": 1, "delay": [300, 500], "anchorX": 54, "anchorY": 1},
+        {"res": "pull_fish-2.png", "next": 2, "delay": [130, 160], "anchorX": 54, "anchorY": 1},
+        {"res": "pull_fish-3.png", "next": 3, "delay": [160, 200], "anchorX": 54, "anchorY": 1},
+        {"res": "pull_fish-4.png", "next": 4, "delay": [130, 160], "anchorX": 54, "anchorY": 1},
+        {"res": "pull_fish-5.png", "next": 5, "delay": 70, "anchorX": 54, "anchorY": 1},
+        {"res": "pull_fish-6.png", "next": 6, "delay": 70, "anchorX": 67, "anchorY": -47, "dx": 130},
+        {"res": "pull_fish-6.png", "next": 7, "delay": 70, "anchorX": 67, "anchorY": -87, "dx": 125},
+        {"res": "pull_fish-6.png", "next": 8, "delay": 70, "anchorX": 67, "anchorY": -47, "dx": 120},
+        {"res": "wriggle-1.png", "next": null, "delay": 500, "anchorX": 54, "anchorY": 1, "dx": 120}
+      ]
+    }
+  }
+}

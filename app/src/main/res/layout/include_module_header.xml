@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 模块头部：1px 分隔线(90%宽居中) + 模块标题，与设置页各 activity 的模块结构完全一致。
+     由 BaseThresholdActivity.render() 通过 inflate 复用，避免代码里手抄样式数值。
+     注意：根必须是独立 ViewGroup（不能是 <merge>），否则 inflate(..., attachToRoot=false)
+     会把根视图等同于 parent，导致"把容器 add 进自己"而崩溃。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <!-- 模块间分隔线：与设置页相同（layout_weight=0.9 的 1px cp_subtle 居中） -->
+    <LinearLayout android:id="@+id/module_sep"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">
+        <View android:layout_width="0dp" android:layout_height="1px"
+            android:layout_weight="0.9" android:background="@color/cp_subtle"/>
+    </LinearLayout>
+
+    <!-- 模块标题：与设置页一致（14dp / cp_sub / marginStart=4dp / marginBottom=6dp） -->
+    <TextView android:id="@+id/tv_module_title"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:textSize="14dp" android:textColor="@color/cp_sub"
+        android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+</LinearLayout>

@@ -33,6 +33,8 @@ _*.txt
 _*.kt
 _*.bak
 *.kts.bak
+# 临时构建日志（排查编译错误时生成，不应提交）
+build_log.txt
 
 # ===== 操作系统 =====
 .DS_Store

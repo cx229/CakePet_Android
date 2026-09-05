@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="#20000000">
+    android:color="@color/cp_ripple_on_light">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="#FFFFFFFF" />
+            <solid android:color="@color/cp_btn_outline_bg" />
             <stroke
                 android:width="1.5dp"
-                android:color="#FF000000" />
+                android:color="@color/cp_btn_outline_stroke" />
             <corners android:radius="14dp" />
         </shape>
     </item>

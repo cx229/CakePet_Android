@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 滑块类阈值项：第一行标题；第二行为 下限输入框 / <= / 默认输入框 / <= / 上限输入框，
+     每个输入框在上、对应文字标签在下（"<=" 列下用空白占位保持对齐） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginStart="20dp" android:layout_marginEnd="20dp"
+    android:layout_marginTop="0dp" android:layout_marginBottom="12dp">
+
+    <TextView android:id="@+id/tv_label"
+        style="@style/SettingsOptionTitle"
+        android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:layout_marginTop="0dp">
+
+        <!-- 下限：上输入框 / 下“下限” -->
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical">
+            <EditText android:id="@+id/et_min"
+                android:layout_width="match_parent" android:layout_height="30dp"
+                android:inputType="numberDecimal" android:textSize="13sp" android:gravity="center"
+                android:background="@drawable/edit_bg"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="下限" android:textSize="11sp" android:textColor="@color/cp_note"
+                android:gravity="center"/>
+        </LinearLayout>
+
+        <!-- ≤ ：上“≤” / 下空白占位 -->
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:orientation="vertical" android:gravity="center_horizontal"
+            android:layout_marginStart="2dp" android:layout_marginEnd="2dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="≤" android:textSize="13sp" android:textColor="@color/cp_note"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text=" " android:textSize="11sp"/>
+        </LinearLayout>
+
+        <!-- 默认：上输入框 / 下“默认” -->
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical">
+            <EditText android:id="@+id/et_default"
+                android:layout_width="match_parent" android:layout_height="30dp"
+                android:inputType="numberDecimal" android:textSize="13sp" android:gravity="center"
+                android:background="@drawable/edit_bg"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="默认" android:textSize="11sp" android:textColor="@color/cp_note"
+                android:gravity="center"/>
+        </LinearLayout>
+
+        <!-- ≤ ：上“≤” / 下空白占位 -->
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:orientation="vertical" android:gravity="center_horizontal"
+            android:layout_marginStart="2dp" android:layout_marginEnd="2dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="≤" android:textSize="13sp" android:textColor="@color/cp_note"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text=" " android:textSize="11sp"/>
+        </LinearLayout>
+
+        <!-- 上限：上输入框 / 下“上限” -->
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical">
+            <EditText android:id="@+id/et_max"
+                android:layout_width="match_parent" android:layout_height="30dp"
+                android:inputType="numberDecimal" android:textSize="13sp" android:gravity="center"
+                android:background="@drawable/edit_bg"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="上限" android:textSize="11sp" android:textColor="@color/cp_note"
+                android:gravity="center"/>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

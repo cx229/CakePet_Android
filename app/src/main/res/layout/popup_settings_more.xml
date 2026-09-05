@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/menu_bg_popup"
+    android:padding="4dp">
+
+    <TextView
+        android:id="@+id/item_threshold"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="默认值与阈值"
+        android:textSize="11sp"
+        android:textColor="@color/cp_title"
+        android:background="?attr/selectableItemBackground" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/cp_subtle" />
+
+    <TextView
+        android:id="@+id/item_reset_user"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="恢复用户默认"
+        android:textSize="11sp"
+        android:textColor="@color/cp_title"
+        android:background="?attr/selectableItemBackground" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/cp_subtle" />
+
+    <TextView
+        android:id="@+id/item_reset_system"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="重置系统默认值与阈值"
+        android:textSize="11sp"
+        android:textColor="@color/cp_title"
+        android:background="?attr/selectableItemBackground" />
+
+    <!-- 主设置页专属：重置软件所有设置（含确认弹窗） -->
+    <View
+        android:id="@+id/sep_reset_all"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/cp_subtle"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/item_reset_all"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="重置软件所有设置"
+        android:textSize="11sp"
+        android:textColor="@color/cp_title"
+        android:background="?attr/selectableItemBackground"
+        android:visibility="gone" />
+</LinearLayout>

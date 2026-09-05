@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 碎碎念空白时长双滑块初始值：最小 2s / 最大 15s（与 PetConfigData 默认值一致） -->
+    <array name="empty_range_initial">
+        <item>2.0</item>
+        <item>15.0</item>
+    </array>
+</resources>

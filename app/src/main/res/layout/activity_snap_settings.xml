@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/cp_bg"
+    android:focusableInTouchMode="true"
+    android:descendantFocusability="afterDescendants">
+
+    <!-- 状态栏占位条：纯黑，高度由 Activity 按真实状态栏高度设置 -->
+    <View android:id="@+id/status_bar_spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/cp_status_bar" />
+
+    <!-- 标题栏：黑底 -->
+    <LinearLayout android:id="@+id/title_bar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/cp_bg">
+
+        <ImageView android:id="@+id/iv_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title"
+            android:padding="14dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="返回"/>
+
+        <TextView android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="贴边边设置"
+            android:textSize="20dp"
+            android:textStyle="bold"
+            android:textColor="@color/cp_title"/>
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+        <ImageView android:id="@+id/btn_more"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_more"
+            app:tint="@color/cp_title"
+            android:padding="12dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="更多"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true" android:focusable="true"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- ===== 模块：吸附边缘（原设置页贴边边卡片内容直接迁移） ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="吸附边缘" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <!-- 吸附边缘总开关：直接控制 snapEnabled，不影响子选项值 -->
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
+                    android:layout_marginBottom="0dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="吸附边缘" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="拖拽时在屏幕边缘松手，会吸附边缘。&#10;吸附状态，长按拖出。" style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_snap_enabled"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:minWidth="0dp" android:minHeight="0dp"
+                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
+                </LinearLayout>
+
+                <!-- 显示吸附线：吸附态时在图片“地面（锚点）”处显示一条灰色细线（默认开） -->
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="10dp"
+                    android:layout_marginBottom="0dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="显示吸附线" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="吸附状态下，在宠物“地面”位置显示一条灰色细线（宽度随宠物大小变化）。"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_show_snap_line"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:minWidth="0dp" android:minHeight="0dp"
+                        android:checked="true"
+                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
+                </LinearLayout>
+
+                <!-- 四边吸附（原 bg_cell_gray 横排四宫格，id 保持不变） -->
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    style="@style/SettingsOptionTitle"
+                    android:layout_marginTop="14dp" android:layout_marginBottom="4dp"
+                    android:text="四边吸附"/>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:layout_marginTop="2dp" android:layout_marginBottom="2dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="horizontal"
+                        android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                        android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="上" style="@style/SettingsOptionSub"/>
+                        <Switch android:id="@+id/sw_stop" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"/>
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="horizontal"
+                        android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                        android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="下" style="@style/SettingsOptionSub"/>
+                        <Switch android:id="@+id/sw_sbottom" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"/>
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="horizontal"
+                        android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                        android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="左" style="@style/SettingsOptionSub"/>
+                        <Switch android:id="@+id/sw_sleft" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"/>
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="horizontal"
+                        android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                        android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="右" style="@style/SettingsOptionSub"/>
+                        <Switch android:id="@+id/sw_sright" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"/>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 吸附距离（原设置页同款：id snap_threshold_bar，range 0-600，备注不变） -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginTop="16dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="吸附距离" style="@style/SettingsOptionTitle"/>
+                            <EditText android:id="@+id/snap_threshold_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="100" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="number"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
+                        </LinearLayout>
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/snap_threshold_bar" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="0.0" android:valueTo="600.0" android:stepSize="1.0"
+                            android:layout_marginBottom="0dp"/>
+                    </LinearLayout>
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="拖拽松手时，数值越大，越容易被吸附在边缘"
+                        style="@style/SettingsOptionNote"
+                        android:layout_marginBottom="4dp"/>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

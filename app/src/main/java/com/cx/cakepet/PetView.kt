@@ -3,6 +3,7 @@ package com.cx.cakepet
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.os.Build
 import android.os.SystemClock
@@ -15,6 +16,7 @@ import android.view.View
 import android.view.WindowInsets
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.round
 
 /**
  * 宠物浮窗视图：绘制当前帧、处理触摸拖动、长按弹出菜单。
@@ -29,6 +31,14 @@ class PetView @JvmOverloads constructor(
     val physics = PetPhysics()
     private val imageManager = ImageModeManager(context)
     private var currentBitmap: Bitmap? = null
+
+    /** 当前帧锚点【快照】：在 syncCurrentBitmap() 中与 currentBitmap 同一次、同帧写入，
+     *  是“显示位图”与“定位锚点”的唯一真相源。之后所有位置计算只读它，不再回头 currentAnchor() 实时读，
+     *  杜绝“显示切到帧 N+1、位置还在用帧 N 锚点”的异步错位（动作与位置不适配）。 */
+    private var currentFrameAnchor: Pair<Int, Int>? = null
+    // 上次已发出位置的锚点值：仅当锚点真正变化时才重发浮窗位置（避免每帧无谓 updateViewLayout）。
+    private var lastEmittedAnchorX = -1
+    private var lastEmittedAnchorY = -1
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     // 触摸拖动状态
@@ -36,6 +46,9 @@ class PetView @JvmOverloads constructor(
     private var lastTouchY = 0f
     private var dragging = false
     private var movedDuringPress = false
+    // 本次手势的 DOWN 是否命中（像素点）并被消费。透明起点（红框）时为 false，
+    // 用于守卫 MOVE/UP：只有命中起点的手势才允许进入拖拽/提起，避免透明区误拖动导致位置跳变。
+    private var hitDownConsumed = false
     // 长按手势状态：
     // - pressing：手指按下中（尚未判定为拖拽或长按）
     // - longPressTriggered：已达长按阈值且未明显移动 -> 候选打开菜单（已振动）
@@ -71,10 +84,17 @@ class PetView @JvmOverloads constructor(
     var onLand: (() -> Unit)? = null
     // 尺寸（缩放/帧）变化后通知外部重新计算边界
     var onSizeChanged: (() -> Unit)? = null
+    // 拖拽拉出吸附态：残留朝向(rotation/flip/side)归零后通知外部重算活动范围，避免边界沿用吸附态包围盒
+    var onSnapExit: (() -> Unit)? = null
     // 输入法（软键盘）显隐：回调当前键盘高度（已扣除导航栏），供外部抬高宠物地面避免遮挡
     var onImeInsetChanged: ((height: Int) -> Unit)? = null
-    // 调试：是否叠加红色矩形（大小与当前显示一致）
-    var showRect = false
+    // 调试边框（两个独立开关）：显示边框=图片窗口黑线+脚锚点十字；控制边框=命中可视化（贴实际控制窗）
+    var showImageBorder = false
+    var showControlBorder = false
+    var hitMode: Int = ConfigDefaults.HIT_BOUNDARY // 命中模式：像素/边界/核心(脚底盒)
+    var ctrlBoxWidth: Float = ConfigDefaults.CTRL_BOX_WIDTH      // 核心命中区宽（128基数）
+    var ctrlBoxHeight: Float = ConfigDefaults.CTRL_BOX_HEIGHT    // 核心命中区高（128基数）
+    var ctrlBoxVOffset: Float = ConfigDefaults.CTRL_BOX_VOFFSET  // 核心命中区垂直偏移（128基数）
 
     // 行走朝向镜像（水平翻转）：朝右走时 true（对齐 PC transform_flag）。
     // 公开：供 PetService 在一次性位移模式（如扒鱼）读取当前面朝方向以设位移初速度。
@@ -96,11 +116,11 @@ class PetView @JvmOverloads constructor(
             }
         }
     // 当前渲染旋转角（度，顺时针），由 gravityDir 推导。
-    private var gravityRotation = 0f
+    internal var gravityRotation = 0f
 
     // 吸附态专属旋转角（度，顺时针）：仅 SNAP_HEAD 变体叠加的“脚朝向贴附边”旋转，
     // 不修改全局 gravityDir/gravityRotation，退出吸附即归零，不影响其他状态方向。
-    private var snapRotation = 0f
+    internal var snapRotation = 0f
 
     // 吸附态专属镜像（水平翻转）：吸附探头时左右/上下随机朝向（不修改全局 flipX）。
     // 仅吸附态渲染时应用，退出吸附即不生效，零状态残留、不污染 walk/扒鱼/静置等朝向逻辑。
@@ -139,22 +159,133 @@ class PetView @JvmOverloads constructor(
     }
 
     /**
-     * 把「窗口内本地锚点偏移」(offX, offY) 按重力朝向绕窗口中心旋转，得到旋转后真实屏幕偏移。
-     * 不处理 flipX（调用方传入的 off 已含镜像），只叠加重力旋转，与 onDraw(先 rotate 后 flip) 一致。
-     * 默认 0° 时原样返回（避免无谓三角函数）。
+     * 把「窗口内本地锚点偏移」(offX, offY) 按指定旋转角（度，顺时针）绕 (cx, cy) 旋转，
+     * 得到旋转后真实屏幕偏移。与 onDraw 的 canvas.rotate(deg, cx, cy) 一致（先旋转后镜像）。
+     * 不处理 flipX（调用方传入的 off 已含镜像）。默认 0° 时原样返回（避免无谓三角函数）。
+     * 默认旋转中心为窗口中心 (w/2, h/2)；ROLL 传入锚点自身 (offX, offY) 作为中心，
+     * 使球状对称的 roll 绕脚（锚点）旋转、浮窗不抖，同时锚点用真实值、与其他动作统一。
      */
-    private fun rotateOffset(offX: Float, offY: Float, w: Int, h: Int): Pair<Float, Float> {
-        if (gravityRotation == 0f) return offX to offY
-        val cx = w / 2f
-        val cy = h / 2f
+    /**
+     * 二分测试开关：定位「像素级命中失效」是位图问题还是外部链路消费了点击。
+     *   - null  : 正常使用像素级判定（isHitOnPet 真实返回值）
+     *   - true  : 强制整窗命中（等价于当前"矩形内都可点击"）
+     *   - false : 强制整窗不命中（透明/非透明都应穿透，整窗不可拖）
+     * 实测：
+     *   - 恒 true 与恒 false 行为【不同】 -> isHitOnPet 确实是闸门，问题在其真实返回值（位图/矩阵）
+     *   - 恒 false 仍可拖 -> 是外部链路（而非 isHitOnPet）消费了 DOWN，问题在 PetService/窗口层
+     * 伴生对象：全局统一，PetService 内所有真实浮窗实例都会遵守。
+     */
+    companion object {
+        @Volatile
+        @JvmStatic
+        var FORCE_HIT_TEST: Boolean? = null
+    }
+
+    /** 当前帧 bitmap（供触摸像素命中判定使用） */
+    private fun getFrameBitmap(): Bitmap? = currentBitmap
+
+    /** 绘制/命中共用的渲染状态：强制 onDraw 与 isHitOnPet 在同一帧使用完全相同的参数，
+     *  杜绝两者因各自计算绘制矩形/旋转/镜像导致的坐标系错位（整窗误判命中的根因）。 */
+    private data class RenderState(
+        val bmp: Bitmap,
+        val dw: Float, val dh: Float,
+        val left: Float, val top: Float,
+        val cx: Float, val cy: Float,
+        val rotation: Float, val flip: Boolean,
+        val scale: Float
+    )
+
+    /** 由 currentBitmap + scaleFactor + 当前吸附/朝向状态计算渲染参数。
+     *  注意：非吸附态不使用 snapRotation，故这里不读取 snapRotation（旧 onDraw 非吸附态会
+     *  顺手写 snapRotation=0f，属于副作用，已移除，避免与命中判定读到不同中间状态）。 */
+    private fun computeRenderState(): RenderState? {
+        val bmp = currentBitmap ?: return null
+        if (bmp.width <= 0 || bmp.height <= 0) return null
+        // 逻辑画布尺寸（恒 128 基准；新包解码 256 超采样但画布逻辑仍为 128）。dw/dh 用逻辑尺寸，
+        // 而非 bmp 像素（256），否则新包会被放大 2x。
+        val (cw, ch) = imageManager.currentBitmapSize()
+        val s = scaleFactor
+        val dw = cw * s
+        val dh = ch * s
+        if (dw <= 0 || dh <= 0) return null
+        // 渲染坐标系必须用固定整帧尺寸（与 stageView 的 getBaseAnchorScaled 同源），
+        // 不可用控制窗实时尺寸：CORE 模式下控制窗被缩成脚底盒，用 width/height 会把位图算偏。
+        val (fw, fh) = getBaseBitmapSize()
+        val left = (fw - dw) / 2f
+        val top = fh - dh
+        val cx = fw / 2f
+        val cy = fh / 2f
+        // 绘制缩放：把【实际 bitmap 像素】映射为【屏幕逻辑矩形】。新包 bmp=256、dw=128*s ⇒ s/2（GPU 降采样，清晰）；
+        // 旧包 bmp=128、dw=128*s ⇒ s（与原行为一致）。isHitOnPet 用同一 scale 反算，命中与显示严格对齐。
+        val drawScale = if (bmp.width > 0) dw / bmp.width else s
+        val rotation = if (physics.isSnapped) snapRotation else gravityRotation
+        val flip = if (physics.isSnapped) snapFlipX else flipX
+        return RenderState(bmp, dw, dh, left, top, cx, cy, rotation, flip, drawScale)
+    }
+
+    /**
+     * 判断视图坐标 (vx, vy) 是否落在 pet 当前显示部分（非透明像素）。
+     * 使用与 onDraw 完全相同的 RenderState（同一份尺寸/旋转/镜像/缩放参数）构建正向矩阵并求逆，
+     * 保证命中坐标系与显示严格一致。透明区域返回 false → onTouchEvent 放行穿透。
+     */
+    /** 调试可视化：最近一次 DOWN 的命中判定结果（null=未点；true=命中非透明；false=透明穿透） */
+    private var lastHitTest: Boolean? = null
+
+    /** 调试可视化：PetView 实际收到的最近一次触摸 action（0=未收到, 0=DOWN,1=MOVE,2=UP） */
+    private var lastAction: Int = -1
+
+    // 供 PetStageView 调试层读取的只读通道（控制边框可视化用），不暴露写权限。
+    val debugLastHitTest: Boolean? get() = lastHitTest
+    val debugLastAction: Int get() = lastAction
+
+    private fun isHitOnPet(vx: Float, vy: Float): Boolean {
+        val rs = computeRenderState() ?: return false // 无图时不命中，整窗放行穿透
+        val w = rs.bmp.width
+        val h = rs.bmp.height
+        // 正向矩阵（bitmap像素 -> View坐标）必须严格等于 onDraw 的变换链：
+        //   canvas.rotate(R) → canvas.scale(-1,F) → drawBitmap(RectF = T∘S)
+        // 即正向 M = R · F · T · S（R/F 绕中心，T=translate(left,top)，S=scale(s)）。
+        // post* 为右乘（后调用先作用于点），故按"从右到左"顺序构造：
+        //   postScale(s) → postTranslate(left,top) → postScale(-1,F) → postRotate(R)
+        val m = Matrix()
+        m.postScale(rs.scale, rs.scale)          // S
+        m.postTranslate(rs.left, rs.top)          // T
+        if (rs.flip) m.postScale(-1f, 1f, rs.cx, rs.cy)  // F（绕中心）
+        if (rs.rotation != 0f) m.postRotate(rs.rotation, rs.cx, rs.cy) // R（绕中心）
+        val inv = Matrix()
+        if (!m.invert(inv)) return false
+        val pts = floatArrayOf(vx, vy)
+        inv.mapPoints(pts)
+        val px = round(pts[0]).toInt()
+        val py = round(pts[1]).toInt()
+        if (px < 0 || py < 0 || px >= w || py >= h) {
+            return false
+        }
+        val alpha = rs.bmp.getPixel(px, py).ushr(24)
+        val hit = alpha != 0 // alpha != 0 即命中
+        lastHitTest = hit
+        return hit
+    }
+
+    private fun rotateOffsetWith(offX: Float, offY: Float, w: Int, h: Int, deg: Float,
+                                 cx: Float = w / 2f, cy: Float = h / 2f): Pair<Float, Float> {
+        if (deg == 0f) return offX to offY
         val rx = offX - cx
         val ry = offY - cy
-        val rad = Math.toRadians(gravityRotation.toDouble())
+        val rad = Math.toRadians(deg.toDouble())
         val cos = kotlin.math.cos(rad)
         val sin = kotlin.math.sin(rad)
         val nx = rx * cos - ry * sin
         val ny = rx * sin + ry * cos
         return (cx + nx.toFloat()) to (cy + ny.toFloat())
+    }
+
+    /**
+     * 把「窗口内本地锚点偏移」(offX, offY) 按【重力朝向】绕窗口中心旋转（非吸附态用）。
+     * 吸附态应使用 rotateOffsetWith(..., snapRotation)，与 onDraw 的 snapRotation 渲染一致。
+     */
+    private fun rotateOffset(offX: Float, offY: Float, w: Int, h: Int): Pair<Float, Float> {
+        return rotateOffsetWith(offX, offY, w, h, gravityRotation)
     }
 
     private var scaleFactor = 1.0f
@@ -335,6 +466,12 @@ class PetView @JvmOverloads constructor(
 
     fun getScale(): Float = scaleFactor
 
+    /** 吸附态渲染旋转角（度），与 onDraw 中应用的 snapRotation 一致。 */
+    fun getSnapRotation(): Float = snapRotation
+
+    /** 吸附态渲染水平镜像，与 onDraw 中应用的 snapFlipX 一致。 */
+    fun getSnapFlipX(): Boolean = snapFlipX
+
     /**
      * 由物理循环每帧调用（~16ms，ms 级）。
      * 职责严格分离：
@@ -370,16 +507,10 @@ class PetView @JvmOverloads constructor(
         // 模式切换的当帧：强制立即推一帧，让 提起/滚动 首帧即时显示，不被节流延迟。
         if (modeChanged) {
             frameAccumulator = 0f
+            // syncCurrentBitmap() 内部已写入锚点快照、并按“锚点是否变化”原子重发浮窗位置
+            // （与位图同帧），故切模式导致的锚点变化会立即反映到窗口位置，无需此处再发。
+            // 拖拽/抛掷中由 touch 事件负责位置，syncCurrentBitmap 内部已跳过，不会覆盖抓取偏移语义。
             syncCurrentBitmap()
-            // 模式切换会改变当前锚点（各模式锚点基准不同，如扒鱼 52 / LIE 42 / SIT 81），
-            // 浮窗位置 = physics.{x,y} - 锚点偏移。锚点变了必须立即按新锚点重算并写出浮窗，
-            // 否则切到 dx=0 的静止模式（LIE/SIT）时不刷新位置，导致图相对地面错位、
-            // 甚至被推出屏幕；直到后续某次位移才偶然归位（见扒鱼后 sit 的 bug）。
-            // 拖拽/抛掷中由 touch 事件负责位置，此处跳过避免覆盖抓取偏移语义。
-            // 注意：此处【不】调 onSizeChanged（窗口尺寸恒定，无需 resize），避免卡顿。
-            if (!physics.isDragging && !physics.isThrowing) {
-                onPositionChanged?.invoke(physics.x, physics.y)
-            }
         } else if (frameAccumulator >= FRAME_INTERVAL) {
             frameAccumulator = 0f
             val dtMs = (FRAME_INTERVAL * 1000f).toLong().coerceAtLeast(1)
@@ -489,6 +620,31 @@ class PetView @JvmOverloads constructor(
         lastFrameH = fh
         lastAnchorX = fax
         lastAnchorY = fay
+        // 锚点快照：与上面的 currentBitmap 同一次、同帧写入，是“显示位图”与“定位锚点”的唯一真相源。
+        // 之后所有位置计算(getAnchorScaled/getAnchorRaw)只读此快照，不再回头 currentAnchor() 实时读，
+        // 杜绝“显示切到帧 N+1、位置还在用帧 N 锚点”的异步错位。
+        currentFrameAnchor = fax to fay
+        // 锚点变化才按新锚点重发浮窗位置：与位图同步在同一调用内完成 → 动作与位置严格同帧更新。
+        // 拖拽/抛掷期间由 touch 链路负责位置，此处跳过避免覆盖抓取偏移语义。
+        if (!physics.isDragging && !physics.isThrowing) {
+            if (fax != lastEmittedAnchorX || fay != lastEmittedAnchorY) {
+                lastEmittedAnchorX = fax
+                lastEmittedAnchorY = fay
+                onPositionChanged?.invoke(physics.x, physics.y)
+            }
+        }
+    }
+
+    /**
+     * 运行时切换资源包（关于页“使用新资源”开关触发）。
+     * 重建 ImageModeManager 内部状态并复位到静坐，再重读基准帧尺寸、同步当前帧。
+     */
+    fun applySpritePack(pack: SpritePack) {
+        imageManager.setPack(pack)
+        val (gw, gh) = imageManager.globalMaxSize()
+        baseFrameW = gw
+        baseFrameH = gh
+        syncCurrentBitmap()
     }
 
     /**
@@ -562,11 +718,15 @@ class PetView @JvmOverloads constructor(
             }
             physics.isSnapped -> {
                 // 吸附态：常驻探头（脚朝向被贴附的边），循环播放、忽略重力。
-                // 抢占一次性动作（如摸头），确保吸附探头不被打断。
-                if (imageManager.isPlayingForced()) imageManager.cancelForced()
+                // 抢占一次性动作（如摸头），确保吸附探头不被打断；
+                // 但允许“吸附探头摸摸头(SNAP_PAT_HEAD)”一次性动作完整播放，结束后由其 nextMode 切回 SNAP_HEAD。
+                if (imageManager.isPlayingForced() && imageManager.getMode() != ImageModeManager.SNAP_PAT_HEAD) {
+                    imageManager.cancelForced()
+                }
                 // 仅本变体叠加“朝向贴附边”的旋转，不修改全局 gravityDir（不影响其他状态/方向）。
                 snapRotation = dirToRotation(physics.snapSide)
-                if (imageManager.getMode() != ImageModeManager.SNAP_HEAD) {
+                val curMode = imageManager.getMode()
+                if (curMode != ImageModeManager.SNAP_HEAD && curMode != ImageModeManager.SNAP_PAT_HEAD) {
                     // 刚进入吸附的这一帧：振动一次提示（getMode 已为 SNAP_HEAD 后不再重复触发）。
                     imageManager.setMode(ImageModeManager.SNAP_HEAD)
                     // 反向镜像随机：吸附探头脚朝向固定（snapRotation），但左右/上下随机翻转，
@@ -603,33 +763,90 @@ class PetView @JvmOverloads constructor(
 
     /**
      * 当前帧锚点【在浮窗窗口内的偏移】× 缩放（对齐 PC image_meta）。
-     * onDraw 把当前帧【居中】绘制到固定窗口（窗口 = 全局最大帧 × scale，进程内恒定），
-     * 因此位图锚点在窗口中的 X = (窗口宽 - 位图宽)/2 + 锚点X*scale。
+     * 统一画布为【顶部填充、底部补透明】填充（非 roll 时图片置顶、透明在下方），
+     * currentAnchor() 返回的 fay 已按该规则含 padY（脚离窗口顶距离），窗口内偏移 Y = fay*scale；
+     * 不再叠加 (h-dh)/2 居中偏移（否则锚点被多下移半张图高，宠物悬空/出界）。
+     * 水平方向图居中填充，偏移 X = (窗口宽-图宽)/2 + 锚点X*scale。
      * 浮窗左上 = physics.x - 此偏移，保证位图锚点精确落在屏幕 (physics.x, physics.y)。
      */
     fun getAnchorScaled(): Pair<Float, Float> {
         val (w, h) = getBitmapSize()          // 当前模式最大帧×scale（窗口尺寸）
-        val (fax, fay) = imageManager.currentAnchor()  // 当前帧图片像素锚点
-        val bmp = currentBitmap
-        val dw = (bmp?.width ?: 0) * scaleFactor
-        val dh = (bmp?.height ?: 0) * scaleFactor
-        // 镜像(flipX)时图片以窗口中心翻转，图片像素 x 映射到 dw - x。
-        // 故锚点在窗口内的偏移需对称翻转：offX = (w+dw)/2 - fax*scale。
-        // 这样扒鱼等镜像模式脚底/接触点对称正确（对齐 PC transform_flag 左右朝向）。
-        val offX = if (flipX) {
+        // 锚点取自【同帧快照】currentFrameAnchor，与 onDraw 显示的 currentBitmap 严格同帧，
+        // 不再实时读 currentAnchor()（否则会与显示帧错位，导致动作/位置不适配）。
+        val (fax, fay) = currentFrameAnchor ?: imageManager.currentAnchor()
+        // 绘制宽度 = 窗口宽 w（逻辑 128*s，render 把 256 超采样源缩进此矩形铺满），
+        // 不再用 bmp.width（新包=256 物理像素），否则横向偏移偏 64*s。
+        val dw = w
+        // 镜像：吸附态用专属 snapFlipX（与 onDraw 渲染一致），非吸附态用全局 flipX。
+        // 镜像时图片以窗口中心翻转，图片像素 x 映射到 dw - x，
+        // 故锚点在窗口内的偏移需对称翻转：offX = (w+dw)/2 - fax*scale（扒鱼等左右朝向正确）。
+        val useFlip = if (physics.isSnapped) snapFlipX else flipX
+        val offX = if (useFlip) {
             (w + dw) / 2f - fax * scaleFactor
         } else {
             (w - dw) / 2f + fax * scaleFactor
         }
-        val offY = (h - dh) / 2f + fay * scaleFactor
-        // 锚点偏移需随重力朝向旋转，否则旋转 90/180/270 后脚没落在 physics 坐标上
-        // （表现为悬浮高度/贴边错位）。与 onDraw 的 canvas.rotate 一致。
-        return rotateOffset(offX, offY, w, h)
+        // 统一画布顶部填充、底部补透明，currentAnchor() 已按填充规则含 padY ⇒ 脚离窗口顶 = fay，直接乘 scale，
+        // 不再叠加 (h-dh)/2 居中偏移（否则锚点被多下移半张图高，宠物悬空/出界）。
+        val offY = fay * scaleFactor
+        // 锚点偏移需随【渲染旋转】旋转，否则旋转 90/180/270 后脚没落在 physics 坐标上
+        // （表现为悬浮高度/贴边错位）。吸附态渲染用 snapRotation（脚朝贴附边），
+        // 非吸附态用 gravityRotation；必须用与 onDraw 完全相同的旋转角与旋转中心，否则定位与显示错位。
+        // 所有非 ROLL 动作绕【窗口/矩形框中心】旋转，锚点(脚)随朝向旋转后定位浮窗。
+        // ROLL 解构（避免因果循环）：球状对称的 roll 在脚方向改变时，图绕自身中心自转、
+        // 视觉不变，但矩形框(浮窗)位置必须恒定——否则锚点偏移被 rot 旋转后回流到浮窗 y，
+        // 导致脚方向一变框就跳（锚点↔位置循环因果）。
+        // 引入中间值：roll 时浮窗定位用 rot=0 的【锚点基准偏移】（图中心/脚的 rot 无关投影），
+        // 旋转只作用于 onDraw 的图自转，不参与浮窗定位。anchorY 仍真实参与 offY 计算
+        // （它是位置输入：非 roll 动作切换正常用；roll 时也影响恒定偏移，用户可调），
+        // 只是不再被 rot 旋转后回流，从而在“锚点仍生效”与“框不随 rot 跳变”间解耦。
+        val rot = if (physics.isSnapped) snapRotation else gravityRotation
+        val effRot = if (imageManager.getMode() == ImageModeManager.ROLL) 0f else rot
+        return rotateOffsetWith(offX, offY, w, h, effRot)
     }
 
     /**
-     * 边界计算用的固定基准尺寸（初始化静止帧 × scale），与动画帧无关。
-     * 使用它能避免 Roll/Walk 每帧尺寸变化导致边界抖动、位置被反复 clamp。
+     * 当前帧锚点【在浮窗窗口内的偏移】× 缩放，但【未随重力朝向旋转】（= getAnchorScaled 的旋转前值）。
+     * 供吸附线浮层在「与 PetView 完全相同的局部坐标系」中重放同样的 rotate/scale 变换，
+     * 避免双重旋转导致线段错位。返回的是相对浮窗左上角的偏移 (offX, offY)。
+     */
+    /**
+     * 当前帧锚点【在浮窗窗口内的偏移】× 缩放，但【未随重力朝向旋转】（= getAnchorScaled 的旋转前值）。
+     * 供吸附线浮层在「与 PetView 完全相同的局部坐标系」中重放同样的 rotate/scale 变换，
+     * 避免双重旋转导致线段错位。返回的是相对浮窗左上角的偏移 (offX, offY)。
+     *
+     * 关键：必须复用 imageManager.currentAnchor() 的【已含 pad 补偿】的锚点值，
+     * 而非帧原始 anchorY 自己手算居中偏移——统一画布是【顶部填充、底部补透明】（非 roll 时 padY=0），
+     * currentAnchor() 已按填充规则把 padY 加进锚点（ay=frame.anchorY+padY），手算 (h-dh)/2 会得到
+     * 「居中」补偿（与顶部填充不符），使地面线偏低、偏离宠物真实脚底（贴墙接触线）。
+     * 位图在窗口内由 onDraw 居中绘制到 (left,top)，故锚点窗口坐标 = left + ax*scale / top + ay*scale。
+     */
+    fun getAnchorRaw(): Pair<Float, Float> {
+        val (w, h) = getBitmapSize()
+        val (fax, fay) = currentFrameAnchor ?: imageManager.currentAnchor()  // 已含 pad 补偿的统一画布坐标（未乘 scale）
+        // 绘制宽/高 = 窗口宽/高（逻辑 128*s，render 把 256 超采样源缩进此矩形铺满），
+        // 不再用 bmp 物理像素（新包=256），否则 left/top 横纵各偏 64*s。
+        val dw = w
+        val dh = h
+        val left = (w - dw) / 2f
+        // 统一画布顶部填充、底部补透明（与 onDraw 一致）：位图在窗口内按 (left,top) 对齐绘制，
+        // 图片在画布内（顶部），脚由 currentAnchor 的 fay 给出；若 dh≠h 则 top=h-dh 兜底对齐。
+        val top = (h - dh)
+        // 镜像(flipX)时图片以窗口中心翻转，锚点 X 对称：offX = w - (left + fax*scale)。
+        // 与 onDraw 的 scale(-1,1,center) 完全一致，使吸附线 X 与宠物脚底/接触点对齐。
+        val offX = if (flipX) {
+            w - (left + fax * scaleFactor)
+        } else {
+            left + fax * scaleFactor
+        }
+        val offY = top + fay * scaleFactor
+        return offX to offY
+    }
+
+    /**
+     * 边界计算用的固定基准尺寸（全局最大帧尺寸 × scale），与动画帧无关。
+     * 所有模式共用同一张统一画布（globalMaxSize），sit 与 SNAP_HEAD 尺寸相同，故恒定返回此值即可；
+     * 使用它能避免每帧尺寸变化导致边界抖动、位置被反复 clamp。
      */
     fun getBaseBitmapSize(): Pair<Int, Int> {
         if (baseFrameW <= 0 || baseFrameH <= 0) return getBitmapSize()
@@ -637,19 +854,176 @@ class PetView @JvmOverloads constructor(
     }
 
     /**
-     * 边界计算用的固定基准锚点（初始化静止帧，居中绘制下的窗口内偏移 × scale）。
+     * 给定窗口尺寸 (w,h) 与旋转角 rotDeg，返回图片绕中心旋转后【水平半跨度, 垂直半跨度】
+     * （即旋转后图片在 x/y 方向占用的半尺寸）。rotDeg=0 时 = (w/2, h/2)。
+     * 供 recalcBounds 在吸附/重力旋转态下按“旋转后包围盒”内缩，使图片边缘精确贴偏移线。
+     */
+    fun getRotatedHalfExtents(w: Int, h: Int, rotDeg: Float): Pair<Float, Float> {
+        // 图片绕中心旋转 rotDeg（顺时针，与 onDraw 的 canvas.rotate 一致）后的 AABB 半跨度。
+        // 标准公式：halfW = |w/2*cos| + |h/2*sin|，halfH = |w/2*sin| + |h/2*cos|。rotDeg=0 时=(w/2,h/2)。
+        val rad = Math.toRadians(rotDeg.toDouble())
+        val cos = abs(kotlin.math.cos(rad).toFloat())
+        val sin = abs(kotlin.math.sin(rad).toFloat())
+        val hw = (w / 2f) * cos + (h / 2f) * sin
+        val hh = (w / 2f) * sin + (h / 2f) * cos
+        return hw to hh
+    }
+
+    /**
+     * 边界计算用的固定基准锚点（居中绘制下的窗口内偏移 × scale）。
+     *
+     * 与历史版本一致：吸附态也用 sit 基准 baseAnchorX/Y（=81），【不】改用 SNAP_HEAD 的
+     * currentAnchor()(=66)。原因：recalcBounds 与浮窗定位都用此方法算"锚点→浮窗左上"，
+     * 二者必须同源。若吸附态改用 66，则探头"虚拟地面"变成脚锚点(66)而非 png 底，
+     * 图片整体下坠 15px、超出偏移线，且与其他动作(均用 81)不一致 → 只有探头错位。
+     * 旋转：吸附态用 snapRotation（脚朝贴附边，与 onDraw 一致）、非吸附态用 gravityRotation，
+     * 保证朝向正确（仅旋转图片，不改变"地面=基准锚点"的约定）。
+     */
+    /**
+     * 边界/贴边计算用的锚点（居中绘制下的窗口内偏移 × scale）。
+     *
+     * 必须与渲染层 getAnchorScaled 同源：一律用 currentAnchor()（当前帧真实锚点，
+     * sit=81 / SNAP_HEAD=66 / 其它动作各自值），吸附态/非吸附态都不切换。
+     * 这样 recalcBounds 的 maxY 与浮窗定位 layoutParams=physics-ay 用【同一个 ay】，
+     * 锚点(脚)才能精确落在 physics 坐标上。
+     *
+     * 探头/越界模型（见 recalcBounds）：边界只约束“脚朝向那一侧的锚点不超可见区”，
+     * 其余三侧约束 PNG 四边不超界。故 SNAP(66) 脚的锚点贴边、图底自然下垂到屏幕外
+     * （被裁切=探头），sit(81) 同理脚贴边、图底透明区垂下；各动作按各自脚锚点贴边，
+     * 互不干扰。边界与渲染同源是探头成立的前提（之前改 66/81 来回抵消=同源被误删）。
+     *
+     * 旋转：吸附态 snapRotation、非吸附态 gravityRotation，保证朝向与 onDraw 一致。
      */
     fun getBaseAnchorScaled(): Pair<Float, Float> {
-        if (baseAnchorX <= 0 || baseAnchorY <= 0) return getAnchorScaled()
+        val (fax, fay) = imageManager.currentAnchor()   // 当前帧真实锚点（随动作/模式变化）
         val (w, h) = getBaseBitmapSize()
-        val (fax, fay) = baseAnchorX to baseAnchorY
-        val bmp = currentBitmap
-        val dw = (bmp?.width ?: 0) * scaleFactor
-        val dh = (bmp?.height ?: 0) * scaleFactor
+        // 位图在窗口内铺满（render 把 256 物理超采样源缩进 128×s 逻辑矩形），绘制宽度 = 窗口宽 w，
+        // 不再用 bmp.width（新包=256 物理像素），否则 offX 横向偏 64*s、所有动作浮窗整体右移。
+        val dw = w
         val offX = (w - dw) / 2f + fax * scaleFactor
-        val offY = (h - dh) / 2f + fay * scaleFactor
-        // 与 getAnchorScaled 一致：锚点偏移随重力朝向旋转，保证边界/贴边计算与显示对齐。
-        return rotateOffset(offX, offY, w, h)
+        // 顶部填充、底部补透明：currentAnchor() 已按填充规则含 padY ⇒ 脚离窗口顶 = fay，直接乘 scale，不加 (h-dh)/2。
+        val offY = fay * scaleFactor
+        val rot = if (physics.isSnapped) snapRotation else gravityRotation
+        // 与 getAnchorScaled 同源：ROLL 同样用 rot=0 中间值，保证边界/贴边计算与浮窗定位一致
+        // （框恒定，不随脚方向跳变）。
+        val effRot = if (imageManager.getMode() == ImageModeManager.ROLL) 0f else rot
+        return rotateOffsetWith(offX, offY, w, h, effRot)
+    }
+
+    /**
+     * 控制窗矩形（屏幕绝对坐标）：控制层几何，独立于显示层（全屏画布只显示、不接触摸）。
+     * - 像素/边界：整只宠物显示矩形（覆盖全宠以便整窗命中）。
+     * - 核心：脚底盒（ctrlBox，屏幕单位，不乘图片 scale），随脚方向旋转；
+     *   控制窗缩到该盒的轴对齐包围盒(AABB)，盒外区域由 isCoreHit 的 OBB 判定放穿。
+     */
+    fun controlWindowRect(): android.graphics.RectF {
+        val (ax, ay) = getBaseAnchorScaled()
+        val dispX = physics.x - ax
+        val dispY = physics.y - ay
+        return when (hitMode) {
+            ConfigDefaults.HIT_CORE -> {
+                val (bcx, bcy) = coreBoxCenterDisplayLocal()
+                val rot = if (physics.isSnapped) snapRotation else gravityRotation
+                val effRot = if (imageManager.getMode() == ImageModeManager.ROLL) 0f else rot
+                val rad = Math.toRadians(effRot.toDouble())
+                val c = Math.abs(Math.cos(rad)).toFloat()
+                val s = Math.abs(Math.sin(rad)).toFloat()
+                // ctrlBox 为 128 逻辑基数，× scaleFactor（宠物大小）转屏幕像素。
+                val hw = ctrlBoxWidth * scaleFactor
+                val hh = ctrlBoxHeight * scaleFactor
+                val ahw = (hw / 2f) * c + (hh / 2f) * s
+                val ahh = (hw / 2f) * s + (hh / 2f) * c
+                val left = dispX + bcx - ahw
+                val top = dispY + bcy - ahh
+                android.graphics.RectF(left, top, left + 2 * ahw, top + 2 * ahh)
+            }
+            else -> {
+                // 像素/边界：控制窗 = 整只宠物显示矩形。尺寸必须用 getBaseBitmapSize()
+                // （render/PetStageView 实际绘制窗口），不可用 getBitmapSize()（全局最大帧），
+                // 否则控制窗尺寸与显示矩形不符、触摸坐标映射错位。
+                val (w, h) = getBaseBitmapSize()
+                android.graphics.RectF(dispX, dispY, dispX + w, dispY + h)
+            }
+        }
+    }
+
+    /**
+     * 控制窗调试轮廓（屏幕绝对坐标）：供 PetStageView 调试层绘制控制边框。
+     * 几何与控制层严格同源：CORE 保留旋转 OBB（中心/半宽半高/旋转角，与 isCoreHit 一致），
+     * 其余返回整帧 AABB。绝对坐标 = 显示窗左上(dispX,dispY) + 本地中心，独立于显示窗绘制。
+     */
+    data class ControlWindowOBB(val cx: Float, val cy: Float, val hw: Float, val hh: Float, val rot: Float)
+
+    fun getControlWindowOBB(): ControlWindowOBB? {
+        val (ax, ay) = getBaseAnchorScaled()
+        val dispX = physics.x - ax
+        val dispY = physics.y - ay
+        return when (hitMode) {
+            ConfigDefaults.HIT_CORE -> {
+                // coreBoxCenterDisplayLocal 返回显示窗本地坐标，转绝对需 + dispX/dispY。
+                // ctrlBoxWidth/Height 为全宽/全高（128 基数 × scaleFactor = 屏幕像素），
+                // OBB 的 hw/hh 取半宽/半高，这样矩形中心在脚上方 (hh/2+vo)、底贴脚、整体在脚以上。
+                val (bcx, bcy) = coreBoxCenterDisplayLocal()
+                val hw = ctrlBoxWidth * scaleFactor / 2f
+                val hh = ctrlBoxHeight * scaleFactor / 2f
+                val rot = if (physics.isSnapped) snapRotation else gravityRotation
+                val effRot = if (imageManager.getMode() == ImageModeManager.ROLL) 0f else rot
+                ControlWindowOBB(dispX + bcx, dispY + bcy, hw, hh, effRot)
+            }
+            else -> {
+                val (w, h) = getBaseBitmapSize()
+                ControlWindowOBB(dispX + w / 2f, dispY + h / 2f, w / 2f, h / 2f, 0f)
+            }
+        }
+    }
+
+    /** 核心脚底盒中心（显示窗口本地坐标）：本地系内脚锚点正上方 (hh/2+vo)、身体中轴居中，经 effRot 旋转。
+     *  镜像：与 render 的 canvas.scale(-1,1,center) 同源——脚锚点 X 对称翻转，
+     *  脚底盒以“可见脚 X”为身体中轴居中，故盒子中心 X 必须随 flip 取镜像值（snapFlipX/flipX）。
+     *  注意：定位仍用非镜像 getBaseAnchorScaled（与全屏画布窗口同源），仅此处盒子中心 X 镜像感知。 */
+    private fun coreBoxCenterDisplayLocal(): Pair<Float, Float> {
+        // ctrlBox 为 128 逻辑基数，× scaleFactor（宠物大小）转屏幕像素，与脚锚点 fay*scaleFactor 同坐标系。
+        val hw = ctrlBoxWidth * scaleFactor
+        val hh = ctrlBoxHeight * scaleFactor
+        val vo = ctrlBoxVOffset * scaleFactor
+        val (w, h) = getBaseBitmapSize()
+        val (fax, fay) = imageManager.currentAnchor()
+        val dw = w
+        // 镜像感知的脚锚点 X（与 getAnchorScaled 的翻转公式一致，但绕 getBaseBitmapSize 窗口中心）。
+        val useFlip = if (physics.isSnapped) snapFlipX else flipX
+        val offX = if (useFlip) {
+            (w + dw) / 2f - fax * scaleFactor
+        } else {
+            (w - dw) / 2f + fax * scaleFactor
+        }
+        val offY = fay * scaleFactor
+        val bcxLocal = offX
+        val bcyLocal = offY - (hh / 2f + vo)
+        val rot = if (physics.isSnapped) snapRotation else gravityRotation
+        val effRot = if (imageManager.getMode() == ImageModeManager.ROLL) 0f else rot
+        return rotateOffsetWith(bcxLocal, bcyLocal, w, h, effRot)
+    }
+
+    /** 核心模式命中判定：view 本地坐标 (vx,vy) 是否在脚底盒 OBB 内（与控制窗/可视化严格同源）。 */
+    private fun isCoreHit(vx: Float, vy: Float): Boolean {
+        // ctrlBox 为 128 逻辑基数，× scaleFactor（宠物大小）转屏幕像素，与可视化/控制窗 AABB 同源。
+        val hw = ctrlBoxWidth * scaleFactor
+        val hh = ctrlBoxHeight * scaleFactor
+        val rot = if (physics.isSnapped) snapRotation else gravityRotation
+        val effRot = if (imageManager.getMode() == ImageModeManager.ROLL) 0f else rot
+        val rad = Math.toRadians(effRot.toDouble())
+        val c = Math.abs(Math.cos(rad))
+        val s = Math.abs(Math.sin(rad))
+        val ahw = (hw / 2f) * c + (hh / 2f) * s
+        val ahh = (hw / 2f) * s + (hh / 2f) * c
+        val dx = vx - ahw
+        val dy = vy - ahh
+        val cos = Math.cos(rad).toFloat()
+        val sin = Math.sin(rad).toFloat()
+        // 逆变换 R(-θ)（与 render 的 canvas.rotate(θ) 一致），半长判定。
+        val lx = dx * cos + dy * sin
+        val ly = -dx * sin + dy * cos
+        return Math.abs(lx) <= hw / 2f && Math.abs(ly) <= hh / 2f
     }
 
     /** 当前动画模式名（供调试显示） */
@@ -681,6 +1055,11 @@ class PetView @JvmOverloads constructor(
         imageManager.forceReset()
         physics.clearSnap()   // 召回同时退出吸附态
         physics.snapSide = 0
+        // 吸附朝向复位：snapRotation/snapFlipX 只在吸附态每帧刷新，退出后不再更新。
+        // 必须显式归零——边界重算(recalcBoundsFor)以当前朝向计算包围盒，
+        // 若残留吸附态旋转，召回后的 maxY 仍是“脚朝左/右/顶”包围盒的值，导致地面判断错误。
+        snapRotation = 0f
+        snapFlipX = false
     }
 
     /** 仅切回静坐 sit_clam（清除一次性动画，但保留吸附态/物理位置），用于重力·抛掷关闭时进入静坐。 */
@@ -688,60 +1067,116 @@ class PetView @JvmOverloads constructor(
         imageManager.forceReset()
     }
 
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        val bmp = currentBitmap ?: return
-        // View 尺寸固定为【当前模式最大帧】尺寸（不随帧变 → 不重排 → 流畅）。
-        // 每帧位图按【居中】绘制到窗口内（铺满窗口宽/高进行等比缩放），onDraw 只负责“完整显示当前帧”，
-        // 不做锚点负偏移——锚点对齐由 PetService 写 layoutParams 时负责（浮窗左上 = physics.x - 锚点偏移）。
-        // 这样小帧/大帧都能完整显示，不会因负偏移被推出窗口只剩边角。
-        val dw = (bmp.width * scaleFactor).toInt()
-        val dh = (bmp.height * scaleFactor).toInt()
-        if (dw <= 0 || dh <= 0) return
-        val left = (width - dw) / 2f
-        val top = (height - dh) / 2f
+    // 渲染输出（共享画布专用）：由 PetStageView 在同一 onDraw 内统一调用，
+    // 使“位图 + 位置”在同一次提交中完成，消除浮窗几何(WMS) 与 View 绘制(RenderThread) 的 vsync 竞态。
+    // 调用方负责 canvas.translate 到本宠物窗口左上角；本方法在本地 (0,0)-(width,height) 空间内绘制。
+    fun render(canvas: Canvas) {
+        // 使用与 isHitOnPet 完全相同的渲染状态，确保命中坐标系与显示严格一致。
+        // 固定整帧尺寸（与控制窗实时尺寸无关）：用于调试矩形与对齐，CORE 模式控制窗缩小也不受影响。
+        val (fw, fh) = getBaseBitmapSize()
+        val rs = computeRenderState() ?: return
+        val dw = rs.dw
+        val dh = rs.dh
+        val left = rs.left
+        val top = rs.top
         canvas.save()
         // 重力朝向：绕窗口中心旋转画布，使宠物“脚朝重力方向”（含 sit 等静态动作）。
         // 旋转在当前帧中心进行，浮窗位置由 physics 决定、图仅绕自身中心转，姿态正确且不重排。
         // 吸附态以 snapSide 为唯一方向来源（snapRotation 已在 updateAnimByState 的 isSnapped
         // 分支按贴附边赋值），【不叠加】拖动期可能被体感污染的 gravityRotation，避免吸附后方向异常。
-        val effRotation = if (physics.isSnapped) {
-            snapRotation
-        } else {
-            snapRotation = 0f
-            gravityRotation
-        }
-        if (effRotation != 0f) {
-            canvas.rotate(effRotation, width / 2f, height / 2f)
+        // 注意：非吸附态使用 gravityRotation，不再读取/写入 snapRotation（旧实现会顺手 snapRotation=0f，
+        // 属于 onDraw 副作用，已移除，避免与命中判定在同一帧读到不同中间状态）。
+        if (rs.rotation != 0f) {
+            // 所有动作（含 ROLL）统一绕【窗口/矩形框中心】旋转，与 rotateOffsetWith 默认一致。
+            // ROLL 为球状对称图，居中填充使图中心=窗口中心，绕窗口中心旋转即图绕自身中心自转，
+            // 视觉静止、浮窗不抖；锚点(脚)用真实值随旋转角在定位中同步更新（rotateOffsetWith 已含）。
+            canvas.rotate(rs.rotation, rs.cx, rs.cy)
         }
         // 镜像：吸附态用专属 snapFlipX（反向随机、隔离全局 flipX）；非吸附态用全局 flipX。
         // 两者互斥（吸附态不读 flipX），退出吸附后 snapFlipX 不再应用，零状态残留。
-        if (physics.isSnapped) {
-            if (snapFlipX) {
-                canvas.scale(-1f, 1f, width / 2f, height / 2f)
-            }
-        } else if (flipX) {
+        if (rs.flip) {
             // 水平镜像：以中心为轴翻转画布（对齐 PC transform_flag 左右随机朝向），叠加在重力旋转之上
-            canvas.scale(-1f, 1f, width / 2f, height / 2f)
+            canvas.scale(-1f, 1f, rs.cx, rs.cy)
         }
-        canvas.drawBitmap(bmp, null,
+        canvas.drawBitmap(rs.bmp, null,
             android.graphics.RectF(left, top, left + dw, top + dh), paint)
         canvas.restore()
-        // 调试：红色矩形 = View（浮窗）真实边界，与屏幕位置严格对齐，稳定不跳动
-        if (showRect) {
-            val rectPaint = android.graphics.Paint().apply {
-                color = 0xFFFF0000.toInt()
+        // ===== 显示边框：图片窗口黑细线描边 + 脚锚点十字（横线同宽、纵线同高，锚点处交叉）=====
+        if (showImageBorder) {
+            val bp = android.graphics.Paint().apply {
+                color = 0xFF000000.toInt()
                 style = android.graphics.Paint.Style.STROKE
-                strokeWidth = 3f
+                strokeWidth = 1.5f
             }
-            canvas.drawRect(1.5f, 1.5f, width - 1.5f, height - 1.5f, rectPaint)
+            // 图片窗口矩形（固定整帧，用于判断图片显示位置是否准确）
+            canvas.drawRect(1.5f, 1.5f, fw - 1.5f, fh - 1.5f, bp)
+            // 脚锚点（图片窗口内坐标）：横线同宽、纵线同高，交叉于锚点。
+            // 用红白黑白红交替细线（由外到内 5 层叠绘）突出十字，便于在任意底色上辨识锚点。
+            val (ax, ay) = getBaseAnchorScaled()
+            val anchorPaints = listOf(
+                0xFFFF0000.toInt() to 5f,   // 红(外)
+                0xFFFFFFFF.toInt() to 4f,   // 白
+                0xFF000000.toInt() to 3f,   // 黑
+                0xFFFFFFFF.toInt() to 2f,   // 白
+                0xFFFF0000.toInt() to 1f    // 红(内)
+            ).map { (c, w) ->
+                android.graphics.Paint().apply {
+                    color = c
+                    style = android.graphics.Paint.Style.STROKE
+                    strokeWidth = w
+                    isAntiAlias = true
+                }
+            }
+            for (p in anchorPaints) {
+                canvas.drawLine(1.5f, ay, fw - 1.5f, ay, p)   // 横线贯穿整框宽
+                canvas.drawLine(ax, 1.5f, ax, fh - 1.5f, p)   // 纵线贯穿整框高
+            }
         }
+        // ===== 控制边框已迁移到 PetStageView.onDraw（绝对坐标、按需绘制，独立于显示窗）=====
+        // 此处不再绘制控制边框，避免借显示窗局部坐标导致 CORE 脚盒与显示窗错位。
+    }
+
+    // 本类作为“控制窗”时不自绘（绘制已上移到 PetStageView.render），仅作透明触摸目标。
+    override fun onDraw(canvas: Canvas) {
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // 像素级命中：透明区域恒定不可点击，直接放行穿透（return false 且不进入任何消费逻辑）。
+        // 必须放在最前，避免 gestureDetector 或其它分支对透明区 DOWN 也产生消费。
+        lastAction = when (event.action) {
+            MotionEvent.ACTION_DOWN -> 0
+            MotionEvent.ACTION_MOVE -> 1
+            MotionEvent.ACTION_UP -> 2
+            else -> -1
+        }
+        // 命中模式：像素(全框+alpha) / 边界(整窗) / 核心(脚底盒 OBB)。
+        // 像素/边界窗口为整帧（全屏画布显示），核心窗口缩到脚盒（控制层几何，见 controlWindowRect）。
+        when (hitMode) {
+            ConfigDefaults.HIT_PIXEL -> {
+                if (event.action == MotionEvent.ACTION_DOWN && !isHitOnPet(event.x, event.y)) {
+                    hitDownConsumed = false // 透明起点：本次手势不消费，后续 MOVE/UP 忽略
+                    invalidate() // 刷新绿/红边框显示
+                    return false
+                }
+            }
+            ConfigDefaults.HIT_CORE -> {
+                if (event.action == MotionEvent.ACTION_DOWN) {
+                    if (!isCoreHit(event.x, event.y)) {
+                        hitDownConsumed = false // 脚盒外：穿透
+                        invalidate()
+                        return false
+                    }
+                    hitDownConsumed = true
+                }
+            }
+            else -> { // HIT_BOUNDARY：整窗命中
+                if (event.action == MotionEvent.ACTION_DOWN) hitDownConsumed = true
+            }
+        }
         gestureDetector.onTouchEvent(event)
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                hitDownConsumed = true // 命中起点：允许后续拖拽/提起
                 dragging = false
                 movedDuringPress = false
                 pressing = true
@@ -762,6 +1197,8 @@ class PetView @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
+                // 守卫：透明起点（未命中）的手势，即使系统仍派发 MOVE 也不消费、不改位置
+                if (!hitDownConsumed) return true
                 val dx = event.rawX - lastTouchX
                 val dy = event.rawY - lastTouchY
                 if (abs(dx) > 2 || abs(dy) > 2) movedDuringPress = true
@@ -792,9 +1229,18 @@ class PetView @JvmOverloads constructor(
                 lastMoveTime = now
                 if (dragging) {
                     physics.isDragging = true
-                    physics.clearSnap()   // 用户拖拽拉出：解除吸附态
-                    // 提起动画系列随速度切换的逻辑已移到 tick()（每帧驱动，对齐 PC drag_func 每帧判定），
-                    // 此处仅跟随手指与速度采样，不再直接切帧。
+                    // 用户拖拽拉出：仅在吸附态→非吸附态跳变时归零残留并触发重算（避免拖拽中重复）。
+                    // 残留参数(snapSide/snapRotation/snapFlipX)只在吸附态每帧刷新、退出后不再更新；
+                    // getBaseAnchorScaled 的边界重算按"当前朝向包围盒"得出 minX/maxX，若不归零并
+                    // 重算，活动范围会沿用吸附态(脚朝左/右/顶)的窄高盒，导致地面/活动范围判断偏差。
+                    val wasSnapped = physics.isSnapped
+                    physics.clearSnap()
+                    if (wasSnapped) {
+                        physics.snapSide = 0
+                        snapRotation = 0f
+                        snapFlipX = false
+                        onSnapExit?.invoke()   // 通知外部按非吸附态重算活动范围
+                    }
 
                     // 锚点跟随手指（保持抓取点相对图片不变）：锚点 = 手指 + 抓取偏移
                     val ax = event.rawX + grabOffsetX
@@ -806,6 +1252,8 @@ class PetView @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                // 守卫：透明起点（未命中）的手势，UP/CANCEL 不执行任何拖拽结束逻辑
+                if (!hitDownConsumed) return true
                 pressing = false
                 physics.isDragging = false
                 if (dragging) {

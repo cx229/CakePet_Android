@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 夜间（暗色）语义色，跟随系统 DayNight 切换。
+         背景刻意调亮一档（不再接近纯黑），提升内容可读性，避免“黑的太黑”。 -->
+    <color name="cp_bg">#242528</color>
+    <color name="cp_text">#D8D8DC</color>
+    <color name="cp_card_bg">#2E2F33</color>
+    <color name="cp_title">#F0F0F2</color>
+    <color name="cp_sub">#B4B4BA</color>
+    <color name="cp_note">#8A8A90</color>
+    <color name="cp_value">#CFCFD4</color>
+    <color name="cp_divider">#3C3C40</color>
+    <color name="cp_status_bar">#242528</color>
+    <color name="cp_btn_primary_text">#FFFFFFFF</color>
+    <color name="cp_btn_outline_text">#E4E4E8</color>
+    <color name="cp_hint_dark">#80FFFFFF</color>
+    <color name="cp_hint_white">#CCFFFFFF</color>
+    <color name="cp_subtle">#3C3C40</color>
+    <!-- 夜间开关/滑块开启态强调色（浅青）：在暗底上清晰可辨，避免“黑色滑块与背景难分” -->
+    <color name="cp_accent">#4DD0C4</color>
+    <!-- 危险操作文字（退出）：夜间下偏亮的红，暗底可读 -->
+    <color name="cp_danger">#FF6E6E</color>
+    <color name="cp_btn_primary_bg">#3A3B40</color>
+    <color name="cp_btn_outline_bg">#2E2F33</color>
+    <color name="cp_btn_outline_stroke">#E4E4E8</color>
+    <color name="cp_ripple_on_dark">#40FFFFFF</color>
+    <color name="cp_ripple_on_light">#20FFFFFF</color>
+</resources>

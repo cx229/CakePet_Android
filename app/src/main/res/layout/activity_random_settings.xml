@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:background="@color/cp_bg">
 
     <!-- 状态栏占位条：纯黑，高度由 Activity 按真实状态栏高度设置 -->
     <View android:id="@+id/status_bar_spacer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:background="#000000" />
+        android:background="@color/cp_status_bar" />
 
     <!-- 标题栏：黑底 -->
     <LinearLayout android:id="@+id/title_bar"
@@ -17,13 +19,15 @@
         android:minHeight="?attr/actionBarSize"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="#000000">
+        android:background="@color/cp_bg">
 
         <ImageView android:id="@+id/iv_back"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@android:drawable/ic_menu_revert"
-            android:padding="12dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title"
+            android:padding="14dp"
             android:layout_gravity="center_vertical"
             android:contentDescription="返回"/>
 
@@ -32,7 +36,18 @@
             android:text="随机模式设置"
             android:textSize="20dp"
             android:textStyle="bold"
-            android:textColor="#FFFFFF"/>
+            android:textColor="@color/cp_title"/>
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+        <ImageView android:id="@+id/btn_more"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_more"
+            app:tint="@color/cp_title"
+            android:padding="12dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="更多"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true" android:focusable="true"/>
     </LinearLayout>
 
     <ScrollView
@@ -43,86 +58,111 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:padding="16dp">
 
-            <!-- ===== 模块：随机项（每个一项一个开关） ===== -->
+            <!-- ===== 模块1：随机模式（总开关，首项） ===== -->
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="随机项" android:textSize="14dp" android:textColor="#555555"
+                android:text="随机模式" android:textSize="14dp" android:textColor="@color/cp_sub"
                 android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:padding="20dp">
+                android:padding="16dp">
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="随机模式" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            style="@style/SettingsOptionNote"
+                            android:text="「芝麻酥」的行为会偷偷改变"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_random_mode" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"/>
+                </LinearLayout>
+            </LinearLayout>
 
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="大小 (0.6-2.0)" style="@style/SettingsOptionTitle"/>
+            <!-- ===== 模块：随机项（每个一项一个开关） ===== -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">
+                <View android:layout_width="0dp" android:layout_height="1px"
+                    android:layout_weight="0.9" android:background="@color/cp_subtle"/>
+            </LinearLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="随机项" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="大小 (0.6-2.0)" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_scale" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="透明度 (0.3-1.0)" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="透明度 (0.3-1.0)" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_alpha" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="重力抛掷" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="重力抛掷" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_gravity_enabled" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="体感重力" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="体感重力" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_tilt_gravity" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="最大速度 (2000-20000)" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="最大速度 (2000-20000)" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_max_speed" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="重力强度 (500-7000)" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="重力强度 (500-7000)" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_gravity" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="反弹系数 (0.45-0.95)" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="反弹系数 (0.45-0.95)" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_rebound" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
 
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="12dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="四边重力·上下" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="四边重力·上下" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_gdir_v" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="四边重力·左右" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="四边重力·左右" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_gdir_h" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
@@ -131,78 +171,87 @@
                     style="@style/SettingsOptionSub"
                     android:text="四边反弹"
                     android:layout_marginTop="12dp" android:layout_marginBottom="4dp"/>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="四边反弹·上" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="四边反弹·上" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_rbound_top" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="四边反弹·下" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="四边反弹·下" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_rbound_bottom" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="四边反弹·左" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="四边反弹·左" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_rbound_left" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="4dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="四边反弹·右" style="@style/SettingsOptionTitle"/>
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="四边反弹·右" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
                     <Switch android:id="@+id/sw_r_rbound_right" android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- ===== 模块：随机周期 ===== -->
+            <!-- ===== 模块：周期（双滑块合并为 RangeSlider） ===== -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">
+                <View android:layout_width="0dp" android:layout_height="1px"
+                    android:layout_weight="0.9" android:background="@color/cp_subtle"/>
+            </LinearLayout>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="随机周期（分钟）" android:textSize="14dp" android:textColor="#555555"
-                android:layout_marginStart="4dp" android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
+                android:text="周期" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:padding="20dp">
+                android:padding="16dp">
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="最小" style="@style/SettingsOptionSub"/>
-                    <TextView android:id="@+id/period_min_value" android:layout_width="0dp"
-                        android:layout_height="wrap_content" android:layout_weight="1"
-                        android:gravity="end" android:text="30" android:textSize="16dp"/>
+                    android:orientation="vertical" android:layout_marginBottom="14dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="周期" style="@style/SettingsOptionTitle"/>
+                            <EditText android:id="@+id/period_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="30 - 120" android:textSize="16dp"
+                                android:background="@null" android:inputType="none"
+                                android:focusable="false" android:clickable="false"
+                                android:importantForAutofill="no" android:singleLine="true"/>
+                        </LinearLayout>
+                        <com.google.android.material.slider.RangeSlider
+                            android:id="@+id/period_range"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:stepSize="1.0"
+                            android:valueFrom="1.0"
+                            android:valueTo="180.0"
+                            app:thumbColor="@color/black"
+                            app:haloColor="@color/slider_halo"
+                            app:trackColorActive="@color/black"
+                            app:trackColorInactive="@color/slider_track_inactive"
+                            app:tickColorActive="@color/black"
+                            app:tickColorInactive="@color/slider_track_inactive"/>
+                    </LinearLayout>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        style="@style/SettingsOptionNote"
+                        android:text="随机间隔的上下限（分钟）"/>
                 </LinearLayout>
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    style="@style/SettingsOptionNote"
-                    android:text="随机间隔的下限"/>
-                <SeekBar android:id="@+id/period_min_bar" android:layout_width="match_parent"
-                    android:layout_height="wrap_content" android:max="180" android:progress="30"
-                    android:layout_marginBottom="12dp"/>
-
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="最大" style="@style/SettingsOptionSub"/>
-                    <TextView android:id="@+id/period_max_value" android:layout_width="0dp"
-                        android:layout_height="wrap_content" android:layout_weight="1"
-                        android:gravity="end" android:text="120" android:textSize="16dp"/>
-                </LinearLayout>
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    style="@style/SettingsOptionNote"
-                    android:text="随机间隔的上限（不小于最小）"/>
-                <SeekBar android:id="@+id/period_max_bar" android:layout_width="match_parent"
-                    android:layout_height="wrap_content" android:max="180" android:progress="120"/>
             </LinearLayout>
-
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

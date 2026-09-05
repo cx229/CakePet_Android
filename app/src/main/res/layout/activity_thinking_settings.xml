@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/cp_bg"
+    android:focusableInTouchMode="true"
+    android:descendantFocusability="afterDescendants">
+
+    <!-- 状态栏占位条：纯黑，高度由 Activity 按真实状态栏高度设置 -->
+    <View android:id="@+id/status_bar_spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/cp_status_bar" />
+
+    <!-- 标题栏：黑底 -->
+    <LinearLayout android:id="@+id/title_bar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/cp_bg">
+
+        <ImageView android:id="@+id/iv_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title"
+            android:padding="14dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="返回"/>
+
+        <TextView android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="碎碎念设置"
+            android:textSize="20dp"
+            android:textStyle="bold"
+            android:textColor="@color/cp_title"/>
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+        <ImageView android:id="@+id/btn_more"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_more"
+            app:tint="@color/cp_title"
+            android:padding="12dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="更多"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true" android:focusable="true"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- ===== 模块：碎碎念总开关 ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="碎碎念" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="底部消息" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="屏幕底部显示「芝麻酥」的碎碎念" style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_thinking_enabled"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:minWidth="0dp" android:minHeight="0dp"
+                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块：显示 ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="显示" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:id="@+id/card_display"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <!-- 字号 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginBottom="14dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="字号" style="@style/SettingsOptionTitle"/>
+                            <EditText android:id="@+id/text_size_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="10" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="number"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
+                        </LinearLayout>
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/text_size_bar" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"/>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 透明度 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginBottom="14dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="透明度" style="@style/SettingsOptionTitle"/>
+                            <EditText android:id="@+id/text_alpha_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="100" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="number"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
+                        </LinearLayout>
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/text_alpha_bar" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"/>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 位置偏移（由设置页迁移而来） -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginBottom="14dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="96dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="位置偏移" style="@style/SettingsOptionTitle"/>
+                            <EditText android:id="@+id/offset_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="0" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="number"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
+                        </LinearLayout>
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/offset_bar" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"/>
+                    </LinearLayout>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        style="@style/SettingsOptionNote"
+                        android:text="碎碎念在屏幕底部的显示位置"/>
+                </LinearLayout>
+
+                <!-- 频率：合并进「显示」模块，位于「颜色」之前 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginBottom="14dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="频率" style="@style/SettingsOptionTitle"/>
+                            <TextView android:id="@+id/empty_range_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="2 - 15" android:textSize="16dp"/>
+                        </LinearLayout>
+                        <com.google.android.material.slider.RangeSlider
+                            android:id="@+id/empty_range"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginTop="0dp"
+                            android:stepSize="1.0"
+                            android:valueFrom="1.0"
+                            android:valueTo="60.0"
+                            app:thumbColor="@color/black"
+                            app:haloColor="@color/slider_halo"
+                            app:trackColorActive="@color/black"
+                            app:trackColorInactive="@color/slider_track_inactive"
+                            app:tickColorActive="@color/black"
+                            app:tickColorInactive="@color/slider_track_inactive"
+                            app:values="@array/empty_range_initial"/>
+                    </LinearLayout>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        style="@style/SettingsOptionNote"
+                        android:text="碎碎念的更新时间间隔（秒）"/>
+                </LinearLayout>
+
+                <!-- 颜色入口：整行可点击（与设置页「显示-其他」入口布局一致，但点击打开取色浮窗而非新页）。
+                     左侧标题 + 备注，右侧当前色块 + › 箭头。 -->
+                <LinearLayout android:id="@+id/row_color"
+                    style="@style/SettingsSwitchRow"
+                    android:layout_marginTop="4dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="颜色" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
+                    <View android:id="@+id/color_dot"
+                        android:layout_width="26dp" android:layout_height="26dp"
+                        android:layout_marginEnd="10dp"/>
+                    <ImageView android:layout_width="22dp" android:layout_height="22dp"
+                        android:src="@drawable/ic_chevron_right"
+                        android:layout_marginStart="12dp"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块：闪回 ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="闪回" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:id="@+id/card_flash"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <!-- 文字闪现：控制显形特效（空白结束 -> 文字出现） -->
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="文字闪现" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="碎碎念显示前的文字特效" style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_flash_in"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:minWidth="0dp" android:minHeight="0dp"
+                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
+                </LinearLayout>
+
+                <!-- 文字闪回：控制退场特效（文字消失 -> 进入空白） -->
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="文字闪回" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="碎碎念消失时的文字特效" style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_flash_out"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:minWidth="0dp" android:minHeight="0dp"
+                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- ===== 模块：背景 ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="背景" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:id="@+id/card_bg"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+                <!-- 气泡背景 -->
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="气泡背景" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="碎碎念是否显示气泡背景" style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_thinking_bg_enabled"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                </LinearLayout>
+                <!-- 背景透明度 -->
+                <LinearLayout style="@style/SettingsSliderRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="背景透明度" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
+                    <EditText android:id="@+id/edit_thinking_bg_alpha" style="@style/SettingsValueInput"
+                        android:inputType="number" android:maxLength="3"/>
+                    <com.google.android.material.slider.Slider android:id="@+id/seek_thinking_bg_alpha"
+                        style="@style/SettingsSlider"/>
+                </LinearLayout>
+                <!-- 背景颜色 -->
+                <LinearLayout android:id="@+id/row_bg_color" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="背景颜色" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
+                    <View android:id="@+id/bg_color_dot"
+                        android:layout_width="26dp" android:layout_height="26dp"
+                        android:layout_marginEnd="10dp"/>
+                    <ImageView android:layout_width="22dp" android:layout_height="22dp"
+                        android:src="@drawable/ic_chevron_right"
+                        android:layout_marginStart="12dp"/>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

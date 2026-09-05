@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
+        android:name=".CakePetApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -23,7 +24,8 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:theme="@style/Theme.CakePet.FullscreenTitle">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -45,6 +47,51 @@
             android:exported="false"
             android:theme="@style/Theme.CakePet.FullscreenTitle" />
 
+        <activity
+            android:name=".ThinkingSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".SnapSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".RangeSettingsActivity"
+            android:exported="true"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".MainThresholdActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".SnapThresholdActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".RangeThresholdActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".ThinkingThresholdActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".RandomThresholdActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".TestHitActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
         <service
             android:name=".PetService"
             android:exported="false"
@@ -54,6 +101,20 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="cakepet_overlay" />
+        </service>
+
+        <!-- 无障碍服务：仅声明支持无障碍能力，需用户在系统设置中手动开启（不弹请求弹窗）。 -->
+        <service
+            android:name=".CakePetAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:label="@string/accessibility_service_label">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
         </service>
     </application>
 </manifest>

@@ -2,7 +2,33 @@ package com.cx.cakepet
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import kotlin.math.roundToInt
 import kotlin.random.Random
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * 图片资源包：抽象“不同套美术资源”的加载策略。
+ * - [resolve]：resName(如 "sit_clam-1.png") -> assets 相对路径(如 "img/sit_clam-1.png"
+ *   / "芝麻酥/安静/sit_clam-1.png")；返回 null 表示该包不含此帧（加载时回退到 fallback）。
+ * - [decodeTarget]：物理解码目标边长(px)；0 = 保持原始尺寸（默认包，原生 128）。
+ *   新包原图 1000×1000，设为 256 ⇒ 解码期超采样到 256（最长边），作 2x 抗锯齿源；
+ *   但【逻辑/锚点/画布】空间仍由 [anchorRes]=128 决定，渲染时把 256 位图按 ratio 缩进 128 逻辑矩形，
+ *   既复用现有 128 逻辑（JSON 锚点/边界/scaleFactor 零改动），又比硬压 128 清晰 2x。
+ * - [anchorRes]：逻辑分辨率（锚点/画布/UI 坐标系的“1”单位，恒为 128）。
+ *   与 decodeTarget 解耦：decodeTarget=256、anchorRes=128 ⇒ 解码超采样 2x、逻辑仍 128。
+ *   默认包 decodeTarget=0（原生=128=逻辑），此字段不生效。
+ * - [forceBottomCenterAnchor]：true 时忽略逐帧 anchorX/anchorY，统一用“图底中心”。
+ *   （先期约定：新包所有动作锚点都先假设在图片底部中心。）
+ */
+data class SpritePack(
+    val id: String,
+    val resolve: (String) -> String?,
+    val configPath: String? = null,   // 该包的动画/帧/锚点配置（assets 内相对路径），如 "img/modes.json" / "芝麻酥/modes.json"
+    val decodeTarget: Int = 0,         // 物理超采样解码边长（0=原生）；新包 256
+    val anchorRes: Int = 128,          // 逻辑分辨率（锚点/画布/UI 坐标系单位），恒 128
+    val forceBottomCenterAnchor: Boolean = false
+)
 
 /**
  * 动画模式管理：每帧时延严格对齐 PC（image_modes.py）。
@@ -10,7 +36,10 @@ import kotlin.random.Random
  * - 帧序列按 next 链循环（loop=true）或在最后一帧结束后切到指定下一模式（一次性动画）。
  * - 常驻模式支持 PC 的 time_next：随机间隔后按概率切换到指定/随机下一模式。
  */
-class ImageModeManager(private val ctx: android.content.Context) {
+class ImageModeManager(
+    private val ctx: android.content.Context,
+    initialPack: SpritePack = DEFAULT_SPRITE_PACK
+) {
 
     companion object {
         const val DEFAULT_MODE = "sit_clam"
@@ -27,8 +56,37 @@ class ImageModeManager(private val ctx: android.content.Context) {
         const val PULL_FISH = "pull_fish"
         const val PROBE_HEAD = "probe_head"
         const val SNAP_HEAD = "snap_head"
+        const val SNAP_PAT_HEAD = "snap_pat_head"   // 吸附探头摸摸头：吸附态下的“摸头”动作，结束后回 snap_head
         const val LIE = "lie"
         const val PORTAL = "portal"
+
+        /** 默认资源包：assets/img/ 下按原图尺寸加载，沿用逐帧锚点。 */
+        val DEFAULT_SPRITE_PACK = SpritePack(
+            id = "default",
+            resolve = { "img/$it" },
+            configPath = "img/modes.json"
+        )
+
+        /**
+         * 构建“芝麻酥”新资源包：扫描 assets/芝麻酥/ 下所有 png，
+         * 以文件名(含扩展名)为 key 映射到完整相对路径（按子目录归类，如 安静/sit_clam-1.png）。
+         * 仅加载与默认包【同名】的帧（多出来的 sit_thinking/probe_pat_head/sir_look/jump/side_walk 暂不接入）。
+         */
+        /**
+         * “芝麻酥”资源包：modes.json 中的 res 直接以“子目录/文件名”给出（如 "安静/sit_clam-1.png"），
+         * 这里只拼 “芝麻酥/” 前缀即可定位，无需在初始化时递归扫描 assets 目录。
+         */
+        @Suppress("UNUSED_PARAMETER")
+        fun zhimasuPack(ctx: android.content.Context): SpritePack {
+            return SpritePack(
+                id = "zhimasu",
+                resolve = { "芝麻酥/$it" },
+                configPath = "芝麻酥/modes.json",
+                decodeTarget = 256,                // 物理超采样 2x（逻辑仍为 anchorRes=128）
+                anchorRes = 128,
+                forceBottomCenterAnchor = true
+            )
+        }
     }
 
     /** 单帧定义：资源名、下一帧索引（null=序列结束）、时延(ms)、锚点(图片像素坐标，对齐 PC image_meta) */
@@ -37,7 +95,11 @@ class ImageModeManager(private val ctx: android.content.Context) {
         val nextIndex: Int?,            // 下一帧在 frames 中的下标，null 表示序列结束
         val delay: () -> Long,          // 该帧停留时长(ms)
         val anchorX: Int = -1,          // 图片像素锚点 X（<0 表示用图宽/2 居中）
-        val anchorY: Int = -1,          // 图片像素锚点 Y（<0 表示用图高 底边对齐）
+        // 图片像素锚点 Y（距【底】边，左下角原点，Y 向上）。
+        // 合法范围 [-128, 128]：0=贴底，128=贴顶，负数=脚在图底下方（图外，如 walk/wriggle 的脚实际在地面以下）。
+        // null 表示未设置：当 pack 强制底部中心(forceBottomCenterAnchor)时按 0(贴底)处理，否则也按 0。
+        // 注意：当 pack.forceBottomCenterAnchor=true 时，仅当本帧在 JSON 显式给出 anchorY 才覆盖默认底中，否则沿用底中。
+        val anchorY: Int? = null,
         // 帧位移偏移(px)，对齐 PC 的 QPoint(x,0) offset：每帧把该偏移累加到锚点坐标，
         // 实现“拉鱼/扒鱼”这类【帧驱动】位移（区别于物理速度驱动的 walk/roll）。
         // 单循环：一次性动画播完即停，不反弹（对齐 PC PullFishMode 第6~9帧的 offset）。
@@ -62,7 +124,8 @@ class ImageModeManager(private val ctx: android.content.Context) {
         val changeProb: Float = 0.5f,
         val nextModeName: String? = null,       // 指定下一模式（PC next_mode_name）
         val onSequenceEnd: ((() -> Unit) -> Unit)? = null,  // 序列结束回调（用于 SIT 间随机切换等）
-        val walkSpeed: Float = 0f               // 行走位移速度(px/s)，>0 时由物理引擎驱动水平位移（对齐 PC 帧偏移 QPoint）
+        val walkSpeed: Float = 0f,              // 行走位移速度(px/s)，>0 时由物理引擎驱动水平位移（对齐 PC 帧偏移 QPoint）
+        val label: String = ""                  // 中文名：仅供阅读 modes.json 用，不参与任何代码逻辑
     )
 
     private fun rnd(min: Long, max: Long): () -> Long = { Random.nextLong(min, max + 1) }
@@ -77,6 +140,8 @@ class ImageModeManager(private val ctx: android.content.Context) {
     private var forcedOnEnd: (() -> Unit)? = null
     private var timeNextAcc = 0L
     private var timeNextTarget = 0L
+    /** 当前生效的资源包；默认=默认包，可由 setPack 运行时切换（关于页“使用新资源”）。 */
+    var currentPack: SpritePack = initialPack
 
     /** 当前行走方向与位移速度（>0 表示正在行走位移，由物理引擎驱动水平移动） */
     var walkDir = 1
@@ -104,7 +169,7 @@ class ImageModeManager(private val ctx: android.content.Context) {
      * 静止池：待机池去除位移/物理驱动类模式（蠕动、walk、扒鱼）。
      * 当“重力·抛掷”关闭（gravitEnabled=false）时使用，宠物保持在原地的小动作/静坐。
      */
-    private val staticPool = listOf(
+    private var staticPool = listOf(
         SIT_CLAM, SIT_PUFFED, PROBE_HEAD, SHAKE_HEAD, LIE, WALK_WHITE
     )
 
@@ -119,15 +184,25 @@ class ImageModeManager(private val ctx: android.content.Context) {
         if (useStaticPool) staticPool else standbyPool
 
     init {
+        var loaded = false
+        if (currentPack.configPath != null) {
+            try {
+                loadModesFromJson(currentPack.configPath!!)
+                loaded = true
+            } catch (_: Exception) {
+                // 解析失败：回退到下方写死的内建模式（保持旧行为，避免宠物崩溃）
+            }
+        }
+        if (!loaded) {
         // ============ 常驻：静坐-安静（SIT_CLAM）============
         // 帧链：1→2→3→2→1(loop)。delay 对齐 PC SitClamMode
         registerMode(ImageModeDef(
             SIT_CLAM, "sit_clam-1.png",
             listOf(
-                Frame("sit_clam-1.png", 1, rnd(120, 10_000), anchorY = 81),
-                Frame("sit_clam-2.png", 2, rnd(120, 160), anchorY = 81),
-                Frame("sit_clam-3.png", 3, rnd(120, 160), anchorY = 81),
-                Frame("sit_clam-2.png", 0, rnd(120, 160), anchorY = 81)
+                Frame("sit_clam-1.png", 1, rnd(120, 10_000), anchorY = 1),
+                Frame("sit_clam-2.png", 2, rnd(120, 160), anchorY = 1),
+                Frame("sit_clam-3.png", 3, rnd(120, 160), anchorY = 1),
+                Frame("sit_clam-2.png", 0, rnd(120, 160), anchorY = 1)
             ),
             loop = true,
             timeNextEnabled = true,
@@ -140,11 +215,11 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             SIT_PUFFED, "sit_puffed-1.png",
             listOf(
-                Frame("sit_puffed-1.png", 1, rnd(120, 10_000), anchorY = 81),
-                Frame("sit_puffed-2.png", 2, rnd(120, 160), anchorY = 81),
-                Frame("sit_puffed-3.png", 3, rnd(120, 160), anchorY = 81),
-                Frame("sit_puffed-4.png", 4, rnd(120, 160), anchorY = 81),
-                Frame("sit_puffed-2.png", 0, rnd(120, 160), anchorY = 81)
+                Frame("sit_puffed-1.png", 1, rnd(120, 10_000), anchorY = 1),
+                Frame("sit_puffed-2.png", 2, rnd(120, 160), anchorY = 1),
+                Frame("sit_puffed-3.png", 3, rnd(120, 160), anchorY = 1),
+                Frame("sit_puffed-4.png", 4, rnd(120, 160), anchorY = 1),
+                Frame("sit_puffed-2.png", 0, rnd(120, 160), anchorY = 1)
             ),
             loop = true,
             timeNextEnabled = true,
@@ -155,11 +230,11 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             PAT_HEAD, "sit_clam-1.png",
             listOf(
-                Frame("pat_head-1.png", 1, rnd(105, 110), anchorY = 81),
-                Frame("pat_head-2.png", 2, rnd(100, 110), anchorY = 81),
-                Frame("pat_head-3.png", 3, rnd(100, 110), anchorY = 81),
-                Frame("pat_head-4.png", 4, rnd(105, 110), anchorY = 81),
-                Frame("pat_head-5.png", 1, rnd(105, 110), anchorY = 81)  // 闭合内部循环 1->2->3->4->5->1
+                Frame("pat_head-1.png", 1, rnd(105, 110), anchorY = 1),
+                Frame("pat_head-2.png", 2, rnd(100, 110), anchorY = 1),
+                Frame("pat_head-3.png", 3, rnd(100, 110), anchorY = 1),
+                Frame("pat_head-4.png", 4, rnd(105, 110), anchorY = 1),
+                Frame("pat_head-5.png", 1, rnd(105, 110), anchorY = 1)  // 闭合内部循环 1->2->3->4->5->1
             ),
             loop = false,                       // 循环由 timeNext 机制驱动，而非帧链 loop
             nextModeName = SHAKE_HEAD,          // 概率跳出后的下一个模式（对齐 PC）
@@ -176,8 +251,8 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             SHAKE_HEAD, "sit_clam-1.png",
             listOf(
-                Frame("shake_head-1.png", 1, rnd(140, 180), anchorY = 81),  // -> 帧2
-                Frame("shake_head-2.png", 0, rnd(140, 180), anchorY = 81)   // -> 帧1（闭合 1<->2 循环）
+                Frame("shake_head-1.png", 1, rnd(140, 180), anchorY = 1),  // -> 帧2
+                Frame("shake_head-2.png", 0, rnd(140, 180), anchorY = 1)   // -> 帧1（闭合 1<->2 循环）
             ),
             loop = false,                       // 循环由 timeNext 机制驱动，而非帧链 loop
             nextModeName = SIT_PUFFED,
@@ -196,14 +271,14 @@ class ImageModeManager(private val ctx: android.content.Context) {
             listOf(
                 // 空中下落帧（S1/S2）：PC 默认 (宽/2, 高)=(64,128)，即"图片底部当成假设地面线"，
                 // 宠物随物理整体下落，脚相对图位置不变，表现下落途中。jump_down 是原生 128 图无 padding。
-                Frame("jump_down-1.png", 1, rnd(50, 70), anchorX = 64, anchorY = 81),
-                Frame("jump_down-2.png", 2, rnd(80, 90), anchorX = 64, anchorY = 81),
+                Frame("jump_down-1.png", 1, rnd(50, 70), anchorX = 64, anchorY = 1),
+                Frame("jump_down-2.png", 2, rnd(80, 90), anchorX = 64, anchorY = 1),
                 // 落地帧（S3）：停留 200-250ms（对齐 PC）后切 WALK。
-                // 采用"垂直贴底 padding"后，所有落地态（WALK/sit/jump_down 落地）的图底都对齐统一画布底边，
-                // 地面线天然一致，无需手动偏移。jump_down 是 128 原生图无 padding，故锚点用图底 128，
-                // 与 WALK 贴底地面线（127）连续、无跳变。
+                // 采用"顶部填充、底部补透明"后，各落地态（WALK/sit/jump_down 落地）的脚锚点 fay 在统一画布内
+                // 由 currentAnchor 按填充规则统一给出，地面线天然一致，无需手动偏移。
+                // jump_down 是 128 原生图（无 padding，bh=128），anchorY=1 ⇒ fay=127，与 WALK 连续、无跳变。
                 // 期间可被拖拽/抛掷（cancelForced）或主动切换（菜单 ACTION_JUMP 等）打断。
-                Frame("jump_down-3.png", null, rnd(200, 250), anchorX = 64, anchorY = 81)
+                Frame("jump_down-3.png", null, rnd(200, 250), anchorX = 64, anchorY = 1)
             ),
             loop = false,
             nextModeName = WALK
@@ -219,12 +294,12 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             LIFT_UP, "sit_clam-1.png",
             listOf(
-                Frame("lift_up-1.png", 1, rnd(340, 370), anchorY = 71),  // S1 -> S2
-                Frame("lift_up-2.png", 0, rnd(340, 370), anchorY = 71),  // S2 -> S1（轻晃闭环）
-                Frame("lift_up-3.png", 0, fixed(200), anchorY = 71),     // S3 -> S1
-                Frame("lift_up-4.png", 1, fixed(200), anchorY = 71),     // S4 -> S2
-                Frame("lift_up-5.png", 2, fixed(300), anchorY = 71),     // S5 -> S3
-                Frame("lift_up-6.png", 3, fixed(300), anchorY = 71)      // S6 -> S4
+                Frame("lift_up-1.png", 1, rnd(340, 370), anchorY = 43),  // S1 -> S2
+                Frame("lift_up-2.png", 0, rnd(340, 370), anchorY = 43),  // S2 -> S1（轻晃闭环）
+                Frame("lift_up-3.png", 0, fixed(200), anchorY = 43),     // S3 -> S1
+                Frame("lift_up-4.png", 1, fixed(200), anchorY = 43),     // S4 -> S2
+                Frame("lift_up-5.png", 2, fixed(300), anchorY = 43),     // S5 -> S3
+                Frame("lift_up-6.png", 3, fixed(300), anchorY = 43)      // S6 -> S4
             ),
             loop = true   // 拖拽期间持续循环
         ))
@@ -234,12 +309,12 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             ROLL, "roll-6.png",
             listOf(
-                Frame("roll-1.png", 1, rnd(140, 180), anchorX = 45, anchorY = 80),
-                Frame("roll-2.png", 2, rnd(140, 180), anchorX = 45, anchorY = 80),
-                Frame("roll-3.png", 3, rnd(140, 180), anchorX = 45, anchorY = 80),
-                Frame("roll-4.png", 4, rnd(140, 180), anchorX = 45, anchorY = 80),
-                Frame("roll-5.png", 5, rnd(140, 180), anchorX = 45, anchorY = 80),
-                Frame("roll-6.png", 0, rnd(140, 180), anchorX = 45, anchorY = 80)
+                Frame("roll-1.png", 1, rnd(140, 180), anchorX = 45, anchorY = 15),
+                Frame("roll-2.png", 2, rnd(140, 180), anchorX = 45, anchorY = 15),
+                Frame("roll-3.png", 3, rnd(140, 180), anchorX = 45, anchorY = 15),
+                Frame("roll-4.png", 4, rnd(140, 180), anchorX = 45, anchorY = 15),
+                Frame("roll-5.png", 5, rnd(140, 180), anchorX = 45, anchorY = 15),
+                Frame("roll-6.png", 0, rnd(140, 180), anchorX = 45, anchorY = 15)
             ),
             loop = true   // 抛掷期间持续循环
         ))
@@ -252,9 +327,9 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             WALK, "walk-1.png",
             listOf(
-                Frame("walk-1.png", 1, fixed(100), anchorX = 47, anchorY = 81),
-                Frame("walk-2.png", 2, fixed(100), anchorX = 47, anchorY = 81),
-                Frame("walk-3.png", 0, fixed(100), anchorX = 47, anchorY =81)
+                Frame("walk-1.png", 1, fixed(100), anchorX = 47, anchorY = 1),
+                Frame("walk-2.png", 2, fixed(100), anchorX = 47, anchorY = 1),
+                Frame("walk-3.png", 0, fixed(100), anchorX = 47, anchorY = 1)
             ),
             loop = true,
             timeNextEnabled = true,                       // 常驻行走，过段时间随机切换到其他待机模式
@@ -267,11 +342,11 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             WALK_WHITE, "sit_clam-1.png",
             listOf(
-                Frame("walk_white-1.png", 1, rnd(200, 300), anchorX = 47, anchorY = 81),
-                Frame("walk_white-2.png", 2, rnd(200, 300), anchorX = 47, anchorY = 81),
-                Frame("walk_white-3.png", 3, rnd(200, 300), anchorX = 47, anchorY = 81),
-                Frame("walk_white-4.png", 4, rnd(200, 300), anchorX = 47, anchorY = 81),
-                Frame("walk_white-5.png", null, rnd(5000, 10_000), anchorX = 47, anchorY = 81)
+                Frame("walk_white-1.png", 1, rnd(200, 300), anchorX = 47, anchorY = 1),
+                Frame("walk_white-2.png", 2, rnd(200, 300), anchorX = 47, anchorY = 1),
+                Frame("walk_white-3.png", 3, rnd(200, 300), anchorX = 47, anchorY = 1),
+                Frame("walk_white-4.png", 4, rnd(200, 300), anchorX = 47, anchorY = 1),
+                Frame("walk_white-5.png", null, rnd(5000, 10_000), anchorX = 47, anchorY = 1)
             ),
             loop = false
             // 下一个无指定：对齐 PC，美白结束后回到待机随机池（菜单与待机池激活一致）
@@ -281,8 +356,8 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             WRIGGLE, "sit_clam-1.png",
             listOf(
-                Frame("wriggle-1.png", 1, rnd(250, 300), anchorX = 54, anchorY = 81),
-                Frame("wriggle-2.png", 0, rnd(250, 300), anchorX = 54, anchorY = 81)
+                Frame("wriggle-1.png", 1, rnd(250, 300), anchorX = 54, anchorY = 1),
+                Frame("wriggle-2.png", 0, rnd(250, 300), anchorX = 54, anchorY = 1)
             ),
             loop = true,
             timeNextEnabled = true,
@@ -296,8 +371,8 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             PROBE_HEAD, "sit_clam-1.png",
             listOf(
-                Frame("probe_head-1.png", 1, rnd(1000, 5000), anchorY = 66),
-                Frame("probe_head-2.png", 0, rnd(150, 300), anchorY = 66)   // -> 帧1（闭合 1<->2 循环）
+                Frame("probe_head-1.png", 1, rnd(1000, 5000), anchorY = 16),
+                Frame("probe_head-2.png", 0, rnd(150, 300), anchorY = 16)   // -> 帧1（闭合 1<->2 循环）
             ),
             loop = false,                       // 循环由 timeNext 机制驱动，而非帧链 loop
             nextModeName = SIT_CLAM,
@@ -314,13 +389,30 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             SNAP_HEAD, "sit_clam-1.png",
             listOf(
-                Frame("probe_head-1.png", 1, rnd(1000, 5000), anchorY = 66),
-                Frame("probe_head-2.png", 0, rnd(150, 300), anchorY = 66)   // -> 帧1（闭合 1<->2 循环）
+                Frame("probe_head-1.png", 1, rnd(1000, 5000), anchorY = 16),
+                Frame("probe_head-2.png", 0, rnd(150, 300), anchorY = 16)   // -> 帧1（闭合 1<->2 循环）
             ),
             loop = true,                        // 常驻循环，不跳出
             nextModeName = null,
             timeNextEnabled = false,
             changeProb = 0f
+        ))
+
+        // ============ 吸附探头摸摸头（SNAP_PAT_HEAD，吸附态专属）============
+        // 旧资源无独立“探头摸摸头”美术，复用 probe_head 帧；新资源用 探头摸摸头/probe_pat_head-*。
+        // 与 PAT_HEAD 类似：一次性动作，播完后由 nextModeName 回到吸附探头(SNAP_HEAD)，不落入 sit_clam。
+        registerMode(ImageModeDef(
+            SNAP_PAT_HEAD, "probe_head-1.png",
+            listOf(
+                Frame("probe_head-1.png", 1, rnd(1000, 5000), anchorY = 16),
+                Frame("probe_head-2.png", 0, rnd(150, 300), anchorY = 16)   // -> 帧1（闭合 1<->2 循环）
+            ),
+            loop = false,
+            nextModeName = SNAP_HEAD,
+            timeNextEnabled = true,
+            changeIntervalMin = 5000,
+            changeIntervalMax = 10_000,
+            changeProb = 0.5f
         ))
 
         // ============ 趴着（LIE，常驻单帧）============
@@ -330,7 +422,7 @@ class ImageModeManager(private val ctx: android.content.Context) {
             LIE, "wriggle-1.png",
             // 复用 wriggle-1.png，锚点必须与 wriggle 模式完全一致（anchorX=54, anchorY=42），
             // 否则同一张图在不同模式下锚点不同 → 图片位置偏移。lie 是趴姿静止，单帧即可。
-            listOf(Frame("wriggle-1.png", null, rnd(3000, 7000), anchorX = 54, anchorY = 81)),
+            listOf(Frame("wriggle-1.png", null, rnd(3000, 7000), anchorX = 54, anchorY = 1)),
             loop = false
             // 下一个无指定：对齐 PC，趴着结束后回到待机随机池（菜单与待机池激活一致）
         ))
@@ -338,7 +430,7 @@ class ImageModeManager(private val ctx: android.content.Context) {
         // ============ 传送门（PORTAL，占位）============
         registerMode(ImageModeDef(
             PORTAL, "sit_clam-1.png",
-            listOf(Frame("sit_clam-1.png", null, fixed(3000), anchorY = 110)),
+            listOf(Frame("sit_clam-1.png", null, fixed(3000), anchorY = -28)),
             loop = false,
             nextModeName = SIT_CLAM
         ))
@@ -353,22 +445,23 @@ class ImageModeManager(private val ctx: android.content.Context) {
         registerMode(ImageModeDef(
             PULL_FISH, "sit_clam-1.png",
             listOf(
-                Frame("pull_fish-1.png", 1, rnd(300, 500), anchorX = 54, anchorY = 81),
-                Frame("pull_fish-2.png", 2, rnd(130, 160), anchorX = 54, anchorY = 81),
-                Frame("pull_fish-3.png", 3, rnd(160, 200), anchorX = 54, anchorY = 81),
-                Frame("pull_fish-4.png", 4, rnd(130, 160), anchorX = 54, anchorY = 81),
-                Frame("pull_fish-5.png", 5, fixed(70), anchorX = 54, anchorY = 81),
+                Frame("pull_fish-1.png", 1, rnd(300, 500), anchorX = 54, anchorY = 1),
+                Frame("pull_fish-2.png", 2, rnd(130, 160), anchorX = 54, anchorY = 1),
+                Frame("pull_fish-3.png", 3, rnd(160, 200), anchorX = 54, anchorY = 1),
+                Frame("pull_fish-4.png", 4, rnd(130, 160), anchorX = 54, anchorY = 1),
+                Frame("pull_fish-5.png", 5, fixed(70), anchorX = 54, anchorY = 1),
                 // 第6帧：S6 基础锚点(67,39) + anchor_dy(70*ratio)；水平位移 130*ratio
-                Frame("pull_fish-6.png", 6, fixed(70), anchorX = 67, anchorY = (67 + 70 * pfRatio).toInt(),
+                // 转换器：距底 = rawH(90) - 距顶(67+70*ratio) = 23 - 70*ratio
+                Frame("pull_fish-6.png", 6, fixed(70), anchorX = 67, anchorY = (23 - 70 * pfRatio).toInt(),
                     dx = (130 * pfRatio).toInt()),
-                // 第7帧：复用 pull_fish-6.png（PC replace(anchor_dy=110*ratio)），锚点 X 同 S6=67，Y 下沉(110*ratio)；水平位移 125*ratio
-                Frame("pull_fish-6.png", 7, fixed(70), anchorX = 67, anchorY = (67 + 110 * pfRatio).toInt(),
+                // 第7帧：复用 pull_fish-6.png（PC replace(anchor_dy=110*ratio)），距底 = 90 - (67+110*ratio) = 23 - 110*ratio
+                Frame("pull_fish-6.png", 7, fixed(70), anchorX = 67, anchorY = (23 - 110 * pfRatio).toInt(),
                     dx = (125 * pfRatio).toInt()),
-                // 第8帧：复用 pull_fish-6.png（PC replace(anchor_dy=70*ratio)），锚点 X 同 S6=67，Y 回(70*ratio)；水平位移 120*ratio
-                Frame("pull_fish-6.png", 8, fixed(70), anchorX = 67, anchorY = (67 + 70 * pfRatio).toInt(),
+                // 第8帧：复用 pull_fish-6.png（PC replace(anchor_dy=70*ratio)），距底 = 23 - 70*ratio
+                Frame("pull_fish-6.png", 8, fixed(70), anchorX = 67, anchorY = (23 - 70 * pfRatio).toInt(),
                     dx = (120 * pfRatio).toInt()),
-                // 第9帧：收尾过渡，PC 用 Wriggle.S1（wriggle-1.png）+ anchor_dy=0 → 锚点(54,42)，水平位移 120*ratio，随后回到 LIE
-                Frame("wriggle-1.png", null, fixed(500), anchorX = 54, anchorY = 81,
+                // 第9帧：收尾过渡，PC 用 Wriggle.S1（wriggle-1.png）+ anchor_dy=0 → 距底 = 43 - 81 = -38
+                Frame("wriggle-1.png", null, fixed(500), anchorX = 54, anchorY = 1,
                     dx = (120 * pfRatio).toInt())
             ),
             loop = false,
@@ -376,8 +469,10 @@ class ImageModeManager(private val ctx: android.content.Context) {
             nextModeName = LIE
         ))
 
+        } // end if(!loaded)
+
         currentName = DEFAULT_MODE
-        currentDef = modes[DEFAULT_MODE]
+        currentDef = modes[DEFAULT_MODE] ?: modes.values.firstOrNull()
         frameIndex = 0
         acc = 0L
         resetTimeNext()
@@ -392,6 +487,75 @@ class ImageModeManager(private val ctx: android.content.Context) {
             base?.changeIntervalMin ?: 3000,
             (base?.changeIntervalMax ?: 4000) + 1
         )
+    }
+
+    /**
+     * 从 assets 下的 JSON 配置加载动画模式（帧序列/延迟/锚点/待机池等）。
+     * 解析失败由调用方捕获并回退到内建模式，本函数不抛未处理异常。
+     */
+    private fun loadModesFromJson(path: String) {
+        val text = ctx.assets.open(path).bufferedReader().use { it.readText() }
+        val root = JSONObject(text)
+        // 包级：是否强制底部中心锚点（覆盖 currentPack 默认值，便于 JSON 驱动）
+        val forceBottom = if (root.has("forceBottomCenterAnchor"))
+            root.getBoolean("forceBottomCenterAnchor") else currentPack.forceBottomCenterAnchor
+        currentPack = currentPack.copy(forceBottomCenterAnchor = forceBottom)
+        // 清空旧模式，按 JSON 重建
+        modes.clear()
+        val modesObj = root.getJSONObject("modes")
+        val kit = modesObj.keys()
+        while (kit.hasNext()) {
+            val name = kit.next()
+            val m = modesObj.getJSONObject(name)
+            val fallback = if (m.has("fallback")) m.getString("fallback") else ""
+            val loop = m.optBoolean("loop", false)
+            val tn = if (m.has("timeNext")) m.getJSONObject("timeNext") else null
+            val timeNextEnabled = tn?.optBoolean("enabled", false) ?: false
+            val changeIntervalMin = tn?.optLong("min", 3000) ?: 3000
+            val changeIntervalMax = tn?.optLong("max", 4000) ?: 4000
+            val changeProb = (tn?.optDouble("prob", 0.5) ?: 0.5).toFloat()
+            val nextModeName = if (m.has("nextMode") && !m.isNull("nextMode")) m.getString("nextMode") else null
+            val walkSpeed = m.optDouble("walkSpeed", 0.0).toFloat()
+            val label = if (m.has("label")) m.getString("label") else name
+            val framesArr = m.getJSONArray("frames")
+            val frames = mutableListOf<Frame>()
+            for (i in 0 until framesArr.length()) {
+                val f = framesArr.getJSONObject(i)
+                val res = f.getString("res")
+                val nextIndex = if (f.has("next") && !f.isNull("next")) f.getInt("next") else null
+                val delay = parseDelay(f.get("delay"))
+                val anchorX = if (f.has("anchorX")) f.getInt("anchorX") else -1
+                val anchorY = if (f.has("anchorY")) f.getInt("anchorY") else null
+                val dx = if (f.has("dx")) f.getInt("dx") else 0
+                val dy = if (f.has("dy")) f.getInt("dy") else 0
+                frames.add(Frame(res, nextIndex, delay, anchorX, anchorY, dx, dy))
+            }
+            registerMode(ImageModeDef(name, fallback, frames, loop, timeNextEnabled,
+                changeIntervalMin, changeIntervalMax, changeProb, nextModeName, null, walkSpeed, label))
+        }
+        // 待机池 / 静止池
+        if (root.has("standbyPool")) {
+            standbyPool.clear()
+            val sp = root.getJSONArray("standbyPool")
+            for (i in 0 until sp.length()) standbyPool.add(sp.getString(i))
+        }
+        if (root.has("staticPool")) {
+            val arr = root.getJSONArray("staticPool")
+            staticPool = List(arr.length()) { arr.getString(it) }
+        }
+    }
+
+    /** delay 字段：[min,max]=随机区间；数字=固定值(ms)。 */
+    private fun parseDelay(d: Any?): () -> Long = when (d) {
+        is JSONArray -> {
+            val min = d.getLong(0)
+            val max = d.getLong(1)
+            rnd(min, max)
+        }
+        is Int -> fixed(d.toLong())
+        is Long -> fixed(d)
+        is Double -> fixed(d.toLong())
+        else -> fixed(100)
     }
 
     private fun registerMode(mode: ImageModeDef) {
@@ -484,6 +648,36 @@ class ImageModeManager(private val ctx: android.content.Context) {
         setMode(DEFAULT_MODE)
     }
 
+    /**
+     * 运行时切换资源包（关于页“使用新资源”开关触发）。
+     * 清空位图/尺寸缓存，重建统一画布尺寸，并复位到默认静坐模式。
+     * 注意：切换会打断当前一次性动画并回到 sit_clam（配置切换属低频操作，可接受短暂停顿）。
+     */
+    fun setPack(pack: SpritePack) {
+        if (currentPack.id == pack.id) return
+        currentPack = pack
+        bitmapCache.clear()
+        rawSizeCache.clear()
+        if (pack.configPath != null) {
+            try {
+                loadModesFromJson(pack.configPath!!)
+            } catch (_: Exception) {
+                // 换包配置解析失败：保留当前已加载的 modes，避免空模式导致宠物卡死
+            }
+        }
+        val (w, h) = globalMaxSize()
+        globalW = w
+        globalH = h
+        forcedSeq = null
+        forcedOnEnd = null
+        currentName = DEFAULT_MODE
+        currentDef = modes[DEFAULT_MODE] ?: modes.values.firstOrNull()
+        frameIndex = 0
+        acc = 0L
+        resetTimeNext()
+        modeChangedFlag = true
+    }
+
     // 供 View 检测“是否切到了新动画序列”：每次 nextFrame 后由 didModeChange() 取一次并清除标记
     private var modeChangedFlag = false
     private var reportedName: String? = null
@@ -533,25 +727,55 @@ class ImageModeManager(private val ctx: android.content.Context) {
         return loadBitmap(frame.resName) ?: loadBitmap(def.fallback)
     }
 
-    /** 当前帧位图尺寸（真实像素，随帧变化） */
+    /** 当前帧【逻辑画布】尺寸（恒 128 基准；新包解码 256 超采样但画布逻辑仍为 128）。
+     *  窗口/锚点 X 居中/渲染矩形均以画布计，而非逐帧 bitmap 像素（256 超采样源）。 */
     fun currentBitmapSize(): Pair<Int, Int> {
-        val bmp = currentBitmap()
-        return if (bmp != null) bmp.width to bmp.height else 160 to 160
+        return if (globalW > 0 && globalH > 0) globalW to globalH else 160 to 160
     }
+
+    /** 原始位图尺寸记忆化：同一 resName 只解一次，消除 currentAnchor() 每次调用都 open+decode 的 I/O 抖动。 */
+    private val rawSizeCache = mutableMapOf<String, Pair<Int, Int>>()
 
     /**
      * 仅解码取原始位图尺寸（不进入 bitmapCache、不引用 globalW/globalH），
      * 专供 init 阶段计算统一画布尺寸，避免与 globalW/globalH 的 init 形成初始化死循环。
+     * 结果按 resName 记忆化：同一帧尺寸只解一次，既消除重复 I/O，也保证“位置求锚点”与“显示求锚点”
+     * 取到的是同一份已缓存尺寸、不会因重读原始文件而错位。
      */
+    // 取原图尺寸（用于锚点/ padding 计算）。缓存避免重复解码头。
+    // 新包：返回「保比例下采样」后的真实内容尺寸（最长边 = decodeTarget，如 1000×500 → 128×64），
+    // 而非原始的 1000×1000 也非方块 128×128（否则非正方形图锚点会算到错误处/脚落到透明区导致错位）。
     private fun rawBitmapSize(resName: String): Pair<Int, Int> {
-        return try {
-            val istr = ctx.assets.open("img/$resName")
-            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeStream(istr, null, opts)
-            opts.outWidth to opts.outHeight
-        } catch (_: Exception) {
-            0 to 0
+        rawSizeCache[resName]?.let { return it }
+        val path = currentPack.resolve(resName)
+        if (path == null) {
+            rawSizeCache[resName] = 0 to 0
+            return 0 to 0
         }
+        val r = if (currentPack.decodeTarget > 0) {
+            try {
+                val istr = ctx.assets.open(path)
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeStream(istr, null, opts)
+                istr.close()
+                // 逻辑尺寸：按【anchorRes=128】保比例算，而非物理 decodeTarget(256)。
+                // 锚点/画布/边界全部活在 128 逻辑空间，decodeTarget 只影响解码清晰度、不影响坐标。
+                scaledContentSize(opts.outWidth, opts.outHeight, currentPack.anchorRes)
+            } catch (_: Exception) {
+                currentPack.anchorRes to currentPack.anchorRes   // 读不到边界：回退逻辑方块尺寸，避免下游异常
+            }
+        } else {
+            try {
+                val istr = ctx.assets.open(path)
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeStream(istr, null, opts)
+                opts.outWidth to opts.outHeight
+            } catch (_: Exception) {
+                0 to 0
+            }
+        }
+        rawSizeCache[resName] = r
+        return r
     }
 
     /**
@@ -573,27 +797,41 @@ class ImageModeManager(private val ctx: android.content.Context) {
     }
 
     /**
-     * 当前帧锚点（图片像素坐标，对齐 PC image_meta）：
-     * - anchorX<0 => 图宽/2（水平居中）
-     * - anchorY<0 => 图高（底边对齐）
-     * 锚点需叠加【居中 padding 偏移】，因原图被居中 padding 到统一画布后，
-     * 脚锚点在统一画布中的真实位置 = 原始 anchor + pad。否则 pad 后图内容偏移、
-     * 锚点仍指原图坐标 → 脚落点与图不对齐（错位）。
+     * 当前帧锚点（【转换器】内部使用，对外输入见各 frame.anchorX/Y 注释）。
+     *
+     * 对外输入约定（方便美术/新增动作直接按图确认地面点）：
+     *   - anchorX：距图片【左】边的像素（<0 表示水平居中 = 图宽/2）
+     *   - anchorY：距图片【底】边的像素（左下角原点，Y 向上）。null = 未设置（贴底 = 0）；
+     *     可为负值（脚在图底下方，如 walk/wriggle），转换器照常计算 rawH - anchorY，不截断。
+     * 背景：原 PC 锚点是“距顶 + 贴底 padding 偏移”的复合值，难直观。现改为按 PNG 左下角
+     * 直接填地面点，转换器在内部还原为旧版等价坐标，保证渲染/边界效果【与改动前完全一致】。
+     *
+     * 还原推导（padY 由 fillOffset 给出：非 roll = 0 顶部填充、roll = (globalH-H_orig)/2 居中）：
+     *   新版输出 = (anchorX距左 + padX) , (anchorY距顶 + padY)
+     *   新版输入 = 距底 = H_orig - 距顶  ⇒  距顶 = H_orig - anchorY
+     *   ⇒ 新版输出 = (anchorX + padX) , ((H_orig - anchorY) + padY)
+     *             = (anchorX + padX) , (anchorY + (H_orig + padY - anchorY))  // 与旧距顶版等价
+     *   即：ay = (H_orig - anchorY) + padY，X 不变（距左语义一致）；
+     *   非 roll 时 padY=0 ⇒ ay = H_orig - anchorY（脚距画布顶 = 图内脚距顶），画布底到脚为透明。
+     *   ROLL 不再特判，使用与所有动作相同的真实 anchorY；其旋转一致性由 PetView 在
+     *   rotateOffsetWith / onDraw 中对 ROLL 改绕锚点自身旋转来保证（球状对称，外观不变）。
      */
     fun currentAnchor(): Pair<Int, Int> {
         val def = forcedSeq ?: currentDef ?: return 80 to 160
         val frame = def.frames.getOrNull(frameIndex) ?: return 80 to 160
-        val (w, h) = currentBitmapSize()   // padding 后尺寸 = globalW×globalH
-        // 翻滚（ROLL）：原图 90×90 中心对称。体感重力下会随 gravityRotation 绕窗口中心旋转，
-        // 若锚点偏离窗口中心，rotateOffset 会让浮窗左上角画圆 → 旋转抖动。
-        // 故对 ROLL 强制把锚点对齐到统一画布中心（globalW/2, globalH/2），
-        // 使任意旋转角下锚点恒等于窗口中心 → 浮窗位置不变、旋转视觉静止。
-        // 中心对称图绕中心旋转外观不变，故此特判无视觉错位。
-        if (def.name == ROLL) {
-            return (globalW / 2) to (globalH / 2)
-        }
-        val axRaw = if (frame.anchorX >= 0) frame.anchorX else w / 2
-        val ayRaw = if (frame.anchorY >= 0) frame.anchorY else h
+        val (w, _) = currentBitmapSize()   // padding 后尺寸 = globalW×globalH（仅用 w 供锚点 X 居中）
+        val (_, rawH) = rawBitmapSize(frame.resName)   // 原始 PNG 尺寸（未 padding），仅用高
+        // 默认底部中心(forceBottomCenterAnchor=true)时，逐帧 anchorX/anchorY 一般被忽略；
+        // 但若某帧在 JSON 里显式给出 anchorX(>=0) / anchorY(非 null)，则该帧覆盖默认、使用自定义锚点。
+        val forced = currentPack.forceBottomCenterAnchor
+        val frameHasAx = frame.anchorX >= 0           // JSON 给了非负 anchorX 即视为显式
+        val frameHasAy = frame.anchorY != null        // JSON 给了 anchorY 即视为显式
+        val axIn = if (forced && !frameHasAx) -1 else frame.anchorX
+        val ayIn = if (forced && !frameHasAy) 0 else (frame.anchorY ?: 0)
+        val axRaw = if (axIn >= 0) axIn else w / 2   // 距左（<0 居中）
+        // 输入 anchorY=距底 ⇒ 转距顶 = rawH - anchorY。合法范围 [-128,128]，负值(脚在图底下方)照常参与计算。
+        val ayFromBottom = ayIn
+        val ayRaw = rawH - ayFromBottom
         val (padX, padY) = padOf(frame.resName)
         return (axRaw + padX) to (ayRaw + padY)
     }
@@ -692,52 +930,120 @@ class ImageModeManager(private val ctx: android.content.Context) {
      *  - 锚点 (ax,ay) 经 pad 偏移后仍指向「宠物脚在原图内的相对位置」，跨模式连续 → 不错位。
      * 这解决了“各 mode 画布被裁切到不同尺寸、锚点像素值未同步”导致的全链路错位。
      */
-    val globalW: Int
-    val globalH: Int
+    var globalW: Int = 0
+    var globalH: Int = 0
     init {
         val (w, h) = globalMaxSize()
         globalW = w
         globalH = h
     }
 
-    /** 每帧相对统一画布的偏移（px），供锚点补偿使用。水平居中、垂直贴底。 */
-    private fun padOf(resName: String): Pair<Int, Int> {
-        val bmp = bitmapCache[resName] ?: return 0 to 0
-        val dx = (globalW - bmp.width).coerceAtLeast(0)
-        val dy = (globalH - bmp.height).coerceAtLeast(0)
-        return dx / 2 to dy   // y 贴底：原图底边对齐画布底边
+    /**
+     * 单图资源相对统一画布的填充偏移 (padX, padY)：【唯一】填充规则来源。
+     * 同时供 loadBitmap（像素落点）与 padOf/currentAnchor（锚点补偿）使用，
+     * 保证“填充方式”与“锚点计算”永远是同一套规则，不会因改填充而锚点错位。
+     *
+     * 规则（以图片资源名为单位，粒度 = resName.startsWith("roll") 为唯一例外）：
+     *  - 水平：始终居中，padX = (globalW - bw) / 2。
+     *  - 垂直：ROLL 类（球状对称）【居中】填充（padY = (globalH - bh)/2）；
+     *          其余图片【顶部】填充（padY = 0，图片置顶，透明空白补在图片【下方】至画布底），
+     *          即“除 roll 外，其他图片为底部填充透明”——用下方透明把图撑到目标尺寸 globalH。
+     *
+     * 锚点传导（关键）：currentAnchor 经 padOf 复用本规则，fay = (rawH - 距底) + padY；
+     * 非 roll 的 padY=0 ⇒ fay = rawH - 距底，即脚在画布内的【距顶】距离，画布底到脚之间是透明。
+     * 浮窗定位只认 fay（脚），透明区不参与，故各帧脚在世界坐标仍按锚点对齐；
+     * 但“矩形框底 = 统一地面基线”不再成立（画布底在脚下方、是透明）。
+     *
+     * 必须用【原始】PNG 尺寸（bw/bh）算 pad，不能读 bitmapCache——
+     * 缓存里存的是已 padding 到统一画布(globalW×globalH)的位图，若用其尺寸则 padY=globalH-globalH=0，
+     * 但此处非 roll 本就 padY=0，读缓存反而掩盖了真实原始高度，故仍禁止。
+     */
+    private fun fillOffset(resName: String, bw: Int, bh: Int, canvasW: Int = globalW, canvasH: Int = globalH): Pair<Int, Int> {
+        if (bw <= 0 || bh <= 0) return 0 to 0
+        val padX = ((canvasW - bw).coerceAtLeast(0)) / 2
+        // roll：垂直居中；其余置顶（padY=0，透明填充在图片【下方】）。
+        val isRoll = resName.startsWith("roll", ignoreCase = true)
+        val padY = if (isRoll) (canvasH - bh) / 2 else 0
+        return padX to padY
     }
 
+    /** 每帧相对统一画布的偏移（px），供锚点补偿使用。直接复用 fillOffset（单一规则来源）。 */
+    private fun padOf(resName: String): Pair<Int, Int> {
+        val (bw, bh) = rawBitmapSize(resName)
+        return fillOffset(resName, bw, bh)
+    }
+
+    // 解析并缓存单帧位图。解码产物 pad 进「解码画布」(decodeTarget 边长；旧包=逻辑画布 globalW×globalH)，
+    // 居中绘制（水平居中，垂直置顶、底部补透明）。
+    // 新包：按 decodeTarget=256 保比例下采样（最长边 → 256，如 1000×500 → 256×128）作 2x 超采样源，
+    // pad 进 256×256 解码画布；逻辑/锚点空间仍是 anchorRes=128，渲染时再把 256 位图缩进 128 逻辑矩形（见 PetView）。
     private fun loadBitmap(resName: String): Bitmap? {
         bitmapCache[resName]?.let { return it }
-        // 图片资源在 assets/img/ 下（文件名即 resName，如 sit_clam-1.png）
+        val path = currentPack.resolve(resName) ?: return null
         val src = try {
-            val istr = ctx.assets.open("img/$resName")
-            BitmapFactory.decodeStream(istr)
+            if (currentPack.decodeTarget > 0) {
+                decodeAssetScaled(path, currentPack.decodeTarget)
+            } else {
+                val istr = ctx.assets.open(path)
+                BitmapFactory.decodeStream(istr)
+            }
         } catch (_: Exception) {
             null
-        }
-        val bmp = if (src != null && (src.width != globalW || src.height != globalH)) {
-            // 统一画布：水平居中、垂直【贴底】填充（仅图片上方补透明）。
-            // 这样所有图的"图底"都对齐统一画布底边 → 矩形框底即统一地面基线，
-            // 用户可一眼判断某 mode 的脚/地面是否贴基线（间隙=锚点偏低，越界=不可能）。
-            // 锚点补偿见 padOf：padY = globalH - src.height（不再 /2）。
-            // 特例 ROLL（roll-*.png）：原图 90×90 中心对称，体感重力下绕窗口中心自转。
-            // 若仍贴底填充，图中心(64,83)偏离旋转中心(64,64) → 旋转时图画圈跳动。
-            // 故 ROLL 改为【居中】填充，使图中心恰好落在画布中心(64,64)，
-            // 配合 currentAnchor 对 ROLL 返回画布中心，旋转时图原地自转、视觉静止。
-            val isRoll = resName.startsWith("roll", ignoreCase = true)
-            val yOff = if (isRoll) (globalH - src.height) / 2 else (globalH - src.height)
-            val out = Bitmap.createBitmap(globalW, globalH, Bitmap.Config.ARGB_8888)
+        } ?: return null
+        // 解码画布：新包用 decodeTarget(256) 超采样画布；旧包用逻辑画布 globalW×globalH(128)。
+        // 解码产物与该画布同尺寸则直接复用，否则经 fillOffset 填充（roll 居中，其余顶部对齐、底部补透明）。
+        // 非 roll 图片置顶、透明补在下方 → 矩形框底不是地面基线（脚在画布内、下方为透明），
+        // 浮窗定位改由 currentAnchor 的 fay（脚距顶）驱动，与填充规则共用 fillOffset 永不错位。
+        // ROLL 例外：roll 为球状对称图，按【居中】填充使图中心恰好落在画布中心，旋转时图绕自身中心自转、视觉静止。
+        val canvasRes = if (currentPack.decodeTarget > 0) currentPack.decodeTarget else globalW
+        val bmp = if (src.width == canvasRes && src.height == canvasRes) {
+            src
+        } else {
+            val (padX, padY) = fillOffset(resName, src.width, src.height, canvasRes, canvasRes)
+            val out = Bitmap.createBitmap(canvasRes, canvasRes, Bitmap.Config.ARGB_8888)
             val c = android.graphics.Canvas(out)
-            c.drawBitmap(src, ((globalW - src.width) / 2).toFloat(), yOff.toFloat(), null)
+            c.drawBitmap(src, padX.toFloat(), padY.toFloat(), null)
             src.recycle()
             out
-        } else {
-            src
         }
         bitmapCache[resName] = bmp
         return bmp
+    }
+
+    /**
+     * 下采样解码（仅新包 decodeTarget>0 用）：先以 inJustDecodeBounds 取原始尺寸算 inSampleSize
+     * （按最长边向上取整到目标尺寸，避免欠采样发虚），粗降后【保比例】精确缩放，使最长边 = target，
+     * 而非压成 target×target 方块（否则非正方形图会被拉伸变形）。
+     * 真实内容尺寸由 scaledContentSize 计算，与 rawBitmapSize 共用，保证锚点/画布一致。
+     */
+    private fun decodeAssetScaled(path: String, target: Int): Bitmap? {
+        val istr1 = try { ctx.assets.open(path) } catch (_: Exception) { return null }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeStream(istr1, null, bounds)
+        istr1.close()
+        val realW = bounds.outWidth.takeIf { it > 0 } ?: return null
+        val realH = bounds.outHeight.takeIf { it > 0 } ?: return null
+        val (outW, outH) = scaledContentSize(realW, realH, target)   // 保比例：最长边 = target
+        val longSide = if (realW > realH) realW else realH
+        val inSample = ((longSide + target - 1) / target).coerceAtLeast(1)
+        val istr2 = try { ctx.assets.open(path) } catch (_: Exception) { return null }
+        val opts = BitmapFactory.Options().apply { inSampleSize = inSample }
+        val base = BitmapFactory.decodeStream(istr2, null, opts) ?: return null
+        return if (base.width == outW && base.height == outH) base
+        else Bitmap.createScaledBitmap(base, outW, outH, true).also { if (it != base) base.recycle() }
+    }
+
+    /**
+     * 计算「最长边缩到 target、保比例」后的内容尺寸（与 decodeAssetScaled 产物严格一致）。
+     * 例：1000×500, target=128 → 128×64；128×64 再经 fillOffset 顶部对齐、底部补透明到统一画布。
+     */
+    private fun scaledContentSize(realW: Int, realH: Int, target: Int): Pair<Int, Int> {
+        if (realW <= 0 || realH <= 0) return target to target
+        val longSide = if (realW > realH) realW else realH
+        val scale = target.toFloat() / longSide
+        val outW = (realW * scale).roundToInt().coerceAtLeast(1)
+        val outH = (realH * scale).roundToInt().coerceAtLeast(1)
+        return outW to outH
     }
 
     /** 释放位图缓存（View 销毁时调用） */

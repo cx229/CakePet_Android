@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 夜间开启态：纯黑（按要求保持黑色） -->
+    <item android:state_checked="true" android:color="#FF000000" />
+    <!-- 夜间关闭态：浅灰，在暗底上仍可见 -->
+    <item android:state_checked="false" android:color="#9AA0A6" />
+</selector>

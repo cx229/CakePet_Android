@@ -17,6 +17,8 @@
         <item name="android:colorForeground">@color/black</item>
         <!-- Status bar color. -->
         <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <!-- 所有 SwitchCompat 统一走黑色开关样式（不受 colorControlActivated 影响，避免连 checkbox 一起变黑） -->
+        <item name="switchStyle">@style/Widget.CakePet.Switch</item>
         <!-- Customize your theme here. -->
     </style>
 
@@ -24,6 +26,8 @@
          高度=状态栏高度的纯黑占位条，与标题栏黑底连成整体覆盖状态栏；
          标题文字在标题栏内完整显示，不与状态栏时间/电量重叠。不使用透明/translucent 黑魔法。 -->
     <style name="Theme.CakePet.FullscreenTitle" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
         <item name="colorPrimary">@color/purple_500</item>
         <item name="colorPrimaryVariant">@color/purple_700</item>
         <item name="colorOnPrimary">@color/white</item>
@@ -34,6 +38,15 @@
         <item name="colorSwitchThumbNormal">@color/switch_off_thumb</item>
         <item name="android:colorForeground">@color/black</item>
         <item name="android:statusBarColor">@color/black</item>
+        <item name="switchStyle">@style/Widget.CakePet.Switch</item>
+    </style>
+
+    <!-- 通用确认弹窗：透明窗口背景，仅由卡片自绘圆角与阴影，避免 Material 面板双层叠加。配色走语义色 cp_* 自动适配夜间。 -->
+    <style name="Theme.CakePet.ConfirmDialog" parent="Theme.MaterialComponents.DayNight.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:backgroundDimAmount">0.5</item>
     </style>
 
     <!-- 透明主题：用于长按菜单 Activity，仅显示 BottomSheet -->
@@ -50,5 +63,13 @@
         <item name="colorControlActivated">@color/black</item>
         <item name="colorSwitchThumbNormal">@color/switch_off_thumb</item>
         <item name="android:colorForeground">@color/black</item>
+        <item name="switchStyle">@style/Widget.CakePet.Switch</item>
+    </style>
+
+    <!-- 全部开关（SwitchCompat）统一黑色：开启纯黑、关闭浅灰，日/夜一致。
+         仅作用于 SwitchCompat（由 switchStyle 引用），不影响 CheckBox/RadioButton。 -->
+    <style name="Widget.CakePet.Switch" parent="Widget.AppCompat.CompoundButton.Switch">
+        <item name="thumbTint">@color/switch_black_selector</item>
+        <item name="trackTint">@color/switch_black_selector</item>
     </style>
 </resources>

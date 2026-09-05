@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/cp_bg"
+    android:focusableInTouchMode="true"
+    android:descendantFocusability="afterDescendants">
+
+    <!-- 状态栏占位条：纯黑，高度由 Activity 按真实状态栏高度设置，与标题栏连成整体覆盖状态栏 -->
+    <View android:id="@+id/status_bar_spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/cp_status_bar" />
+
+    <!-- 标题栏：黑底，紧跟占位条之下，与设置页完全一致，仅文本不同 -->
+    <LinearLayout android:id="@+id/title_bar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/cp_bg">
+
+        <ImageView android:id="@+id/iv_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title"
+            android:padding="14dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="返回" />
+
+        <TextView android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="显示-其他"
+            android:textSize="20dp"
+            android:textStyle="bold"
+            android:textColor="@color/cp_title" />
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+        <ImageView android:id="@+id/btn_more"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_more"
+            app:tint="@color/cp_title"
+            android:padding="12dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="更多"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true" android:focusable="true"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scrollbarStyle="outsideOverlay"
+        android:fadeScrollbars="false"
+        android:scrollbarFadeDuration="0"
+        android:clipToPadding="false">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- ===== 模块1：活动范围（标题在卡片矩形外面） ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="活动范围" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp" />
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="边界偏移" style="@style/SettingsOptionTitle" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="「芝麻酥」与屏幕边缘的间距" style="@style/SettingsOptionNote" />
+
+                <!-- 顶部偏移 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginTop="12dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="顶部偏移" style="@style/SettingsOptionTitle" />
+                            <EditText android:id="@+id/off_top_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="140" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="numberSigned"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
+                        </LinearLayout>
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/off_top_bar" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="-300" android:valueTo="2100" android:stepSize="1"
+                            android:value="140" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 底部偏移 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginTop="12dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="底部偏移" style="@style/SettingsOptionTitle" />
+                            <EditText android:id="@+id/off_bottom_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="140" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="numberSigned"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
+                        </LinearLayout>
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/off_bottom_bar" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="-300" android:valueTo="2100" android:stepSize="1"
+                            android:value="140" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 左部偏移 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginTop="12dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="左部偏移" style="@style/SettingsOptionTitle" />
+                            <EditText android:id="@+id/off_left_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="20" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="numberSigned"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
+                        </LinearLayout>
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/off_left_bar" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="-300" android:valueTo="1000" android:stepSize="1"
+                            android:value="0" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 右部偏移 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginTop="12dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="右部偏移" style="@style/SettingsOptionTitle" />
+                            <EditText android:id="@+id/off_right_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="20" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="numberSigned"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
+                        </LinearLayout>
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/off_right_bar" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="-300" android:valueTo="1000" android:stepSize="1"
+                            android:value="0" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块2：键盘适应（标题在卡片矩形外面） ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="键盘适应" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginTop="24dp" android:layout_marginBottom="6dp" />
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <!-- 输入法防误触开关（与设置页开关布局一致） -->
+                <LinearLayout style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="键盘时抬高" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="键盘弹出时，自动抬高以避免遮挡输入框"
+                            style="@style/SettingsOptionNote" />
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_ime_adapt" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- 重置边界（键盘适应）：开启后键盘弹出时无视上下边界偏移，仅用键盘高度+抬高偏移 -->
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="16dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="重置边界" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="无效上下边界偏移，防触抬高位置仅基于键盘顶部"
+                            style="@style/SettingsOptionNote" />
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_ime_reset_bottom" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- 抬高偏移 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginTop="16dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="抬高偏移" style="@style/SettingsOptionTitle" />
+                            <EditText android:id="@+id/ime_lift_value" android:layout_width="match_parent"
+                                android:layout_height="wrap_content" android:text="0" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="numberSigned"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
+                        </LinearLayout>
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/ime_lift_bar" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="-800" android:valueTo="800" android:stepSize="1" />
+                    </LinearLayout>
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="对「芝麻酥」抬高的高度再额外修正"
+                        style="@style/SettingsOptionNote" android:layout_marginBottom="4dp" />
+                </LinearLayout>
+
+                <!-- 键盘时隐藏（默认关）：键盘弹出时暂时隐藏「酥」且不可点击，键盘收起恢复 -->
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="16dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="键盘时隐藏" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="键盘弹出时，酥不可见不可点"
+                            style="@style/SettingsOptionNote" />
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_ime_hide" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

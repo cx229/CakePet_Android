@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 设置页：每个选项的主标题（带 Switch/SeekBar 的那种） -->
+    <!-- 设置页：每个选项的主标题（带 Switch/滑块的那种） -->
     <style name="SettingsOptionTitle">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
         <item name="android:textSize">14dp</item>
         <item name="android:textStyle">bold</item>
-        <item name="android:textColor">#000000</item>
+        <item name="android:textColor">@color/cp_title</item>
     </style>
 
     <!-- 设置页：选项标题下方的备注/说明文字（标题与备注间隙很小） -->
     <style name="SettingsOptionNote">
         <item name="android:textSize">11dp</item>
-        <item name="android:textColor">#AAAAAA</item>
+        <item name="android:textColor">@color/cp_note</item>
         <item name="android:layout_marginTop">0dp</item>
     </style>
 
@@ -18,6 +20,95 @@
     <style name="SettingsOptionSub">
         <item name="android:textSize">13dp</item>
         <item name="android:textStyle">bold</item>
-        <item name="android:textColor">#666666</item>
+        <item name="android:textColor">@color/cp_sub</item>
+    </style>
+
+    <!-- 设置页：二级页模块大标题（如“活动范围”“键盘适应”） -->
+    <style name="SettingsModuleTitle">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">16dp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/cp_text</item>
+        <item name="android:layout_marginTop">4dp</item>
+    </style>
+
+    <!-- 设置页：模块标题下方的整段说明文字 -->
+    <style name="SettingsModuleNote">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">11dp</item>
+        <item name="android:textColor">@color/cp_note</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:layout_marginBottom">4dp</item>
+    </style>
+
+    <!-- 设置页：选项右侧的当前数值（与标题上下同宽排列） -->
+    <style name="SettingsOptionValue">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">12dp</item>
+        <item name="android:textColor">@color/cp_value</item>
+    </style>
+
+    <!-- ===== 开关行（标题+备注在左，开关在右） ===== -->
+
+    <!-- 开关行外层：标题与备注整体垂直居中于开关 -->
+    <style name="SettingsSwitchRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:layout_marginBottom">12dp</item>
+    </style>
+
+    <!-- 开关行左侧：标题 + 备注纵向排列（两者间距由 SettingsOptionNote 的 marginTop=0dp 保证） -->
+    <style name="SettingsSwitchTexts">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <!-- 设置页：底部操作按钮（如“恢复默认设置”），风格与卡片模块一致 -->
+    <style name="SettingsButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingTop">14dp</item>
+        <item name="android:paddingBottom">14dp</item>
+        <item name="android:textSize">15dp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/cp_value</item>
+        <item name="android:background">@drawable/card_bg</item>
+    </style>
+
+    <!-- ===== 滑块行（标题/备注在左，数值输入框 + 滑块在右） ===== -->
+
+    <!-- 滑块行外层：标题与备注整体垂直居中，右侧数值输入与滑块横向排列 -->
+    <style name="SettingsSliderRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:layout_marginBottom">12dp</item>
+    </style>
+
+    <!-- 滑块行右侧的数值输入框（与 item_slider_bound 的输入框风格一致） -->
+    <style name="SettingsValueInput">
+        <item name="android:layout_width">50dp</item>
+        <item name="android:layout_height">30dp</item>
+        <item name="android:inputType">number</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:background">@drawable/edit_bg</item>
+        <item name="android:layout_marginStart">8dp</item>
+    </style>
+
+    <!-- 滑块行右侧的拖动条（占据剩余宽度） -->
+    <style name="SettingsSlider">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_marginStart">8dp</item>
     </style>
 </resources>

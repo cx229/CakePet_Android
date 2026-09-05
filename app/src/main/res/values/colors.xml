@@ -9,4 +9,35 @@
     <color name="white">#FFFFFFFF</color>
     <!-- 开关关闭态滑块（浅灰，与开启纯黑区分） -->
     <color name="switch_off_thumb">#FFBDBDBD</color>
+    <!-- 滑块未激活轨道色（浅灰，与黑色激活段区分） -->
+    <color name="slider_track_inactive">#FFBDBDBD</color>
+    <!-- 滑块按压光晕（半透明黑，纯黑会遮挡轨道，故保留透明度） -->
+    <color name="slider_halo">#33000000</color>
+    <!-- 设置页背景与主要文字色 -->
+    <color name="cp_bg">#F0F0F0</color>
+    <color name="cp_text">#222222</color>
+
+    <!-- ===== 日间/夜间语义色（跟随系统 DayNight 切换） ===== -->
+    <color name="cp_card_bg">#FFFFFF</color>          <!-- 卡片/按钮底色 -->
+    <color name="cp_title">#000000</color>            <!-- 标题文字（标题栏/选项标题） -->
+    <color name="cp_sub">#555555</color>              <!-- 子标题/模块小标题 -->
+    <color name="cp_note">#AAAAAA</color>             <!-- 备注/说明文字 -->
+    <color name="cp_value">#333333</color>            <!-- 数值/次要文字 -->
+    <color name="cp_divider">#E5E5E5</color>          <!-- 分隔线 -->
+    <color name="cp_status_bar">#F0F0F0</color>      <!-- 标题栏/状态栏占位背景 -->
+    <color name="cp_btn_primary_text">#FFFFFFFF</color> <!-- 主按钮白字（夜间仍白） -->
+    <color name="cp_btn_outline_text">#FF000000</color> <!-- 描边按钮文字 -->
+    <color name="cp_hint_dark">#80000000</color>      <!-- 半透明黑提示 -->
+    <color name="cp_hint_white">#CCFFFFFF</color>     <!-- 半透明白提示 -->
+    <color name="cp_subtle">#DDDDDD</color>             <!-- 浅灰分隔/轨道（如移动等高亮条） -->
+    <!-- drawable 背景引用色（日间/夜间） -->
+    <color name="cp_btn_primary_bg">#FF000000</color>   <!-- 主按钮底色（黑） -->
+    <color name="cp_btn_outline_bg">#FFFFFFFF</color>   <!-- 描边按钮底色（白） -->
+    <color name="cp_btn_outline_stroke">#FF000000</color> <!-- 描边按钮描边（黑） -->
+    <color name="cp_ripple_on_dark">#40FFFFFF</color>   <!-- 黑底上的水波纹 -->
+    <color name="cp_ripple_on_light">#20000000</color>  <!-- 白底上的水波纹 -->
+    <!-- 危险操作文字（退出）：日间沿用原红 -->
+    <color name="cp_danger">#B00020</color>
+    <!-- 强调色：日间用深青（与 teal_700 一致），夜间在 values-night 覆盖为浅青 -->
+    <color name="cp_accent">#FF018786</color>
 </resources>
