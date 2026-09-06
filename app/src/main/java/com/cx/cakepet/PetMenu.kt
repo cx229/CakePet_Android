@@ -25,6 +25,8 @@ class PetMenu(
     private var root: FrameLayout? = null
     private var menuView: View? = null
     private var actionsView: View? = null
+    private var interactView: View? = null
+    private var exitConfirmView: View? = null
 
     private val params: WindowManager.LayoutParams
         get() = WindowManager.LayoutParams().apply {
@@ -64,6 +66,9 @@ class PetMenu(
     fun show() {
         if (root != null) return
         val ctx = nightAwareContext()
+        // 长按打开浮窗时记录当前宠物的显示信息（位置/当前自动帧/脚朝向）：定格用这份快照，
+        // 而非再次让用户选择；之后活体继续动也不影响已定格图层。
+        val snap = petView.captureFreeze()
         root = FrameLayout(ctx).apply {
             // 顶部圆角卡片背景 + 点击外部关闭
             setBackgroundResource(R.drawable.menu_bg)
@@ -76,12 +81,15 @@ class PetMenu(
         }
         menuView = buildMenu(ctx)
         actionsView = buildActions(ctx).also { it.visibility = View.GONE }
+        interactView = buildInteract(ctx, snap).also { it.visibility = View.GONE }
+        exitConfirmView = buildExitConfirm(ctx).also { it.visibility = View.GONE }
         root!!.addView(menuView)
         root!!.addView(actionsView)
+        root!!.addView(interactView)
+        root!!.addView(exitConfirmView)
 
         // 底部全宽、纵向按需：贴底显示，y 为距底边偏移（0 贴底）
         val lp = params
-        val vis = service.getScreenBounds()
         lp.x = 0
         lp.y = 0
         // 横向全屏：宽度取屏幕宽
@@ -94,12 +102,14 @@ class PetMenu(
             root = null
             menuView = null
             actionsView = null
+            interactView = null
+            exitConfirmView = null
         }
     }
 
     private fun buildMenu(ctx: Context): View {
         val v = LayoutInflater.from(ctx).inflate(R.layout.sheet_menu, null)
-        // 两个开关：点击穿透 / 重力·抛掷（与设置页同数据源，即时生效）
+        // 三个开关：点击穿透 / 重力·抛掷 / 体感重力（与设置页同数据源，即时生效）
         val cfg = service.currentConfig()
         val swCt = v.findViewById<android.widget.Switch>(R.id.sw_clickthrough)
         val swG = v.findViewById<android.widget.Switch>(R.id.sw_gravity)
@@ -124,7 +134,12 @@ class PetMenu(
             service.updateConfig { copy(tiltGravity = next) }
         }
         v.findViewById<View>(R.id.menu_pat).setOnClickListener {
-            service.performAction(MenuActivity.ACTION_PAT); dismiss()
+            service.performAction(MenuActivity.ACTION_PAT, petView); dismiss()
+        }
+        // 交互：打开交互子页面（定格-咔嚓 / 清除所有定格）
+        v.findViewById<View>(R.id.menu_interact).setOnClickListener {
+            menuView?.visibility = View.GONE
+            interactView?.visibility = View.VISIBLE
         }
         v.findViewById<View>(R.id.menu_actions).setOnClickListener {
             menuView?.visibility = View.GONE
@@ -138,13 +153,15 @@ class PetMenu(
             service.startActivity(intent)
         }
         v.findViewById<View>(R.id.menu_recall).setOnClickListener {
-            service.performAction(MenuActivity.ACTION_RECALL); dismiss()
+            service.performAction(MenuActivity.ACTION_RECALL, petView); dismiss()
         }
         v.findViewById<View>(R.id.menu_hide).setOnClickListener {
-            service.performAction(MenuActivity.ACTION_HIDE); dismiss()
+            service.performAction(MenuActivity.ACTION_HIDE, petView); dismiss()
         }
         v.findViewById<View>(R.id.menu_exit).setOnClickListener {
-            dismiss(); service.performAction(MenuActivity.ACTION_EXIT)
+            // 不再直接退出：进入退出确认子页，由用户二次确认
+            menuView?.visibility = View.GONE
+            exitConfirmView?.visibility = View.VISIBLE
         }
         return v
     }
@@ -153,7 +170,7 @@ class PetMenu(
         val v = LayoutInflater.from(ctx).inflate(R.layout.sheet_actions, null)
         fun bind(id: Int, action: String) {
             v.findViewById<View>(id).setOnClickListener {
-                service.performAction(action); dismiss()
+                service.performAction(action, petView); dismiss()
             }
         }
         bind(R.id.act_sit_clam, MenuActivity.ACTION_SIT_CLAM)
@@ -168,6 +185,83 @@ class PetMenu(
         v.findViewById<View>(R.id.act_back).setOnClickListener {
             actionsView?.visibility = View.GONE
             menuView?.visibility = View.VISIBLE
+        }
+        return v
+    }
+
+    /**
+     * 交互子页面：定格-咔嚓（用长按时记录的快照定格当前宠物并退出浮窗）、
+     * 清除所有定格（移除所有定格显示层并退出浮窗）。
+     */
+    private fun buildInteract(ctx: Context, snap: PetView.FreezeSnapshot?): View {
+        val v = LayoutInflater.from(ctx).inflate(R.layout.sheet_interact, null)
+        // 定格-交互：控制全部定格显示层是否可点击交互（默认关=纯显示不可点击），即时生效
+        val swFd = v.findViewById<android.widget.Switch>(R.id.sw_freezeinteract)
+        swFd.isChecked = service.currentConfig().freezeDraggable
+        v.findViewById<View>(R.id.menu_switch_freezeinteract).setOnClickListener {
+            val next = !swFd.isChecked
+            swFd.isChecked = next
+            service.updateConfig { copy(freezeDraggable = next) }
+        }
+        v.findViewById<View>(R.id.act_back).setOnClickListener {
+            interactView?.visibility = View.GONE
+            menuView?.visibility = View.VISIBLE
+        }
+        v.findViewById<View>(R.id.freeze_snap).setOnClickListener {
+            // 定格：在长按时记录的指定位置创建指定帧的纯显示图层（不可点击、不拦截交互），然后退出浮窗
+            snap?.let { s -> service.addFreezeLayer(s) }
+            dismiss()
+        }
+        v.findViewById<View>(R.id.freeze_clear).setOnClickListener {
+            // 清除所有定格显示层
+            service.clearAllFreeze()
+            dismiss()
+        }
+        // 分身 归零 / -1 / +1：修改酥的数量（petCount），逻辑与关于页一致，范围 1..20；
+        // 到达上下界时不再变化，并用系统 Toast 提示（「酥」）。
+        // 注：点击后立即关闭浮窗，否则 Toast 会被浮窗遮住看不到。
+        val PET_COUNT_MIN = 1
+        val PET_COUNT_MAX = 20
+        fun toast(msg: String) =
+            android.widget.Toast.makeText(service, msg, android.widget.Toast.LENGTH_SHORT).show()
+        v.findViewById<View>(R.id.pet_zero).setOnClickListener {
+            service.updateConfig { copy(petCount = PET_COUNT_MIN) }
+            dismiss()
+            toast("「酥」已归零")
+        }
+        v.findViewById<View>(R.id.pet_minus).setOnClickListener {
+            val cur = service.currentConfig().petCount
+            if (cur <= PET_COUNT_MIN) { dismiss(); toast("「酥」不能再少了"); return@setOnClickListener }
+            service.updateConfig { copy(petCount = cur - 1) }
+            dismiss()
+            toast("「酥」数量：" + (cur - 1))
+        }
+        v.findViewById<View>(R.id.pet_plus).setOnClickListener {
+            val cur = service.currentConfig().petCount
+            if (cur >= PET_COUNT_MAX) { dismiss(); toast("「酥」不能再多了"); return@setOnClickListener }
+            service.updateConfig { copy(petCount = cur + 1) }
+            dismiss()
+            toast("「酥」数量：" + (cur + 1))
+        }
+        return v
+    }
+
+    /**
+     * 退出确认子页面：返回/取消回到主菜单；点“退出”才真正执行退出动作。
+     */
+    private fun buildExitConfirm(ctx: Context): View {
+        val v = LayoutInflater.from(ctx).inflate(R.layout.sheet_exit_confirm, null)
+        // 返回 / 取消：回到主菜单
+        val backToMenu: () -> Unit = {
+            exitConfirmView?.visibility = View.GONE
+            menuView?.visibility = View.VISIBLE
+        }
+        v.findViewById<View>(R.id.exit_back).setOnClickListener { backToMenu() }
+        v.findViewById<View>(R.id.exit_cancel).setOnClickListener { backToMenu() }
+        v.findViewById<View>(R.id.exit_confirm).setOnClickListener {
+            // 真正退出：关闭浮窗并执行退出动作
+            dismiss()
+            service.performAction(MenuActivity.ACTION_EXIT, petView)
         }
         return v
     }

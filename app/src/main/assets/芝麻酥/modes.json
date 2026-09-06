@@ -1,7 +1,7 @@
 {
   "forceBottomCenterAnchor": true,
-  "standbyPool": ["sit_clam", "sit_puffed", "wriggle", "probe_head", "shake_head", "lie", "walk_white", "walk", "pull_fish"],
-  "staticPool": ["sit_clam", "sit_puffed", "probe_head", "shake_head", "lie", "walk_white"],
+  "standbyPool": ["sit_clam", "sit_puffed", "wriggle", "shake_head", "lie", "walk_white", "walk", "pull_fish"],
+  "staticPool": ["sit_clam", "sit_puffed", "shake_head", "lie", "walk_white"],
   "modes": {
     "sit_clam": {
       "label": "静坐",

@@ -286,11 +286,16 @@ class SettingsActivity : AppCompatActivity() {
         ) { resetDefaultNow() }
     }
 
-    /** 实际执行「恢复本页默认」：把阈值页记录的默认值写回 PetConfig。 */
+    /** 实际执行「恢复本页默认」：把阈值页记录的默认值写回 PetConfig，并统一重绑滑块行程回填 UI。
+     * 与「重置系统」(resetSystemNow) 同一条刷新路径（setupSliders 从 config 全量重建），否则只写 config 不刷新显示，
+     * 导致「仅恢复一部分、需重开页面才全更新」。 */
     private fun resetDefaultNow() {
         suppressSnapPreview = true
         lifecycleScope.launch {
             config.resetFromBounds(PetBounds(this@SettingsActivity), SettingsPage.MAIN)
+            // 关键：按最新 bounds 重绑滑块行程（setupSliders 从 config 回填全部滑块/开关），避免只改 config 不刷新 UI
+            bs = PetBounds(this@SettingsActivity).getBlocking(SettingsPage.MAIN).sliders.associateBy { it.key }
+            setupSliders()
             // 重置后数据绑定会回填开关并触发 listener，延迟解除屏蔽避免误显示示意图
             kotlinx.coroutines.delay(300)
             suppressSnapPreview = false

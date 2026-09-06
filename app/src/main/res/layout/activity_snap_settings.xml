@@ -85,23 +85,6 @@
                         android:paddingStart="6dp" android:paddingEnd="6dp"/>
                 </LinearLayout>
 
-                <!-- 显示吸附线：吸附态时在图片“地面（锚点）”处显示一条灰色细线（默认开） -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="10dp"
-                    android:layout_marginBottom="0dp">
-                    <LinearLayout style="@style/SettingsSwitchTexts">
-                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:text="显示吸附线" style="@style/SettingsOptionTitle"/>
-                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:text="吸附状态下，在宠物“地面”位置显示一条灰色细线（宽度随宠物大小变化）。"
-                            style="@style/SettingsOptionNote"/>
-                    </LinearLayout>
-                    <Switch android:id="@+id/sw_show_snap_line"
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:minWidth="0dp" android:minHeight="0dp"
-                        android:checked="true"
-                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
-                </LinearLayout>
-
                 <!-- 四边吸附（原 bg_cell_gray 横排四宫格，id 保持不变） -->
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                     style="@style/SettingsOptionTitle"

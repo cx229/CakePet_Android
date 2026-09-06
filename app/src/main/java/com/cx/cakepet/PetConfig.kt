@@ -42,9 +42,6 @@ data class PetConfigData(
     val snapRight: Boolean = ConfigDefaults.SNAP_RIGHT,
     // 吸附判定阈值（像素）：拖拽松手时距某边 < snapThreshold 且速度低才吸附。默认 100。
     val snapThreshold: Float = ConfigDefaults.SNAP_THRESHOLD,
-    // 显示吸附线：处于吸附态时，在图片“地面（锚点）”位置画一条灰色细线（宽度=宠物宽、随大小变化、高度固定）。
-    // 仅在吸附态生效，默认开。
-    val showSnapLine: Boolean = ConfigDefaults.SHOW_SNAP_LINE,
     // 重力/抛掷总开关：关闭后拖动即静止，不受拖动速度与重力影响（类似 PC）
     val gravityEnabled: Boolean = ConfigDefaults.GRAVITY_ENABLED,
     // 体感重力（倾斜重力）：开启后由手机重力传感器决定重力方向（关闭四边定向重力，但保留边界反弹）。
@@ -60,6 +57,8 @@ data class PetConfigData(
     val offsetRight: Float = ConfigDefaults.OFFSET_RIGHT,
     val alpha: Float = ConfigDefaults.ALPHA,          // 宠物整体透明度，范围 0.1 - 1
     val clickThrough: Boolean = ConfigDefaults.CLICK_THROUGH, // 点击穿透：开启后窗口不接收触摸事件，事件穿透到下层
+    val freezeDraggable: Boolean = ConfigDefaults.FREEZE_DRAGGABLE, // 定格图层可拖动：开启后所有定格显示层可点击拖动位置
+    val freezeBorderShow: Boolean = ConfigDefaults.FREEZE_BORDER_SHOW, // 显示定格边框：开启后在每块定格显示层叠加红色矩形真实窗口边框
     val bounceVibrate: Boolean = ConfigDefaults.BOUNCE_VIBRATE,  // 边界反弹时轻微振动（默认开）
     val enabled: Boolean = ConfigDefaults.ENABLED,      // 浮窗总开关
     val showDebug: Boolean = ConfigDefaults.SHOW_DEBUG,   // 屏幕左下调试信息
@@ -67,6 +66,11 @@ data class PetConfigData(
     // 显示边框 = 图片窗口黑细线 + 脚锚点十字；控制边框 = 命中/action 彩色调试框（贴实际控制窗）
     val showImageBorder: Boolean = ConfigDefaults.SHOW_IMAGE_BORDER,
     val showControlBorder: Boolean = ConfigDefaults.SHOW_CONTROL_BORDER,
+    val hideControlLayer: Boolean = ConfigDefaults.HIDE_CONTROL_LAYER, // 诊断：隐藏控制窗，仅画布
+    val hideStage: Boolean = ConfigDefaults.HIDE_STAGE, // 诊断：隐藏画布，仅控制窗
+    // 调试：强制显示无透明（默认关）。开启→显示窗去掉 FLAG_NOT_TOUCHABLE 以避开系统对透明悬浮窗的半透明钳制；
+    // 与 clickThrough/hideControlLayer 互斥（二者任一开时显示窗恢复 NOT_TOUCHABLE 以保点击穿透/控制层隐藏生效）。
+    val forceOpaque: Boolean = ConfigDefaults.FORCE_OPAQUE,
     // 命中模式：像素/边界/核心(脚底盒)，见 ConfigDefaults.HIT_*
     val hitMode: Int = ConfigDefaults.HIT_MODE,
     // 核心(脚底盒)命中区尺寸：128 逻辑基数（1X=128），几何计算时 × scaleFactor（宠物大小）转屏幕像素
@@ -169,7 +173,6 @@ class PetConfig(private val context: Context) {
     private val KEY_SLEFT = booleanPreferencesKey("snap_left")
     private val KEY_SRIGHT = booleanPreferencesKey("snap_right")
     private val KEY_SNAP_THRESHOLD = floatPreferencesKey("snap_threshold")
-    private val KEY_SHOW_SNAP_LINE = booleanPreferencesKey("show_snap_line")
     private val KEY_GRAVITY_ENABLED = booleanPreferencesKey("gravity_enabled")
     private val KEY_TILT_GRAVITY = booleanPreferencesKey("tilt_gravity")
     private val KEY_MAXSPEED = floatPreferencesKey("max_speed")
@@ -182,6 +185,9 @@ class PetConfig(private val context: Context) {
     private val KEY_RECT = booleanPreferencesKey("show_rect") // 旧键，仅用于迁移
     private val KEY_IMAGE_BORDER = booleanPreferencesKey("image_border_show")
     private val KEY_CONTROL_BORDER = booleanPreferencesKey("control_border_show")
+    private val KEY_HIDE_CONTROL_LAYER = booleanPreferencesKey("hide_control_layer")
+    private val KEY_HIDE_STAGE = booleanPreferencesKey("hide_stage")
+    private val KEY_FORCE_OPAQUE = booleanPreferencesKey("force_opaque")
     private val KEY_SHOW_BOUND_OFFSET = booleanPreferencesKey("show_bound_offset")
     private val KEY_SHOW_SNAP_OFFSET = booleanPreferencesKey("show_snap_offset")
     private val KEY_RECT_HIT_MODE = booleanPreferencesKey("rect_hit_mode") // 旧键，仅用于迁移
@@ -196,6 +202,8 @@ class PetConfig(private val context: Context) {
     private val KEY_IME_HIDE = booleanPreferencesKey("ime_hide")
     private val KEY_ALPHA = floatPreferencesKey("alpha")
     private val KEY_CLICK_THROUGH = booleanPreferencesKey("click_through")
+    private val KEY_FREEZE_DRAGGABLE = booleanPreferencesKey("freeze_draggable")
+    private val KEY_FREEZE_BORDER_SHOW = booleanPreferencesKey("freeze_border_show")
     private val KEY_BOUNCE_VIBRATE = booleanPreferencesKey("bounce_vibrate")
     private val KEY_THINKING_ENABLED = booleanPreferencesKey("thinking_enabled")
     private val KEY_THINKING_OFFSET = floatPreferencesKey("thinking_offset")
@@ -243,7 +251,6 @@ class PetConfig(private val context: Context) {
             snapLeft = prefs[KEY_SLEFT] ?: ConfigDefaults.SNAP_LEFT,
             snapRight = prefs[KEY_SRIGHT] ?: ConfigDefaults.SNAP_RIGHT,
             snapThreshold = prefs[KEY_SNAP_THRESHOLD] ?: ConfigDefaults.SNAP_THRESHOLD,
-            showSnapLine = prefs[KEY_SHOW_SNAP_LINE] ?: ConfigDefaults.SHOW_SNAP_LINE,
             gravityEnabled = prefs[KEY_GRAVITY_ENABLED] ?: ConfigDefaults.GRAVITY_ENABLED,
             // 体感重力默认关闭：开启后会自动关闭四边定向重力（见 PetService 处理）。
             tiltGravity = prefs[KEY_TILT_GRAVITY] ?: ConfigDefaults.TILT_GRAVITY,
@@ -261,6 +268,8 @@ class PetConfig(private val context: Context) {
             showControlBorder = prefs[KEY_CONTROL_BORDER] ?: run {
                 if (prefs.contains(KEY_RECT)) prefs[KEY_RECT] == true else ConfigDefaults.SHOW_CONTROL_BORDER
             },
+            hideControlLayer = prefs[KEY_HIDE_CONTROL_LAYER] ?: ConfigDefaults.HIDE_CONTROL_LAYER,
+            hideStage = prefs[KEY_HIDE_STAGE] ?: ConfigDefaults.HIDE_STAGE,
             showBoundOffset = prefs[KEY_SHOW_BOUND_OFFSET] ?: ConfigDefaults.SHOW_BOUND_OFFSET,
             showSnapOffset = prefs[KEY_SHOW_SNAP_OFFSET] ?: ConfigDefaults.SHOW_SNAP_OFFSET,
             hitMode = prefs[KEY_HIT_MODE] ?: run {
@@ -277,8 +286,10 @@ class PetConfig(private val context: Context) {
             imeLiftOffset = (prefs[KEY_IME_LIFT_OFFSET] ?: ConfigDefaults.IME_LIFT_OFFSET).coerceIn(-800f, 800f),
             imeResetBottomOffset = prefs[KEY_IME_RESET_BOTTOM] ?: ConfigDefaults.IME_RESET_BOTTOM_OFFSET,
             imeHide = prefs[KEY_IME_HIDE] ?: ConfigDefaults.IME_HIDE,
-            alpha = (prefs[KEY_ALPHA] ?: ConfigDefaults.ALPHA).coerceIn(0.1f, 1f),
+            alpha = (prefs[KEY_ALPHA] ?: ConfigDefaults.ALPHA).coerceIn(0f, 1f),
             clickThrough = prefs[KEY_CLICK_THROUGH] ?: ConfigDefaults.CLICK_THROUGH,
+        freezeDraggable = prefs[KEY_FREEZE_DRAGGABLE] ?: ConfigDefaults.FREEZE_DRAGGABLE,
+        freezeBorderShow = prefs[KEY_FREEZE_BORDER_SHOW] ?: ConfigDefaults.FREEZE_BORDER_SHOW,
             bounceVibrate = prefs[KEY_BOUNCE_VIBRATE] ?: ConfigDefaults.BOUNCE_VIBRATE,
             thinkingEnabled = prefs[KEY_THINKING_ENABLED] ?: ConfigDefaults.THINKING_ENABLED,
             thinkingOffset = prefs[KEY_THINKING_OFFSET] ?: ConfigDefaults.THINKING_OFFSET,
@@ -301,7 +312,8 @@ class PetConfig(private val context: Context) {
             forceNightOn = prefs[KEY_FORCE_NIGHT_ON] ?: ConfigDefaults.FORCE_NIGHT_ON,
             forceNightOff = prefs[KEY_FORCE_NIGHT_OFF] ?: ConfigDefaults.FORCE_NIGHT_OFF,
             useNewSprite = prefs[KEY_USE_NEW_SPRITE] ?: ConfigDefaults.USE_NEW_SPRITE,
-            singleTrayMsg = prefs[KEY_SINGLE_TRAY_MSG] ?: ConfigDefaults.SINGLE_TRAY_MSG
+            singleTrayMsg = prefs[KEY_SINGLE_TRAY_MSG] ?: ConfigDefaults.SINGLE_TRAY_MSG,
+            forceOpaque = prefs[KEY_FORCE_OPAQUE] ?: ConfigDefaults.FORCE_OPAQUE
         )
     }
 
@@ -375,7 +387,6 @@ class PetConfig(private val context: Context) {
             prefs[KEY_SLEFT] = updated.snapLeft
             prefs[KEY_SRIGHT] = updated.snapRight
             prefs[KEY_SNAP_THRESHOLD] = updated.snapThreshold
-            prefs[KEY_SHOW_SNAP_LINE] = updated.showSnapLine
             prefs[KEY_GRAVITY_ENABLED] = updated.gravityEnabled
             prefs[KEY_TILT_GRAVITY] = updated.tiltGravity
             prefs[KEY_MAXSPEED] = updated.maxSpeed
@@ -387,6 +398,8 @@ class PetConfig(private val context: Context) {
             prefs[KEY_DEBUG] = updated.showDebug
             prefs[KEY_IMAGE_BORDER] = updated.showImageBorder
             prefs[KEY_CONTROL_BORDER] = updated.showControlBorder
+            prefs[KEY_HIDE_CONTROL_LAYER] = updated.hideControlLayer
+            prefs[KEY_HIDE_STAGE] = updated.hideStage
             prefs[KEY_SHOW_BOUND_OFFSET] = updated.showBoundOffset
             prefs[KEY_SHOW_SNAP_OFFSET] = updated.showSnapOffset
             prefs[KEY_HIT_MODE] = updated.hitMode
@@ -400,6 +413,8 @@ class PetConfig(private val context: Context) {
             prefs[KEY_IME_HIDE] = updated.imeHide
             prefs[KEY_ALPHA] = updated.alpha
             prefs[KEY_CLICK_THROUGH] = updated.clickThrough
+            prefs[KEY_FREEZE_DRAGGABLE] = updated.freezeDraggable
+            prefs[KEY_FREEZE_BORDER_SHOW] = updated.freezeBorderShow
             prefs[KEY_BOUNCE_VIBRATE] = updated.bounceVibrate
             prefs[KEY_THINKING_ENABLED] = updated.thinkingEnabled
             prefs[KEY_THINKING_OFFSET] = updated.thinkingOffset
@@ -423,6 +438,7 @@ class PetConfig(private val context: Context) {
             prefs[KEY_FORCE_NIGHT_OFF] = updated.forceNightOff
             prefs[KEY_USE_NEW_SPRITE] = updated.useNewSprite
             prefs[KEY_SINGLE_TRAY_MSG] = updated.singleTrayMsg
+            prefs[KEY_FORCE_OPAQUE] = updated.forceOpaque
         }
     }
 
@@ -476,6 +492,11 @@ class PetConfig(private val context: Context) {
             }
             b.switches.forEach { sw ->
                 nc = when (sw.key) {
+                    "snapEnabled" -> nc.copy(snapEnabled = sw.default)
+                    "snapTop" -> nc.copy(snapTop = sw.default)
+                    "snapBottom" -> nc.copy(snapBottom = sw.default)
+                    "snapLeft" -> nc.copy(snapLeft = sw.default)
+                    "snapRight" -> nc.copy(snapRight = sw.default)
                     "visible" -> nc.copy(visible = sw.default)
                     "clickThrough" -> nc.copy(clickThrough = sw.default)
                     "gravityEnabled" -> nc.copy(gravityEnabled = sw.default)

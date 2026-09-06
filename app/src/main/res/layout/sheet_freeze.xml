@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/freeze_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- 行1：定格时刻的手机系统时间（程序内填充，纯文本、水平居中） -->
+    <TextView android:id="@+id/freeze_time" android:layout_width="match_parent"
+        android:layout_height="48dp" android:gravity="center"
+        android:textSize="17dp" android:textColor="@color/cp_title"/>
+
+    <!-- 行1.5：可编辑备注（默认取自碎碎念清单，失焦自动保存，随定格清除而丢失） -->
+    <EditText android:id="@+id/freeze_note" android:layout_width="match_parent"
+        android:layout_height="40dp" android:gravity="center"
+        android:textSize="8dp" android:textColor="@color/cp_title"
+        android:hint="写点什么…" android:textColorHint="@color/cp_sub"
+        android:background="@drawable/edittext_border"
+        android:inputType="text" android:maxLines="1"
+        android:layout_margin="4dp" android:paddingStart="8dp" android:paddingEnd="8dp"/>
+
+    <!-- 行2：定格-清除 与 定格-清除所有 同处一行，文字均水平居中 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_margin="4dp">
+        <TextView android:id="@+id/freeze_clear" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
+            android:layout_marginEnd="4dp"
+            android:text="定格-清除" android:textSize="17dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/freeze_clear_all" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
+            android:layout_marginStart="4dp"
+            android:text="定格-清除所有" android:textSize="17dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+    </LinearLayout>
+
+    <!-- 行3：定格-交互 开关（单行，标题与开关整体水平居中） -->
+    <LinearLayout android:id="@+id/menu_switch_freezeinteract" android:layout_width="match_parent"
+        android:layout_height="56dp" android:orientation="horizontal"
+        android:gravity="center" android:background="@drawable/cell_bg"
+        android:layout_margin="4dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="定格-交互" android:textSize="16dp" android:textColor="@color/cp_title"
+            android:layout_marginEnd="12dp"/>
+        <Switch android:id="@+id/sw_freezeinteract" android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:thumbTint="@color/switch_black_selector"
+            android:trackTint="@color/switch_black_selector"
+            android:clickable="false" android:focusable="false"/>
+    </LinearLayout>
+
+    <!-- 行4：设置（跳转应用设置页，与宠物浮窗一致） -->
+    <TextView android:id="@+id/freeze_settings" android:layout_width="match_parent"
+        android:layout_height="56dp" android:gravity="center"
+        android:layout_margin="4dp"
+        android:text="设置" android:textSize="17dp" android:textColor="@color/cp_title"
+        android:background="@drawable/cell_bg"/>
+
+</LinearLayout>

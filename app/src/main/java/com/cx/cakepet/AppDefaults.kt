@@ -62,8 +62,8 @@ object AppBounds {
         SliderBound(
             key = "alpha", label = "透明度", group = "显示",
             hardMin = 0f, hardMax = 100f,           // 百分比：0=全透明，100=不透明（UI 层；物理层 ALPHA 用 0-1 小数）
-            baseMin = 10f, baseMax = 100f,
-            from = 10f, to = 100f,
+            baseMin = 0f, baseMax = 100f,
+            from = 0f, to = 100f,
             step = 1f, default = 70f
         ),
         SliderBound(
@@ -86,13 +86,6 @@ object AppBounds {
             baseMin = 0f, baseMax = 2f,
             from = 0f, to = 2f,
             step = 0.1f, default = 0.7f
-        ),
-        SliderBound(
-            key = "petCount", label = "数量", group = "显示",
-            hardMin = 1f, hardMax = 30f,            // 阈值极限 1-30（关于页入口仍为 1-10）
-            baseMin = 1f, baseMax = 10f,
-            from = 1f, to = 10f,
-            step = 1f, default = 1f
         )
     )
     val MAIN_SWITCHES = listOf(
@@ -112,7 +105,7 @@ object AppBounds {
         SwitchBound("reboundRight", "右边反弹", "反弹", true)
     )
     val MAIN_ORDER = listOf(
-        "scale", "alpha", "petCount", "visible", "clickThrough",
+        "scale", "alpha", "visible", "clickThrough",
         "maxSpeed",
         "gravityEnabled", "tiltGravity", "gravity", "gravityTop", "gravityBottom", "gravityLeft", "gravityRight",
         "reboundEnabled", "bounceVibrate", "rebound", "reboundTop", "reboundBottom", "reboundLeft", "reboundRight"
@@ -129,16 +122,17 @@ object AppBounds {
             step = 1f, default = 100f
         )
     )
+    // 吸附开关：设置页(SnapSettingsActivity)显示/改当前值(live)；阈值页(SnapThresholdActivity)显示/改用户默认值(pet_bounds)。
+    // 两者分离：数值提交(coerceConfigToBounds)不碰开关，避免覆盖设置页当前值；恢复默认/重置系统经 resetFromBounds 统一生效。
     val SNAP_SWITCHES = listOf(
         SwitchBound("snapEnabled", "吸附边缘", "吸附边缘", true),
         SwitchBound("snapTop", "上边吸附", "吸附边缘", true),
         SwitchBound("snapBottom", "下边吸附", "吸附边缘", true),
         SwitchBound("snapLeft", "左边吸附", "吸附边缘", true),
-        SwitchBound("snapRight", "右边吸附", "吸附边缘", true),
-        SwitchBound("showSnapLine", "显示吸附线", "显示吸附线", true)
+        SwitchBound("snapRight", "右边吸附", "吸附边缘", true)
     )
     val SNAP_ORDER = listOf(
-        "snapEnabled", "snapTop", "snapBottom", "snapLeft", "snapRight", "snapThreshold", "showSnapLine"
+        "snapEnabled", "snapTop", "snapBottom", "snapLeft", "snapRight", "snapThreshold"
     )
 
     // ---------------- RANGE 页 ----------------
@@ -152,7 +146,7 @@ object AppBounds {
             step = 1f, default = 140f
         ),
         SliderBound(
-            key = "offsetBottom", label = "底部偏移", group = "活动范围",
+            key = "offsetBottom", label = "底部偏移（底部=充电口侧）", group = "活动范围",
             hardMin = -4000f, hardMax = 4000f,
             baseMin = -300f, baseMax = 1200f,
             from = -300f, to = 1200f,
@@ -325,6 +319,8 @@ object ConfigDefaults {
     val MAX_SPEED = 7100f                // 速度上限，防止数值爆炸（px/s）
     val ALPHA = 0.7f                      // 整体透明度：0-1 小数（UI 滑块是 0-100 百分比，PetConfig 内换算）
     val CLICK_THROUGH = false             // 点击穿透：true 时宠物不拦截触摸（点击会落到底层窗口）
+    val FREEZE_DRAGGABLE = false          // 定格图层可拖动：true 时所有定格显示层可点击拖动位置（默认关=纯显示不可点击）
+    val FREEZE_BORDER_SHOW = false         // 显示定格边框：true 时在每块定格显示层上叠加红色矩形边框（调试用的真实窗口边框，默认关）
     val BOUNCE_VIBRATE = true             // 落地/反弹时是否触发一次振动反馈
     val ENABLED = true                    // 总开关：false 时宠物整体停用（不渲染、不运动）
     val VISIBLE = true                    // 可见性：false 时隐藏宠物（仍常驻、不卸载）
@@ -348,7 +344,6 @@ object ConfigDefaults {
     val SNAP_LEFT = true                  // 是否吸附屏幕左边
     val SNAP_RIGHT = true                 // 是否吸附屏幕右边
     val SNAP_THRESHOLD = 100f             // 吸附触发距离（px，可为负=外扩吸附区）；AppBounds 同名校验更宽
-    val SHOW_SNAP_LINE = true             // 是否绘制吸附辅助线（调试/对齐用）
     // 边界偏移
     val OFFSET_TOP = 140f                 // 活动区顶部内缩（px，正=向内留白，负=向外出血）
     val OFFSET_BOTTOM = 140f              // 活动区底部内缩（px）
@@ -363,6 +358,12 @@ object ConfigDefaults {
     val SHOW_DEBUG = false                // 调试模式总开关（叠加调试信息）
     val SHOW_IMAGE_BORDER = false         // 显示边框：图片窗口黑线 + 脚锚点十字（判断图片显示位置）
     val SHOW_CONTROL_BORDER = false       // 控制边框：命中/action 彩色调试框（贴实际控制窗）
+    val HIDE_CONTROL_LAYER = false        // 诊断开关：开启后不挂 PetView 控制窗（仅画布绘制），用于二分定位点击拦截来源
+    val HIDE_STAGE = false                // 诊断开关：开启后不添加/移除画布（仅控制窗），用于二分定位点击拦截来源
+    // 强制显示无透明：调试开关（默认关）。开启则让显示窗去掉 FLAG_NOT_TOUCHABLE，避开 InputDispatcher 对
+    // “NOT_TOUCHABLE 且窗口 alpha>0.8 必然钳制半透明”的逻辑，使宠物可 100% 不透明。
+    // 副作用：显示层变为可点击（会吃掉宠物区点击，不穿透）；故与“点击穿透/隐藏控制层”互斥（二者开启时显示窗恢复 NOT_TOUCHABLE）。
+    val FORCE_OPAQUE = false
     // 命中模式三态：像素(全框+alpha) / 边界(全框整窗) / 核心(脚底盒)
     const val HIT_PIXEL = 0
     const val HIT_BOUNDARY = 1

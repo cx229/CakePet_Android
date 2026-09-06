@@ -117,7 +117,7 @@
             </LinearLayout>
             <SeekBar android:id="@+id/sb_pet_count" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:layout_marginTop="4dp"
-                android:max="10" android:progress="1"/>
+                android:max="20" android:progress="1"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:gravity="center_vertical"
                 android:layout_marginTop="8dp">
@@ -131,6 +131,22 @@
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="调试" style="@style/SettingsOptionTitle"
                 android:layout_marginTop="24dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="诊断：隐藏控制层(仅画布)" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_hide_control_layer" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="诊断：隐藏画布(仅控制窗)" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_hide_stage" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:gravity="center_vertical"
                 android:layout_marginTop="8dp">
@@ -169,6 +185,22 @@
                 <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1" android:text="控制边框(命中可视化)" style="@style/SettingsOptionSub"/>
                 <Switch android:id="@+id/sw_control_border" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="显示定格边框（红色真实窗口）" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_freeze_border" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="强制显示无透明（去掉点击穿透）" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_force_opaque" android:layout_width="wrap_content"
                     android:layout_height="wrap_content"/>
             </LinearLayout>
             <!-- ===== 命中模式（三态单选） ===== -->

@@ -14,9 +14,15 @@ import kotlin.math.abs
  */
 class PetPhysics {
 
-    // 位置（左上角坐标，像素）
+    // 位置（窗口左上角坐标，像素）——唯一位置真值，移动/速度/拖拽/抛掷直接作用此处，与锚点解耦。
+    // 脚锚点(屏幕坐标) = (x + anchorOffX, y + anchorOffY)，仅在需要“脚语义”(贴边/吸附落点)时由 anchorOff 派生。
     var x = 0f
     var y = 0f
+
+    // 脚锚点相对窗口左上角的像素偏移（= getBaseAnchorScaled），由 PetView 每帧写入。
+    // 旋转/缩放/帧切换只改此偏移，不再牵动 x/y → 锚点变化不会触发窗口跳变。
+    var anchorOffX = 0f
+    var anchorOffY = 0f
 
     // 速度（像素/秒）
     var vx = 0f
@@ -31,6 +37,13 @@ class PetPhysics {
     var maxX = 0f
     var minY = 0f
     var maxY = 0f
+
+    // 纯偏移吸附边界线（与设置页“边界偏移线/吸附环带”同一几何，不含图片 inset、不随脚朝向变化）：
+    // = 屏幕可见区 ± 用户边界偏移。吸附判定/落点钳制一律用这组，避免误用带 inset 的活动边界 minY/maxY。
+    var snapMinX = 0f
+    var snapMaxX = 0f
+    var snapMinY = 0f
+    var snapMaxY = 0f
 
     // 配置（实时更新）
     var gravity = 1500f
@@ -174,31 +187,58 @@ class PetPhysics {
         isThrowing = false
         vx = 0f
         vy = 0f
+        // snapMin/Max 为“脚贴边”屏幕吸附线；窗口坐标 = 脚线 - 锚点偏移。
+        // “基于锚点计算落点”：指定脚应到位置，反推窗口位置，移动与锚点解耦。
+        val ox = anchorOffX
+        val oy = anchorOffY
         when (side) {
-            0 -> y = maxY      // 贴底
-            3 -> y = minY      // 贴顶
-            1 -> x = minX      // 贴左
-            2 -> x = maxX      // 贴右
+            0 -> y = snapMaxY - oy   // 贴底
+            3 -> y = snapMinY - oy   // 贴顶
+            1 -> x = snapMinX - ox   // 贴左
+            2 -> x = snapMaxX - ox   // 贴右
         }
     }
 
     /**
-     * 返回当前最近且开启了吸附开关的边（在 snapDist 范围内），无则 -1。
-     * 顺序：底>顶>左>右（优先底边，符合“脚朝下的默认落地”直觉）。
+     * 在松手手指屏幕坐标 (fx, fy) 处，从「开启了吸附开关且手指落在 snapDist 内」的边里，
+     * 选出手指到该边垂线距离最小的一条；无候选则 -1。
+     * 注意：判定用【手指位置】而非脚锚点 (x/y)，与宠物尺寸/边框/朝向无关；
+     * 选边用【最近距离】而非写死优先级，避免手指更近左边却被底边抢走。
+     * 边沿用活动范围边界 (minY/maxY/minX/maxX)，与 snapTo 落点钳制同源、坐标一致。
      */
-    fun nearestSnapSide(): Int {
+    fun nearestSnapSide(fx: Float, fy: Float): Int {
+        // 先判吸附总开关（关则四边子开关失效）；各方向是否候选还需各自子开关。
         if (!snapEnabled) return -1
-        if (snapBottom && y >= maxY - snapDist) return 0
-        if (snapTop && y <= minY + snapDist) return 3
-        if (snapLeft && x <= minX + snapDist) return 1
-        if (snapRight && x >= maxX - snapDist) return 2
-        return -1
+        var best = -1
+        var bestD = Float.MAX_VALUE
+        // 带符号距离：手指在偏移线【内侧】(朝屏心)=正，【外侧】(朝真实屏边)=负。
+        // 外侧为负 → 必 ≤ snapDist(正) → 该方向开启即“必然吸附”候选；
+        // 内侧为正 → 仅 d ≤ snapDist 才候选（需判断是否在吸附距离内）。
+        // 统一取最小 d 即“最近边”，无需 abs、无需内外分支。
+        // 注意：候选前提是【总开关开 + 该方向子开关开】，下方每个 if 已把关。
+        if (snapTop) {
+            val d = fy - snapMinY
+            if (d <= snapDist && d < bestD) { bestD = d; best = 3 }
+        }
+        if (snapBottom) {
+            val d = snapMaxY - fy
+            if (d <= snapDist && d < bestD) { bestD = d; best = 0 }
+        }
+        if (snapLeft) {
+            val d = fx - snapMinX
+            if (d <= snapDist && d < bestD) { bestD = d; best = 1 }
+        }
+        if (snapRight) {
+            val d = snapMaxX - fx
+            if (d <= snapDist && d < bestD) { bestD = d; best = 2 }
+        }
+        return best
     }
 
     /** 松手是否满足吸附条件：速度低 + 某边开启且在吸附距离内 */
-    fun shouldSnap(): Boolean {
+    fun shouldSnap(fx: Float, fy: Float): Boolean {
         val sp = kotlin.math.hypot(vx, vy)
-        return sp < snapSpeed && nearestSnapSide() != -1
+        return sp < snapSpeed && nearestSnapSide(fx, fy) != -1
     }
 
     /** 是否已基本静止（用于决定是否继续动画/省电） */
@@ -574,6 +614,14 @@ class PetPhysics {
         this.maxY = maxY
         // 夹紧当前位置
         clampToBounds()
+    }
+
+    /** 设置纯偏移吸附边界线（与边界偏移线/吸附环带同几何）。 */
+    fun setSnapBounds(sMinX: Float, sMinY: Float, sMaxX: Float, sMaxY: Float) {
+        snapMinX = sMinX
+        snapMinY = sMinY
+        snapMaxX = sMaxX
+        snapMaxY = sMaxY
     }
 
     /** 把当前锚点坐标夹到活动范围（图片贴边范围）。供帧位移/拖拽后调用。 */

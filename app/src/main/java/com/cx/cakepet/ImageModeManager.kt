@@ -161,7 +161,7 @@ class ImageModeManager(
      * 后续可按状态（如关闭重力）裁剪此池，不含位移/物理驱动类模式。
      */
     private var standbyPool = mutableListOf(
-        SIT_CLAM, SIT_PUFFED, WRIGGLE, PROBE_HEAD, SHAKE_HEAD, LIE, WALK_WHITE, WALK,
+        SIT_CLAM, SIT_PUFFED, WRIGGLE, SHAKE_HEAD, LIE, WALK_WHITE, WALK,
         PULL_FISH   // 扒鱼：待机可随机触发（一次性位移动作，播完回 LIE）
     )
 
@@ -170,7 +170,7 @@ class ImageModeManager(
      * 当“重力·抛掷”关闭（gravitEnabled=false）时使用，宠物保持在原地的小动作/静坐。
      */
     private var staticPool = listOf(
-        SIT_CLAM, SIT_PUFFED, PROBE_HEAD, SHAKE_HEAD, LIE, WALK_WHITE
+        SIT_CLAM, SIT_PUFFED, SHAKE_HEAD, LIE, WALK_WHITE
     )
 
     /**

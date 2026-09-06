@@ -205,9 +205,9 @@ class PetBounds(private val context: Context) {
                 )
             },
             switches = sys.switches.map { sw ->
-                // 开关阈值项为 live 配置（存 pet_config），不持久化进 pet_bounds：
-                // 始终用 AppDefaults 定义的 default 作为渲染/重置的工厂值，避免与 live 双存储互相覆盖。
-                sw
+                // 开关阈值项的「默认值」持久化进 pet_bounds（阈值页=用户默认），
+                // 仅作为「恢复用户默认」的工厂值，不写 live；live 由 pet_config 独立管理，无双存储冲突。
+                sw.copy(default = prefs[bk(page, sw.key, "default")] ?: sw.default)
             },
             colors = sys.colors.map { c ->
                 c.copy(default = prefs[ck(page, c.key)] ?: c.default)
@@ -235,7 +235,9 @@ class PetBounds(private val context: Context) {
                 prefs[fk(page, d.key, "stepB")] = d.stepB
                 prefs[fk(page, d.key, "defaultB")] = d.defaultB
             }
-            // 开关阈值项不持久化进 pet_bounds（只存 live，见 boundsFlow 注释），此处跳过。
+            bounds.switches.forEach { sw ->
+                prefs[bk(page, sw.key, "default")] = sw.default
+            }
             bounds.colors.forEach { c ->
                 prefs[ck(page, c.key)] = c.default
             }

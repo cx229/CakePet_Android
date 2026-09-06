@@ -96,22 +96,11 @@ class RangeSettingsActivity : AppCompatActivity() {
         ) { resetDefaultNow() }
     }
 
-    /** 实际执行「恢复本页默认」：把阈值页记录的默认值写回 PetConfig 并刷新 UI。 */
+    /** 实际执行「恢复本页默认」：把阈值页记录的默认值写回 PetConfig，再统一走 refreshUI 全量重建 UI。
+     * 与「重置系统」(resetSystemNow) 同一条刷新路径，避免手工逐控件回填漏项导致只恢复一部分。 */
     private fun resetDefaultNow() {
         runBlocking { config.resetFromBounds(PetBounds(this@RangeSettingsActivity), SettingsPage.RANGE) }
-        val c = runBlocking { config.configFlow.first() }
-        val b = PetBounds(this@RangeSettingsActivity).getBlocking(SettingsPage.RANGE)
-        val bo = { key: String -> b.sliders.first { it.key == key } }
-        suppressRefresh = true
-        offTopBar.value = bizToSliderValue(c.offsetTop, bo("offsetTop").from, bo("offsetTop").to); EditSync.setText(offTopVal, c.offsetTop.toInt().toString())
-        offBottomBar.value = bizToSliderValue(c.offsetBottom, bo("offsetBottom").from, bo("offsetBottom").to); EditSync.setText(offBottomVal, c.offsetBottom.toInt().toString())
-        offLeftBar.value = bizToSliderValue(c.offsetLeft, bo("offsetLeft").from, bo("offsetLeft").to); EditSync.setText(offLeftVal, c.offsetLeft.toInt().toString())
-        offRightBar.value = bizToSliderValue(c.offsetRight, bo("offsetRight").from, bo("offsetRight").to); EditSync.setText(offRightVal, c.offsetRight.toInt().toString())
-        swImeAdapt.isChecked = c.imeAdapt
-        swImeResetBottom.isChecked = c.imeResetBottomOffset
-        swImeHide.isChecked = c.imeHide
-        imeLiftBar.value = bizToSliderValue(c.imeLiftOffset, bo("imeLiftOffset").from, bo("imeLiftOffset").to); EditSync.setText(imeLiftVal, c.imeLiftOffset.toInt().toString())
-        suppressRefresh = false
+        refreshUI()
     }
 
     /** 重置系统默认值与阈值：先弹确认框，确认后恢复本页上下界、默认与当前值为系统出厂。 */

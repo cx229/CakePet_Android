@@ -13,6 +13,9 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.graphics.RectF
+import android.graphics.drawable.BitmapDrawable
+import android.view.MotionEvent
+import android.widget.ImageView
 import android.os.Build
 import android.os.IBinder
 import android.os.Handler
@@ -21,11 +24,13 @@ import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.display.DisplayManager
 import android.view.Display
 import android.view.Surface
 import androidx.core.app.NotificationCompat
@@ -48,6 +53,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 data class PetInstance(
     val view: PetView,
     var layoutParams: WindowManager.LayoutParams,
+    var displayView: PetDisplayView?,
+    var displayLp: WindowManager.LayoutParams?,
+    var displayAdded: Boolean,
+    var controlAdded: Boolean,
     var petMsg: TrayMsgManager,
     var lastW: Int = -1,
     var lastH: Int = -1
@@ -71,10 +80,203 @@ class PetService : Service() {
     // 上次生效的宠物数量，用于检测配置中 petCount 变化并触发重建
     private var lastPetCount = 1
 
-    // 共享显示画布（单个全屏、固定、NOT_TOUCHABLE 窗口）：统一绘制所有宠物，
-    // 消除“浮窗几何(WMS) vs View 绘制(RenderThread)”的 vsync 竞态；触摸由各自控制窗承接。
-    private var stageView: PetStageView? = null
-    private var stageParams: WindowManager.LayoutParams? = null
+    // 定格显示层：长按菜单“定格-咔嚓”创建的纯展示浮窗（静态 Bitmap，不可点击、不拦截交互）。
+    // 是否可拖动由全局开关 freezeDraggable 控制：关→NOT_TOUCHABLE（纯显示），开→可点击拖动。
+    data class FreezeLayer(
+    val iv: ImageView,
+    val lp: WindowManager.LayoutParams,
+    val time: Long,
+    val note: String = "",
+    val borderView: View? = null  // 显示定格边框开关开启时的红色真实窗口边框（NOT_TOUCHABLE，不拦截交互）
+)
+    private val freezeLayers = mutableListOf<FreezeLayer>()
+    // 上次生效的定格-拖动开关，用于检测变化并即时作用于全部已有定格层
+    private var lastFreezeDraggable = ConfigDefaults.FREEZE_DRAGGABLE
+    // 上次生效的显示定格边框开关，用于检测变化并即时叠加/移除红色窗口边框
+    private var lastFreezeBorderShow = ConfigDefaults.FREEZE_BORDER_SHOW
+
+    // 定格层拖动 + 长按：可拖动时既能跟随手指位移（delta，不触发提起/抛掷），又能长按弹出定格菜单。
+    private class FreezeDragState {
+        var lastX = 0f
+        var lastY = 0f
+        var moved = false          // 是否已判定为拖动（移动超阈值）
+        var longPressFired = false // 长按菜单是否已弹出（弹出后忽略后续移动）
+        var pending: Runnable? = null
+    }
+
+    private val freezeDragListener = View.OnTouchListener { v, e ->
+        val lp = v.layoutParams as? WindowManager.LayoutParams ?: return@OnTouchListener false
+        val st = (v.tag as? FreezeDragState) ?: FreezeDragState().also { v.tag = it }
+        when (e.action) {
+            MotionEvent.ACTION_DOWN -> {
+                st.lastX = e.rawX; st.lastY = e.rawY
+                st.moved = false; st.longPressFired = false
+                // 长按检测：400ms 内无明显移动→弹出定格菜单（仅当 定格-交互 开启时本监听才挂载）
+                val r = Runnable {
+                    if (!st.moved) {
+                        st.longPressFired = true
+                        openFreezeMenu(v)
+                    }
+                }
+                st.pending = r
+                mainHandler.postDelayed(r, 400)
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = e.rawX - st.lastX
+                val dy = e.rawY - st.lastY
+                st.lastX = e.rawX; st.lastY = e.rawY
+                // 超过阈值视为拖动：取消长按计时
+                if (!st.longPressFired && (kotlin.math.abs(dx) > 8f || kotlin.math.abs(dy) > 8f)) {
+                    st.moved = true
+                    st.pending?.let { mainHandler.removeCallbacks(it) }
+                    st.pending = null
+                }
+                if (st.longPressFired) return@OnTouchListener true  // 菜单已开，忽略拖动
+                lp.x += dx.toInt()
+                lp.y += dy.toInt()
+                try { windowManager.updateViewLayout(v, lp) } catch (_: Exception) {}
+                // 同步红色边框（若存在）跟随定格层移动
+                freezeLayers.firstOrNull { it.iv === v }?.borderView?.let { bv ->
+                    val blp = bv.layoutParams as? WindowManager.LayoutParams ?: return@let
+                    blp.x = lp.x
+                    blp.y = lp.y
+                    try { windowManager.updateViewLayout(bv, blp) } catch (_: Exception) {}
+                }
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                st.pending?.let { mainHandler.removeCallbacks(it) }
+                st.pending = null
+                true
+            }
+            else -> false
+        }
+    }
+
+    /** 长按定格层：找到对应层并弹出定格菜单（样式与长按宠物一致）。 */
+    private fun openFreezeMenu(v: View) {
+        val layer = freezeLayers.firstOrNull { it.iv === v } ?: return
+        // 长按打开定格菜单时振动一次，与长按宠物弹菜单一致
+        val vm = getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            vm?.vibrate(android.os.VibrationEffect.createOneShot(30, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vm?.vibrate(30)
+        }
+        FreezeMenu(this, layer).show()
+    }
+
+    /** 在指定位置创建一个静态 Bitmap 定格显示层（纯展示；可拖动性由当前 freezeDraggable 决定）。 */
+    fun addFreezeLayer(snap: PetView.FreezeSnapshot) {
+        val draggable = currentConfig().freezeDraggable
+        val iv = ImageView(this).apply {
+            setImageBitmap(snap.bmp)
+            scaleType = ImageView.ScaleType.FIT_XY
+        }
+        val lp = WindowManager.LayoutParams().apply {
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            format = PixelFormat.TRANSLUCENT
+            // FLAG_LAYOUT_NO_LIMITS：定格层可放置在屏幕任意位置（含屏外），拖动时不受屏幕/活动范围约束。
+            // FLAG_LAYOUT_IN_SCREEN：窗口 (0,0) 以物理屏幕左上角为原点（含状态栏区），而非活动窗口(状态栏下方)，
+            //   使 getScreenBounds() 的物理坐标 1:1 映射到屏幕、不受状态栏显隐影响（否则会被整体下移状态栏高度并随其跳变）。
+            // 可拖动性由 freezeDraggable 决定：开→可点击拖动；关→NOT_TOUCHABLE 纯显示、不拦截交互。
+            flags = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    if (draggable) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            gravity = Gravity.TOP or Gravity.START
+            width = snap.w
+            height = snap.h
+            x = snap.left
+            y = snap.top
+        }
+        if (draggable) iv.setOnTouchListener(freezeDragListener)
+        try { windowManager.addView(iv, lp) } catch (_: Exception) { snap.bmp.recycle(); return }
+        val layer = FreezeLayer(iv, lp, snap.time, TrayMsgManager.randomMutter())
+        freezeLayers.add(layer)
+        // 显示定格边框开关开启时，叠加红色真实窗口边框（调试用，不拦截交互）
+        if (currentConfig().freezeBorderShow) setFreezeBorder(layer, true)
+    }
+
+    /** 为指定定格层创建红色真实窗口边框（NOT_TOUCHABLE，不拦截拖动/长按）。 */
+    private fun createFreezeBorderView(layer: FreezeLayer): View {
+        val bv = View(this).apply { background = getDrawable(R.drawable.freeze_border) }
+        val blp = WindowManager.LayoutParams().apply {
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            format = PixelFormat.TRANSLUCENT
+            // FLAG_LAYOUT_IN_SCREEN：使窗口原点对齐物理屏幕左上角，坐标不受状态栏显隐影响。
+            flags = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            gravity = Gravity.TOP or Gravity.START
+            width = layer.lp.width
+            height = layer.lp.height
+            x = layer.lp.x
+            y = layer.lp.y
+        }
+        try { windowManager.addView(bv, blp) } catch (_: Exception) {}
+        return bv
+    }
+
+    /** 为指定定格层开启/关闭红色真实窗口边框（调试用）。 */
+    private fun setFreezeBorder(layer: FreezeLayer, on: Boolean) {
+        val idx = freezeLayers.indexOf(layer)
+        if (idx < 0) return
+        val cur = freezeLayers[idx]
+        if (on && cur.borderView == null) {
+            freezeLayers[idx] = cur.copy(borderView = createFreezeBorderView(cur))
+        } else if (!on && cur.borderView != null) {
+            try { windowManager.removeView(cur.borderView) } catch (_: Exception) {}
+            freezeLayers[idx] = cur.copy(borderView = null)
+        }
+    }
+
+    /** 清除所有定格显示层（回收 Bitmap，防泄漏），并清空列表。 */
+    fun clearAllFreeze() {
+        for (layer in freezeLayers) {
+            try { windowManager.removeView(layer.iv) } catch (_: Exception) {}
+            (layer.iv.drawable as? BitmapDrawable)?.bitmap?.recycle()
+            layer.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
+        }
+        freezeLayers.clear()
+    }
+
+    /** 仅清除指定定格显示层（回收其 Bitmap）。 */
+    fun removeFreezeLayer(layer: FreezeLayer) {
+        try { windowManager.removeView(layer.iv) } catch (_: Exception) {}
+        (layer.iv.drawable as? BitmapDrawable)?.bitmap?.recycle()
+        layer.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
+        freezeLayers.remove(layer)
+    }
+
+    /** 更新指定定格层的备注文本（失焦自动保存，仅存于内存，随层清除而丢失）。 */
+    fun updateFreezeNote(layer: FreezeLayer, note: String) {
+        val idx = freezeLayers.indexOf(layer)
+        if (idx < 0) return
+        freezeLayers[idx] = freezeLayers[idx].copy(note = note)
+    }
+
+    /** 定格-拖动开关变化：即时作用于全部已有定格层（开→可点击拖动；关→纯显示不可点击）。 */
+    private fun applyFreezeDraggable(on: Boolean) {
+        for (layer in freezeLayers) {
+            // 始终保持 FLAG_LAYOUT_NO_LIMITS：定格层位置不受屏幕/活动范围约束，可任意摆放。
+            layer.lp.flags = if (on) WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                             else WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            if (on) layer.iv.setOnTouchListener(freezeDragListener) else layer.iv.setOnTouchListener(null)
+            try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) {}
+        }
+    }
+
+    // 显示/控制分离（主战场为安卓，鸿蒙尽力）：每只宠物一个独立显示窗（PetDisplayView），
+    // 纯展示层用 NOT_TOUCHABLE【不接任何点击、事件穿透给下层 app】，由控制窗承接拖动；
+    // 控制窗 NOT_TOUCH_MODAL 仅在自身命中区（脚盒/整帧）消费点击。因安卓端小 NOT_TOUCHABLE 窗正常穿透，
+    // 显示层不再“偷吃”宠物身上的点击（CORE 模式点身体也能穿透）。鸿蒙对小 NOT_TOUCHABLE 窗穿透属已知未知，尽力兼容。
+    // 仅设置期/调试用的大尺寸辅助线（边框/偏移/键盘示意）走独立 guide 窗（NOT_TOUCHABLE、显式尺寸）。
+    private var guideParams: WindowManager.LayoutParams? = null
+    private var guideAdded = false
 
     // 碎碎念多行错位步长（像素）：开启多宠物时，第 i 个实例的碎碎念距屏幕底偏移 = 设置偏移 + i * TRAY_ROW_STEP，
     // 即第一个用设置的位置、第二个在上一行、第三个在上两行……互不重叠。
@@ -89,6 +291,46 @@ class PetService : Service() {
     private var showDebug = false
     private var showImageBorder = false
     private var showControlBorder = false
+    private var hideControlLayer = false
+    private var hideStage = false
+    // 用户「点击穿透」开关：语义上等同于“隐藏控制层”（显示窗本就 NOT_TOUCHABLE，
+    // 屏蔽控制窗即可让点击穿透到下层 app，且宠物仍可见）。统一走 syncControlWindows，
+    // 不再单独维护一套 flag 舞蹈（原 applyClickThrough 已删除，因其与 hideControlLayer 状态机互相打架）。
+    private var clickThrough = false
+    // 调试：强制显示无透明（默认关）。开启时显示窗去掉 FLAG_NOT_TOUCHABLE（配合宠物窗口 alpha=1），
+    // 避开 InputDispatcher 对“NOT_TOUCHABLE 且窗口 alpha>0.8 必然钳制半透明”的逻辑，使宠物可 100% 不透明。
+    // 与 controlHidden（hideControlLayer||clickThrough）互斥：二者任一开时显示窗必须恢复 NOT_TOUCHABLE 以保点击穿透/控制层隐藏生效。
+    private var forceOpaque = false
+    // 宠物整体透明度（0.1~1，1=完全不透明），需逐显示窗设置；单独记账以便 hideStage 重挂后保持。
+    private var petAlpha = 1f
+
+    /** 控制窗是否应隐藏：调试隐藏控制层 或 用户点击穿透，二者任一即隐藏。 */
+    private val controlHidden: Boolean get() = hideControlLayer || clickThrough
+
+    /** 显示窗是否应带 FLAG_NOT_TOUCHABLE：控制层隐藏(穿透/诊断) 或 未强制无透明 → 带（保持穿透）；
+     *  强制无透明且控制层可见 → 不带（避开系统半透明钳制，宠物可 100% 不透明，代价是显示层吃掉宠物区点击）。 */
+    private val displayNotTouchable: Boolean get() = controlHidden || !forceOpaque
+
+    /**
+     * 按 displayNotTouchable（controlHidden || !forceOpaque）实时增删各显示窗的 FLAG_NOT_TOUCHABLE。
+     * 配合宠物窗口 alpha=1：去掉该 flag 即避开 InputDispatcher 对“NOT_TOUCHABLE 且 alpha>0.8 必然钳制半透明”的逻辑，
+     * 使宠物可 100% 不透明；恢复该 flag 则回到点击穿透/控制层隐藏生效的默认态。运行时改配置即时生效，无需重建窗口。
+     */
+    private fun applyDisplayTouchFlags() {
+        for (inst in pets) {
+            val dlp = inst.displayLp ?: continue
+            val disp = inst.displayView ?: continue
+            val newFlags = if (displayNotTouchable) {
+                dlp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            } else {
+                dlp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            }
+            if (dlp.flags != newFlags) {
+                dlp.flags = newFlags
+                try { windowManager.updateViewLayout(disp, dlp) } catch (_: Exception) {}
+            }
+        }
+    }
 
     // 当前前台应用包名（由无障碍服务 CakePetAccessibilityService 回调写入；未授权/未开启时为 null）。
     // 仅用于调试浮窗展示，不参与任何交互逻辑。
@@ -117,15 +359,10 @@ class PetService : Service() {
     private var useNewSpriteFlag = false
     private var zhimasuSpritePack: SpritePack? = null
 
-    // 设置页调整“边界偏移/碎碎念偏移”时显示的黑色虚线辅助层。
-    // 【不再建独立窗口】：并入 stageView 绘制（见 PetStageView.guideView），避免 Android 16 上
-    // “两个全屏 overlay 叠加导致触摸穿透失效、吞掉整屏点击”的问题。
+    // 设置页调整“边界偏移/碎碎念偏移”时显示的黑色虚线辅助层（GuideLineView）。
+    // 它是【独立窗口】（NOT_TOUCHABLE、显式尺寸），由 syncGuideWindow 按需挂载/卸载，
+    // 仅设置期/调试出现，低频，不波及日常其它 app。
     private var guideLineView: GuideLineView? = null
-
-    // 吸附判定线【不再有独立 View/窗口】：每帧由主循环算出线段列表交给 stageView 绘制
-    // （见 PetStageView.setSnapSegments），仅在吸附态且开关开启时有内容。
-    // 是否显示吸附线（来自 PetConfig.showSnapLine）
-    private var showSnapLineFlag = true
 
     // 体感重力（倾斜重力）：由手机重力传感器决定重力方向。无需权限。
     // 重力强度复用 config.gravity，倾斜越大等效重力越大。
@@ -133,8 +370,11 @@ class PetService : Service() {
     private var gravitySensor: Sensor? = null
     private var tiltGravityEnabled = false
     private var tiltStrength = 3000f   // 与设置页“重力强度”联动，作为传感器分量→加速度的缩放基准
-    // 屏幕旋转：仅在主线程（注册时 / 配置变更时）读取并缓存，避免传感器后台线程访问 display 引发异常
-    private var cachedRotation = Surface.ROTATION_0
+    // 屏幕旋转基准：唯一权威来源 = DisplayManager 真实屏幕旋转（onDisplayChanged 回调 + 体感每帧回填），
+    // 与渲染/边界/脚方向同源，横屏方向严格对应屏幕。@Volatile 保证传感器后台线程可见性。
+    @Volatile private var cachedRotation = Surface.ROTATION_0
+    // 屏幕旋转监听：用 DisplayManager.DisplayListener 监听真实屏幕旋转变化（后台/overlay 可靠，优于 OrientationEventListener）。
+    private var displayListener: DisplayManager.DisplayListener? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var running = false
@@ -213,134 +453,65 @@ class PetService : Service() {
             }
             // 动画推进：用真实 dt（时延精确），绝不控制位置。每实例独立。
             for (inst in pets) inst.view.tick(dt)
+            // 边界重算统一在本帧（tick 已刷新 currentFrameAnchor 快照之后）执行：
+            // 传感器线程置位的 boundsDirty 在此落到主线程，与下方窗口定位用同一份锚点快照，
+            // 避免脚方向变化时锚点/位置被跨线程改写后重算造成的跳变。
+            if (boundsDirty) {
+                boundsDirty = false
+                recalcBounds()
+            }
             // 吸附态：snapRotation 由 updateAnimByState 按贴附边赋值，边界必须用同一旋转重算，
             // 否则 snapTo 落点/钳制基于旧的重力态边界，浮窗与旋转后的图片错位。
             // 仅吸附态每帧轻量重算（仅几次加减），非吸附态边界已随配置/缩放变化触发，无需每帧。
             for (inst in pets) if (inst.view.physics.isSnapped) recalcBoundsFor(inst.view, getScreenBounds())
-            // 单一位置写入点：由物理循环统一把锚点坐标换算成浮窗左上角。
-            // 坐标语义：physics.x/y = 锚点在屏幕的坐标（对齐 PC image_meta），
-            // 浮窗左上 = 锚点 - 锚点相对位图偏移。钳制已在 physics.setBounds 内完成。
-            // 必须用 getBaseAnchorScaled()：与 recalcBounds 的边界计算（getBaseBitmapSize/getBaseAnchorScaled）
-            // 完全同源。若改用 getAnchorScaled()，其窗口尺寸取自统一画布 (globalW×globalH)，
-            // 与 recalcBounds 用的 sit 基准尺寸 (baseFrameW/H) 不一致，导致贴左/右/顶时浮窗错位
-            // （矩形框紧贴偏移线、或离偏移线约两倍差值）。
+            // 单一位置写入点：物理循环统一写入窗口左上角（physics.x/y 即浮窗左上角真值）。
+            // 坐标语义：physics.x/y = 浮窗左上角（屏幕坐标）；脚锚点 = physics ∓ anchorOff 仅贴边/snap 时派生。
+            // 钳制已在 physics.setBounds 内完成（min/max 为窗口范围，由 recalcBoundsFor 用 getBaseAnchorScaled
+            // 同源换算）。移动/速度/拖拽/抛掷直接改 physics.x/y，与锚点解耦 → 锚点变化不再牵动位置。
             // 主实例尺寸 (w,h) 同时用于调试浮层/吸附线绘制。
             val v0 = petView
-            val nx = v0.physics.x
-            val ny = v0.physics.y
             // 主实例整帧尺寸（调试浮层/吸附线仍按整只宠物绘制，与命中模式无关）。
             // 必须用 getBaseBitmapSize()：与 recalcBounds/getBaseAnchorScaled（基准帧 baseFrameW/H）
             // 及 render/PetStageView 实际绘制窗口完全同源；getBitmapSize()(globalW) 与之不符会导致控制窗尺寸错位。
-            val (w, h) = v0.getBaseBitmapSize()
-            if (v0.hitMode == ConfigDefaults.HIT_CORE) {
-                // 核心(脚底盒)：控制窗缩到脚盒（控制层几何，见 PetView.controlWindowRect），
-                // 与全屏画布里的显示矩形无关；脚盒外区域由 isCoreHit 的 OBB 判定放穿。
-                val r = v0.controlWindowRect()
-                layoutParams.x = r.left.toInt()
-                layoutParams.y = r.top.toInt()
-                val rw = r.width().toInt()
-                val rh = r.height().toInt()
-                if (rw != lastW || rh != lastH) {
-                    layoutParams.width = rw
-                    layoutParams.height = rh
-                    lastW = rw
-                    lastH = rh
-                }
-            } else {
-                // 像素/边界：窗口为整张位图全框（锚点落在 physics 坐标）。
-                val (ax, ay) = v0.getBaseAnchorScaled()
-                layoutParams.x = (nx - ax).toInt()
-                layoutParams.y = (ny - ay).toInt()
-                if (w != lastW || h != lastH) {
-                    layoutParams.width = w
-                    layoutParams.height = h
-                    lastW = w
-                    lastH = h
-                }
+            // 控制窗定位：单一数据源 placeControlWindow（CORE=脚盒、其余=整帧），尺寸变化才写 width/height。
+            if (placeControlWindow(v0, layoutParams, lastW, lastH)) {
+                lastW = layoutParams.width
+                lastH = layoutParams.height
             }
+            // 主实例整帧尺寸（调试浮层 updateDebug 仍按整只宠物绘制，与命中模式无关）。
+            val (w, h) = v0.getBaseBitmapSize()
             try {
                 windowManager.updateViewLayout(petView, layoutParams)
             } catch (_: Exception) {
             }
+            // 主实例显示窗同步（位置/尺寸与位图矩形一致；窗外穿透由 NOT_TOUCH_MODAL 保证）。
+            pets.getOrNull(0)?.let { syncDisplayWindow(it) }
             // 其余实例：各自写位置 + 尺寸 + 刷新（不依赖主实例 lastW/lastH）。
             for (i in 1 until pets.size) {
                 val inst = pets[i]
                 val v = inst.view
-                val nx = v.physics.x
-                val ny = v.physics.y
                 val ilp = inst.layoutParams
-                if (v.hitMode == ConfigDefaults.HIT_CORE) {
-                    // 核心：控制窗缩到脚盒（控制层几何），与显示矩形无关。
-                    val r = v.controlWindowRect()
-                    ilp.x = r.left.toInt()
-                    ilp.y = r.top.toInt()
-                    val rw = r.width().toInt()
-                    val rh = r.height().toInt()
-                    if (rw != inst.lastW || rh != inst.lastH) {
-                        ilp.width = rw
-                        ilp.height = rh
-                        inst.lastW = rw
-                        inst.lastH = rh
-                    }
-                } else {
-                    val (iax, iay) = v.getBaseAnchorScaled()
-                    ilp.x = (nx - iax).toInt()
-                    ilp.y = (ny - iay).toInt()
-                    val (iw, ih) = v.getBaseBitmapSize()
-                    if (iw != inst.lastW || ih != inst.lastH) {
-                        ilp.width = iw
-                        ilp.height = ih
-                        inst.lastW = iw
-                        inst.lastH = ih
-                    }
+                // 控制窗定位：与主实例同源 placeControlWindow（CORE=脚盒、其余=整帧）。
+                if (placeControlWindow(v, ilp, inst.lastW, inst.lastH)) {
+                    inst.lastW = ilp.width
+                    inst.lastH = ilp.height
                 }
                 try {
                     windowManager.updateViewLayout(v, ilp)
                 } catch (_: Exception) {
                 }
+                syncDisplayWindow(inst)
             }
 
             // 每帧强制重绘：让物理位置与位图每帧都画出来。
             // 原 roll 版删掉了 invalidate，改靠“尺寸变化才改 layoutParams”间接触发 onDraw，
             // 但同尺寸相邻帧（Roll 序列很常见）不会触发重绘 → 位置算出来了屏幕却半秒才画一次 → 卡顿。
-            // 共享画布：每帧仅重绘一次舞台（所有宠物在其中统一绘制）；
-            // 控制窗(PetView) 本身不再自绘，故不再逐个 invalidate。
-            stageView?.invalidate()
+            // 这里每帧对各显示窗统一刷新位置并 invalidate（syncDisplayWindow 已做），控制窗(PetView) 本身不再自绘。
 
             // 吸附判定线：仅当【处于吸附态】且【吸附判定线开关(showSnapLine)开启】时显示。
             // 虚拟地面 = 用户在设置页拖动时看到的边界偏移线（boundLines），直接复用其坐标，
             // 位置与设置页偏移线完全一致；与宠物图片/帧锚点无关。
             // 遍历【所有实例】各算一段（修复：旧实现只驱动主实例，多宠物时其它宠物不显示）。
-            // 只绘制「需要的长度」：水平线限宠物浮窗宽、竖线限宠物浮窗高。
-            val snapSegs = ArrayList<PetStageView.SnapSeg>()
-            if (showSnapLineFlag) {
-                val vis = getScreenBounds()
-                val bound = boundLines(
-                    vis, boundOffsetTop, boundOffsetBottom, boundOffsetLeft, boundOffsetRight
-                )
-                for (inst in pets) {
-                    val v = inst.view
-                    val p = v.physics
-                    if (!p.isSnapped) continue
-                    // 该实例贴附边对应的那条边界偏移线（boundLines 顺序：0左,1右,2上,3下）。
-                    // snapSide：0=底,1=左,2=右,3=顶。
-                    val edge = when (p.snapSide) {
-                        0 -> bound[3]   // 底 → 下缘
-                        1 -> bound[0]   // 左 → 左缘
-                        2 -> bound[1]   // 右 → 右缘
-                        else -> bound[2] // 3=顶 → 上缘
-                    }
-                    // 该实例浮窗屏幕矩形：与上方帧循环同源（浮窗左上 = 锚点 - 锚点偏移），
-                    // 尺寸取 getBaseBitmapSize()（与定位/绘制窗口同源；getBitmapSize()(globalW) 与之不符会裁错）。
-                    val (iax, iay) = v.getBaseAnchorScaled()
-                    val (iw, ih) = v.getBaseBitmapSize()
-                    clipSnapSeg(edge, p.x - iax, p.y - iay, iw.toFloat(), ih.toFloat())
-                        ?.let { snapSegs.add(it) }
-                }
-            }
-            // 空列表 = 不绘制（未吸附 / 开关关闭），无需维护可见性或窗口状态。
-            stageView?.setSnapSegments(snapSegs)
-
             if (showDebug) updateDebug(w, h)
 
             mainHandler.postDelayed(this, FRAME_DELAY)
@@ -429,6 +600,9 @@ class PetService : Service() {
         applyNightMode(config.getBlocking())
         registerConfigObserver()
         registerScreenReceiver()
+        // 屏幕旋转监听常驻：横屏/折叠屏切换时刷新体感方向基准与活动边界（对所有宠物均有益）。
+        // 用 DisplayManager.DisplayListener 取真实屏幕旋转（后台/overlay 可靠），替代不可靠的 OrientationEventListener。
+        initDisplayRotationListener()
 
         // 初始位置已在 initPetView 的 addView 前算好（底部中心），此处仅同步可见区并刷新边界。
         lastVisRect = getScreenBounds()
@@ -459,22 +633,8 @@ class PetService : Service() {
             }
         }
 
-        // 共享显示画布：单个全屏固定、NOT_TOUCHABLE 窗口，统一绘制所有宠物。
-        // 宠物不再各自建显示窗，由本画布一次性提交（位图+位置同帧），消除几何 vs 绘制竞态。
-        // 层级置于宠物控制窗 / 吸附线之上、调试与辅助线浮层之下。
-        stageView = PetStageView(this).apply { pets = this@PetService.pets.map { it.view } }
-        stageParams = WindowManager.LayoutParams().apply {
-            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            format = PixelFormat.TRANSLUCENT
-            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-            gravity = Gravity.TOP or Gravity.START
-            width = WindowManager.LayoutParams.MATCH_PARENT
-            height = WindowManager.LayoutParams.MATCH_PARENT
-        }
-        windowManager.addView(stageView, stageParams)
-
+        // 诊断开关 hideStage：开启时完全不创建/移除显示窗（宠物仅剩透明控制窗，即 9.27 几何），
+        // 用于二分点击拦截来源。显示窗在 createPetInstance 中按 hideStage 决定是否挂载。
         // 调试信息浮层（左下角，初始隐藏）—— 仅主实例对应一份
         debugView = android.widget.TextView(this).apply {
             setTextColor(0xFFFFFF00.toInt())
@@ -487,9 +647,11 @@ class PetService : Service() {
         debugParams = WindowManager.LayoutParams().apply {
             type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             format = PixelFormat.TRANSLUCENT
+            // FLAG_LAYOUT_IN_SCREEN：调试窗原点对齐物理屏幕左上角，坐标不受状态栏显隐影响。
             flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
             gravity = Gravity.BOTTOM or Gravity.START
             width = WindowManager.LayoutParams.WRAP_CONTENT
             height = WindowManager.LayoutParams.WRAP_CONTENT
@@ -497,19 +659,17 @@ class PetService : Service() {
         windowManager.addView(debugView, debugParams)
 
         // 辅助线层（初始隐藏）：设置页调整偏移时显示黑色虚线。
-        // 关键：这是【纯绘制层，不是独立窗口】——直接挂给 stageView 由其 onDraw 绘制。
-        // 若单独建全屏 TYPE_APPLICATION_OVERLAY 窗口，Android 16 上与 stageView 形成
-        // “两个全屏窗口叠加”，即便带 FLAG_NOT_TOUCHABLE 也会吞掉整屏点击（A12 正常）。
+        // 它是【独立窗口】（NOT_TOUCHABLE、显式尺寸），按需由 syncGuideWindow 挂载/卸载，
+        // 不再依赖共享全屏画布。仅设置期/调试出现，低频，不波及日常其它 app。
         guideLineView = GuideLineView(this).apply {
             visibility = android.view.View.GONE
             isClickable = false
             isFocusable = false
             isFocusableInTouchMode = false
         }
-        stageView?.guideView = guideLineView
         // 记录已创建的实例数量（与 initPetView 生成数口径一致），避免 registerConfigObserver
         // 首个配置事件因 petCount 与初始值不同而立即重建
-        lastPetCount = config.getBlocking().petCount.coerceIn(1, 10)
+        lastPetCount = config.getBlocking().petCount.coerceIn(1, 20)
     }
 
     // 创建第 index 个宠物实例：独立 View / 物理 / 碎碎念 / 位置。主实例额外挂吸附线浮层。
@@ -518,16 +678,20 @@ class PetService : Service() {
         val lp = WindowManager.LayoutParams().apply {
             type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             format = PixelFormat.TRANSLUCENT
+            // FLAG_LAYOUT_IN_SCREEN：控制窗 (0,0) 对齐物理屏幕左上角，与显示窗(已加该 flag)共用物理坐标系，
+            // 使 placeControlWindow 的 lp.x/y(来自 physics.x/y 物理坐标) 与显示窗落点一致；
+            // 否则控制窗原点在活动窗口(状态栏下方)，会相对显示窗整体下移状态栏高度，导致点击/拖动坐标偏移。
             flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
             gravity = Gravity.TOP or Gravity.START
             width = WindowManager.LayoutParams.WRAP_CONTENT
             height = WindowManager.LayoutParams.WRAP_CONTENT
         }
         val petMsg = TrayMsgManager(this)
 
-        view.onLongPress = { showMenu() }
+        view.onLongPress = { showMenu(view) }
         view.onDoubleTap = {
             // 摸头（双击）：吸附态下播放“吸附探头摸摸头”，结束后自动切回吸附探头；非吸附态播放普通摸头。
             if (view.physics.isSnapped) {
@@ -543,6 +707,9 @@ class PetService : Service() {
         view.onSizeChanged = { recalcBounds() }
         // 拖拽拉出吸附态：PetView 归零残留朝向后会回调，按非吸附态重算活动范围（minX/maxX 等）
         view.onSnapExit = { recalcBounds() }
+        // 帧锚点偏移或重力方向变化（非拖拽/非吸附）：吸附拉出后 SNAP_HEAD 旋转帧切到 SIT/ROLL 0° 帧，
+        // anchorOff 剧变使旧边界盒失效、脚会被夹到屏幕外；此回调按新帧重算并 clamp 窗口，脚回到界内。
+        view.onBoundsMaybeDirty = { recalcBounds() }
         // 输入法（键盘）显隐：view 级补充来源；与全局检测取较大值
         view.onImeInsetChanged = { h ->
             viewImeInset = h.toFloat()
@@ -551,17 +718,35 @@ class PetService : Service() {
         view.onPositionChanged = { cx, cy ->
             // 回调传的是锚点坐标（手指 + 抓取偏移）。拖拽期间物理 step 不跑，
             // 直接更新锚点并立即 clamp + 写出浮窗位置（跟手，且单一数据源 physics.x/y）。
-            // 拖拽跟手：用 getBaseAnchorScaled() 与 recalcBounds 同源（非吸附态返回 sit 基准，
-            // 与边界 clamp 一致，避免拖到边缘时浮窗与偏移线错位）。
-            val (ax, ay) = view.getBaseAnchorScaled()
+            // 控制窗定位用 placeControlWindow（与帧循环同源）：CORE=脚盒、其余=整帧，
+            // 杜绝拖拽时 CORE 控制窗被错复位到整帧左上（旧 onPositionChanged 用 physics-anchor 的 bug）。
             view.physics.x = cx
             view.physics.y = cy
             view.physics.clampToBounds()
-            lp.x = (view.physics.x - ax).toInt()
-            lp.y = (view.physics.y - ay).toInt()
+            placeControlWindow(view, lp, lastW, lastH)
+            lastW = lp.width
+            lastH = lp.height
             try { windowManager.updateViewLayout(view, lp) } catch (_: Exception) {}
+            // 同一触摸事件内同步移动显示窗：消除“控制层随触摸即时动、显示层随主循环晚一帧”的
+            // 双时钟微抖。显示窗永远整帧（与 hit 模式无关），位置 = physics - 整帧锚点；
+            // 仅位置级 updateViewLayout（绝不 removeView+addView 重建 Surface，无卡顿）；
+            // hideStage 未挂显示窗时跳过。displayLeft/displayTop 与主循环同源，避免吸附线错位。
+            pets.find { it.view === view }?.let { inst ->
+                val d = inst.displayView ?: return@let
+                val dlp = inst.displayLp ?: return@let
+                if (inst.displayAdded) {
+                    // physics.x/y 已是窗口左上角真值，直接放置显示窗（无需锚点减法）。
+                    dlp.x = view.physics.x.toInt()
+                    dlp.y = view.physics.y.toInt()
+                    d.displayLeft = view.physics.x
+                    d.displayTop = view.physics.y
+                    try { windowManager.updateViewLayout(d, dlp) } catch (_: Exception) {}
+                }
+            }
         }
-        // 提起（拖拽）开始/结束：驱动本实例碎碎念“提起”持续文案
+        // 提起（拖拽）开始/结束：驱动本实例碎碎念“提起”持续文案。
+        // 注：原“多宠物拖动置顶”已移除——removeView+addView 会重建 Surface 导致卡顿，
+        // 流畅度优先级高于层级问题；显示层跟手已由 onPositionChanged 同步处理。
         view.onDragStateChanged = { dragging ->
             if (thinkingEnabled) {
                 if (dragging) {
@@ -571,6 +756,9 @@ class PetService : Service() {
                 }
             }
         }
+        // 轻点/长按（非拖拽）命中本宠物：原用于把本宠窗组置顶，使被压住宠物可被点中。
+        // 已移除置顶——removeView+addView 重建 Surface 卡顿，优先级低于流畅度；层级问题牺牲。
+        view.onTap = {}
         // 真正落地（拖拽/抛掷触底，进入 JUMP_DOWN 动画那一刻）：显示落地文案，之后先空白再轮播
         view.onLand = {
             if (thinkingEnabled) petMsg.showLand()
@@ -580,9 +768,10 @@ class PetService : Service() {
         // 多个实例在水平方向轻微错开，避免初始完全重叠（各自物理独立，会自行散开）。
         val vis = getScreenBounds()
         val (w, h) = view.getBaseBitmapSize()
-        val (ax, ay) = view.getBaseAnchorScaled()
-        val baseX = (vis.left + ax + (vis.right - (w - ax))) / 2f + index * 12f
-        val baseY = vis.bottom.toFloat() - (h - ay)
+        // physics.x/y = 窗口左上角真值。脚落屏幕底部中心 → 窗口 = 脚位置 - 锚点偏移。
+        // 等价于原“脚在 vis.bottom - (h - ay)、窗口 = 脚 - ay = vis.bottom - h”，保持落点与原来一致。
+        val baseX = (vis.left + vis.right) / 2f - w / 2f + index * 12f
+        val baseY = vis.bottom.toFloat() - h
         view.physics.x = baseX
         view.physics.y = baseY
         if (view.hitMode == ConfigDefaults.HIT_CORE) {
@@ -593,52 +782,98 @@ class PetService : Service() {
             lp.width = r.width().toInt()
             lp.height = r.height().toInt()
         } else {
-            lp.x = (baseX - ax).toInt()
-            lp.y = (baseY - ay).toInt()
+            // physics.x/y 已是窗口左上角，直接作为浮窗左上角（无需锚点减法）。
+            lp.x = baseX.toInt()
+            lp.y = baseY.toInt()
             lp.width = w
             lp.height = h
         }
 
-        // 注：吸附判定线不再随实例创建（它不属于某个宠物实例，而是 stageView 的绘制内容）。
+        // 每宠物独立显示窗（替代共享全屏画布）：纯展示层，NOT_TOUCHABLE 不接任何点击，
+        // 事件穿透给下层 app（安卓端小 NOT_TOUCHABLE 窗正常穿透；鸿蒙尽力兼容）。
+        // 位置/尺寸与位图矩形一致，初始算到底部中心（与 view 同源）。
+        val disp = PetDisplayView(this, view)
+        val dispLp = WindowManager.LayoutParams().apply {
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            format = PixelFormat.TRANSLUCENT
+            // FLAG_LAYOUT_IN_SCREEN：显示窗 (0,0) 对齐物理屏幕左上角，baseX/baseY(来自 getScreenBounds 物理坐标)
+            //   1:1 映射，状态栏显隐不再让宠物整体移位（否则落点原点在活动窗口=状态栏下，会下移状态栏高度并随其跳变）。
+            // NOT_TOUCHABLE 是否保留由 displayNotTouchable 决定：默认/穿透/隐藏控制层 → 带(穿透)；
+            //   强制无透明且控制层可见 → 去掉 NOT_TOUCHABLE 以避开系统对透明悬浮窗的半透明钳制（宠物可 100% 不透明）。
+            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    (if (displayNotTouchable) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0)
+            gravity = Gravity.TOP or Gravity.START
+            // physics.x/y（baseX/baseY）为窗口左上角真值，直接作为浮窗左上角。
+            x = baseX.toInt()
+            y = baseY.toInt()
+            width = w
+            height = h
+        }
+        disp.displayLeft = baseX
+        disp.displayTop = baseY
+        // 透明度折进位图绘制（render 的 paint.alpha），窗口保持不透明（alpha=1），
+        // 避免每帧移动时 View.setAlpha 触发合成器半透明离屏层重建导致卡顿。
+        view.petAlpha = petAlpha
+        // 诊断开关 hideStage：开启时不挂显示窗（仅透明控制窗，即 9.27 几何），用于二分点击拦截来源。
+        var dispAdded = false
+        if (!hideStage) {
+            windowManager.addView(disp, dispLp)
+            dispAdded = true
+        }
 
-        windowManager.addView(view, lp)
+        // 控制窗是否挂载：调试“隐藏控制层”或用户“点击穿透”任一为真即不挂（二者语义等价，
+        // 显示窗本就 NOT_TOUCHABLE，屏蔽控制窗后点击穿透到下层 app 且宠物仍可见）。
+        var controlAdded = false
+        if (!controlHidden) {
+            windowManager.addView(view, lp)
+            controlAdded = true
+        }
         return PetInstance(
             view = view,
             layoutParams = lp,
+            displayView = disp,
+            displayLp = dispLp,
+            displayAdded = dispAdded,
+            controlAdded = controlAdded,
             petMsg = petMsg
         )
     }
 
-    // 变更宠物数量（酥的数量）：移除所有现有实例与碎碎念，按新数量重建。
-    // 重建后重新应用共享配置，各实例独立（位置/动作/吸附/碎碎念内容）随机散开。
-    // 接收最新配置 c（来自 configFlow），避免重建时重新读 DataStore 造成竞态/重复重建。
-    private fun rebuildPets(c: PetConfigData) {
-        // 吸附判定线由主循环每帧重算，与宠物实例无关，无需在此清理。
-        // 移除所有宠物实例浮窗与各自碎碎念浮窗
-        for (inst in pets) {
-            try { windowManager.removeView(inst.view) } catch (_: Exception) {}
+    // 变更宠物数量（酥的数量）：多退少补，绝不整体重建。
+    // - 目标 > 当前：末尾追加新实例（保留现有宠物，不重置其位置/动画），index 用真实序号（createPetInstance 偏移错开）。
+    // - 目标 < 当前：从末尾移除多余实例（保留 index 0 主实例，petView/layoutParams/trayMsgManager 不变）；
+    //   移除时**同时清理控制窗与显示窗**（旧 rebuildPets 漏删显示窗，导致改数量后残留旧画面 + 位图/Surface 泄漏）。
+    // - 新实例经 applySharedConfig + 资源包拿到共享配置（与现有一致）；现有实例重应用幂等、位置/物理不复位。
+    // 接收最新配置 c（来自 configFlow），避免重读 DataStore 造成竞态/重复重建。
+    private fun adjustPetCount(c: PetConfigData) {
+        val target = c.petCount.coerceIn(1, 20)
+        // 多退：从末尾移除多余实例（始终保留 index 0 主实例）。
+        while (pets.size > target) {
+            val inst = pets.removeAt(pets.lastIndex)
+            // 显示窗（PetDisplayView）必须显式 removeView，否则残留屏幕且强引用旧 PetView/位图 → 泄漏。
+            if (inst.displayAdded) try { windowManager.removeView(inst.displayView) } catch (_: Exception) {}
+            if (inst.controlAdded) try { windowManager.removeView(inst.view) } catch (_: Exception) {}
             try { inst.petMsg.destroy() } catch (_: Exception) {}
         }
-        pets.clear()
-        val count = c.petCount.coerceIn(1, 10)
-        for (i in 0 until count) {
-            val inst = createPetInstance(i)
+        // 少补：末尾追加新实例，index 用真实 pets.size（createPetInstance 依 index 做水平错开）。
+        while (pets.size < target) {
+            val inst = createPetInstance(pets.size)
             pets.add(inst)
-            if (i == 0) {
+            if (pets.size == 1) {   // 安全兜底：若此前为空，首位即主实例
                 petView = inst.view
                 layoutParams = inst.layoutParams
                 trayMsgManager = inst.petMsg
             }
         }
-        // 重新应用当前共享配置（物理参数/缩放/碎碎念样式/点击穿透等）+ 边界
+        // 重新应用当前共享配置（物理参数/缩放/碎碎念样式/点击穿透等），新实例据此拿到配置、现有实例幂等刷新。
         applySharedConfig(c)
-        // 修复 bug#3：重建后按当前资源开关重应用资源包，避免改数量时退回默认(旧)资源
+        // 资源包：按当前开关重应用（避免改数量时退回默认资源）。
         if (useNewSpriteFlag) {
             val pack = spritePackFor(true)
             pets.forEach { it.view.applySpritePack(pack) }
         }
-        // 重建后舞台需指向新的 PetView 实例（旧控制窗已 removeView）
-        stageView?.pets = pets.map { it.view }
         recalcBounds()
     }
 
@@ -661,7 +896,9 @@ class PetService : Service() {
             v.ctrlBoxWidth = c.ctrlBoxWidth
             v.ctrlBoxHeight = c.ctrlBoxHeight
             v.ctrlBoxVOffset = c.ctrlBoxVOffset
-            v.alpha = c.alpha.coerceIn(0.1f, 1f)   // 透明度是 View 实例属性，需逐实例设置
+            petAlpha = c.alpha.coerceIn(0f, 1f)
+            // 透明度折进位图绘制（render 的 paint.alpha），窗口保持不透明，避免移动卡顿。
+            v.petAlpha = petAlpha
             v.visibility = if (c.visible && c.enabled) android.view.View.VISIBLE else android.view.View.GONE
             v.invalidate()
             // 碎碎念：每个实例独立浮窗，可见性/样式跟随共享配置，但位置按序号错开。
@@ -678,7 +915,6 @@ class PetService : Service() {
             inst.petMsg.setVisible(showForThis && c.visible && c.enabled)
         }
         applyImeHide(keyboardUp)
-        applyClickThrough(c.clickThrough)
     }
 
     /** 根据开关选择资源包：默认=旧图；开启=“芝麻酥”新图（assets 扫描仅一次并缓存）。 */
@@ -692,7 +928,20 @@ class PetService : Service() {
         showDebug = c.showDebug
         showImageBorder = c.showImageBorder
         showControlBorder = c.showControlBorder
-        showSnapLineFlag = c.showSnapLine
+        // 控制窗隐藏开关：调试“隐藏控制层” 或 用户“点击穿透”任一变化，统一实时增删控制窗
+        // forceOpaque 与二者互斥，变化时一并刷新显示窗 NOT_TOUCHABLE（强制无透明 vs 恢复穿透）。
+        if (c.hideControlLayer != hideControlLayer || c.clickThrough != clickThrough || c.forceOpaque != forceOpaque) {
+            hideControlLayer = c.hideControlLayer
+            clickThrough = c.clickThrough
+            forceOpaque = c.forceOpaque
+            syncControlWindows()
+            applyDisplayTouchFlags()
+        }
+        // 诊断开关：隐藏画布变化时实时增删画布窗口
+        if (c.hideStage != hideStage) {
+            hideStage = c.hideStage
+            syncDisplayWindows()
+        }
         showBoundOffsetFlag = c.showBoundOffset
         showSnapOffsetFlag = c.showSnapOffset
         applyDebugGuides()
@@ -723,16 +972,28 @@ class PetService : Service() {
         // 重力朝向：非体感模式按四边开关算宠物脚朝向；体感模式初始朝下(0)，
         // 实际朝向由 tiltListener 每帧根据重力向量量化（左右/上主导时临时旋转脚朝左右/上）。
         // 重力朝向：重力·抛掷关闭时强制脚朝正下(0)，与四边开关/体感无关（吸附态仍独立保留朝向）。
-        petView.gravityDir = if (c.gravityEnabled) (if (effectiveTilt) 0 else calcGravityDir(c)) else 0
+        // 广播给所有宠物实例（不再只写主实例 petView）：每只独立设置自身脚朝向，驱动各自渲染旋转与位移方向。
+        val gTarget = if (c.gravityEnabled) (if (effectiveTilt) 0 else calcGravityDir(c)) else 0
+        pets.forEach { inst -> inst.view.gravityDir = gTarget }
         recalcBounds()
     }
 
     private fun registerConfigObserver() {
         config.configFlow.onEach { c ->
-            // 宠物数量（酥的数量）变化：重建所有实例（各实例独立散开，共享配置重新应用）。
+            // 宠物数量（酥的数量）变化：多退少补，保留现有宠物，仅增删差异部分（见 adjustPetCount）。
             if (c.petCount != lastPetCount) {
                 lastPetCount = c.petCount
-                rebuildPets(c)
+                adjustPetCount(c)
+            }
+            // 定格-拖动开关变化：即时作用于全部已有定格层（开→可点击拖动；关→纯显示不可点击）。
+            if (c.freezeDraggable != lastFreezeDraggable) {
+                lastFreezeDraggable = c.freezeDraggable
+                applyFreezeDraggable(c.freezeDraggable)
+            }
+            // 显示定格边框开关变化：即时叠加/移除全部已有定格层的红色真实窗口边框
+            if (c.freezeBorderShow != lastFreezeBorderShow) {
+                lastFreezeBorderShow = c.freezeBorderShow
+                for (layer in freezeLayers) setFreezeBorder(layer, c.freezeBorderShow)
             }
             // 物理参数同步：遍历所有实例（共享配置，各实例物理独立生效）。
             pets.forEach { inst ->
@@ -786,7 +1047,20 @@ class PetService : Service() {
             showDebug = c.showDebug
             showImageBorder = c.showImageBorder
             showControlBorder = c.showControlBorder
-            showSnapLineFlag = c.showSnapLine
+            // 控制窗隐藏开关：调试“隐藏控制层” 或 用户“点击穿透”任一变化，统一实时增删控制窗
+            // forceOpaque 与二者互斥，变化时一并刷新显示窗 NOT_TOUCHABLE（强制无透明 vs 恢复穿透）。
+            if (c.hideControlLayer != hideControlLayer || c.clickThrough != clickThrough || c.forceOpaque != forceOpaque) {
+                hideControlLayer = c.hideControlLayer
+                clickThrough = c.clickThrough
+                forceOpaque = c.forceOpaque
+                syncControlWindows()
+                applyDisplayTouchFlags()
+            }
+            // 诊断开关：隐藏画布变化时实时增删画布窗口
+            if (c.hideStage != hideStage) {
+                hideStage = c.hideStage
+                syncDisplayWindows()
+            }
             showBoundOffsetFlag = c.showBoundOffset
             showSnapOffsetFlag = c.showSnapOffset
             applyDebugGuides()
@@ -816,27 +1090,28 @@ class PetService : Service() {
             // 注意：必须用 c.gravityEnabled 单独守卫，不能只依赖 effectiveTilt（=tiltGravity && gravityEnabled），
             // 否则关重力时 effectiveTilt=false 会落入下方 calcGravityDir 分支，用仍残留的旧四边方向算出
             // 非下方向并触发 enterTiltRoll，造成“先错误方向、再被 updateAnimByState 强制 0 纠正”的闪烁。
+            // 脚朝向广播给所有宠物实例（不再只写主实例 petView）：每只独立设置/进 ROLL，
+            // 吸附态各自保留朝向、忽略全局方向突变。
             if (c.gravityEnabled) {
                 if (effectiveTilt) {
-                    petView.gravityDir = 0
+                    pets.forEach { inst -> if (!inst.view.physics.isSnapped) inst.view.gravityDir = 0 }
                 } else {
-                    // 吸附态：忽略脚朝向突变触发的 ROLL（等待用户手动拉出/召回才退出吸附）。
-                    if (!petView.physics.isSnapped) {
-                        val target = calcGravityDir(c)
+                    val target = calcGravityDir(c)
+                    pets.forEach { inst ->
+                        val v = inst.view
+                        // 吸附态：忽略脚朝向突变触发的 ROLL（等待用户手动拉出/召回才退出吸附）。
+                        if (v.physics.isSnapped) return@forEach
                         // 脚朝向突变：主动进 ROLL 掩盖旧模式（非对称）帧被新旋转角硬转一帧的闪，
-                        // 对齐体感 updateTiltGravityDir 行为。先切 ROLL（居中对称）→ 再在 enterTiltRoll
-                        // 内部 setMode 后设方向，下一帧即 ROLL+新朝向，无闪烁。方向未变（如改其他设置）不进 ROLL。
-                        if (target != petView.gravityDir) {
-                            if (!petView.physics.isThrowing) petView.enterTiltRoll(target)
-                            else petView.gravityDir = target   // 翻滚中仅更新方向，不重复抢 ROLL
+                        // 对齐体感 updateTiltGravityDir 行为。方向未变（如改其他设置）不进 ROLL。
+                        if (target != v.gravityDir) {
+                            if (!v.physics.isThrowing) v.enterTiltRoll(target)
+                            else v.gravityDir = target   // 翻滚中仅更新方向，不重复抢 ROLL
                         }
                     }
                 }
             } else {
                 // 关重力：无条件脚朝正下(0)，且跳过方向突变 ROLL（updateAnimByState 每帧也会兜底纠正）。
-                if (!petView.physics.isSnapped) {
-                    petView.gravityDir = 0
-                }
+                pets.forEach { inst -> if (!inst.view.physics.isSnapped) inst.view.gravityDir = 0 }
             }
             recalcBounds()  // 偏移/scale 变化需重算边界（固定基准，不会每帧抖动；与方向检测解耦，无条件重算）
             // 夜间模式强制开关变化：即时重应用（强制打开优先级 > 强制关闭 > 跟随系统）。
@@ -903,34 +1178,39 @@ class PetService : Service() {
             try {
                 val t = event.sensor.type
                 if (t != Sensor.TYPE_GRAVITY && t != Sensor.TYPE_ACCELEROMETER) return
-                // 设备坐标系重力向量（指向真实地面下方，约 9.8 m/s^2 量级）
-                val gx = event.values[0]
-                val gy = event.values[1]
-                // 把设备坐标投影到【屏幕平面】：忽略 z（垂直屏幕），用 x/y 分量作为屏幕重力方向。
-                // 屏幕旋转使用主线程缓存的 cachedRotation（传感器后台线程不访问 display，避免异常）。
-                //  - 竖屏(ROTATION_0)：设备 x -> 屏幕 x（右），设备 y -> 屏幕 y（下，因 Android y 向下）
-                //  - 横屏(ROTATION_90)：设备 y -> 屏幕 -x，设备 x -> 屏幕 y
-                //  - 横屏反向(ROTATION_270)：设备 y -> 屏幕 x，设备 x -> 屏幕 -y
-                //  - 翻转(ROTATION_180)：设备 x -> 屏幕 -x，设备 y -> 屏幕 -y
-                // Android 屏幕坐标系 y 轴向下为正，故“向下倾斜”应产生 +y 重力（宠物向下走），
-                // 而传感器 gy 在手机顶部抬起（向后倾）时为负——符合直觉：手机前倾→宠物向下。
-                val (sx, sy) = when (cachedRotation) {
-                    Surface.ROTATION_90 -> Pair(-gy, gx)
-                    Surface.ROTATION_270 -> Pair(gy, -gx)
-                    Surface.ROTATION_180 -> Pair(-gx, -gy)
-                    else -> Pair(-gx, gy) // ROTATION_0：竖屏下设备 x 轴符号与屏幕一致，实测需取反使左倾→向左重力
+                // 把设备坐标重力投影到屏幕平面。统一为“重力向量”语义：
+                // 重力传感器读数即指向地心；加速度计静止读数 = -重力（指向天空），需取反，
+                // 否则无重力传感器设备会整体符号相反 → “部分手机左右颠倒”。
+                // 屏幕旋转用权威来源 cachedRotation（DisplayManager 真实屏幕旋转，@Volatile 可见）。
+                // 此处每帧回读一次真实屏幕旋转作为兜底，确保旋转切换时 cachedRotation 不被旧值卡住
+                // （DisplayManager 回调已在主线程更新它，这里仅作双保险，开销极小）。
+                val curRot = readDisplayRotation()
+                if (curRot != cachedRotation) {
+                    if (dbgCount % 30 == 0) Log.d("CakePetTilt", "sensor-thread refresh rot $cachedRotation -> $curRot")
+                    cachedRotation = curRot
                 }
+                val sign = if (t == Sensor.TYPE_ACCELEROMETER) -1f else 1f
+                val gx = event.values[0] * sign
+                val gy = event.values[1] * sign
+                // 投影用 Android 官方 SensorManager.remapCoordinateSystem 的 axis 映射（跨设备符号一致），
+                // 把“屏幕 x/y 轴在设备传感器坐标(x右,y上,z出屏)中的单位向量”与重力点乘得到屏幕平面分量。
+                // 再按竖屏(ROTATION_0)实测校准做一次性全局翻转：屏幕右正用 -projX（竖屏即原 Pair(-gx,gy)），
+                // 屏幕下正用 +projY。原横屏映射表 sx 符号漏校，导致横屏左右颠倒，此处一并修正。
+                val (ax, ay) = tiltScreenAxes(cachedRotation)
+                val projX = gx * ax[0] + gy * ax[1]
+                val projY = gx * ay[0] + gy * ay[1]
+                val sx = -projX
+                val sy = projY
                 // 归一：传感器标称约 9.8。倾斜分量 / 9.8 得 [0,1] 倾斜比例，再乘以设置重力强度，
                 // 得到屏幕坐标系下的加速度（像素/秒^2）。平放时 sx,sy≈0 -> 宠物几乎不受力。
-                // TILT_GAIN：体感专属增益。默认 3000 重力强度下原映射偏弱（小幅倾斜分量小），
-                // 乘增益让体感更跟手；该增益只作用于体感，不改变四边重力的 gravity 语义。
+                // TILT_GAIN：体感专属增益，只作用于体感，不改变四边重力的 gravity 语义。
                 val k = tiltStrength / 9.8f * TILT_GAIN
                 pets.forEach { inst ->
                     inst.view.physics.tiltGx = sx * k
                     inst.view.physics.tiltGy = sy * k
                 }
-                if (dbgCount < 5) {
-                    dbgCount++
+                dbgCount++
+                if (dbgCount % 30 == 0) {
                     Log.d("CakePetTilt", "sensor gx=$gx gy=$gy rot=$cachedRotation sx=$sx sy=$sy k=$k -> tiltGx=${petView.physics.tiltGx} tiltGy=${petView.physics.tiltGy}")
                 }
                 // 由重力向量量化“脚朝向”：左右分量远大于上下时脚朝左右，上分量主导时脚朝上，
@@ -949,15 +1229,216 @@ class PetService : Service() {
     // 主线程读取并缓存当前屏幕旋转（注册时与配置变更时调用，传感器线程只读缓存）
     private fun refreshCachedRotation() {
         cachedRotation = try {
-            // Service 不是 visual Context，不能调 getDisplay()（会抛 UnsupportedOperationException）。
-            // 改用 WindowManager 取 defaultDisplay，它在 Service 中可用。
-            @Suppress("DEPRECATION")
-            val rotation = (getSystemService(Context.WINDOW_SERVICE) as? WindowManager)
-                ?.defaultDisplay?.rotation
-            rotation ?: Surface.ROTATION_0
+            // 统一用 DisplayManager 真实屏幕旋转作为权威来源；失败回退 WindowManager defaultDisplay。
+            readDisplayRotation()
         } catch (e: Throwable) {
             Log.e("CakePetTilt", "refreshCachedRotation error", e)
             Surface.ROTATION_0
+        }
+        // 旋转/折叠屏变化后画布尺寸也变了，重设全屏尺寸并 updateViewLayout。
+        updateGuideSize()
+    }
+
+    /** 读真实屏幕旋转（权威来源）：DisplayManager 的默认 Display 旋转与渲染/边界/脚方向同源。
+     *  后台/overlay Service 也能可靠读到当前屏幕实际旋转；失败时回退 defaultDisplay.rotation。 */
+    private fun readDisplayRotation(): Int {
+        return try {
+            val dm = getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+            val d = dm?.getDisplay(Display.DEFAULT_DISPLAY)
+            if (d != null) d.rotation else windowManager.defaultDisplay.rotation
+        } catch (e: Throwable) {
+            Log.e("CakePetTilt", "readDisplayRotation error: ${e.message}")
+            windowManager.defaultDisplay.rotation
+        }
+    }
+
+    /** 屏幕旋转监听：用 DisplayManager.DisplayListener 监听“真实屏幕旋转”变化（后台/overlay 可靠，
+     *  优于 OrientationEventListener 在 Service 后台被节流/语义不一致的问题）。旋转变化即刷新体感方向
+     *  基准与活动边界（对所有宠物均有益）。 */
+    private fun initDisplayRotationListener() {
+        cachedRotation = readDisplayRotation()   // 初始即用真实屏幕旋转
+        val dm = getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return
+        displayListener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) {}
+            override fun onDisplayRemoved(displayId: Int) {}
+            override fun onDisplayChanged(displayId: Int) {
+                if (displayId != Display.DEFAULT_DISPLAY) return
+                val r = readDisplayRotation()
+                if (r != cachedRotation) {
+                    cachedRotation = r
+                    Log.d("CakePetTilt", "display rotation changed -> rot=$r (recalcBounds)")
+                    recalcBounds()   // 横屏/折叠屏切换：同步刷新活动边界与窗口尺寸
+                    // 旋转真正生效后才回调此处，此刻 screenRealSize() 已反映新朝向；
+                    // 必须同步刷新辅助线窗口尺寸，否则窗口仍是旧朝向尺寸、横屏画线被裁切(显示不完全)。
+                    updateGuideSize()
+                }
+            }
+        }
+        dm.registerDisplayListener(displayListener, mainHandler)
+    }
+
+    /** 屏幕 x/y 轴在【设备传感器坐标】(x右, y上, z出屏)中的单位向量，来自官方
+     *  SensorManager.remapCoordinateSystem 的 axis 映射，跨设备符号一致。 */
+    private fun tiltScreenAxes(rotation: Int): Pair<FloatArray, FloatArray> {
+        return when (rotation) {
+            Surface.ROTATION_90 -> Pair(floatArrayOf(0f, -1f, 0f), floatArrayOf(1f, 0f, 0f))    // MINUS_Y, X
+            Surface.ROTATION_270 -> Pair(floatArrayOf(0f, 1f, 0f), floatArrayOf(-1f, 0f, 0f))   // Y, MINUS_X
+            Surface.ROTATION_180 -> Pair(floatArrayOf(-1f, 0f, 0f), floatArrayOf(0f, -1f, 0f))  // MINUS_X, MINUS_Y
+            else -> Pair(floatArrayOf(1f, 0f, 0f), floatArrayOf(0f, 1f, 0f))                    // X, Y
+        }
+    }
+
+    /** 真实物理屏尺寸（官方推荐的 Display.getRealSize 替代）。 */
+    private fun screenRealSize(): Pair<Int, Int> {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val b = windowManager.maximumWindowMetrics.bounds
+            b.width() to b.height()
+        } else {
+            @Suppress("DEPRECATION")
+            val dm = resources.displayMetrics
+            dm.widthPixels to dm.heightPixels
+        }
+    }
+
+    /** 创建并挂上画布窗口（NOT_TOUCHABLE 全屏）。 */
+    /** 同步单只宠物的显示窗位置/尺寸并刷新（每帧调用）。显示窗始终按整张位图矩形摆放，与控制窗命中模式无关。 */
+    /**
+     * 控制窗定位（屏幕绝对坐标）的单一数据源：帧循环与拖拽触摸回调都走这里，避免双路径分歧。
+     * - 核心(脚底盒)：控制窗缩到脚盒（控制层几何，见 PetView.controlWindowRect），与显示矩形无关；
+     *   脚盒外由 isCoreHit 的 OBB 判定放穿。尺寸随脚盒变化（旋转/脚向变化）才写 width/height。
+     * - 像素/边界：窗口为整张位图全框（锚点落在 physics 坐标）。尺寸随整帧变化才写 width/height。
+     * 仅改 x/y 与（必要时）width/height，绝不 removeView+addView。
+     * 返回是否真改了尺寸（调用方用于更新 lastW/lastH；本函数不直接写 lastW/lastH，保持无副作用）。
+     * 注：CORE 下必须用 controlWindowRect() 而非 physics-anchor，否则拖拽时控制窗会错复位到整帧左上。
+     */
+    private fun placeControlWindow(
+        v: PetView, lp: WindowManager.LayoutParams,
+        lastW: Int, lastH: Int
+    ): Boolean {
+        if (v.hitMode == ConfigDefaults.HIT_CORE) {
+            val r = v.controlWindowRect()
+            lp.x = r.left.toInt()
+            lp.y = r.top.toInt()
+            val rw = r.width().toInt()
+            val rh = r.height().toInt()
+            if (rw != lastW || rh != lastH) {
+                lp.width = rw
+                lp.height = rh
+                return true
+            }
+        } else {
+            // physics.x/y 已是窗口左上角真值，直接作为浮窗左上角（无需再做锚点减法）。
+            lp.x = v.physics.x.toInt()
+            lp.y = v.physics.y.toInt()
+            val (w, h) = v.getBaseBitmapSize()
+            if (w != lastW || h != lastH) {
+                lp.width = w
+                lp.height = h
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun syncDisplayWindow(inst: PetInstance) {
+        val disp = inst.displayView ?: return
+        val dlp = inst.displayLp ?: return
+        if (!inst.displayAdded) return
+        val v = inst.view
+        val (iw, ih) = v.getBaseBitmapSize()
+        // physics.x/y 已是窗口左上角真值，直接作为浮窗左上角（无需锚点减法）。
+        val nx = v.physics.x.toInt()
+        val ny = v.physics.y.toInt()
+        // 仅当位置/尺寸真正变化才 relayout（updateViewLayout 是跨进程重排，开销远大于 invalidate；
+        // 静止宠物每帧 relayout 是拆分小窗架构卡顿的元凶，去重后可省）。动画/拖拽时位置必变，照常更新。
+        if (dlp.x != nx || dlp.y != ny || dlp.width != iw || dlp.height != ih) {
+            dlp.x = nx
+            dlp.y = ny
+            dlp.width = iw
+            dlp.height = ih
+            disp.displayLeft = v.physics.x
+            disp.displayTop = v.physics.y
+            try { windowManager.updateViewLayout(disp, dlp) } catch (_: Exception) {}
+        }
+        // 重绘仍需每帧（动画帧在变）；静止帧重绘只是相同位图 blit，开销小。
+        disp.invalidate()
+    }
+
+    /** 按 hideStage 开关增删各宠物的显示窗（诊断用，实时生效）。 */
+    private fun syncDisplayWindows() {
+        for (inst in pets) {
+            val disp = inst.displayView ?: continue
+            val dlp = inst.displayLp ?: continue
+            if (hideStage && inst.displayAdded) {
+                try { windowManager.removeView(disp) } catch (_: Exception) {}
+                inst.displayAdded = false
+            } else if (!hideStage && !inst.displayAdded) {
+                // 重挂时窗内位图已带当前透明度（petAlpha 在 view 上），窗口 alpha 保持 1，无需设 disp.alpha
+                try { windowManager.addView(disp, dlp) } catch (_: Exception) {}
+                inst.displayAdded = true
+            }
+        }
+    }
+
+    /** 按 controlHidden（hideControlLayer || clickThrough）增删各宠物控制窗，实时生效，无需整组重建。 */
+    private fun syncControlWindows() {
+        for (inst in pets) {
+            if (controlHidden && inst.controlAdded) {
+                try { windowManager.removeView(inst.view) } catch (_: Exception) {}
+                inst.controlAdded = false
+            } else if (!controlHidden && !inst.controlAdded) {
+                try { windowManager.addView(inst.view, inst.layoutParams) } catch (_: Exception) {}
+                inst.controlAdded = true
+            }
+        }
+    }
+
+    /**
+     * 挂载/卸载辅助线 guide 窗（显式全屏尺寸、NOT_TOUCHABLE）：仅设置期/调试显示偏移线/边框时挂载，
+     * 用显式尺寸而非 MATCH_PARENT/全屏标志，避免“两个全屏 NOT_TOUCHABLE 窗叠加吞点击”的 Android 16 问题，
+     * 也规避全屏标志在部分系统（如鸿蒙）上的穿透异常。低频出现，不波及日常其它 app。
+     */
+    private fun syncGuideWindow() {
+        val g = guideLineView ?: return
+        val visible = g.visibility == android.view.View.VISIBLE
+        if (visible && !guideAdded) {
+            // 每次挂载都按当前屏幕尺寸重测窗口宽高，避免复用“一次创建时”的旧朝向尺寸
+            // （如先竖屏创建、后旋转，窗口仍按竖屏尺寸导致横屏画线被裁切）。
+            val (sw, sh) = screenRealSize()
+            if (guideParams == null) {
+                guideParams = WindowManager.LayoutParams().apply {
+                    type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    format = PixelFormat.TRANSLUCENT
+                    // FLAG_LAYOUT_IN_SCREEN：辅助线窗 (0,0) 对齐物理屏幕左上角，与 getScreenBounds 物理坐标同源，
+                    //   偏移线/吸附线不受状态栏显隐影响（否则窗口原点在活动窗口=状态栏下，线整体下移并随其跳变）。
+                    flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                    gravity = Gravity.TOP or Gravity.START
+                    x = 0
+                    y = 0
+                }
+            }
+            guideParams!!.width = sw
+            guideParams!!.height = sh
+            try { windowManager.addView(g, guideParams) } catch (_: Exception) {}
+            guideAdded = true
+        } else if (!visible && guideAdded) {
+            try { windowManager.removeView(g) } catch (_: Exception) {}
+            guideAdded = false
+        }
+    }
+
+    /** 重设 guide 窗为完整物理屏尺寸（旋转/折叠屏后调用）。 */
+    private fun updateGuideSize() {
+        if (!guideAdded) return
+        val g = guideLineView ?: return
+        val (sw, sh) = screenRealSize()
+        guideParams?.let { p ->
+            p.width = sw
+            p.height = sh
+            try { windowManager.updateViewLayout(g, p) } catch (_: Exception) {}
         }
     }
 
@@ -1048,7 +1529,7 @@ class PetService : Service() {
                 // 不触发翻滚（roll 为独立逻辑，此处不动）。否则 enterTiltRoll 在拖动态会被
                 // isDragging 守卫直接 return，导致 gravityDir 始终不更新、提起动画不旋转。
                 view.gravityDir = target
-                recalcBounds()
+                boundsDirty = true
             } else if (!view.physics.isThrowing) {
                 // 脚朝向突变：主动进入翻滚掩盖姿态硬切（方向变了=有新重力，翻滚符合物理直觉）。
                 // 翻滚中(!isThrowing)才触发，避免方向高频变化时重复抢 ROLL 动画；
@@ -1057,14 +1538,20 @@ class PetService : Service() {
                 // 避免先改重力旋转角导致【旧模式帧被新朝向硬转一帧】闪现，然后才切到 ROLL。
                 view.enterTiltRoll(target)
                 // 旋转改变脚落点，重算边界使锚点活动范围与贴边/贴地对齐（开销极小）。
-                // ROLL 锚点已特判为画布中心，rotateOffset 与 gravityDir 无关，顺序安全。
-                recalcBounds()
+                // 实际重算延后到帧循环统一执行（见 boundsDirty），避免传感器线程改 physics 与帧循环竞争。
+                boundsDirty = true
             } else {
                 view.gravityDir = target
-                recalcBounds()
+                boundsDirty = true
             }
         }
     }
+
+    // 边界重算请求标志：由传感器线程（onSensorChanged→updateTiltGravityDirFor）在脚方向变化时置位，
+    // 实际重算由帧循环统一执行。避免传感器后台线程直接 clamp physics.x/y 与帧循环竞争，
+    // 且保证 recalcBounds 与窗口定位在同一帧、用同一份锚点快照（currentFrameAnchor 由 tick 刷新），
+    // 消除“脚方向变化→锚点变→位置被改→又重算”的跳变/抖动回归。
+    @Volatile private var boundsDirty = false
 
     // 所有宠物实例边界相同（共享屏幕范围与偏移配置），遍历重算。
     private fun recalcBounds() {
@@ -1073,9 +1560,31 @@ class PetService : Service() {
         pets.forEach { inst -> recalcBoundsFor(inst.view, vis) }
     }
 
+    // 用户配置的边界偏移是“物理”语义（竖屏自然朝向）：
+    //   boundOffsetTop=物理上(状态栏)、boundOffsetBottom=物理下(导航栏)、boundOffsetLeft=物理左、boundOffsetRight=物理右。
+    // 横/竖屏切换时用真实屏幕旋转 cachedRotation 把它指派到对应的“屏幕边”，保证状态栏/导航栏内缩
+    // 始终落在物理栏所在的屏幕边（而非当前屏幕上下），消除横屏时“上下误用 140、左右被压出界”。
+    // 返回 [屏Top, 屏Right, 屏Bottom, 屏Left] 四个屏幕边偏移。
+    private fun rotatedBoundOffsets(src: FloatArray? = null): FloatArray {
+        val t = src?.getOrElse(0) { boundOffsetTop } ?: boundOffsetTop
+        val b = src?.getOrElse(1) { boundOffsetBottom } ?: boundOffsetBottom
+        val l = src?.getOrElse(2) { boundOffsetLeft } ?: boundOffsetLeft
+        val r = src?.getOrElse(3) { boundOffsetRight } ?: boundOffsetRight
+        return when (cachedRotation) {
+            Surface.ROTATION_0 -> floatArrayOf(t, r, b, l)   // 原样：屏Top=物理上、屏Right=物理右…
+            // ROTATION_90：设备逆时针转 90° → 物理顶(状态栏)→屏左、物理底(充电口)→屏右、
+            //   物理左→屏下、物理右→屏上（注意：物理左/右落在屏幕上下，且物理左在屏下、物理右在屏上）。
+            Surface.ROTATION_90 -> floatArrayOf(r, b, l, t)
+            Surface.ROTATION_180 -> floatArrayOf(b, l, t, r) // 物理下→屏上、物理左→屏右、物理上→屏下、物理右→屏左
+            // ROTATION_270：设备顺时针转 90° → 物理顶(状态栏)→屏右、物理底(充电口)→屏左、
+            //   物理左→屏上、物理右→屏下（与 ROTATION_90 左右镜像，物理左在屏上、物理右在屏下）。
+            else -> floatArrayOf(l, t, r, b)
+        }
+    }
+
     // 为单个宠物实例计算并设置边界（探头/出界模型，详见 recalcBounds 旧注释）。
     private fun recalcBoundsFor(view: PetView, vis: android.graphics.Rect) {
-        // physics.x/y 为【锚点（脚）坐标】。
+        // physics.x/y 为【窗口左上角坐标】（位置真值），脚锚点 = physics ∓ anchorOff 仅在贴边/snap 时派生。
         // 边界模型（探头/出界）：脚朝向的那一侧为【锚点边】——只约束“锚点(脚)不超可见区”，
         // 图底可越过屏幕外（被裁切=探头）；其余三侧仍为【PNG 四边】约束（图边不超可见区）。
         // 脚朝向：吸附态=snapSide(0底/1左/2右/3顶)，非吸附态=gravityDir(0下/1左/2右/3上)。
@@ -1107,23 +1616,40 @@ class PetService : Service() {
         val rightIsAnchor = footDir == 2  // 脚朝右 → 右侧锚点边
         val topIsAnchor = footDir == 3    // 脚朝上 → 顶部锚点边
         val botIsAnchor = footDir == 0    // 脚朝下 → 底部锚点边
-        val minX = vis.left.toFloat() + (if (leftIsAnchor) 0f else leftInset) + boundOffsetLeft
-        val maxX = (vis.right.toFloat() - (if (rightIsAnchor) 0f else rightInset) - boundOffsetRight).coerceAtLeast(minX)
+        // 用户偏移按真实屏幕旋转重映射到屏幕边：[屏Top, 屏Right, 屏Bottom, 屏Left]。
+        // 这样横屏时状态栏(物理上)内缩落在屏幕左/右，屏幕上下用 0，左右溢出与“上下误缩”一并消失。
+        val ob = rotatedBoundOffsets()
+        val rotLeft = ob[3]
+        val rotRight = ob[1]
+        val rotTop = ob[0]
+        val rotBottom = ob[2]
+        val minX = vis.left.toFloat() + (if (leftIsAnchor) 0f else leftInset) + rotLeft
+        val maxX = (vis.right.toFloat() - (if (rightIsAnchor) 0f else rightInset) - rotRight).coerceAtLeast(minX)
         // 仅当“输入法防误触=开”且键盘真实弹出（存在输入法内缩）时，底部才内缩，宠物落到键盘上方。
         val imeActive = imeAdaptEnabled && (viewImeInset > 0f || globalImeInset > 0f)
         val imeBottomInset = if (imeActive) maxOf(viewImeInset, globalImeInset) else 0f
         // 抬高偏移：仅在输入法防误触开启且键盘真实弹出时，才在键盘地面之上额外抬高，正=更高、负=更低。
         val lift = if (imeActive) imeLiftOffset else 0f
-        // 键盘适应-重置偏移：键盘弹出时无视上/下边界偏移（boundOffsetTop/Bottom 归零），
+        // 键盘适应-重置偏移：键盘弹出时无视“物理”上/下边界偏移（rotTop/rotBottom 归零），
         // 仅用键盘高度(imeBottomInset) + 抬高偏移(lift) 决定活动下边界，避免高底部偏移导致键盘弹起时宠物进一步位移。
         val imeResetActive = imeResetBottomOffset && imeActive
-        val topOff = if (imeResetActive) 0f else boundOffsetTop
-        val botOff = if (imeResetActive) 0f else boundOffsetBottom
+        val topOff = if (imeResetActive) 0f else rotTop
+        val botOff = if (imeResetActive) 0f else rotBottom
         // 顶部为锚点边 → minY 直接 = 屏幕顶（脚贴顶，图顶可出界）；否则图顶不超屏幕顶
         val minY = vis.top.toFloat() + (if (topIsAnchor) 0f else topInset) + topOff
         // 底部为锚点边 → maxY 直接 = 屏幕底（脚贴底，图底可出界下垂）；否则图底不超屏幕底
         val maxY = (vis.bottom.toFloat() - (if (botIsAnchor) 0f else botInset) - botOff - imeBottomInset - lift).coerceAtLeast(minY)
-        view.physics.setBounds(minX, minY, maxX, maxY)
+        // physics.x/y = 窗口左上角真值；活动范围换算为窗口范围 = 脚范围(上面 min/max) − 锚点偏移(ax,ay)。
+        // 旋转/缩放只改该范围、不再改写 physics.x/y → 锚点变化不会触发窗口跳变（脚锚点按需派生）。
+        view.physics.setBounds(minX - ax, minY - ay, maxX - ax, maxY - ay)
+        // 纯偏移吸附边界线（与边界偏移线/吸附环带同几何，不含图片 inset、不随脚朝向变）：
+        // = 屏幕可见区 ± 用户偏移（按旋转重映射后的屏幕边偏移）。imeResetActive 时上下偏移归零（与 setBounds 一致）。
+        view.physics.setSnapBounds(
+            vis.left.toFloat() + rotLeft,
+            vis.top.toFloat() + topOff,
+            vis.right.toFloat() - rotRight,
+            vis.bottom.toFloat() - botOff
+        )
     }
 
     /**
@@ -1160,6 +1686,12 @@ class PetService : Service() {
     private fun applyDebugGuides() {
         if (showBoundOffsetFlag) showBoundGuide(DEBUG_BOUND_OWNER) else releaseGuide(DEBUG_BOUND_OWNER)
         if (showSnapOffsetFlag) showSnapGuide(DEBUG_SNAP_OWNER) else releaseGuide(DEBUG_SNAP_OWNER)
+        // 调试控制边框画在控制窗自身（与命中区几何严格同源，CORE 脚盒/整帧都精确贴合，
+        // 且不受 hideStage 影响；hideControlLayer 时控制窗被移除、边框一并隐藏，符合“隐藏控制层”语义）。
+        for (inst in pets) {
+            inst.view.showControlBorder = showControlBorder
+            inst.view.invalidate()
+        }
         drawCurrentGuide()
     }
 
@@ -1329,6 +1861,7 @@ class PetService : Service() {
             activeBoundIndex = -1
             guideLineView?.setLines(emptyList())
             guideLineView?.visibility = android.view.View.GONE
+            syncGuideWindow()
         } else {
             // 仍有来源存活：按其中一个来源的类型重绘，避免残留错误的线
             drawCurrentGuide()
@@ -1354,6 +1887,7 @@ class PetService : Service() {
         snapEmptyWasEmpty = false
         guideLineView?.setLines(emptyList())
         guideLineView?.visibility = android.view.View.GONE
+        syncGuideWindow()
         // 隐藏全部辅助线后，按当前调试开关状态恢复“调试模块”的线（边界偏移线/吸附边界）。
         // 否则设置页/碎碎念页返回时 hideGuide() 会把 DEBUG 调试 owner 一并清空，
         // 导致已开启的偏移线/边界等被强制关闭。
@@ -1396,10 +1930,9 @@ class PetService : Service() {
             // 同时画出「边界偏移线」与「吸附范围内缩框」：
             // 只有内缩框时无法判断它相对屏幕边缘的位置，缺少参照；叠加边界线才有空间概念。
             val o = boundGuideOverride
-            val top = o?.get(0) ?: boundOffsetTop
-            val bottom = o?.get(1) ?: boundOffsetBottom
-            val left = o?.get(2) ?: boundOffsetLeft
-            val right = o?.get(3) ?: boundOffsetRight
+            // 用户偏移是“物理”语义，按真实屏幕旋转重映射到屏幕边后再画，与运行时边界一致。
+            val rob = rotatedBoundOffsets(o)
+            val top = rob[0]; val right = rob[1]; val bottom = rob[2]; val left = rob[3]
             val phys = petView?.physics
             val d = snapGuideOverride ?: phys?.snapDist ?: DEFAULT_SNAP_DIST
             topOn = snapPrevTop ?: phys?.snapTop ?: true
@@ -1457,10 +1990,9 @@ class PetService : Service() {
             // 纯边界偏移来源：计算「活动范围是否为零」，用于无范围振动 + 红框。
             // 注意：仅 BOUND 来源参与 empty 判定，IME 等其他来源拖动时不触发无范围振动/红框。
             val o = boundGuideOverride
-            val topOff = o?.get(0) ?: boundOffsetTop
-            val botOff = o?.get(1) ?: boundOffsetBottom
-            val leftOff = o?.get(2) ?: boundOffsetLeft
-            val rightOff = o?.get(3) ?: boundOffsetRight
+            // 用户偏移是“物理”语义，按真实屏幕旋转重映射到屏幕边后再画，与运行时边界一致。
+            val rob = rotatedBoundOffsets(o)
+            val topOff = rob[0]; val botOff = rob[2]; val leftOff = rob[3]; val rightOff = rob[1]
             lines += boundLines(vis, topOff, botOff, leftOff, rightOff)
             val leftX = vis.left + leftOff
             val rightX = vis.right - rightOff
@@ -1471,11 +2003,17 @@ class PetService : Service() {
             // 键盘抬高预览来源：键盘态下真实边界随「重置偏移」开关归零（与 PetView 实际抬高逻辑一致），
             // 否则预览的“活动范围”与真实运行不一致，表现为偏移线映射错误。
             // 此处不计算 empty（不参与无范围振动/红框），仅画四边活动范围线。
-            val (topOff, botOff) = if (imeResetBottomOffset) 0f to 0f
-            else (boundGuideOverride?.get(0) ?: boundOffsetTop) to (boundGuideOverride?.get(1) ?: boundOffsetBottom)
+            // 键盘适应-重置偏移：重置的是“物理”上/下偏移（状态栏/导航栏），按真实屏幕旋转重映射到屏幕边。
             val o = boundGuideOverride
-            val leftOff = o?.get(2) ?: boundOffsetLeft
-            val rightOff = o?.get(3) ?: boundOffsetRight
+            val src = if (imeResetBottomOffset) {
+                floatArrayOf(0f, 0f,
+                    o?.getOrElse(2) { boundOffsetLeft } ?: boundOffsetLeft,
+                    o?.getOrElse(3) { boundOffsetRight } ?: boundOffsetRight)
+            } else {
+                o ?: floatArrayOf(boundOffsetTop, boundOffsetBottom, boundOffsetLeft, boundOffsetRight)
+            }
+            val rob = rotatedBoundOffsets(src)
+            val topOff = rob[0]; val botOff = rob[2]; val leftOff = rob[3]; val rightOff = rob[1]
             lines += boundLines(vis, topOff, botOff, leftOff, rightOff)
         }
         // 宠物参数异常红框彩蛋（大小/反弹/速度/重力越界时的「酥」吐槽）。
@@ -1548,16 +2086,30 @@ class PetService : Service() {
         // 四边偏移线小文字备注（顺序与 boundLines 对应：左、右、上、下）；
         // 仅纯边框模式（无 TRAY 混入）时绘制文字，避免与碎碎念线错位。
         val boundLabels = if ((hasSnap || hasBoundOnly || hasIme) && !hasTray) {
-            // IME 模式下上下偏移备注随「重置偏移」归零（与预览线保持一致）
-            val (topLbl, botLbl) = if (hasIme && imeResetBottomOffset) 0 to 0
-            else (boundGuideOverride?.get(0) ?: boundOffsetTop) to (boundGuideOverride?.get(1) ?: boundOffsetBottom)
+            // 备注按真实屏幕旋转与线一同旋转：每条屏幕边线携带「实际作用到它的物理偏移」名（顶部/底部/左部/右部），
+            // 与 rotatedBoundOffsets 同源，保证横屏下“改上偏移→移动的那条线备注就是物理顶部偏移（落在屏幕左/右）”，
+            // 不再出现“改上偏移却挪动一条被错标成左部的线”。
             val o = boundGuideOverride
-            val base = listOf(
-                "左部偏移 ${(o?.get(2) ?: boundOffsetLeft).toInt()}",
-                "右部偏移 ${(o?.get(3) ?: boundOffsetRight).toInt()}",
-                "顶部偏移 ${topLbl.toInt()}",
-                "底部偏移 ${botLbl.toInt()}"
-            )
+            val imeZero = hasIme && imeResetBottomOffset
+            // 物理四元组 [T,B,L,R]，IME 重置时物理上/下归零（与预览线一致）；旋转后自然落到对应屏幕边。
+            val tV = if (imeZero) 0f else (o?.get(0) ?: boundOffsetTop)
+            val bV = if (imeZero) 0f else (o?.get(1) ?: boundOffsetBottom)
+            val lV = o?.get(2) ?: boundOffsetLeft
+            val rV = o?.get(3) ?: boundOffsetRight
+            val rob = rotatedBoundOffsets(floatArrayOf(tV, bV, lV, rV))
+            // 边顺序 [左,右,上,下] 对应的物理名（随 cachedRotation）；值与上面画线 rob 完全一致。
+            // 边顺序 [左,右,上,下] 对应的物理名，须与上面修正后的 rotatedBoundOffsets 一致：
+            //   ROT_90：屏左=物上、屏右=物下、屏上=物右、屏下=物左
+            //   ROT_270：屏左=物下、屏右=物上、屏上=物左、屏下=物右
+            val names = when (cachedRotation) {
+                Surface.ROTATION_90 -> listOf("顶部偏移", "底部偏移", "右部偏移", "左部偏移")
+                Surface.ROTATION_180 -> listOf("右部偏移", "左部偏移", "底部偏移", "顶部偏移")
+                Surface.ROTATION_270 -> listOf("底部偏移", "顶部偏移", "左部偏移", "右部偏移")
+                else -> listOf("左部偏移", "右部偏移", "顶部偏移", "底部偏移")
+            }
+            // 左=rob[3]、右=rob[1]、上=rob[0]、下=rob[2]（rotatedBoundOffsets 返回 [屏Top,屏Right,屏Bottom,屏Left]）
+            val vals = listOf(rob[3], rob[1], rob[0], rob[2])
+            val base = names.zip(vals) { n, v -> "$n ${v.toInt()}" }
             if (hasSnap) {
                 val d = (snapGuideOverride ?: petView?.physics?.snapDist ?: DEFAULT_SNAP_DIST).toInt()
                 val snapLabel = "吸附距离 $d"
@@ -1596,29 +2148,9 @@ class PetService : Service() {
         } else {
             guideLineView?.setKeyboardPreview(false, 0f)
         }
-        // 仅置可见标志：偏移线已并入 stageView 绘制，无独立窗口需要添加。
+        // 偏移线/边框已交由独立 guide 窗绘制，置可见后由 syncGuideWindow 挂载窗口（显式尺寸、按需）。
         guideLineView?.visibility = android.view.View.VISIBLE
-    }
-
-    /**
-     * 把一条边界偏移线裁到宠物浮窗矩形范围内，得到该宠物脚下的那段吸附判定线。
-     * - 水平线（贴底/贴顶）：x 限制在 [winLeft, winLeft+winW]
-     * - 竖线（贴左/贴右）：y 限制在 [winTop, winTop+winH]
-     * 无交集（宠物完全在该边之外）时返回 null，由调用方跳过。
-     */
-    private fun clipSnapSeg(
-        line: GuideLineView.Line,
-        winLeft: Float, winTop: Float, winW: Float, winH: Float
-    ): PetStageView.SnapSeg? {
-        return if (line.x1 == line.x2) {
-            val y1 = maxOf(line.y1, winTop)
-            val y2 = minOf(line.y2, winTop + winH)
-            if (y2 <= y1) null else PetStageView.SnapSeg(line.x1, y1, line.x1, y2)
-        } else {
-            val x1 = maxOf(line.x1, winLeft)
-            val x2 = minOf(line.x2, winLeft + winW)
-            if (x2 <= x1) null else PetStageView.SnapSeg(x1, line.y1, x2, line.y1)
-        }
+        syncGuideWindow()
     }
 
     /** 四条边界偏移线：宠物可贴合的实际屏幕边缘。 */
@@ -1640,54 +2172,25 @@ class PetService : Service() {
      * 点击穿透：开启后给浮窗窗口加 FLAG_NOT_TOUCHABLE，使其完全不接收触摸事件，
      * 点击/拖动/长按均穿透到下层应用；关闭则移除该 flag 恢复正常交互。
      */
-    private fun applyClickThrough(enabled: Boolean) {
-        // 点击穿透作用于所有宠物实例窗口。
-        for (inst in pets) {
-            val lp = inst.layoutParams
-            val touchable = (lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) == 0
-            if (enabled == !touchable) continue  // 状态未变，避免无谓 updateViewLayout
-            if (enabled) {
-                lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-            } else {
-                lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-            }
-            try { windowManager.updateViewLayout(inst.view, lp) } catch (_: Exception) {}
-        }
-    }
-
     /**
      * 获取浮窗可活动范围（物理屏幕像素坐标，覆盖状态栏/导航栏）。
-     * 需求：图片边缘紧贴手机真实显示边缘（最大边缘），忽略状态栏/导航栏/刘海。
-     * 做法：以 displayMetrics 的真实物理分辨率作为基准，再用 WindowInsets 只取
-     * 状态栏（顶部）与导航栏（底部）的占用高度，分别将活动区向上/向下扩展，
-     * 使浮窗在 FLAG_LAYOUT_NO_LIMITS 下可越过系统栏、真正贴到物理屏幕最顶/最底。
-     * 注意：左右无横向系统栏，保持 0..W，不可扩展，否则会超出屏幕。
+     * 需求：图片边缘紧贴手机真实显示边缘（最大边缘），忽略状态栏/导航栏/刘海，且坐标不受状态栏显隐影响。
+     * 做法：用 maximumWindowMetrics.bounds 取真实物理屏尺寸（官方推荐的 Display.getRealSize 替代），
+     * 即完整物理屏（含状态栏/导航栏），原点即物理 (0,0)、不受状态栏弹起影响。
+     * 配合各浮窗的 FLAG_LAYOUT_IN_SCREEN，窗口落点原点同样对齐物理 (0,0)，二者坐标 1:1 一致，
+     * 故活动范围 = 真实显示尺寸，无需任何 inset 平移。左右无横向系统栏，保持 0..W。
      */
     internal fun getScreenBounds(): android.graphics.Rect {
-        val dm = resources.displayMetrics
-        val phW = dm.widthPixels
-        val phH = dm.heightPixels
-        // 仅取顶部状态栏高度与底部导航栏高度（左右用 0，不扩展）
-        var topInset = 0
-        var bottomInset = 0
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            val metrics = windowManager.currentWindowMetrics
-            val insets = metrics.getWindowInsets()
-                .getInsetsIgnoringVisibility(
-                    android.view.WindowInsets.Type.statusBars() or
-                    android.view.WindowInsets.Type.navigationBars()
-                )
-            topInset = insets.top
-            bottomInset = insets.bottom
+        // 各浮窗已加 FLAG_LAYOUT_IN_SCREEN + FLAG_LAYOUT_NO_LIMITS：窗口覆盖完整物理屏、原点即物理 (0,0)，
+        // 故活动范围 = maximumWindowMetrics.bounds（真实显示尺寸，含状态栏/导航栏），无需 inset 平移或状态栏补偿。
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val b = windowManager.maximumWindowMetrics.bounds
+            android.graphics.Rect(b.left, b.top, b.right, b.bottom)
+        } else {
+            @Suppress("DEPRECATION")
+            val dm = resources.displayMetrics
+            android.graphics.Rect(0, 0, dm.widthPixels, dm.heightPixels)
         }
-        // 浮窗坐标系原点相对物理屏幕下移了 statusBars.top，故底部需扣除该下移量，
-        // 再下扩导航栏高度以覆盖导航栏、贴到物理最底。左右不变。
-        return android.graphics.Rect(
-            0,
-            -topInset,
-            phW,
-            phH - topInset + bottomInset
-        )
     }
 
     /**
@@ -1908,11 +2411,12 @@ class PetService : Service() {
         mainHandler.postDelayed(frameRunnable, FRAME_DELAY)
     }
 
-    private fun showMenu() {
+    private fun showMenu(target: PetView) {
         // 长按菜单：以 TYPE_APPLICATION_OVERLAY 浮窗承载（见 PetMenu），
         // 悬浮在其它应用之上，不进入 app task、不抢前台；仅“设置”项才进入 app。
+        // target = 触发长按的宠物，菜单动作只作用于该宠物（多数量下不再错误落到主实例 index 0）。
         petMenu?.dismiss()
-        petMenu = PetMenu(this, petView).apply { show() }
+        petMenu = PetMenu(this, target).apply { show() }
     }
 
     private fun createNotificationChannel() {
@@ -1951,32 +2455,39 @@ class PetService : Service() {
     /** 供浮窗菜单读取当前配置（初始化开关状态） */
     fun currentConfig(): PetConfigData = config.getBlocking()
 
-    /** 处理菜单/广播/通知下发的动作（供浮窗菜单与 onStartCommand 共用） */
-    fun performAction(action: String?) {
+    /**
+     * 处理菜单/广播/通知下发的动作（供浮窗菜单与 onStartCommand 共用）。
+     * @param target 具体执行动作的宠物（长按菜单打开于某只宠物时传入该 PetView，动作只作用于它）；
+     *               null 表示广播/通知等无明确目标的全局动作，回落到主实例 petView（index 0）。
+     */
+    fun performAction(action: String?, target: PetView? = null) {
         // 退出(EXIT)必须最先处理：不依赖 petView 是否已初始化，否则一旦 petView 未就绪，
         // 下面的吸附态判断会抛异常，导致 exitApp() 永不执行、退出静默失败。
         if (action == MenuActivity.ACTION_EXIT) {
             exitApp()
             return
         }
+        // tv = 实际执行动作的目标宠物（菜单动作取触发菜单的宠物，广播回落主实例）。
+        val tv = target ?: petView
         // 吸附态：菜单里的动作切换一律忽略（探头常驻，仅用户手动拉出/召回才退出）。
         // 召回(RECALL)是用户主动退出，允许；隐藏(HIDE)只改可见性、不动吸附态，允许。
-        if (::petView.isInitialized && petView.physics.isSnapped &&
+        // 用目标宠物自身的吸附态判定（多数量下每只独立吸附），而非写死主实例。
+        if (::petView.isInitialized && tv.physics.isSnapped &&
             action != MenuActivity.ACTION_RECALL && action != MenuActivity.ACTION_HIDE
         ) return
         when (action) {
-            MenuActivity.ACTION_PAT -> petView.playOnce(ImageModeManager.PAT_HEAD)
+            MenuActivity.ACTION_PAT -> tv.playOnce(ImageModeManager.PAT_HEAD)
             MenuActivity.ACTION_JUMP -> {
-                petView.playOnce(ImageModeManager.JUMP_DOWN)
+                tv.playOnce(ImageModeManager.JUMP_DOWN)
                 // 给一个向上的初速度，模拟跳起（配合底部重力落回）
-                petView.physics.vx = 0f
-                petView.physics.vy = -900f
+                tv.physics.vx = 0f
+                tv.physics.vy = -900f
             }
             MenuActivity.ACTION_ROLL -> {
-                petView.playOnce(ImageModeManager.ROLL)
+                tv.playOnce(ImageModeManager.ROLL)
                 // 翻滚带水平位移
-                petView.physics.vx = 300f
-                petView.physics.vy = 0f
+                tv.physics.vx = 300f
+                tv.physics.vy = 0f
             }
             MenuActivity.ACTION_PULL_FISH -> {
                 // 扒鱼：位移 mode，但位移非循环、仅一次（单循环）。
@@ -1986,25 +2497,26 @@ class PetService : Service() {
                 // 翻转(flipX=true)则朝左；位移方向随 flipX 反向、锚点对称翻转（见 PetView）。
                 // 扒鱼结束后保留 flipX，使后续 LIE/SIT 也沿用该朝向，方向连贯。
                 // 撞墙由 PetView 累加时 coerceIn 边界处理（夹边即停，不穿透/反弹）。
-                petView.flipX = Random.nextBoolean()
-                petView.playOnce(ImageModeManager.PULL_FISH)
+                tv.flipX = Random.nextBoolean()
+                tv.playOnce(ImageModeManager.PULL_FISH)
             }
-            MenuActivity.ACTION_WHITE -> petView.playOnce(ImageModeManager.WALK_WHITE)
-            MenuActivity.ACTION_PUFFED -> petView.playOnce(ImageModeManager.SIT_PUFFED)
-            MenuActivity.ACTION_SIT_CLAM -> petView.playOnce(ImageModeManager.SIT_CLAM)
-            MenuActivity.ACTION_SHAKE_HEAD -> petView.playOnce(ImageModeManager.SHAKE_HEAD)
+            MenuActivity.ACTION_WHITE -> tv.playOnce(ImageModeManager.WALK_WHITE)
+            MenuActivity.ACTION_PUFFED -> tv.playOnce(ImageModeManager.SIT_PUFFED)
+            MenuActivity.ACTION_SIT_CLAM -> tv.playOnce(ImageModeManager.SIT_CLAM)
+            MenuActivity.ACTION_SHAKE_HEAD -> tv.playOnce(ImageModeManager.SHAKE_HEAD)
             // WALK / WRIGGLE 是常驻循环 + 行走位移模式（walkSpeed>0），
             // 必须用 setMode（常驻）激活，不能用 playOnce：
             // playOnce 会把模式放进 forcedSeq，而 isWalk() 要求 forcedSeq==null，
             // 导致行走分支不执行 → 原地踏步无位移。setMode 后 forcedSeq==null，位移生效。
-            MenuActivity.ACTION_WALK -> petView.setMode(ImageModeManager.WALK)
-            MenuActivity.ACTION_WRIGGLE -> petView.setMode(ImageModeManager.WRIGGLE)
-            MenuActivity.ACTION_LIE -> petView.playOnce(ImageModeManager.LIE)
+            MenuActivity.ACTION_WALK -> tv.setMode(ImageModeManager.WALK)
+            MenuActivity.ACTION_WRIGGLE -> tv.setMode(ImageModeManager.WRIGGLE)
+            MenuActivity.ACTION_LIE -> tv.playOnce(ImageModeManager.LIE)
             MenuActivity.ACTION_PROBE_HEAD -> {
-                petView.playOnce(ImageModeManager.PROBE_HEAD)
-                // 摸头：碎碎念显示“喵喵喵/~o( =∩ω∩= )m/喵”三选一，1-3s 后继续轮播池
+                tv.playOnce(ImageModeManager.PROBE_HEAD)
+                // 摸头：碎碎念显示“喵喵喵/~o( =∩ω∩= )m/喵”三选一，1-3s 后继续轮播池；
+                // 显示在该目标宠物自己的碎碎念浮窗（多数量下不再串到主实例）。
                 if (thinkingEnabled) {
-                    trayMsgManager?.showMomentary(
+                    (pets.find { it.view === tv }?.petMsg ?: trayMsgManager)?.showMomentary(
                         listOf("喵喵喵", "~o( =∩ω∩= )m", "喵"), 1000L, 3000L
                     )
                 }
@@ -2078,16 +2590,26 @@ class PetService : Service() {
         try { petMenu?.dismiss() } catch (_: Exception) {}
         // 注销体感重力传感器监听，避免泄漏
         try { sensorManager?.unregisterListener(tiltListener) } catch (_: Exception) {}
-        // 移除所有宠物实例浮窗与各自碎碎念浮窗
+        // 注销屏幕旋转监听（DisplayManager），避免泄漏
+        try {
+            val dm = getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+            if (displayListener != null) dm?.unregisterDisplayListener(displayListener!!)
+        } catch (_: Exception) {}
+        displayListener = null
+        // 移除所有宠物实例：控制窗 + 各自显示窗 + 碎碎念浮窗
         for (inst in pets) {
+            try { if (inst.displayAdded && inst.displayView != null) windowManager.removeView(inst.displayView) } catch (_: Exception) {}
             try { windowManager.removeView(inst.view) } catch (_: Exception) {}
             try { inst.petMsg.destroy() } catch (_: Exception) {}
         }
         pets.clear()
-        try { if (stageView != null) windowManager.removeView(stageView) } catch (_: Exception) {}
-        stageView = null
+        // 移除独立 guide 辅助线窗（若有）
+        try { if (guideAdded && guideLineView != null) windowManager.removeView(guideLineView) } catch (_: Exception) {}
+        guideAdded = false
         try { if (debugView != null) windowManager.removeView(debugView) } catch (_: Exception) {}
         guideLineView = null
+        // 清除所有定格显示层（回收 Bitmap，防泄漏）
+        clearAllFreeze()
         trayMsgManager = null
         instance = null
         try { scope.cancel() } catch (_: Exception) {}

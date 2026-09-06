@@ -67,9 +67,22 @@ class TrayMsgManager(private val context: Context) {
             TrayMsgMeta(text = "(=°Д°=)", base_ms = 1000, random_ms = 3500),
             TrayMsgMeta(text = "(◦`~´◦)", base_ms = 1000, random_ms = 3500),
             TrayMsgMeta(text = "(=^‥^=)", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "(⋟﹏⋞)", base_ms = 1000, random_ms = 3500)
+            TrayMsgMeta(text = "(⋟﹏⋞)", base_ms = 1000, random_ms = 3500),
+
+            TrayMsgMeta(text = "人有五名，代价有三，你是其中之一", base_ms = 1500, random_ms = 3500),
+            TrayMsgMeta(text = "人有五名，代价有三，你不是其中之一", base_ms = 1500, random_ms = 3500),
+            TrayMsgMeta(text = "此番美景，我虽求而不得，却能，邀诸位共赏", base_ms = 1500, random_ms = 3500),
+            TrayMsgMeta(text = "彼岸……葬送！", base_ms = 1500, random_ms = 3500),
+            TrayMsgMeta(text = "「刃」的存在，唯有挥剑的刹那，才能消失片刻", base_ms = 1500, random_ms = 3500),
+            TrayMsgMeta(text = "千冶成刃", base_ms = 1500, random_ms = 3500),
+            TrayMsgMeta(text = "芝麻酥……不胖……不胖……", base_ms = 1500, random_ms = 3500),
+            TrayMsgMeta(text = "我会一直看着你", base_ms = 1500, random_ms = 3500),
+            TrayMsgMeta(text = "我有驾驶证", base_ms = 1500, random_ms = 3500),
 
         )
+
+        /** 随机取一条碎碎念文本（供定格浮窗的备注默认内容使用）。 */
+        fun randomMutter(): String = MSG_POOL[Random.nextInt(MSG_POOL.size)].text
 
         // 文字默认样式（未读取到配置时的兜底值，实际由 applyStyle() 覆盖）
         private const val DEFAULT_TEXT_SIZE_DP = 10f

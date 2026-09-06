@@ -75,8 +75,6 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     // 样式全部复用设置页已有 style / drawable，代码里不再手抄任何样式数值。
     protected fun render() {
         binding.container.removeAllViews()
-        // 开关阈值项为 live 配置，直接读实时 PetConfig 显示（不依赖 pet_bounds 的 default）
-        val liveCfg = runBlocking { petConfig.configFlow.first() }
         val order = current.order.ifEmpty {
             // 兜底：无 order 时按 group 首次出现顺序
             current.sliders.map { it.key } + current.duals.map { it.key } + current.switches.map { it.key }
@@ -136,7 +134,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     }
                     switchMap[key]?.value?.group == g -> {
                         val (idx, sw) = switchMap.getValue(key)
-                        card.addView(switchItem(sw, idx, liveCfg))
+                        card.addView(switchItem(sw, idx))
                     }
                     colorMap[key]?.value?.group == g -> {
                         val (idx, c) = colorMap.getValue(key)
@@ -279,15 +277,18 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         return v
     }
 
-    // 开关阈值项为 live 配置：显示直接读 PetConfig，切换直接写 PetConfig，
-    // 不再经由 pet_bounds 的 default↔live 回灌（那是「键盘适应」等模块默认/重置失效的根因）。
-    private fun switchItem(sw: SwitchBound, index: Int, liveCfg: PetConfigData): View {
+    // 开关阈值项 = 用户在阈值页设置的【默认值】(存 pet_bounds.default)：
+    // 显示读 default；切换时仅写 default 并经 commitOne 持久化，不写当前值(live)。
+    // 默认值只在用户手动点「恢复用户默认」时经 resetFromBounds 写回当前值。
+    private fun switchItem(sw: SwitchBound, index: Int): View {
         val v = layoutInflater.inflate(R.layout.item_switch_bound, binding.container, false)
         v.findViewById<TextView>(R.id.tv_label).text = sw.label
         val swView = v.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.sw_value)
-        swView.isChecked = liveSwitchFromConfig(sw.key, liveCfg) ?: sw.default
+        swView.isChecked = sw.default
         swView.setOnCheckedChangeListener { _, isChecked ->
-            runBlocking { petConfig.update { setLiveSwitch(it, sw.key, isChecked) } }
+            val cur = current.switches[index]
+            current = current.copy(switches = current.switches.toMutableList().also { it[index] = cur.copy(default = isChecked) })
+            commitOne() // 仅存阈值默认(pet_bounds)，不改当前值(live)；只在「恢复用户默认」时才写回
         }
         return v
     }
@@ -424,7 +425,6 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     "gravity" -> nc.copy(gravity = nc.gravity.coerceIn(s.from, s.to))
                     "maxSpeed" -> nc.copy(maxSpeed = nc.maxSpeed.coerceIn(s.from, s.to))
                     "rebound" -> nc.copy(reboundRatio = nc.reboundRatio.coerceIn(s.from, s.to))
-                    "petCount" -> nc.copy(petCount = nc.petCount.coerceIn(s.from.toInt(), s.to.toInt()))
                     "snapThreshold" -> nc.copy(snapThreshold = nc.snapThreshold.coerceIn(s.from, s.to))
                     "offsetTop" -> nc.copy(offsetTop = nc.offsetTop.coerceIn(s.from, s.to))
                     "offsetBottom" -> nc.copy(offsetBottom = nc.offsetBottom.coerceIn(s.from, s.to))
@@ -462,47 +462,6 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     }
 
     /**
-     * 阈值页开关阈值项对应的实时 PetConfig 布尔值。
-     * 用于打开阈值页时把开关初始态对齐 live 配置，避免与设置页双存储(pet_bounds / pet_config)脱节：
-     * 否则 pet_bounds 的「默认」会在提交阈值时把用户在设置页的选择覆盖掉（即「默认值不好使」的复发根因）。
-     * 非简单布尔开关（如随机项位标志）回退到 null，交由调用方保留 pet_bounds 默认。
-     */
-    private fun liveSwitchFromConfig(key: String, cfg: PetConfigData): Boolean? = when (key) {
-        "snapEnabled" -> cfg.snapEnabled
-        "snapTop" -> cfg.snapTop
-        "snapBottom" -> cfg.snapBottom
-        "snapLeft" -> cfg.snapLeft
-        "snapRight" -> cfg.snapRight
-        "showSnapLine" -> cfg.showSnapLine
-        "visible" -> cfg.visible
-        "clickThrough" -> cfg.clickThrough
-        "gravityEnabled" -> cfg.gravityEnabled
-        "bounceVibrate" -> cfg.bounceVibrate
-        "tiltGravity" -> cfg.tiltGravity
-        "gravityTop" -> cfg.gravityTop
-        "gravityBottom" -> cfg.gravityBottom
-        "gravityLeft" -> cfg.gravityLeft
-        "gravityRight" -> cfg.gravityRight
-        "reboundEnabled" -> cfg.reboundEnabled
-        "reboundTop" -> cfg.reboundTop
-        "reboundBottom" -> cfg.reboundBottom
-        "reboundLeft" -> cfg.reboundLeft
-        "reboundRight" -> cfg.reboundRight
-        "imeAdapt" -> cfg.imeAdapt
-        "imeResetBottomOffset" -> cfg.imeResetBottomOffset
-        "imeHide" -> cfg.imeHide
-        "thinkingEnabled" -> cfg.thinkingEnabled
-        "thinkingFlashIn" -> cfg.thinkingFlashIn
-        "thinkingFlashOut" -> cfg.thinkingFlashOut
-        "thinkingBgEnabled" -> cfg.thinkingBgEnabled
-        "randomEnabled" -> cfg.randomEnabled
-        else -> {
-            val flag = AppBounds.RANDOM_ITEM_FLAG_MAP[key]
-            flag?.let { cfg.randomItems and it != 0 }
-        }
-    }
-
-    /**
      * 阈值页开关阈值项对应的「写入 PetConfig」反向映射，与 [liveSwitchFromConfig] 严格对称。
      * 开关切换/恢复出厂时直接写 live（pet_config），不再经由 pet_bounds 的 default 回灌。
      */
@@ -512,7 +471,6 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         "snapBottom" -> c.copy(snapBottom = value)
         "snapLeft" -> c.copy(snapLeft = value)
         "snapRight" -> c.copy(snapRight = value)
-        "showSnapLine" -> c.copy(showSnapLine = value)
         "visible" -> c.copy(visible = value)
         "clickThrough" -> c.copy(clickThrough = value)
         "gravityEnabled" -> c.copy(gravityEnabled = value)

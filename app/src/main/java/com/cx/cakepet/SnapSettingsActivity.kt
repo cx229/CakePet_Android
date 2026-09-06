@@ -34,7 +34,6 @@ class SnapSettingsActivity : AppCompatActivity() {
 
     // 视图/开关提升为字段，供 refreshUI / onResume 复用
     private lateinit var swSnapEnabled: Switch
-    private lateinit var swShowSnapLine: Switch
     private lateinit var swStop: Switch
     private lateinit var swSbottom: Switch
     private lateinit var swSleft: Switch
@@ -72,7 +71,6 @@ class SnapSettingsActivity : AppCompatActivity() {
         snapBtnMore.setOnClickListener { snapMoreMenu.show() }
 
         swSnapEnabled = findViewById(R.id.sw_snap_enabled)
-        swShowSnapLine = findViewById(R.id.sw_show_snap_line)
         swStop = findViewById(R.id.sw_stop)
         swSbottom = findViewById(R.id.sw_sbottom)
         swSleft = findViewById(R.id.sw_sleft)
@@ -87,12 +85,6 @@ class SnapSettingsActivity : AppCompatActivity() {
             if (b && !snapEnabledWasOn) showSnapGuideDialog()
             snapEnabledWasOn = b
             lifecycleScope.launch { config.update { it.copy(snapEnabled = b) } }
-        }
-
-        // 显示吸附线开关：控制吸附态时地面灰色细线是否显示，默认开
-        swShowSnapLine.setOnCheckedChangeListener { _, b ->
-            if (suppressSnapPreview) return@setOnCheckedChangeListener
-            lifecycleScope.launch { config.update { it.copy(showSnapLine = b) } }
         }
 
         // 四边吸附开关：各自独立，点击时短暂预览对应边的吸附探头
@@ -154,7 +146,6 @@ class SnapSettingsActivity : AppCompatActivity() {
         suppressSnapPreview = true
         suppressEnabled = true
         swSnapEnabled.isChecked = c.snapEnabled
-        swShowSnapLine.isChecked = c.showSnapLine
         swStop.isChecked = c.snapTop
         swSbottom.isChecked = c.snapBottom
         swSleft.isChecked = c.snapLeft

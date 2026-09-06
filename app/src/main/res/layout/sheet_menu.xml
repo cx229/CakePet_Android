@@ -5,11 +5,19 @@
     android:orientation="vertical"
     android:padding="12dp">
 
-    <TextView android:id="@+id/menu_pat" android:layout_width="match_parent"
-        android:layout_height="56dp" android:gravity="center_vertical"
-        android:layout_margin="4dp" android:paddingStart="12dp"
-        android:text="摸摸头 🐾" android:textSize="17dp" android:textColor="@color/cp_title"
-        android:background="@drawable/cell_bg"/>
+    <LinearLayout android:layout_width="match_parent"
+        android:layout_height="56dp" android:orientation="horizontal">
+        <TextView android:id="@+id/menu_pat" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center" android:paddingStart="12dp"
+            android:text="摸摸头 🐾" android:textSize="17dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/menu_interact" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center"
+            android:text="交互 ›" android:textSize="17dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+    </LinearLayout>
 
     <TextView android:id="@+id/menu_actions" android:layout_width="match_parent"
         android:layout_height="56dp" android:gravity="center_vertical"
@@ -58,8 +66,8 @@
                 android:thumbTint="@color/switch_black_selector"
                 android:trackTint="@color/switch_black_selector"
                 android:clickable="false" android:focusable="false"/>
+                </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
 
     <LinearLayout android:layout_width="match_parent"
         android:layout_height="56dp" android:orientation="horizontal"

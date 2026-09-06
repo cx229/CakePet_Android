@@ -50,6 +50,10 @@ class AboutActivity : AppCompatActivity() {
         val swUseNewSprite = findViewById<Switch>(R.id.sw_use_new_sprite)
         val swImageBorder = findViewById<Switch>(R.id.sw_image_border)
         val swControlBorder = findViewById<Switch>(R.id.sw_control_border)
+        val swFreezeBorder = findViewById<Switch>(R.id.sw_freeze_border)
+        val swForceOpaque = findViewById<Switch>(R.id.sw_force_opaque)
+        val swHideControlLayer = findViewById<Switch>(R.id.sw_hide_control_layer)
+        val swHideStage = findViewById<Switch>(R.id.sw_hide_stage)
         val swSingleTrayMsg = findViewById<Switch>(R.id.sw_single_tray_msg)
         val sbPetCount = findViewById<SeekBar>(R.id.sb_pet_count)
         val tvPetCount = findViewById<TextView>(R.id.tv_pet_count)
@@ -93,8 +97,12 @@ class AboutActivity : AppCompatActivity() {
             swUseNewSprite.isChecked = c.useNewSprite
             swImageBorder.isChecked = c.showImageBorder
             swControlBorder.isChecked = c.showControlBorder
+            swFreezeBorder.isChecked = c.freezeBorderShow
+            swForceOpaque.isChecked = c.forceOpaque
+            swHideControlLayer.isChecked = c.hideControlLayer
+            swHideStage.isChecked = c.hideStage
             swSingleTrayMsg.isChecked = c.singleTrayMsg
-            sbPetCount.progress = c.petCount.coerceIn(1, 10)
+            sbPetCount.progress = c.petCount.coerceIn(1, 20)
             tvPetCount.text = c.petCount.toString()
         }
         swDebug.setOnCheckedChangeListener { _, b ->
@@ -148,6 +156,21 @@ class AboutActivity : AppCompatActivity() {
         swControlBorder.setOnCheckedChangeListener { _, b ->
             lifecycleScope.launch { config.update { it.copy(showControlBorder = b) } }
         }
+        // 显示定格边框：开启后在每块定格显示层叠加红色真实窗口边框（调试用）
+        swFreezeBorder.setOnCheckedChangeListener { _, b ->
+            lifecycleScope.launch { config.update { it.copy(freezeBorderShow = b) } }
+        }
+        // 强制显示无透明（默认关）：开启让显示窗去掉 FLAG_NOT_TOUCHABLE，避开系统对透明悬浮窗的半透明钳制，宠物 100% 不透明；
+        // 与点击穿透/隐藏控制层互斥（二者开启时显示窗恢复 NOT_TOUCHABLE，见 PetService.applyDisplayTouchFlags）。
+        swForceOpaque.setOnCheckedChangeListener { _, b ->
+            lifecycleScope.launch { config.update { it.copy(forceOpaque = b) } }
+        }
+        swHideControlLayer.setOnCheckedChangeListener { _, b ->
+            lifecycleScope.launch { config.update { it.copy(hideControlLayer = b) } }
+        }
+        swHideStage.setOnCheckedChangeListener { _, b ->
+            lifecycleScope.launch { config.update { it.copy(hideStage = b) } }
+        }
         // 仅单个碎碎念：开启=仅主实例显示；关闭=每个实例各自显示（默认开）。
         swSingleTrayMsg.setOnCheckedChangeListener { _, b ->
             lifecycleScope.launch { config.update { it.copy(singleTrayMsg = b) } }
@@ -160,7 +183,7 @@ class AboutActivity : AppCompatActivity() {
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                val n = seekBar?.progress?.coerceIn(1, 10) ?: 1
+                val n = seekBar?.progress?.coerceIn(1, 20) ?: 1
                 tvPetCount.text = n.toString()
                 lifecycleScope.launch { config.update { it.copy(petCount = n) } }
             }
