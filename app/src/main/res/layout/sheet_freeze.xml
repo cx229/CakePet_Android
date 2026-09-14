@@ -31,7 +31,7 @@
         <TextView android:id="@+id/freeze_clear_all" android:layout_width="0dp"
             android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
             android:layout_marginStart="4dp"
-            android:text="定格-清除所有" android:textSize="17dp" android:textColor="@color/cp_title"
+            android:text="定格-清空" android:textSize="17dp" android:textColor="@color/cp_title"
             android:background="@drawable/cell_bg"/>
     </LinearLayout>
 

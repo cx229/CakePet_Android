@@ -490,6 +490,9 @@ class PetView @JvmOverloads constructor(
     /** 吸附态渲染水平镜像，与 onDraw 中应用的 snapFlipX 一致。 */
     fun getSnapFlipX(): Boolean = snapFlipX
 
+    /** 设置吸附态水平镜像（投食等一次性动作需按轨迹设定吸附态朝向）。 */
+    fun setSnapFlipX(b: Boolean) { snapFlipX = b }
+
     /**
      * 由物理循环每帧调用（~16ms，ms 级）。
      * 职责严格分离：
@@ -759,14 +762,16 @@ class PetView @JvmOverloads constructor(
             physics.isSnapped -> {
                 // 吸附态：常驻探头（脚朝向被贴附的边），循环播放、忽略重力。
                 // 抢占一次性动作（如摸头），确保吸附探头不被打断；
-                // 但允许“吸附探头摸摸头(SNAP_PAT_HEAD)”一次性动作完整播放，结束后由其 nextMode 切回 SNAP_HEAD。
-                if (imageManager.isPlayingForced() && imageManager.getMode() != ImageModeManager.SNAP_PAT_HEAD) {
+                // 但允许“吸附探头摸摸头(SNAP_PAT_HEAD)”与“吸附投食(SNAP_FEED_FISH)”一次性动作完整播放，
+                // 结束后分别由其 nextMode 切回 SNAP_HEAD。
+                val snapForcedAllow = setOf(ImageModeManager.SNAP_PAT_HEAD, ImageModeManager.SNAP_FEED_FISH)
+                if (imageManager.isPlayingForced() && imageManager.getMode() !in snapForcedAllow) {
                     imageManager.cancelForced()
                 }
                 // 仅本变体叠加“朝向贴附边”的旋转，不修改全局 gravityDir（不影响其他状态/方向）。
                 snapRotation = dirToRotation(physics.snapSide)
                 val curMode = imageManager.getMode()
-                if (curMode != ImageModeManager.SNAP_HEAD && curMode != ImageModeManager.SNAP_PAT_HEAD) {
+                if (curMode !in snapForcedAllow && curMode != ImageModeManager.SNAP_HEAD) {
                     // 刚进入吸附的这一帧：振动一次提示（getMode 已为 SNAP_HEAD 后不再重复触发）。
                     imageManager.setMode(ImageModeManager.SNAP_HEAD)
                     // 反向镜像随机：吸附探头脚朝向固定（snapRotation），但左右/上下随机翻转，
@@ -1170,6 +1175,9 @@ class PetView @JvmOverloads constructor(
 
     /** 当前动画模式名（供调试显示） */
     fun currentModeName(): String = imageManager.getMode()
+
+    /** 当前模式是否处于待机动作清单（供投喂判断是否切"坐姿投食"）。 */
+    fun isStandbyMode(): Boolean = imageManager.isStandbyMode()
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val (w, h) = getBitmapSize()

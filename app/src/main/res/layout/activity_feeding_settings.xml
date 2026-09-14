@@ -1,0 +1,372 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/cp_bg">
+
+    <!-- 状态栏占位条：纯黑，高度由 Activity 按真实状态栏高度设置 -->
+    <View android:id="@+id/status_bar_spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/cp_status_bar" />
+
+    <!-- 标题栏：黑底 -->
+    <LinearLayout android:id="@+id/title_bar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/cp_bg">
+
+        <ImageView android:id="@+id/iv_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title"
+            android:padding="14dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="返回"/>
+
+        <TextView android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="吃吃吃"
+            android:textSize="20dp"
+            android:textStyle="bold"
+            android:textColor="@color/cp_title"/>
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+        <ImageView android:id="@+id/btn_more"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_more"
+            app:tint="@color/cp_title"
+            android:padding="12dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="更多"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true" android:focusable="true"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- ===== 模块：投喂 ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="投食" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="投食" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            style="@style/SettingsOptionNote"
+                            android:text="随机刷新掉落「支鱼」，可拖动给「酥」"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_feeding_enabled" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"/>
+                </LinearLayout>
+
+                <!-- 大小 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="14dp">
+                    <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="大小" style="@style/SettingsOptionTitle"/>
+                        <EditText android:id="@+id/fish_scale_value" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" android:background="@drawable/edit_bg"
+                            android:textSize="16dp" android:textColor="@color/cp_title"
+                            android:inputType="numberDecimal" android:imeOptions="actionDone"
+                            android:importantForAutofill="no" android:singleLine="true"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/fish_scale_bar"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:stepSize="0.01"
+                        app:thumbColor="@color/black"
+                        app:haloColor="@color/slider_halo"
+                        app:trackColorActive="@color/black"
+                        app:trackColorInactive="@color/slider_track_inactive"
+                        app:tickColorActive="@color/black"
+                        app:tickColorInactive="@color/slider_track_inactive"/>
+                </LinearLayout>
+
+                <!-- 透明度 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="14dp">
+                    <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="透明度" style="@style/SettingsOptionTitle"/>
+                        <EditText android:id="@+id/fish_alpha_value" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" android:background="@drawable/edit_bg"
+                            android:textSize="16dp" android:textColor="@color/cp_title"
+                            android:inputType="number" android:imeOptions="actionDone"
+                            android:importantForAutofill="no" android:singleLine="true"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/fish_alpha_bar"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:stepSize="1.0"
+                        app:thumbColor="@color/black"
+                        app:haloColor="@color/slider_halo"
+                        app:trackColorActive="@color/black"
+                        app:trackColorInactive="@color/slider_track_inactive"
+                        app:tickColorActive="@color/black"
+                        app:tickColorInactive="@color/slider_track_inactive"/>
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- ===== 模块：刷新范围 ===== -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">
+                <View android:layout_width="0dp" android:layout_height="1px"
+                    android:layout_weight="0.9" android:background="@color/cp_subtle"/>
+            </LinearLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="刷新范围" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <!-- 全屏范围 -->
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="全屏范围" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            style="@style/SettingsOptionNote"
+                            android:text="关闭后「支鱼」仅在「酥」活动范围内刷新"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_full_screen" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"/>
+                </LinearLayout>
+
+                <!-- 边缘刷新 -->
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="14dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="边缘刷新" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            style="@style/SettingsOptionNote"
+                            android:text="开启后「支鱼」刷新在边缘"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_edge_refresh" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块：投食变大 ===== -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">
+                <View android:layout_width="0dp" android:layout_height="1px"
+                    android:layout_weight="0.9" android:background="@color/cp_subtle"/>
+            </LinearLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="投食变大" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <!-- 投喂变大（总开关） -->
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="投喂变大" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            style="@style/SettingsOptionNote"
+                            android:text="投食成功后「酥」会变大"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_feed_grow" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"/>
+                </LinearLayout>
+
+                <!-- 变大系数 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="14dp">
+                    <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="变大系数" style="@style/SettingsOptionTitle"/>
+                        <EditText android:id="@+id/feed_grow_value" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" android:background="@drawable/edit_bg"
+                            android:textSize="16dp" android:textColor="@color/cp_title"
+                            android:inputType="numberDecimal" android:imeOptions="actionDone"
+                            android:importantForAutofill="no" android:singleLine="true"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/feed_grow_bar"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:stepSize="0.01"
+                        app:thumbColor="@color/black"
+                        app:haloColor="@color/slider_halo"
+                        app:trackColorActive="@color/black"
+                        app:trackColorInactive="@color/slider_track_inactive"
+                        app:tickColorActive="@color/black"
+                        app:tickColorInactive="@color/slider_track_inactive"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块：随机掉落 ===== -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">
+                <View android:layout_width="0dp" android:layout_height="1px"
+                    android:layout_weight="0.9" android:background="@color/cp_subtle"/>
+            </LinearLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="随机掉落" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <!-- 最大数量 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical">
+                    <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="最大数量" style="@style/SettingsOptionTitle"/>
+                        <EditText android:id="@+id/fish_max_value" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" android:background="@drawable/edit_bg"
+                            android:textSize="16dp" android:textColor="@color/cp_title"
+                            android:inputType="number" android:imeOptions="actionDone"
+                            android:importantForAutofill="no" android:singleLine="true"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/fish_max_bar"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:stepSize="1.0"
+                        app:thumbColor="@color/black"
+                        app:haloColor="@color/slider_halo"
+                        app:trackColorActive="@color/black"
+                        app:trackColorInactive="@color/slider_track_inactive"
+                        app:tickColorActive="@color/black"
+                        app:tickColorInactive="@color/slider_track_inactive"/>
+                </LinearLayout>
+
+                <!-- 频率（双滑块） -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:layout_marginTop="14dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="频率" style="@style/SettingsOptionTitle"/>
+                            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:orientation="horizontal" android:gravity="center">
+                                <EditText android:id="@+id/period_min_value" android:layout_width="0dp"
+                                    android:layout_height="wrap_content" android:layout_weight="1" android:text="5"
+                                    android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
+                                    android:imeOptions="actionDone" android:importantForAutofill="no"
+                                    android:singleLine="true" android:textColor="@color/cp_title"/>
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="-" android:textSize="14dp" android:layout_marginStart="2dp"
+                                    android:layout_marginEnd="2dp" android:textColor="@color/cp_title"/>
+                                <EditText android:id="@+id/period_max_value" android:layout_width="0dp"
+                                    android:layout_height="wrap_content" android:layout_weight="1" android:text="10"
+                                    android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
+                                    android:imeOptions="actionDone" android:importantForAutofill="no"
+                                    android:singleLine="true" android:textColor="@color/cp_title"/>
+                            </LinearLayout>
+                        </LinearLayout>
+                        <com.google.android.material.slider.RangeSlider
+                            android:id="@+id/period_range"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:stepSize="1.0"
+                            app:thumbColor="@color/black"
+                            app:haloColor="@color/slider_halo"
+                            app:trackColorActive="@color/black"
+                            app:trackColorInactive="@color/slider_track_inactive"
+                            app:tickColorActive="@color/black"
+                            app:tickColorInactive="@color/slider_track_inactive"/>
+                    </LinearLayout>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        style="@style/SettingsOptionNote"
+                        android:text="「支鱼」的刷新间隔（秒）"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块：自动过期 ===== -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">
+                <View android:layout_width="0dp" android:layout_height="1px"
+                    android:layout_weight="0.9" android:background="@color/cp_subtle"/>
+            </LinearLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="自动过期" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="自动过期" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            style="@style/SettingsOptionNote"
+                            android:text="一段时间后「支鱼」会消失"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_auto_expire" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"/>
+                </LinearLayout>
+
+                <!-- 过期时间 -->
+                <LinearLayout android:id="@+id/expire_block" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:orientation="horizontal"
+                    android:gravity="center_vertical" android:layout_marginTop="14dp">
+                    <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="过期时间" style="@style/SettingsOptionTitle"/>
+                        <EditText android:id="@+id/fish_expire_value" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" android:background="@drawable/edit_bg"
+                            android:textSize="16dp" android:textColor="@color/cp_title"
+                            android:inputType="number" android:imeOptions="actionDone"
+                            android:importantForAutofill="no" android:singleLine="true"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/fish_expire_bar"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:stepSize="1.0"
+                        app:thumbColor="@color/black"
+                        app:haloColor="@color/slider_halo"
+                        app:trackColorActive="@color/black"
+                        app:trackColorInactive="@color/slider_track_inactive"
+                        app:tickColorActive="@color/black"
+                        app:tickColorInactive="@color/slider_track_inactive"/>
+                </LinearLayout>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    style="@style/SettingsOptionNote"
+                    android:text="「支鱼」消失的时间（秒）"/>
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

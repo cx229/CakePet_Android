@@ -105,6 +105,37 @@
                 <Switch android:id="@+id/sw_use_new_sprite" android:layout_width="wrap_content"
                     android:layout_height="wrap_content"/>
             </LinearLayout>
+            <!-- ===== 静态边界（定格/食物绝对显示边界，仅钳竖向，范围 -200~400） ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="静态边界（定格/食物显示范围）" style="@style/SettingsOptionTitle"
+                android:layout_marginTop="24dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="静态顶部边界（默认120，范围-200~400）" style="@style/SettingsOptionSub"/>
+                <EditText android:id="@+id/tv_static_top" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="120"
+                    android:inputType="numberSigned" android:imeOptions="actionDone"
+                    android:minWidth="56dp" android:gravity="end"
+                    android:textSize="16dp" android:textStyle="bold" android:textColor="@color/cp_title"/>
+            </LinearLayout>
+            <SeekBar android:id="@+id/sb_static_top" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="4dp"
+                android:max="600" android:progress="320"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="静态底部边界（默认0，范围-200~400）" style="@style/SettingsOptionSub"/>
+                <EditText android:id="@+id/tv_static_bottom" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="0"
+                    android:inputType="numberSigned" android:imeOptions="actionDone"
+                    android:minWidth="56dp" android:gravity="end"
+                    android:textSize="16dp" android:textStyle="bold" android:textColor="@color/cp_title"/>
+            </LinearLayout>
+            <SeekBar android:id="@+id/sb_static_bottom" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="4dp"
+                android:max="600" android:progress="200"/>
             <!-- ===== 数量（实验性，多实例分身） ===== -->
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:gravity="center_vertical"
@@ -193,6 +224,14 @@
                 <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1" android:text="显示定格边框（红色真实窗口）" style="@style/SettingsOptionSub"/>
                 <Switch android:id="@+id/sw_freeze_border" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="显示投喂边框（红色真实窗口）" style="@style/SettingsOptionSub"/>
+                <Switch android:id="@+id/sw_feed_border" android:layout_width="wrap_content"
                     android:layout_height="wrap_content"/>
             </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"

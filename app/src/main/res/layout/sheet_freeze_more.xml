@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/freezemore_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- 左上角返回 -->
+    <TextView android:id="@+id/fm_back" android:layout_width="match_parent"
+        android:layout_height="48dp" android:gravity="center_vertical"
+        android:text="‹ 返回" android:textSize="15dp" android:textColor="@color/cp_sub"/>
+
+    <!-- 第一行：定格-咔嚓 -->
+    <TextView android:id="@+id/freeze_snap" android:layout_width="match_parent"
+        android:layout_height="56dp" android:gravity="center"
+        android:layout_margin="4dp"
+        android:text="定格-咔嚓" android:textSize="17dp" android:textColor="@color/cp_title"
+        android:background="@drawable/cell_bg"/>
+
+    <!-- 第二行：定格-归位 + 定格-清空（全部定格重置位置/清除所有） -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_margin="4dp">
+        <TextView android:id="@+id/freeze_reset" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
+            android:layout_marginEnd="4dp"
+            android:text="定格-归位" android:textSize="16dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/freeze_clear" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
+            android:layout_marginStart="4dp"
+            android:text="定格-清空" android:textSize="16dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+    </LinearLayout>
+
+    <!-- 第三行：定格-交互开关 -->
+    <LinearLayout android:id="@+id/menu_switch_freezeinteract" android:layout_width="match_parent"
+        android:layout_height="56dp" android:orientation="horizontal"
+        android:gravity="center" android:background="@drawable/cell_bg"
+        android:layout_margin="4dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="定格-交互" android:textSize="16dp" android:textColor="@color/cp_title"/>
+        <Switch android:id="@+id/sw_freezeinteract" android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:thumbTint="@color/switch_black_selector"
+            android:trackTint="@color/switch_black_selector"
+            android:clickable="false" android:focusable="false"/>
+    </LinearLayout>
+
+    <!-- 第四行：设置（打开主设置） -->
+    <TextView android:id="@+id/fm_settings" android:layout_width="match_parent"
+        android:layout_height="56dp" android:gravity="center"
+        android:layout_margin="4dp"
+        android:text="设置" android:textSize="17dp" android:textColor="@color/cp_title"
+        android:background="@drawable/cell_bg"/>
+
+</LinearLayout>

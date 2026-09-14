@@ -435,6 +435,10 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     "thinkingAlpha" -> nc.copy(thinkingAlpha = (nc.thinkingAlpha * 100f).coerceIn(s.from, s.to) / 100f)
                     "thinkingOffset" -> nc.copy(thinkingOffset = nc.thinkingOffset.coerceIn(s.from, s.to))
                     "thinkingBgAlpha" -> nc.copy(thinkingBgAlpha = nc.thinkingBgAlpha.coerceIn(s.from.toInt(), s.to.toInt()))
+                    "feedScale" -> nc.copy(feedingFishScale = nc.feedingFishScale.coerceIn(s.from, s.to))
+                    "feedAlpha" -> nc.copy(feedingFishAlpha = nc.feedingFishAlpha.coerceIn(s.from, s.to))
+                    "feedMaxCount" -> nc.copy(feedingMaxCount = nc.feedingMaxCount.coerceIn(s.from.toInt(), s.to.toInt()))
+                    "feedExpire" -> nc.copy(feedingExpireTime = nc.feedingExpireTime.coerceIn(s.from.toInt(), s.to.toInt()))
                     else -> nc
                 }
             }
@@ -450,6 +454,12 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                         nc = nc.copy(
                             randomPeriodMin = nc.randomPeriodMin.coerceIn(d.fromA.toInt(), d.toA.toInt()),
                             randomPeriodMax = nc.randomPeriodMax.coerceIn(d.fromB.toInt(), d.toB.toInt())
+                        )
+                    }
+                    "feedPeriod" -> {
+                        nc = nc.copy(
+                            feedingPeriodMin = nc.feedingPeriodMin.coerceIn(d.fromA.toInt(), d.toA.toInt()),
+                            feedingPeriodMax = nc.feedingPeriodMax.coerceIn(d.fromB.toInt(), d.toB.toInt())
                         )
                     }
                 }
@@ -493,6 +503,10 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         "thinkingFlashOut" -> c.copy(thinkingFlashOut = value)
         "thinkingBgEnabled" -> c.copy(thinkingBgEnabled = value)
         "randomEnabled" -> c.copy(randomEnabled = value)
+        "feedingEnabled" -> c.copy(feedingEnabled = value)
+        "feedingAutoExpire" -> c.copy(feedingAutoExpire = value)
+        "feedingFullScreen" -> c.copy(feedingFullScreen = value)
+        "feedingBorderShow" -> c.copy(feedingBorderShow = value)
         else -> {
             val flag = AppBounds.RANDOM_ITEM_FLAG_MAP[key]
             if (flag != null) c.copy(randomItems = if (value) c.randomItems or flag else c.randomItems and flag.inv()) else c

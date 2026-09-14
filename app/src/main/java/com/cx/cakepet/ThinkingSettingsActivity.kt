@@ -39,7 +39,8 @@ class ThinkingSettingsActivity : AppCompatActivity() {
     private lateinit var offsetBar: Slider
     private lateinit var offsetVal: EditText
     private lateinit var rangeSlider: RangeSlider
-    private lateinit var rangeVal: TextView
+    private lateinit var rangeMinVal: EditText
+    private lateinit var rangeMaxVal: EditText
     // 以下开关视图提升为字段，供 doResetDefault 复用
     private lateinit var swFlashIn: SwitchCompat
     private lateinit var swFlashOut: SwitchCompat
@@ -107,7 +108,8 @@ class ThinkingSettingsActivity : AppCompatActivity() {
         offsetBar = findViewById(R.id.offset_bar)
         offsetVal = findViewById(R.id.offset_value)
         rangeSlider = findViewById(R.id.empty_range)
-        rangeVal = findViewById(R.id.empty_range_value)
+        rangeMinVal = findViewById(R.id.empty_min_value)
+        rangeMaxVal = findViewById(R.id.empty_max_value)
 
         colorDot = findViewById(R.id.color_dot)
         findViewById<View>(R.id.row_color).setOnClickListener { showColorPickerDialog() }
@@ -182,7 +184,7 @@ class ThinkingSettingsActivity : AppCompatActivity() {
 
         if (alphaBar.setValueFromConfig(bizToSliderValue(c.thinkingAlpha * 100f, ba2.from, ba2.to), pendingAlpha)) {
             pendingAlpha = null
-            EditSync.setText(alphaVal, ((c.thinkingAlpha) * 100).toInt().toString())
+            EditSync.setText(alphaVal, "%d%%".format((c.thinkingAlpha * 100).toInt()))
         }
 
         if (offsetBar.setValueFromConfig(bizToSliderValue(c.thinkingOffset, bo2.from, bo2.to), pendingOffset)) {
@@ -199,7 +201,8 @@ class ThinkingSettingsActivity : AppCompatActivity() {
         if (pendingEmpty == null || (safeLo.toInt() == pendingEmpty!!.first && safeHi.toInt() == pendingEmpty!!.second)) {
             pendingEmpty = null
             rangeSlider.values = listOf(safeLo, safeHi)
-            rangeVal.text = "${safeLo.toInt()} - ${safeHi.toInt()}"
+            EditSync.setText(rangeMinVal, safeLo.toInt().toString())
+            EditSync.setText(rangeMaxVal, safeHi.toInt().toString())
         }
 
         // 统一抑制所有开关 listener：程序化回填不回写，避免并发改多个开关自激闪动
@@ -210,7 +213,7 @@ class ThinkingSettingsActivity : AppCompatActivity() {
         val bBg = b.sliders.first { it.key == "thinkingBgAlpha" }
         if (seekBgAlpha.setValueFromConfig(bizToSliderValue(c.thinkingBgAlpha.toFloat(), bBg.from, bBg.to), pendingBgAlpha)) {
             pendingBgAlpha = null
-            EditSync.setText(editBgAlpha, c.thinkingBgAlpha.toString())
+            EditSync.setText(editBgAlpha, "%d%%".format(c.thinkingBgAlpha.toInt()))
         }
         swBgEnabled.isChecked = c.thinkingBgEnabled
         currentBgColor = c.thinkingBgColor
@@ -300,7 +303,7 @@ class ThinkingSettingsActivity : AppCompatActivity() {
 
         // 透明度：业务范围 0-100（百分比），config 存 0-1，需 /100 换算
         alphaBar.applyBizRange(bAlpha.from, bAlpha.to, bAlpha.default,
-            formatter = { it.toInt().toString() }) { aPct ->
+            formatter = { "%d%%".format(it.toInt()) }) { aPct ->
             pendingAlpha = bizToSliderValue(aPct, bAlpha.from, bAlpha.to).toInt()
             EditSync.setText(alphaVal, "%d%%".format(aPct.toInt()))
             lifecycleScope.launch { config.update { it.copy(thinkingAlpha = aPct / 100f) } }
@@ -308,8 +311,8 @@ class ThinkingSettingsActivity : AppCompatActivity() {
         alphaBar.onUserTouch(onStart = { startPreview() }, onStop = { stopPreview() })
         EditSync.bind(
             alphaVal,
-            parse = { it.toFloatOrNull() },
-            format = { it.toInt().toString() },
+            parse = { it.replace("%", "").toFloatOrNull() },
+            format = { "%d%%".format(it.toInt()) },
             clamp = { it.coerceIn(minOf(bAlpha.from, bAlpha.to), maxOf(bAlpha.from, bAlpha.to)) },
             defaultValue = bAlpha.default
         ) { v ->
@@ -320,7 +323,7 @@ class ThinkingSettingsActivity : AppCompatActivity() {
         // 背景透明度：业务范围 0-100（百分比），config 存 0-100（整数）
         val bBg = bs.sliders.first { it.key == "thinkingBgAlpha" }
         seekBgAlpha.applyBizRange(bBg.from, bBg.to, bBg.default,
-            formatter = { it.toInt().toString() }) { aPct ->
+            formatter = { "%d%%".format(it.toInt()) }) { aPct ->
             pendingBgAlpha = bizToSliderValue(aPct, bBg.from, bBg.to).toInt()
             EditSync.setText(editBgAlpha, "%d%%".format(aPct.toInt()))
             lifecycleScope.launch { config.update { it.copy(thinkingBgAlpha = aPct.toInt()) } }
@@ -328,8 +331,8 @@ class ThinkingSettingsActivity : AppCompatActivity() {
         seekBgAlpha.onUserTouch(onStart = { startPreview() }, onStop = { stopPreview() })
         EditSync.bind(
             editBgAlpha,
-            parse = { it.toFloatOrNull() },
-            format = { it.toInt().toString() },
+            parse = { it.replace("%", "").toFloatOrNull() },
+            format = { "%d%%".format(it.toInt()) },
             clamp = { it.coerceIn(minOf(bBg.from, bBg.to), maxOf(bBg.from, bBg.to)) },
             defaultValue = bBg.default
         ) { v ->
@@ -368,15 +371,54 @@ class ThinkingSettingsActivity : AppCompatActivity() {
         val rsTo = maxOf(bEmpty.toB, bEmpty.fromA + 1f)
         rangeSlider.valueFrom = rsFrom
         rangeSlider.valueTo = rsTo
+        fun syncEmptyInputs(lo: Int, hi: Int) {
+            EditSync.setText(rangeMinVal, lo.toString())
+            EditSync.setText(rangeMaxVal, hi.toString())
+        }
         rangeSlider.addOnChangeListener { slider, _, fromUser ->
             val lo = slider.values[0].toInt()
             val hi = slider.values[1].toInt()
-            rangeVal.text = "$lo - $hi"
+            syncEmptyInputs(lo, hi)
             if (!fromUser) return@addOnChangeListener
             // 记录用户最后拖到的 (lo,hi)，挡住在途旧发射回流，避免松手后双滑块继续自动滑动
             pendingEmpty = lo to hi
             lifecycleScope.launch {
                 config.update { it.copy(thinkingEmptyMin = lo, thinkingEmptyMax = hi) }
+                PetService.instance?.requestTrayEmptyReset()
+            }
+        }
+        // 频率双输入框：提交时钳制保证 min<=max，并联动双滑块与配置
+        EditSync.bind(
+            rangeMinVal,
+            parse = { it.toFloatOrNull() },
+            format = { it.toInt().toString() },
+            clamp = { it.coerceIn(rsFrom, rsTo) },
+            defaultValue = bEmpty.defaultA
+        ) { v ->
+            val hi = rangeSlider.values[1]
+            val lo = minOf(v, hi)
+            rangeSlider.setValues(lo, hi)
+            EditSync.setText(rangeMaxVal, hi.toInt().toString())
+            pendingEmpty = lo.toInt() to hi.toInt()
+            lifecycleScope.launch {
+                config.update { it.copy(thinkingEmptyMin = lo.toInt(), thinkingEmptyMax = hi.toInt()) }
+                PetService.instance?.requestTrayEmptyReset()
+            }
+        }
+        EditSync.bind(
+            rangeMaxVal,
+            parse = { it.toFloatOrNull() },
+            format = { it.toInt().toString() },
+            clamp = { it.coerceIn(rsFrom, rsTo) },
+            defaultValue = bEmpty.defaultB
+        ) { v ->
+            val lo = rangeSlider.values[0]
+            val hi = maxOf(v, lo)
+            rangeSlider.setValues(lo, hi)
+            EditSync.setText(rangeMinVal, lo.toInt().toString())
+            pendingEmpty = lo.toInt() to hi.toInt()
+            lifecycleScope.launch {
+                config.update { it.copy(thinkingEmptyMin = lo.toInt(), thinkingEmptyMax = hi.toInt()) }
                 PetService.instance?.requestTrayEmptyReset()
             }
         }
@@ -389,7 +431,8 @@ class ThinkingSettingsActivity : AppCompatActivity() {
         val eSafeLo = kotlin.math.round(minOf(eLo, eHi).toFloat().coerceIn(rangeSlider.valueFrom, rangeSlider.valueTo))
         val eSafeHi = kotlin.math.round(maxOf(eLo, eHi).toFloat().coerceIn(rangeSlider.valueFrom, rangeSlider.valueTo))
         rangeSlider.values = listOf(eSafeLo, eSafeHi)
-        rangeVal.text = "${eSafeLo.toInt()} - ${eSafeHi.toInt()}"
+        EditSync.setText(rangeMinVal, eSafeLo.toInt().toString())
+        EditSync.setText(rangeMaxVal, eSafeHi.toInt().toString())
 
         // 数值/开关/颜色由 onCreate 的 configFlow.collect → applyConfigToUi 自动刷新，此处不再冷读回填。
     }

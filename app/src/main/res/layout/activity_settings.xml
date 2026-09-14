@@ -502,6 +502,43 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- ===== 模块：吃吃吃（投食入口） ===== -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">
+                <View android:layout_width="0dp" android:layout_height="1px"
+                    android:layout_weight="0.9" android:background="@color/cp_subtle"/>
+            </LinearLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="吃吃吃" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:paddingTop="16dp" android:paddingBottom="16dp">
+                <LinearLayout android:id="@+id/row_feeding_mode"
+                    style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
+                    android:layout_marginBottom="0dp"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true"
+                    android:paddingStart="20dp" android:paddingEnd="20dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="投食" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            style="@style/SettingsOptionNote"
+                            android:text="随机刷新掉落「支鱼」"/>
+                    </LinearLayout>
+                    <TextView android:id="@+id/tv_feeding_state"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="已开启" android:textSize="14dp" android:textColor="@color/cp_note"
+                        android:layout_marginEnd="10dp"
+                        android:clickable="false" android:focusable="false"/>
+                    <ImageView android:layout_width="22dp" android:layout_height="22dp"
+                        android:src="@drawable/ic_chevron_right"
+                        android:layout_marginStart="12dp"
+                        android:clickable="false" android:focusable="false"/>
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- ===== 模块：变变变（随机模式开关入口） ===== -->
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">

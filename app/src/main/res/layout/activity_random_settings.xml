@@ -226,11 +226,22 @@
                             android:orientation="vertical">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                                 android:text="周期" style="@style/SettingsOptionTitle"/>
-                            <EditText android:id="@+id/period_value" android:layout_width="match_parent"
-                                android:layout_height="wrap_content" android:text="30 - 120" android:textSize="16dp"
-                                android:background="@null" android:inputType="none"
-                                android:focusable="false" android:clickable="false"
-                                android:importantForAutofill="no" android:singleLine="true"/>
+                            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:orientation="horizontal" android:gravity="center">
+                                <EditText android:id="@+id/period_min_value" android:layout_width="0dp"
+                                    android:layout_height="wrap_content" android:layout_weight="1" android:text="30"
+                                    android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
+                                    android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"
+                                    android:textColor="@color/cp_title"/>
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="-" android:textSize="14dp" android:layout_marginStart="2dp"
+                                    android:layout_marginEnd="2dp" android:textColor="@color/cp_title"/>
+                                <EditText android:id="@+id/period_max_value" android:layout_width="0dp"
+                                    android:layout_height="wrap_content" android:layout_weight="1" android:text="120"
+                                    android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
+                                    android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"
+                                    android:textColor="@color/cp_title"/>
+                            </LinearLayout>
                         </LinearLayout>
                         <com.google.android.material.slider.RangeSlider
                             android:id="@+id/period_range"

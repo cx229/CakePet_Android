@@ -66,9 +66,9 @@
       "nextMode": "walk",
       "walkSpeed": 0,
       "frames": [
-        {"res": "落地/jump_down-1.png", "next": 1, "delay": [50, 70],"anchorY": -50},
-        {"res": "落地/jump_down-2.png", "next": 2, "delay": [80, 90],"anchorY": -20},
-        {"res": "落地/jump_down-3.png", "next": null, "delay": [200, 250]}
+        {"res": "落地/jump_down-1.png", "next": 1, "delay": [35, 40],"anchorY": -30},
+        {"res": "落地/jump_down-2.png", "next": 2, "delay": [35, 40],"anchorY": -15},
+        {"res": "落地/jump_down-3.png", "next": null, "delay": [35, 40]}
       ]
     },
     "lift_up": {
@@ -151,8 +151,10 @@
       "nextMode": "sit_clam",
       "walkSpeed": 0,
       "frames": [
-        {"res": "探头/probe_head-1.png", "next": 1, "delay": [1000, 5000],"anchorY": 11},
-        {"res": "探头/probe_head-2.png", "next": 0, "delay": [150, 300],"anchorY": 11}
+        {"res": "探头/probe_head-4.png", "next": 1, "delay": [70, 80],"anchorY": 75},
+        {"res": "探头/probe_head-2.png", "next": 2, "delay": [70, 80],"anchorY": 75},
+        {"res": "探头/probe_head-1.png", "next": 3, "delay": [1000, 5000],"anchorY": 75},
+        {"res": "探头/probe_head-2.png", "next": 2, "delay": [150, 300],"anchorY": 75}
       ]
     },
     "snap_head": {
@@ -163,8 +165,10 @@
       "nextMode": null,
       "walkSpeed": 0,
       "frames": [
-        {"res": "探头/probe_head-1.png", "next": 1, "delay": [1000, 5000],"anchorY": 11},
-        {"res": "探头/probe_head-2.png", "next": 0, "delay": [150, 300],"anchorY": 11}
+        {"res": "探头/probe_head-4.png", "next": 1, "delay": [70, 80],"anchorY": 75},
+        {"res": "探头/probe_head-2.png", "next": 2, "delay": [70, 80],"anchorY": 75},
+        {"res": "探头/probe_head-1.png", "next": 3, "delay": [1000, 5000],"anchorY": 75},
+        {"res": "探头/probe_head-2.png", "next": 2, "delay": [150, 300],"anchorY": 75}
       ]
     },
     "snap_pat_head": {
@@ -175,11 +179,49 @@
       "nextMode": "snap_head",
       "walkSpeed": 0,
       "frames": [
-        {"res": "探头摸摸头/probe_pat_head-1.png", "next": 1, "delay": [105, 110],"anchorY": 11},
-        {"res": "探头摸摸头/probe_pat_head-2.png", "next": 2, "delay": [100, 110],"anchorY": 11},
-        {"res": "探头摸摸头/probe_pat_head-3.png", "next": 3, "delay": [100, 110],"anchorY": 11},
-        {"res": "探头摸摸头/probe_pat_head-4.png", "next": 4, "delay": [105, 110],"anchorY": 11},
-        {"res": "探头摸摸头/probe_pat_head-5.png", "next": 1, "delay": [105, 110],"anchorY": 11}
+        {"res": "探头摸摸头/probe_pat_head-1.png", "next": 1, "delay": [105, 110],"anchorY": 75},
+        {"res": "探头摸摸头/probe_pat_head-2.png", "next": 2, "delay": [100, 110],"anchorY": 75},
+        {"res": "探头摸摸头/probe_pat_head-3.png", "next": 3, "delay": [100, 110],"anchorY": 75},
+        {"res": "探头摸摸头/probe_pat_head-4.png", "next": 4, "delay": [105, 110],"anchorY": 75},
+        {"res": "探头摸摸头/probe_pat_head-5.png", "next": 1, "delay": [105, 110],"anchorY": 75}
+      ]
+    },
+    "feed_fish": {
+      "label": "投食",
+      "fallback": "投食/feed_fish-1.png",
+      "loop": false,
+      "timeNext": {"enabled": true, "min": 2000, "max": 3000, "prob": 0.95},
+      "nextMode": "sit_clam",
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "投食/feed_fish-1.png", "next": 1, "delay": [90, 100], "anchorY": 1},
+        {"res": "投食/feed_fish-2.png", "next": 2, "delay": [90, 100], "anchorY": 1},
+        {"res": "投食/feed_fish-3.png", "next": 3, "delay": [90, 100], "anchorY": 1},
+        {"res": "投食/feed_fish-4.png", "next": 4, "delay": [90, 100], "anchorY": 1},
+        {"res": "投食/feed_fish-3.png", "next": 5, "delay": [90, 100], "anchorY": 1},
+        {"res": "投食/feed_fish-3.png", "next": 6, "delay": [90, 100], "anchorY": 1},
+        {"res": "投食/feed_fish-5.png", "next": 7, "delay": [90, 100], "anchorY": 1},
+        {"res": "投食/feed_fish-6.png", "next": 8, "delay": [90, 100], "anchorY": 1},
+        {"res": "投食/feed_fish-7.png", "next": 6, "delay": [90, 100], "anchorY": 1}
+      ]
+    },
+    "snap_feed_fish": {
+      "label": "探头投食",
+      "fallback": "探头投食/feed_fish-1.png",
+      "loop": false,
+      "timeNext": {"enabled": true, "min": 2000, "max": 3000, "prob": 0.95},
+      "nextMode": "snap_head",
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "探头投食/feed_fish-1.png", "next": 1, "delay": [90, 100], "anchorY": 1},
+        {"res": "探头投食/feed_fish-2.png", "next": 2, "delay": [90, 100], "anchorY": 1},
+        {"res": "探头投食/feed_fish-3.png", "next": 3, "delay": [90, 100], "anchorY": 1},
+        {"res": "探头投食/feed_fish-4.png", "next": 4, "delay": [90, 100], "anchorY": 1},
+        {"res": "探头投食/feed_fish-3.png", "next": 5, "delay": [90, 100], "anchorY": 1},
+        {"res": "探头投食/feed_fish-3.png", "next": 6, "delay": [90, 100], "anchorY": 1},
+        {"res": "探头投食/feed_fish-5.png", "next": 7, "delay": [90, 100], "anchorY": 1},
+        {"res": "探头投食/feed_fish-6.png", "next": 8, "delay": [90, 100], "anchorY": 1},
+        {"res": "探头投食/feed_fish-7.png", "next": 6, "delay": [90, 100], "anchorY": 1}
       ]
     },
     "lie": {

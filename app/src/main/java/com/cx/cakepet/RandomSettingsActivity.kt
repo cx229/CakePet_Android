@@ -16,7 +16,8 @@ import kotlinx.coroutines.launch
 class RandomSettingsActivity : AppCompatActivity() {
     // 周期双滑块视图提升为字段，供 refreshUI / onResume 复用
     private lateinit var periodRange: RangeSlider
-    private lateinit var periodVal: EditText
+    private lateinit var periodMinVal: EditText
+    private lateinit var periodMaxVal: EditText
     // 随机项开关视图映射（提升为字段，供 doResetDefault 复用）
     private lateinit var switchViews: Map<Int, Switch>
     // 随机模式总开关（提升为字段，供 doResetDefault 复用）
@@ -82,7 +83,8 @@ class RandomSettingsActivity : AppCompatActivity() {
 
         // 周期：双滑块合并为 RangeSlider（天然保证 最小 <= 最大），业务范围来自 PetBounds
         periodRange = findViewById(R.id.period_range)
-        periodVal = findViewById(R.id.period_value)
+        periodMinVal = findViewById(R.id.period_min_value)
+        periodMaxVal = findViewById(R.id.period_max_value)
         refreshUI()
 
         // 「恢复默认设置」已移入右上角“更多”浮窗，逻辑封装为 doResetDefault()
@@ -124,7 +126,8 @@ class RandomSettingsActivity : AppCompatActivity() {
             var safeHi = kotlin.math.round(maxOf(lo, hi).toFloat().coerceIn(periodRange.valueFrom, periodRange.valueTo))
             if (safeLo >= safeHi) safeHi = (safeLo + 1f).coerceAtMost(periodRange.valueTo)
             periodRange.values = listOf(safeLo, safeHi)
-            EditSync.setText(periodVal, "${safeLo.toInt()} - ${safeHi.toInt()}")
+            EditSync.setText(periodMinVal, safeLo.toInt().toString())
+            EditSync.setText(periodMaxVal, safeHi.toInt().toString())
             suppressRandomSwitch = false
         } catch (e: Exception) { e.printStackTrace() }
     }
@@ -169,14 +172,42 @@ class RandomSettingsActivity : AppCompatActivity() {
         fun onPeriodChanged() {
             PetService.instance?.requestRandomReset()
         }
+        fun syncPeriodInputs(min: Int, max: Int) {
+            EditSync.setText(periodMinVal, min.toString())
+            EditSync.setText(periodMaxVal, max.toString())
+        }
         periodRange.addOnChangeListener { slider, _, fromUser ->
             if (!fromUser) return@addOnChangeListener
             val min = slider.values[0].toInt()
             val max = slider.values[1].toInt()
-            EditSync.setText(periodVal, "$min - $max")
+            syncPeriodInputs(min, max)
             lifecycleScope.launch { config.update { it.copy(randomPeriodMin = min, randomPeriodMax = max) } }
             onPeriodChanged()
         }
+        // 周期双输入框：提交时钳制保证 min<=max，联动双滑块与配置
+        fun commitPeriodInputs(v: Float, isMin: Boolean) {
+            val curMin = periodRange.values[0]
+            val curMax = periodRange.values[1]
+            val (lo, hi) = if (isMin) minOf(v, curMax) to curMax else curMin to maxOf(v, curMin)
+            periodRange.setValues(lo, hi)
+            syncPeriodInputs(lo.toInt(), hi.toInt())
+            lifecycleScope.launch { config.update { it.copy(randomPeriodMin = lo.toInt(), randomPeriodMax = hi.toInt()) } }
+            onPeriodChanged()
+        }
+        EditSync.bind(
+            periodMinVal,
+            parse = { it.toFloatOrNull() },
+            format = { it.toInt().toString() },
+            clamp = { it.coerceIn(rsFrom, rsTo) },
+            defaultValue = bPeriod.defaultA
+        ) { commitPeriodInputs(it, true) }
+        EditSync.bind(
+            periodMaxVal,
+            parse = { it.toFloatOrNull() },
+            format = { it.toInt().toString() },
+            clamp = { it.coerceIn(rsFrom, rsTo) },
+            defaultValue = bPeriod.defaultB
+        ) { commitPeriodInputs(it, false) }
         lifecycleScope.launch {
             try {
             val c = config.configFlow.first()
@@ -194,7 +225,7 @@ class RandomSettingsActivity : AppCompatActivity() {
             var safeHi = kotlin.math.round(maxOf(lo, hi).toFloat().coerceIn(rsFrom, rsTo))
             if (safeLo >= safeHi) safeHi = (safeLo + 1f).coerceAtMost(rsTo)
             periodRange.values = listOf(safeLo, safeHi)
-            EditSync.setText(periodVal, "${safeLo.toInt()} - ${safeHi.toInt()}")
+            syncPeriodInputs(safeLo.toInt(), safeHi.toInt())
             } catch (e: Exception) { e.printStackTrace() }
         }
     }

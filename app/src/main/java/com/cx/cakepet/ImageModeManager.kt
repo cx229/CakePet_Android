@@ -55,6 +55,8 @@ class ImageModeManager(
         const val WRIGGLE = "wriggle"
         const val PULL_FISH = "pull_fish"
         const val PROBE_HEAD = "probe_head"
+        const val FEED_FISH = "feed_fish"              // 投食成功：坐姿投食（待机态触发，结束回待机池）
+        const val SNAP_FEED_FISH = "snap_feed_fish"     // 投食成功：吸附投食（吸附态触发，结束回吸附态）
         const val SNAP_HEAD = "snap_head"
         const val SNAP_PAT_HEAD = "snap_pat_head"   // 吸附探头摸摸头：吸附态下的“摸头”动作，结束后回 snap_head
         const val LIE = "lie"
@@ -589,6 +591,9 @@ class ImageModeManager(
 
     fun getMode(): String = forcedSeq?.name ?: currentName
     fun isPlayingForced(): Boolean = forcedSeq != null
+
+    /** 当前模式是否属于待机动作清单（standbyPool / staticPool）。供投喂等判断是否可切"坐姿投食"。 */
+    fun isStandbyMode(name: String = currentName): Boolean = currentStandbyPool().contains(name)
 
     /**
      * 提起(LIFT_UP)模式下，按拖动速度/方向跳到对应系列起点帧（对齐 PC DragFollowMode.drag_func）：

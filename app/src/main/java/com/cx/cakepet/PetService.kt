@@ -14,6 +14,11 @@ import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Rect
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.MotionEvent
 import android.widget.ImageView
 import android.os.Build
@@ -88,8 +93,29 @@ class PetService : Service() {
     val time: Long,
     val note: String = "",
     val borderView: View? = null  // 显示定格边框开关开启时的红色真实窗口边框（NOT_TOUCHABLE，不拦截交互）
-)
+    )
     private val freezeLayers = mutableListOf<FreezeLayer>()
+    // 投喂（支鱼）浮窗：随机掉落的单图可拖拽浮窗；拖动给酥则消失（纯清除）。
+    data class FishLayer(
+        val iv: ImageView,
+        val lp: WindowManager.LayoutParams,
+        val time: Long = System.currentTimeMillis(),  // 投食（支鱼）掉落的时刻，供食物浮窗顶部展示
+        val borderView: View? = null,   // 投喂边框开关开启时的红色真实窗口边框（NOT_TOUCHABLE）
+        var expireRunnable: Runnable? = null
+    )
+    private val fishLayers = mutableListOf<FishLayer>()
+    private var fishBitmap: Bitmap? = null        // 原始支鱼图（按 useNewSprite 选资源包）
+    private var fishCropBitmap: Bitmap? = null      // 裁剪到最小不透明像素矩形后的图（窗口按此尺寸 * 倍率）
+    private var fishSpawning = false
+    // 上次生效的投喂配置，用于检测变化并即时作用于全部已有支鱼浮窗
+    private var lastFeedingEnabled = ConfigDefaults.FEEDING_ENABLED
+    private var lastFeedingFishScale = ConfigDefaults.FEEDING_FISH_SCALE
+    private var lastFeedingFishAlpha = ConfigDefaults.FEEDING_FISH_ALPHA
+    private var lastFeedingMaxCount = ConfigDefaults.FEEDING_MAX_COUNT
+    private var lastFeedingAutoExpire = ConfigDefaults.FEEDING_AUTO_EXPIRE
+    private var lastFeedingExpireTime = ConfigDefaults.FEEDING_EXPIRE_TIME
+    private var lastFeedingFullScreen = ConfigDefaults.FEEDING_FULL_SCREEN
+    private var lastFeedingBorderShow = ConfigDefaults.FEEDING_BORDER_SHOW
     // 上次生效的定格-拖动开关，用于检测变化并即时作用于全部已有定格层
     private var lastFreezeDraggable = ConfigDefaults.FREEZE_DRAGGABLE
     // 上次生效的显示定格边框开关，用于检测变化并即时叠加/移除红色窗口边框
@@ -100,8 +126,22 @@ class PetService : Service() {
         var lastX = 0f
         var lastY = 0f
         var moved = false          // 是否已判定为拖动（移动超阈值）
-        var longPressFired = false // 长按菜单是否已弹出（弹出后忽略后续移动）
+        var longPressFired = false // 长按候选是否已达成（达阈值且未移动）；真正打开延后到松手
+        var feedOverPet = false    // 拖动中当前是否悬停在宠物命中区（用于投喂成功提示的边沿检测：进入即振动，离开复位后可再次振动）
+        var entered = false        // 本段拖动中是否曾进入过宠物命中区（用于记录首次进入点）
+        var enterX = 0f            // 首次进入宠物判定区的指针坐标（振动点），用于按相对左右决定镜像
+        var enterY = 0f
         var pending: Runnable? = null
+    }
+
+    // 长按到位振动（仅作候选提醒，与宠物一致；真正打开菜单在松手时）
+    private fun vibrateLongPress() {
+        val vm = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vm?.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION") vm?.vibrate(30)
+        }
     }
 
     private val freezeDragListener = View.OnTouchListener { v, e ->
@@ -111,11 +151,11 @@ class PetService : Service() {
             MotionEvent.ACTION_DOWN -> {
                 st.lastX = e.rawX; st.lastY = e.rawY
                 st.moved = false; st.longPressFired = false
-                // 长按检测：400ms 内无明显移动→弹出定格菜单（仅当 定格-交互 开启时本监听才挂载）
+                // 长按检测：400ms 内无明显移动→置候选并振动（不立即弹窗，延后到松手判定）
                 val r = Runnable {
                     if (!st.moved) {
                         st.longPressFired = true
-                        openFreezeMenu(v)
+                        vibrateLongPress()
                     }
                 }
                 st.pending = r
@@ -126,15 +166,15 @@ class PetService : Service() {
                 val dx = e.rawX - st.lastX
                 val dy = e.rawY - st.lastY
                 st.lastX = e.rawX; st.lastY = e.rawY
-                // 超过阈值视为拖动：取消长按计时
-                if (!st.longPressFired && (kotlin.math.abs(dx) > 8f || kotlin.math.abs(dy) > 8f)) {
+                // 超过阈值视为拖动：取消长按候选（与宠物：拖动清 triggered 一致），允许跟手位移
+                if (kotlin.math.abs(dx) > 8f || kotlin.math.abs(dy) > 8f) {
                     st.moved = true
                     st.pending?.let { mainHandler.removeCallbacks(it) }
                     st.pending = null
+                    st.longPressFired = false
                 }
-                if (st.longPressFired) return@OnTouchListener true  // 菜单已开，忽略拖动
                 lp.x += dx.toInt()
-                lp.y += dy.toInt()
+                lp.y = clampStaticY(lp.y + dy.toInt(), lp.height, currentConfig().staticTopBound, currentConfig().staticBottomBound)
                 try { windowManager.updateViewLayout(v, lp) } catch (_: Exception) {}
                 // 同步红色边框（若存在）跟随定格层移动
                 freezeLayers.firstOrNull { it.iv === v }?.borderView?.let { bv ->
@@ -148,6 +188,87 @@ class PetService : Service() {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 st.pending?.let { mainHandler.removeCallbacks(it) }
                 st.pending = null
+                // 松手且未移动→打开定格菜单（与宠物：长按候选 + 松手判定一致）
+                if (st.longPressFired && !st.moved) openFreezeMenu(v)
+                true
+            }
+            else -> false
+        }
+    }
+
+    // 支鱼拖动 + 长按：与定格层一致；额外松手时若落在宠物显示层矩形内则消失（纯清除）。
+    private val fishDragListener = View.OnTouchListener { v, e ->
+        val lp = v.layoutParams as? WindowManager.LayoutParams ?: return@OnTouchListener false
+        val st = (v.tag as? FreezeDragState) ?: FreezeDragState().also { v.tag = it }
+        when (e.action) {
+            MotionEvent.ACTION_DOWN -> {
+                st.lastX = e.rawX; st.lastY = e.rawY
+                st.moved = false; st.longPressFired = false; st.feedOverPet = false
+                st.entered = false; st.enterX = 0f; st.enterY = 0f
+                // 长按检测：400ms 内无明显移动→置候选并振动（延后到松手判定打开菜单）
+                val r = Runnable {
+                    if (!st.moved) {
+                        st.longPressFired = true
+                        vibrateLongPress()
+                    }
+                }
+                st.pending = r
+                mainHandler.postDelayed(r, 400)
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = e.rawX - st.lastX
+                val dy = e.rawY - st.lastY
+                st.lastX = e.rawX; st.lastY = e.rawY
+                if (kotlin.math.abs(dx) > 8f || kotlin.math.abs(dy) > 8f) {
+                    st.moved = true
+                    st.pending?.let { mainHandler.removeCallbacks(it) }
+                    st.pending = null
+                    st.longPressFired = false
+                }
+                lp.x += dx.toInt()
+                lp.y = clampStaticY(lp.y + dy.toInt(), lp.height, currentConfig().staticTopBound, currentConfig().staticBottomBound)
+                try { windowManager.updateViewLayout(v, lp) } catch (_: Exception) {}
+                fishLayers.firstOrNull { it.iv === v }?.borderView?.let { bv ->
+                    val blp = bv.layoutParams as? WindowManager.LayoutParams ?: return@let
+                    blp.x = lp.x
+                    blp.y = lp.y
+                    try { windowManager.updateViewLayout(bv, blp) } catch (_: Exception) {}
+                }
+                // 拖动中实时判定是否命中任一宠物：进入命中区即振动一次；离开后复位，下次再进入再次振动
+                val overPet = fishDroppedOnPet(e.rawX, e.rawY)
+                if (overPet && !st.feedOverPet) {
+                    st.feedOverPet = true
+                    st.entered = true; st.enterX = e.rawX; st.enterY = e.rawY
+                    vibrateLongPress()
+                } else if (!overPet) {
+                    st.feedOverPet = false
+                }
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                st.pending?.let { mainHandler.removeCallbacks(it) }
+                st.pending = null
+                if (st.longPressFired && !st.moved) {
+                    openFishMenu(v)
+                } else if (st.moved && !st.longPressFired) {
+                    // 拖动给酥：松手点落在宠物显示层矩形内则消失，并触发投食动作
+                    val layer = fishLayers.firstOrNull { it.iv === v } ?: return@OnTouchListener true
+                    if (fishDroppedOnPet(e.rawX, e.rawY)) {
+                        val inst = findPetAt(e.rawX, e.rawY)
+                        removeFish(layer)
+                        // 投喂成功：用鱼首次进入宠物判定区（振动点）相对宠物中心的左右决定镜像；
+                        // 未记录到进入点（理论不会，因投喂必经 MOVE 进入）则用松手点兜底。
+                        val ix = if (st.entered) st.enterX else e.rawX
+                        val iy = if (st.entered) st.enterY else e.rawY
+                        val dlp = inst?.displayLp
+                        val (relX, relY) = if (dlp != null) {
+                            (ix - (dlp.x + dlp.width / 2f)) to (iy - (dlp.y + dlp.height / 2f))
+                        } else (0f to 0f)
+                        triggerFeedAction(inst, relX, relY)
+                        growPetOnFeed()    // 投喂成功后真实增大宠物尺寸（受开关/系数/上限约束）
+                    }
+                }
                 true
             }
             else -> false
@@ -157,14 +278,6 @@ class PetService : Service() {
     /** 长按定格层：找到对应层并弹出定格菜单（样式与长按宠物一致）。 */
     private fun openFreezeMenu(v: View) {
         val layer = freezeLayers.firstOrNull { it.iv === v } ?: return
-        // 长按打开定格菜单时振动一次，与长按宠物弹菜单一致
-        val vm = getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            vm?.vibrate(android.os.VibrationEffect.createOneShot(30, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
-        } else {
-            @Suppress("DEPRECATION")
-            vm?.vibrate(30)
-        }
         FreezeMenu(this, layer).show()
     }
 
@@ -190,7 +303,7 @@ class PetService : Service() {
             width = snap.w
             height = snap.h
             x = snap.left
-            y = snap.top
+            y = clampStaticY(snap.top, snap.h, currentConfig().staticTopBound, currentConfig().staticBottomBound)
         }
         if (draggable) iv.setOnTouchListener(freezeDragListener)
         try { windowManager.addView(iv, lp) } catch (_: Exception) { snap.bmp.recycle(); return }
@@ -242,6 +355,20 @@ class PetService : Service() {
             layer.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         }
         freezeLayers.clear()
+    }
+
+    /** 全部定格显示层重置位置到屏幕中心（y 受静态边界约束）。 */
+    fun resetAllFreezeToCenter() {
+        val (sw, sh) = screenRealSize()
+        val cfg = currentConfig()
+        for (layer in freezeLayers) {
+            val cx = (sw - layer.lp.width) / 2
+            val cy = clampStaticY((sh - layer.lp.height) / 2, layer.lp.height, cfg.staticTopBound, cfg.staticBottomBound)
+            layer.lp.x = cx
+            layer.lp.y = cy
+            try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) { }
+            try { layer.borderView?.let { windowManager.updateViewLayout(it, layer.lp) } } catch (_: Exception) { }
+        }
     }
 
     /** 仅清除指定定格显示层（回收其 Bitmap）。 */
@@ -922,6 +1049,430 @@ class PetService : Service() {
         if (useNew) (zhimasuSpritePack ?: ImageModeManager.zhimasuPack(this).also { zhimasuSpritePack = it })
         else ImageModeManager.DEFAULT_SPRITE_PACK
 
+    // ======================== 投喂（支鱼）浮窗 ========================
+
+    // 最小不透明像素矩形（与 PetView.computeTightAlphaBounds 同义，这里在 Service 侧独立实现以便裁剪支鱼图）。
+    private fun computeTightAlphaBoundsLocal(bmp: Bitmap): Rect? {
+        val w = bmp.width
+        val h = bmp.height
+        if (w == 0 || h == 0) return null
+        val px = IntArray(w * h)
+        bmp.getPixels(px, 0, w, 0, 0, w, h)
+        var minX = w; var minY = h; var maxX = -1; var maxY = -1
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                if ((px[y * w + x] ushr 24) and 0xff > 8) {
+                    if (x < minX) minX = x
+                    if (x > maxX) maxX = x
+                    if (y < minY) minY = y
+                    if (y > maxY) maxY = y
+                }
+            }
+        }
+        if (maxX < 0) return null
+        return Rect(minX, minY, maxX + 1, maxY + 1)
+    }
+
+    private fun cropToTightLocal(bmp: Bitmap): Bitmap? {
+        val tight = computeTightAlphaBoundsLocal(bmp) ?: return bmp
+        return try {
+            Bitmap.createBitmap(bmp, tight.left, tight.top, tight.width(), tight.height())
+        } catch (_: Exception) { bmp }
+    }
+
+    // 与宠物管线一致：源文件先下采样到最长边 256（超采样源），再紧裁提取像素变边框。
+    private fun decodeFishBitmap(path: String): Bitmap? {
+        val istr1 = try { assets.open(path) } catch (_: Exception) { return null }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeStream(istr1, null, bounds)
+        istr1.close()
+        val rw = bounds.outWidth.takeIf { it > 0 } ?: return null
+        val rh = bounds.outHeight.takeIf { it > 0 } ?: return null
+        val longSide = maxOf(rw, rh)
+        val inSample = ((longSide + 256 - 1) / 256).coerceAtLeast(1)   // 最长边粗降到 256
+        val scale = 256f / longSide
+        val outW = (rw * scale).toInt().coerceAtLeast(1)
+        val outH = (rh * scale).toInt().coerceAtLeast(1)
+        val istr2 = try { assets.open(path) } catch (_: Exception) { return null }
+        val opts = BitmapFactory.Options().apply { inSampleSize = inSample }
+        val base = BitmapFactory.decodeStream(istr2, null, opts) ?: run { istr2.close(); return null }
+        istr2.close()
+        return if (base.width == outW && base.height == outH) base
+        else Bitmap.createScaledBitmap(base, outW, outH, true).also { if (it != base) base.recycle() }
+    }
+
+    // 加载并裁剪支鱼位图（按 useNewSprite 选资源包）；已缓存则直接复用。
+    private fun ensureFishBitmap() {
+        if (fishCropBitmap != null && !fishCropBitmap!!.isRecycled) return
+        try {
+            val path = if (useNewSpriteFlag) "芝麻酥/支鱼/fish-1.png" else "img/支鱼/fish-1.png"
+            fishBitmap?.recycle()
+            fishBitmap = decodeFishBitmap(path)
+            fishCropBitmap = fishBitmap?.let { cropToTightLocal(it) }
+        } catch (_: Exception) {
+            fishBitmap = null
+            fishCropBitmap = null
+        }
+    }
+
+    private fun getFishCropBitmap(): Bitmap? {
+        ensureFishBitmap()
+        return fishCropBitmap
+    }
+
+    // 支鱼显示尺寸：源已缩到 256（长边）仅作解码清晰度缓冲，1x 显示基准与宠物一致为 128（长边），
+    // 故在 256 空间像素上乘以 0.5 再乘倍率。
+    private fun fishDisplaySize(crop: Bitmap, c: PetConfigData): Pair<Int, Int> {
+        if (crop.width <= 0 || crop.height <= 0) return Pair(1, 1)
+        val scale = c.feedingFishScale.coerceAtLeast(0.01f) * 0.5f
+        val wpx = (crop.width * scale).toInt().coerceAtLeast(1)
+        val hpx = (crop.height * scale).toInt().coerceAtLeast(1)
+        return wpx to hpx
+    }
+
+    // 资源包切换时重载支鱼位图，并同步应用到全部已有浮窗。
+    private fun reloadFishBitmap() {
+        fishBitmap?.recycle()
+        fishCropBitmap?.recycle()
+        fishBitmap = null
+        fishCropBitmap = null
+        ensureFishBitmap()
+        val crop = fishCropBitmap ?: return
+        val c = currentConfig()
+        val (wpx, hpx) = fishDisplaySize(crop, c)
+        for (layer in fishLayers) {
+            layer.iv.setImageBitmap(crop)
+            layer.lp.width = wpx
+            layer.lp.height = hpx
+            layer.iv.imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
+            try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) {}
+            layer.borderView?.let { bv ->
+                val blp = bv.layoutParams as? WindowManager.LayoutParams
+                blp?.width = layer.lp.width; blp?.height = layer.lp.height
+                blp?.x = layer.lp.x; blp?.y = layer.lp.y
+                try { windowManager.updateViewLayout(bv, blp) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    // 活动范围（受状态栏等影响的当前窗口尺寸）；全屏刷新则改用 screenRealSize()。
+    private fun screenActiveBounds(): Rect {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager.currentWindowMetrics.bounds
+        } else {
+            val r = Rect()
+            windowManager.defaultDisplay.getRectSize(r)
+            r
+        }
+    }
+
+    // 长按支鱼：振动并弹出菜单（清除 / 清除全部 / 投喂设置）。
+    private fun openFishMenu(v: View) {
+        val layer = fishLayers.firstOrNull { it.iv === v } ?: return
+        FishMenu(this, layer).show()
+    }
+
+    // 鱼松手点是否落在任一宠物【显示层】（不含定格）矩形内（拖动给酥判定）。
+    // 使用触摸松手屏幕坐标、宠物显示层矩形，不依赖控制层——即使开启点击穿透（关闭控制层）也能成功投喂。
+    private fun fishDroppedOnPet(rawX: Float, rawY: Float): Boolean {
+        for (inst in pets) {
+            val dlp = inst.displayLp ?: continue
+            if (!inst.displayAdded) continue
+            val lx = dlp.x; val ly = dlp.y; val lw = dlp.width; val lh = dlp.height
+            if (rawX in lx.toFloat()..(lx + lw).toFloat() && rawY in ly.toFloat()..(ly + lh).toFloat()) return true
+        }
+        return false
+    }
+
+    // 与 fishDroppedOnPet 同判定，但返回命中的宠物实例（用于对其单独播放投食动作 + 读其朝向算镜像）。
+    private fun findPetAt(rawX: Float, rawY: Float): PetInstance? {
+        for (inst in pets) {
+            val dlp = inst.displayLp ?: continue
+            if (!inst.displayAdded) continue
+            val lx = dlp.x; val ly = dlp.y; val lw = dlp.width; val lh = dlp.height
+            if (rawX in lx.toFloat()..(lx + lw).toFloat() && rawY in ly.toFloat()..(ly + lh).toFloat()) return inst
+        }
+        return null
+    }
+
+    // 本地 +x（资源朝右）经重力旋转映射到屏幕的前向向量 Fg（脚朝向决定）：
+    // 脚朝下(0)=(+1,0)；脚朝左(1)=(0,+1)；脚朝右(2)=(0,-1)；脚朝上(3)=(-1,0)。
+    private fun feedForward(gravityDir: Int): Pair<Float, Float> = when (gravityDir) {
+        0 -> 1f to 0f
+        1 -> 0f to 1f
+        2 -> 0f to -1f
+        3 -> -1f to 0f
+        else -> 1f to 0f
+    }
+
+    /**
+     * 投喂成功后触发投食动作：
+     * - 吸附态 → 探头投食（结束回 snap_head）；
+     * - 待机清单内 → 坐姿投食（结束回待机随机池）；
+     * - 其余（roll/lift/摸头等）不切动作。
+     * 镜像：以鱼【首次进入宠物判定区】的位置（振动点）相对宠物显示中心的向量 D，
+     * 与宠物"本地右"轴 Rg（脚前向 Fg 顺时针旋转 90°：(x,y)->(-y,x)）做点积决定：
+     *   D·Rg < 0 → 鱼在宠物左侧 → 镜像（flip）；
+     *   D·Rg > 0 → 鱼在宠物右侧 → 不镜像。
+     * Rg 由 Fg 旋转得到，故脚朝左/右/上时自动按宠物自身左右适配。死区内沿用当前朝向。
+     * 投食结束【不还原】镜像，下一动作沿用该朝向。
+     */
+    private fun triggerFeedAction(inst: PetInstance?, relX: Float, relY: Float) {
+        if (inst == null || !useNewSpriteFlag) return
+        val view = inst.view
+        val name = when {
+            view.physics.isSnapped -> ImageModeManager.SNAP_FEED_FISH
+            view.isStandbyMode() -> ImageModeManager.FEED_FISH
+            else -> return
+        }
+        // 脚前向 Fg（屏幕向量）：非吸附用 gravityDir 映射，吸附用 snapRotation。
+        // 镜像目标：让宠物"面朝鱼"。鱼在 Fg 反方向（D·Fg<0，鱼在宠物身后）则镜像。
+        // 上/左/右朝向由 Fg 自身适配，无需额外旋转轴。
+        val (fx, fy) = if (view.physics.isSnapped) {
+            val r = Math.toRadians(view.snapRotation.toDouble())
+            Math.cos(r).toFloat() to Math.sin(r).toFloat()
+        } else feedForward(view.gravityDir)
+        val proj = relX * fx + relY * fy
+        val flip = if (kotlin.math.abs(proj) < 12f) {
+            // 鱼落在宠物正前方/正中附近：死区，沿用当前朝向，避免乱翻
+            if (view.physics.isSnapped) view.getSnapFlipX() else view.flipX
+        } else proj > 0f
+        if (view.physics.isSnapped) view.setSnapFlipX(flip) else view.flipX = flip
+        view.playOnce(name)
+    }
+
+    /**
+     * 投喂成功后按「投喂变大」真实增大宠物尺寸：scale += feedGrowFactor（绝对值相加），
+     * 上限取用户在「大小」项设置的上界（PetBounds MAIN 页 scale 的 to，阈值页可改），
+     * 达到该上界后投喂不再变大；scale 为所有分身共享，故投喂一只全部变大。
+     * 受总开关与系数约束。
+     */
+    private fun growPetOnFeed() {
+        val c = config.getBlocking()
+        if (!c.feedGrowEnabled) return
+        val factor = c.feedGrowFactor.coerceAtLeast(0.01f)
+        // 投喂变大的上限 = 用户对「大小」设定的上界（不是绝对阈值），阈值页修改后此处随之生效
+        val scaleUserMax = PetBounds(this).getBlocking(SettingsPage.MAIN)
+            .sliders.firstOrNull { it.key == "scale" }?.to ?: ConfigDefaults.FEED_GROW_MAX_SCALE
+        val newScale = (c.scale + factor).coerceAtMost(scaleUserMax)
+        if (newScale > c.scale) scope.launch { config.update { it.copy(scale = newScale) } }
+    }
+
+    /** 重置宠物大小为用户默认值（ConfigDefaults.SCALE，所有分身共享，即时生效）。 */
+    fun resetPetScaleToDefault() {
+        scope.launch { config.update { it.copy(scale = ConfigDefaults.SCALE) } }
+    }
+
+    // 按静态边界钳制静态资源（定格/食物）的竖向位置：仅钳 y，横向左右无系统栏保持原样。
+    // top=顶边最小 y；bottom=底边距屏幕底的保留距离；h=资源像素高。范围由调用方在 -200..400 内约束。
+    private fun clampStaticY(y: Int, h: Int, top: Int, bottom: Int): Int {
+        val H = screenRealSize().second
+        val minY = top
+        val maxY = (H - bottom - h).coerceAtLeast(minY) // 极端小屏兜底，避免下界高于上界
+        return y.coerceIn(minY, maxY)
+    }
+
+    // 刷出一条支鱼（随机位置 / 当前倍率 / 透明度 / 边框 / 自动过期）。
+    private fun spawnFish(c: PetConfigData) {
+        val crop = getFishCropBitmap() ?: return
+        val (wpx, hpx) = fishDisplaySize(crop, c)
+        val iv = ImageView(this).apply {
+            setImageBitmap(crop)
+            scaleType = ImageView.ScaleType.FIT_XY
+            imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
+        }
+        val lp = WindowManager.LayoutParams().apply {
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            format = PixelFormat.TRANSLUCENT
+            flags = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            gravity = Gravity.TOP or Gravity.START
+            width = wpx
+            height = hpx
+        }
+        val (sw, sh) = if (c.feedingFullScreen) screenRealSize() else (screenActiveBounds().width() to screenActiveBounds().height())
+        if (c.feedingEdgeRefresh) {
+            // 边缘刷新：支鱼紧贴边界（全屏=物理屏四边；非全屏=活动范围四边），随机选一边，鱼边贴边。
+            // 顶/底边：鱼顶/底边贴顶/底静态边界；左/右边：鱼左/右边贴左/右边界（横向无系统栏，直接 0/宽）。
+            when (Random.nextInt(4)) {
+                0 -> { // 上边
+                    lp.x = Random.nextInt(0, (sw - wpx).coerceIn(1, 99999))
+                    lp.y = clampStaticY(c.staticTopBound, hpx, c.staticTopBound, c.staticBottomBound)
+                }
+                1 -> { // 下边：鱼底贴底边界
+                    lp.x = Random.nextInt(0, (sw - wpx).coerceIn(1, 99999))
+                    lp.y = clampStaticY(sh - c.staticBottomBound - hpx, hpx, c.staticTopBound, c.staticBottomBound)
+                }
+                2 -> { // 左边：鱼左贴左边界
+                    lp.x = 0
+                    lp.y = clampStaticY(Random.nextInt(0, (sh - hpx).coerceIn(1, 99999)), hpx, c.staticTopBound, c.staticBottomBound)
+                }
+                else -> { // 右边：鱼右贴右边界
+                    lp.x = (sw - wpx).coerceIn(0, 99999)
+                    lp.y = clampStaticY(Random.nextInt(0, (sh - hpx).coerceIn(1, 99999)), hpx, c.staticTopBound, c.staticBottomBound)
+                }
+            }
+        } else {
+            lp.x = Random.nextInt(0, (sw - wpx).coerceIn(1, 99999))
+            lp.y = clampStaticY(Random.nextInt(0, (sh - hpx).coerceIn(1, 99999)), hpx, c.staticTopBound, c.staticBottomBound)
+        }
+        iv.setOnTouchListener(fishDragListener)
+        try { windowManager.addView(iv, lp) } catch (_: Exception) { return }
+        val layer = FishLayer(iv, lp)
+        fishLayers.add(layer)
+        if (c.feedingBorderShow) setFishBorder(layer, true)
+        if (c.feedingAutoExpire) scheduleFishExpire(layer, c.feedingExpireTime)
+    }
+
+    private fun scheduleFishExpire(layer: FishLayer, secs: Int) {
+        val idx = fishLayers.indexOfFirst { it.iv === layer.iv }
+        if (idx < 0) return
+        val runnable = Runnable { removeFish(layer) }
+        fishLayers[idx] = fishLayers[idx].copy(expireRunnable = runnable)
+        mainHandler.postDelayed(runnable, secs.coerceAtLeast(1) * 1000L)
+    }
+
+    // 移除一条支鱼（取消过期计时；不回收共享 crop 位图）。
+    // 注意：FishLayer 是 data class，equals 含 expireRunnable 字段，copy 替换后会失配；
+    // 故一律按 ImageView 引用定位，避免过期 runnable 持有旧引用时 indexOf 返回 -1 导致永不删除。
+    fun removeFish(layer: FishLayer) {
+        val idx = fishLayers.indexOfFirst { it.iv === layer.iv }
+        if (idx < 0) return
+        val cur = fishLayers[idx]
+        cur.expireRunnable?.let { mainHandler.removeCallbacks(it) }
+        try { windowManager.removeView(cur.iv) } catch (_: Exception) {}
+        cur.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
+        fishLayers.removeAt(idx)
+    }
+
+    // 清除全部支鱼。
+    fun clearAllFish() {
+        for (layer in fishLayers.toList()) removeFish(layer)
+    }
+
+    /** 全部支鱼浮窗重置位置到屏幕中心（y 受静态边界约束）。 */
+    fun resetAllFishToCenter() {
+        val (sw, sh) = screenRealSize()
+        val cfg = currentConfig()
+        for (layer in fishLayers) {
+            val cx = (sw - layer.lp.width) / 2
+            val cy = clampStaticY((sh - layer.lp.height) / 2, layer.lp.height, cfg.staticTopBound, cfg.staticBottomBound)
+            layer.lp.x = cx
+            layer.lp.y = cy
+            try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) { }
+            try { layer.borderView?.let { windowManager.updateViewLayout(it, layer.lp) } } catch (_: Exception) { }
+        }
+    }
+
+    private fun setFishBorder(layer: FishLayer, on: Boolean) {
+        val idx = fishLayers.indexOfFirst { it.iv === layer.iv }
+        if (idx < 0) return
+        val cur = fishLayers[idx]
+        if (on && cur.borderView == null) {
+            fishLayers[idx] = cur.copy(borderView = createFishBorderView(cur))
+        } else if (!on && cur.borderView != null) {
+            try { windowManager.removeView(cur.borderView) } catch (_: Exception) {}
+            fishLayers[idx] = cur.copy(borderView = null)
+        }
+    }
+
+    private fun createFishBorderView(layer: FishLayer): View {
+        val bv = View(this).apply { background = getDrawable(R.drawable.freeze_border) }
+        val blp = WindowManager.LayoutParams().apply {
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            format = PixelFormat.TRANSLUCENT
+            flags = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            gravity = Gravity.TOP or Gravity.START
+            width = layer.lp.width
+            height = layer.lp.height
+            x = layer.lp.x
+            y = layer.lp.y
+        }
+        try { windowManager.addView(bv, blp) } catch (_: Exception) {}
+        return bv
+    }
+
+    // 倍率 / 透明度变化：即时作用于全部已有支鱼浮窗。
+    private fun applyFishScaleAlpha(c: PetConfigData) {
+        val crop = getFishCropBitmap() ?: return
+        val (wpx, hpx) = fishDisplaySize(crop, c)
+        for (layer in fishLayers) {
+            layer.lp.width = wpx
+            layer.lp.height = hpx
+            layer.iv.imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
+            try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) {}
+            layer.borderView?.let { bv ->
+                val blp = bv.layoutParams as? WindowManager.LayoutParams
+                blp?.width = layer.lp.width; blp?.height = layer.lp.height
+                try { windowManager.updateViewLayout(bv, blp) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    // 自动过期开关 / 过期时间变化：重新排程全部支鱼的过期计时。
+    private fun applyFishAutoExpire(c: PetConfigData) {
+        for (layer in fishLayers) {
+            layer.expireRunnable?.let { mainHandler.removeCallbacks(it) }
+            val idx = fishLayers.indexOfFirst { it.iv === layer.iv }
+            if (idx < 0) continue
+            fishLayers[idx] = if (c.feedingAutoExpire) {
+                val runnable = Runnable { removeFish(layer) }
+                mainHandler.postDelayed(runnable, c.feedingExpireTime.coerceAtLeast(1) * 1000L)
+                fishLayers[idx].copy(expireRunnable = runnable)
+            } else {
+                fishLayers[idx].copy(expireRunnable = null)
+            }
+        }
+    }
+
+    // 随机刷出循环：每个周期刷出一条（不超过最大数量），间隔在 [频率下限, 频率上限] 秒之间随机。
+    private val fishSpawnRunnable = object : Runnable {
+        override fun run() {
+            if (!fishSpawning) return
+            val c = currentConfig()
+            if (c.feedingEnabled && fishLayers.size < c.feedingMaxCount) {
+                spawnFish(c)
+            }
+            scheduleFishSpawn(c)
+        }
+    }
+
+    private fun scheduleFishSpawn(c: PetConfigData) {
+        val lo = c.feedingPeriodMin.coerceAtMost(c.feedingPeriodMax)
+        val hi = c.feedingPeriodMax.coerceAtLeast(c.feedingPeriodMin)
+        val period = if (hi <= lo) hi else Random.nextInt(lo, hi + 1)
+        mainHandler.postDelayed(fishSpawnRunnable, period * 1000L)
+    }
+
+    private fun startFishSpawning() {
+        if (fishSpawning) return
+        fishSpawning = true
+        scheduleFishSpawn(currentConfig())
+    }
+
+    // 交互菜单「投食」：立即刷出一条支鱼（受最大数量约束），并重置随机刷出计时（关闭浮窗由调用方处理）。
+    fun feedNow() {
+        val c = currentConfig()
+        if (fishLayers.size < c.feedingMaxCount) {
+            spawnFish(c)
+        }
+        // 仅当自动刷出运行中才重置计时：取消待触发的随机刷出，从当前时刻重新排程。
+        if (fishSpawning) {
+            mainHandler.removeCallbacks(fishSpawnRunnable)
+            scheduleFishSpawn(c)
+        }
+    }
+
+    private fun stopFishSpawning() {
+        fishSpawning = false
+        mainHandler.removeCallbacks(fishSpawnRunnable)
+        clearAllFish()
+    }
+
     private fun loadConfig() {
         config.normalizeBlocking() // 启动时清洗历史残留的非法四边重力组合
         val c = config.getBlocking()
@@ -975,6 +1526,16 @@ class PetService : Service() {
         // 广播给所有宠物实例（不再只写主实例 petView）：每只独立设置自身脚朝向，驱动各自渲染旋转与位移方向。
         val gTarget = if (c.gravityEnabled) (if (effectiveTilt) 0 else calcGravityDir(c)) else 0
         pets.forEach { inst -> inst.view.gravityDir = gTarget }
+        // 投喂（支鱼）：初始化投喂状态并启动随机刷出（开关开启时）。
+        lastFeedingEnabled = c.feedingEnabled
+        lastFeedingFishScale = c.feedingFishScale
+        lastFeedingFishAlpha = c.feedingFishAlpha
+        lastFeedingMaxCount = c.feedingMaxCount
+        lastFeedingAutoExpire = c.feedingAutoExpire
+        lastFeedingExpireTime = c.feedingExpireTime
+        lastFeedingFullScreen = c.feedingFullScreen
+        lastFeedingBorderShow = c.feedingBorderShow
+        if (c.feedingEnabled) startFishSpawning()
         recalcBounds()
     }
 
@@ -994,6 +1555,33 @@ class PetService : Service() {
             if (c.freezeBorderShow != lastFreezeBorderShow) {
                 lastFreezeBorderShow = c.freezeBorderShow
                 for (layer in freezeLayers) setFreezeBorder(layer, c.freezeBorderShow)
+            }
+            // 投喂（支鱼）：开关变化启停随机刷出；其余参数变化即时作用于已有浮窗。
+            if (c.feedingEnabled != lastFeedingEnabled) {
+                lastFeedingEnabled = c.feedingEnabled
+                if (c.feedingEnabled) startFishSpawning() else stopFishSpawning()
+            }
+            if (c.feedingFishScale != lastFeedingFishScale || c.feedingFishAlpha != lastFeedingFishAlpha) {
+                lastFeedingFishScale = c.feedingFishScale
+                lastFeedingFishAlpha = c.feedingFishAlpha
+                applyFishScaleAlpha(c)
+            }
+            if (c.feedingMaxCount != lastFeedingMaxCount) {
+                lastFeedingMaxCount = c.feedingMaxCount
+                while (fishLayers.size > c.feedingMaxCount) removeFish(fishLayers.last())
+            }
+            if (c.feedingAutoExpire != lastFeedingAutoExpire || c.feedingExpireTime != lastFeedingExpireTime) {
+                lastFeedingAutoExpire = c.feedingAutoExpire
+                lastFeedingExpireTime = c.feedingExpireTime
+                applyFishAutoExpire(c)
+            }
+            if (c.feedingFullScreen != lastFeedingFullScreen) {
+                lastFeedingFullScreen = c.feedingFullScreen
+                // 仅影响下一次刷出位置范围，无需即时处理。
+            }
+            if (c.feedingBorderShow != lastFeedingBorderShow) {
+                lastFeedingBorderShow = c.feedingBorderShow
+                for (layer in fishLayers) setFishBorder(layer, c.feedingBorderShow)
             }
             // 物理参数同步：遍历所有实例（共享配置，各实例物理独立生效）。
             pets.forEach { inst ->
@@ -1078,6 +1666,7 @@ class PetService : Service() {
                 useNewSpriteFlag = c.useNewSprite
                 val pack = spritePackFor(useNewSpriteFlag)
                 pets.forEach { it.view.applySpritePack(pack) }
+                reloadFishBitmap()
             }
             // 体感重力：强度随设置页“重力强度”联动；开关变化启停传感器。
             // 有效体感 = 体感开关开启 且 重力·抛掷总开关开启；重力关时体感整体失效，

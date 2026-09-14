@@ -108,6 +108,8 @@ class SettingsActivity : AppCompatActivity() {
         // 碎碎念开关入口：整行点击进入二级设置页，右侧显示已开启/已关闭
         val tvThinkingState = findViewById<TextView>(R.id.tv_thinking_state)
         val rowThinkingMode = findViewById<android.view.View>(R.id.row_thinking_mode)
+        val tvFeedingState = findViewById<TextView>(R.id.tv_feeding_state)
+        val rowFeedingMode = findViewById<android.view.View>(R.id.row_feeding_mode)
         val swVisible = findViewById<Switch>(R.id.sw_visible)
         val swClickThrough = findViewById<Switch>(R.id.sw_click_through)
         val swBounceVibrate = findViewById<Switch>(R.id.sw_bounce_vibrate)
@@ -162,6 +164,7 @@ class SettingsActivity : AppCompatActivity() {
             tvRandomState.text = if (c.randomEnabled) "已开启" else "已关闭"
             tvSnapState.text = if (c.snapEnabled) "已开启" else "已关闭"
             tvThinkingState.text = if (c.thinkingEnabled) "已开启" else "已关闭"
+            tvFeedingState.text = if (c.feedingEnabled) "已开启" else "已关闭"
             // 体感重力与四边定向重力互不干扰：四边开关始终可交互并显示原值，
             // 开启体感时由 PetPhysics.step() 的 tiltGravity 分支优先接管，四边仅被忽略；
             // 关闭体感后四边原值自动恢复生效，无需用户重新逐个开启。
@@ -250,6 +253,9 @@ class SettingsActivity : AppCompatActivity() {
         // 碎碎念开关入口：整行点击进入碎碎念设置页
         rowThinkingMode.setOnClickListener {
             startActivity(android.content.Intent(this, ThinkingSettingsActivity::class.java))
+        }
+        rowFeedingMode.setOnClickListener {
+            startActivity(android.content.Intent(this, FeedingSettingsActivity::class.java))
         }
         // 吸附边缘总开关入口：整行点击切换 snapEnabled
         // 吸附边缘入口：仅显示状态（已开启/已关闭）+ 跳转贴边边设置页

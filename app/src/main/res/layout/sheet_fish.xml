@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/fish_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- 行1：打开浮窗时宠物实时大小（程序内填充，纯文本、水平居中） -->
+    <TextView android:id="@+id/fish_scale" android:layout_width="match_parent"
+        android:layout_height="40dp" android:gravity="center"
+        android:textSize="17dp" android:textColor="@color/cp_title"/>
+
+    <!-- 行1：投食-清除（本鱼） 与 投食-清空（全部） 同处一行 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_margin="4dp">
+        <TextView android:id="@+id/fish_clear" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
+            android:layout_marginEnd="4dp"
+            android:text="投食-清除" android:textSize="16dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/fish_clear_all" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
+            android:layout_marginStart="4dp"
+            android:text="投食-清空" android:textSize="16dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+    </LinearLayout>
+
+    <!-- 行2：重置大小 -->
+    <TextView android:id="@+id/fish_reset_size" android:layout_width="match_parent"
+        android:layout_height="56dp" android:gravity="center"
+        android:layout_margin="4dp"
+        android:text="重置大小" android:textSize="17dp" android:textColor="@color/cp_title"
+        android:background="@drawable/cell_bg"/>
+
+    <!-- 行3：投食-刷新（开关：投食随机掉落） -->
+    <LinearLayout android:id="@+id/menu_switch_feedrefresh" android:layout_width="match_parent"
+        android:layout_height="56dp" android:orientation="horizontal"
+        android:gravity="center" android:background="@drawable/cell_bg"
+        android:layout_margin="4dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="投食-刷新" android:textSize="16dp" android:textColor="@color/cp_title"/>
+        <Switch android:id="@+id/sw_feedrefresh" android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:thumbTint="@color/switch_black_selector"
+            android:trackTint="@color/switch_black_selector"
+            android:clickable="false" android:focusable="false"/>
+    </LinearLayout>
+
+    <!-- 行4：投食-设置（跳转投食设置页） -->
+    <TextView android:id="@+id/fish_settings" android:layout_width="match_parent"
+        android:layout_height="56dp" android:gravity="center"
+        android:layout_margin="4dp"
+        android:text="投食-设置" android:textSize="17dp" android:textColor="@color/cp_title"
+        android:background="@drawable/cell_bg"/>
+
+</LinearLayout>

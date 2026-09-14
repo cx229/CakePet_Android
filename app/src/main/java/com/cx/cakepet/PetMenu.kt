@@ -26,6 +26,8 @@ class PetMenu(
     private var menuView: View? = null
     private var actionsView: View? = null
     private var interactView: View? = null
+    private var freezeMoreView: View? = null
+    private var feedMoreView: View? = null
     private var exitConfirmView: View? = null
 
     private val params: WindowManager.LayoutParams
@@ -82,10 +84,14 @@ class PetMenu(
         menuView = buildMenu(ctx)
         actionsView = buildActions(ctx).also { it.visibility = View.GONE }
         interactView = buildInteract(ctx, snap).also { it.visibility = View.GONE }
+        freezeMoreView = buildFreezeMore(ctx, snap).also { it.visibility = View.GONE }
+        feedMoreView = buildFeedMore(ctx).also { it.visibility = View.GONE }
         exitConfirmView = buildExitConfirm(ctx).also { it.visibility = View.GONE }
         root!!.addView(menuView)
         root!!.addView(actionsView)
         root!!.addView(interactView)
+        root!!.addView(freezeMoreView)
+        root!!.addView(feedMoreView)
         root!!.addView(exitConfirmView)
 
         // 底部全宽、纵向按需：贴底显示，y 为距底边偏移（0 贴底）
@@ -103,6 +109,8 @@ class PetMenu(
             menuView = null
             actionsView = null
             interactView = null
+            freezeMoreView = null
+            feedMoreView = null
             exitConfirmView = null
         }
     }
@@ -207,15 +215,38 @@ class PetMenu(
             interactView?.visibility = View.GONE
             menuView?.visibility = View.VISIBLE
         }
+        // 定格-咔嚓：用长按时记录的快照定格当前宠物并退出浮窗（互动页首行，其余后延）
         v.findViewById<View>(R.id.freeze_snap).setOnClickListener {
-            // 定格：在长按时记录的指定位置创建指定帧的纯显示图层（不可点击、不拦截交互），然后退出浮窗
             snap?.let { s -> service.addFreezeLayer(s) }
             dismiss()
         }
-        v.findViewById<View>(R.id.freeze_clear).setOnClickListener {
-            // 清除所有定格显示层
-            service.clearAllFreeze()
+        // 定格-更多：进入定格-更多子页（咔嚓/归位/清空/交互开关/设置）
+        v.findViewById<View>(R.id.freeze_more).setOnClickListener {
+            interactView?.visibility = View.GONE
+            freezeMoreView?.visibility = View.VISIBLE
+        }
+        // 投食：立即刷出一条支鱼并重置随机刷出计时，随即关闭浮窗（与分身操作一致：避免浮窗遮挡）。
+        v.findViewById<View>(R.id.feed_now).setOnClickListener {
+            service.feedNow()
             dismiss()
+        }
+        // 重置大小：把宠物大小恢复为用户默认值（所有分身共享、即时生效），随即关闭浮窗
+        v.findViewById<View>(R.id.reset_size).setOnClickListener {
+            service.resetPetScaleToDefault()
+            dismiss()
+        }
+        // 投食-刷新：开关投食随机掉落（与食物浮窗同逻辑）
+        val swFr = v.findViewById<android.widget.Switch>(R.id.sw_feedrefresh)
+        swFr.isChecked = service.currentConfig().feedingEnabled
+        v.findViewById<View>(R.id.menu_switch_feedrefresh).setOnClickListener {
+            val next = !swFr.isChecked
+            swFr.isChecked = next
+            service.updateConfig { copy(feedingEnabled = next) }
+        }
+        // 投食-更多：进入投食-更多子页（投食/重置大小/归位/清空/刷新开关/设置）
+        v.findViewById<View>(R.id.feed_more).setOnClickListener {
+            interactView?.visibility = View.GONE
+            feedMoreView?.visibility = View.VISIBLE
         }
         // 分身 归零 / -1 / +1：修改酥的数量（petCount），逻辑与关于页一致，范围 1..20；
         // 到达上下界时不再变化，并用系统 Toast 提示（「酥」）。
@@ -242,6 +273,84 @@ class PetMenu(
             service.updateConfig { copy(petCount = cur + 1) }
             dismiss()
             toast("「酥」数量：" + (cur + 1))
+        }
+        return v
+    }
+
+    /**
+     * 定格-更多子页面：定格-咔嚓（用长按快照定格并退出）、定格-归位（全部定格重置到屏幕中心）、
+     * 定格-清空（清除所有定格）、定格-交互开关、设置（打开主设置）。
+     */
+    private fun buildFreezeMore(ctx: Context, snap: PetView.FreezeSnapshot?): View {
+        val v = LayoutInflater.from(ctx).inflate(R.layout.sheet_freeze_more, null)
+        val swFd = v.findViewById<android.widget.Switch>(R.id.sw_freezeinteract)
+        swFd.isChecked = service.currentConfig().freezeDraggable
+        v.findViewById<View>(R.id.menu_switch_freezeinteract).setOnClickListener {
+            val next = !swFd.isChecked
+            swFd.isChecked = next
+            service.updateConfig { copy(freezeDraggable = next) }
+        }
+        v.findViewById<View>(R.id.fm_back).setOnClickListener {
+            freezeMoreView?.visibility = View.GONE
+            interactView?.visibility = View.VISIBLE
+        }
+        v.findViewById<View>(R.id.freeze_snap).setOnClickListener {
+            snap?.let { s -> service.addFreezeLayer(s) }
+            dismiss()
+        }
+        v.findViewById<View>(R.id.freeze_reset).setOnClickListener {
+            service.resetAllFreezeToCenter()
+            dismiss()
+        }
+        v.findViewById<View>(R.id.freeze_clear).setOnClickListener {
+            service.clearAllFreeze()
+            dismiss()
+        }
+        v.findViewById<View>(R.id.fm_settings).setOnClickListener {
+            dismiss()
+            val intent = Intent(service, SettingsActivity::class.java).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            service.startActivity(intent)
+        }
+        return v
+    }
+
+    /**
+     * 投食-更多子页面：投食（立即刷出一条支鱼）、重置大小、投食-归位（全部鱼重置到屏幕中心）、
+     * 投食-清空（清除所有鱼）、投食-刷新开关（投食随机掉落）、投食-设置（打开投食设置页）。
+     */
+    private fun buildFeedMore(ctx: Context): View {
+        val v = LayoutInflater.from(ctx).inflate(R.layout.sheet_feed_more, null)
+        val swFr = v.findViewById<android.widget.Switch>(R.id.sw_feedrefresh)
+        swFr.isChecked = service.currentConfig().feedingEnabled
+        v.findViewById<View>(R.id.menu_switch_feedrefresh).setOnClickListener {
+            val next = !swFr.isChecked
+            swFr.isChecked = next
+            service.updateConfig { copy(feedingEnabled = next) }
+        }
+        v.findViewById<View>(R.id.fdm_back).setOnClickListener {
+            feedMoreView?.visibility = View.GONE
+            interactView?.visibility = View.VISIBLE
+        }
+        v.findViewById<View>(R.id.feed_now).setOnClickListener {
+            service.feedNow()
+            dismiss()
+        }
+        v.findViewById<View>(R.id.reset_size).setOnClickListener {
+            service.resetPetScaleToDefault()
+            dismiss()
+        }
+        v.findViewById<View>(R.id.feed_reset).setOnClickListener {
+            service.resetAllFishToCenter()
+            dismiss()
+        }
+        v.findViewById<View>(R.id.feed_clear).setOnClickListener {
+            service.clearAllFish()
+            dismiss()
+        }
+        v.findViewById<View>(R.id.fdm_settings).setOnClickListener {
+            dismiss()
+            val intent = Intent(service, FeedingSettingsActivity::class.java).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            service.startActivity(intent)
         }
         return v
     }

@@ -48,10 +48,15 @@ class AboutActivity : AppCompatActivity() {
         val swForceNightOn = findViewById<Switch>(R.id.sw_force_night_on)
         val swForceNightOff = findViewById<Switch>(R.id.sw_force_night_off)
         val swUseNewSprite = findViewById<Switch>(R.id.sw_use_new_sprite)
+        val sbStaticTop = findViewById<SeekBar>(R.id.sb_static_top)
+        val sbStaticBottom = findViewById<SeekBar>(R.id.sb_static_bottom)
+        val tvStaticTop = findViewById<android.widget.EditText>(R.id.tv_static_top)
+        val tvStaticBottom = findViewById<android.widget.EditText>(R.id.tv_static_bottom)
         val swImageBorder = findViewById<Switch>(R.id.sw_image_border)
         val swControlBorder = findViewById<Switch>(R.id.sw_control_border)
         val swFreezeBorder = findViewById<Switch>(R.id.sw_freeze_border)
         val swForceOpaque = findViewById<Switch>(R.id.sw_force_opaque)
+        val swFeedBorder = findViewById<Switch>(R.id.sw_feed_border)
         val swHideControlLayer = findViewById<Switch>(R.id.sw_hide_control_layer)
         val swHideStage = findViewById<Switch>(R.id.sw_hide_stage)
         val swSingleTrayMsg = findViewById<Switch>(R.id.sw_single_tray_msg)
@@ -95,9 +100,14 @@ class AboutActivity : AppCompatActivity() {
             swForceNightOn.isChecked = c.forceNightOn
             swForceNightOff.isChecked = c.forceNightOff
             swUseNewSprite.isChecked = c.useNewSprite
+            sbStaticTop.progress = (c.staticTopBound + 200).coerceIn(0, 600)
+            sbStaticBottom.progress = (c.staticBottomBound + 200).coerceIn(0, 600)
+            EditSync.setText(tvStaticTop, c.staticTopBound.toString())
+            EditSync.setText(tvStaticBottom, c.staticBottomBound.toString())
             swImageBorder.isChecked = c.showImageBorder
             swControlBorder.isChecked = c.showControlBorder
             swFreezeBorder.isChecked = c.freezeBorderShow
+            swFeedBorder.isChecked = c.feedingBorderShow
             swForceOpaque.isChecked = c.forceOpaque
             swHideControlLayer.isChecked = c.hideControlLayer
             swHideStage.isChecked = c.hideStage
@@ -126,6 +136,9 @@ class AboutActivity : AppCompatActivity() {
         bindCtrlBox(sbCtrlBoxW, tvCtrlBoxW, 0) { cfg, real -> cfg.copy(ctrlBoxWidth = real.toFloat()) }
         bindCtrlBox(sbCtrlBoxH, tvCtrlBoxH, 0) { cfg, real -> cfg.copy(ctrlBoxHeight = real.toFloat()) }
         bindCtrlBox(sbCtrlBoxVo, tvCtrlBoxVo, 128) { cfg, real -> cfg.copy(ctrlBoxVOffset = real.toFloat()) }
+        // 静态边界（定格/食物绝对显示边界）：范围 -200..400，SeekBar 偏移 200（progress = 真实值 + 200）。
+        bindStaticBound(sbStaticTop, tvStaticTop) { cfg, real -> cfg.copy(staticTopBound = real) }
+        bindStaticBound(sbStaticBottom, tvStaticBottom) { cfg, real -> cfg.copy(staticBottomBound = real) }
         // 夜间模式强制开关：默认均关；强制打开优先级 > 强制关闭。
         // 二者互斥——打开其一即关闭另一个，保证语义唯一。
         swForceNightOn.setOnCheckedChangeListener { _, b ->
@@ -159,6 +172,10 @@ class AboutActivity : AppCompatActivity() {
         // 显示定格边框：开启后在每块定格显示层叠加红色真实窗口边框（调试用）
         swFreezeBorder.setOnCheckedChangeListener { _, b ->
             lifecycleScope.launch { config.update { it.copy(freezeBorderShow = b) } }
+        }
+        // 显示投喂边框：开启后每条支鱼浮窗叠加红色真实窗口边框（调试用）
+        swFeedBorder.setOnCheckedChangeListener { _, b ->
+            lifecycleScope.launch { config.update { it.copy(feedingBorderShow = b) } }
         }
         // 强制显示无透明（默认关）：开启让显示窗去掉 FLAG_NOT_TOUCHABLE，避开系统对透明悬浮窗的半透明钳制，宠物 100% 不透明；
         // 与点击穿透/隐藏控制层互斥（二者开启时显示窗恢复 NOT_TOUCHABLE，见 PetService.applyDisplayTouchFlags）。
@@ -247,6 +264,38 @@ class AboutActivity : AppCompatActivity() {
             defaultValue = 0
         ) { v ->
             sb.progress = (v + offset).coerceIn(0, 256)
+            lifecycleScope.launch { config.update { writeReal(it, v) } }
+        }
+    }
+
+    /**
+     * 绑定静态边界（定格/食物绝对显示边界）：SeekBar ↔ EditText 双向联动（EditSync）。
+     * - 取值范围固定 -200..400；SeekBar max=600，UI 层加 200 偏置（progress = 真实值 + 200）。
+     * - 滑块拖动：实时回填输入框并写配置；输入框输入：EditSync 解析 + clamp(-200,400) 校正后写配置并回设滑块。
+     */
+    private fun bindStaticBound(
+        sb: SeekBar, et: android.widget.EditText,
+        writeReal: (PetConfigData, Int) -> PetConfigData
+    ) {
+        sb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val real = (progress - 200).coerceIn(-200, 400)
+                    EditSync.setText(et, real.toString())
+                    lifecycleScope.launch { config.update { writeReal(it, real) } }
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+        EditSync.bind(
+            et,
+            parse = { it.toIntOrNull() },
+            format = { it.toString() },
+            clamp = { it.coerceIn(-200, 400) },
+            defaultValue = 0
+        ) { v ->
+            sb.progress = (v + 200).coerceIn(0, 600)
             lifecycleScope.launch { config.update { writeReal(it, v) } }
         }
     }

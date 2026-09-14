@@ -88,6 +88,16 @@
             android:theme="@style/Theme.CakePet.FullscreenTitle" />
 
         <activity
+            android:name=".FeedingSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".FeedingThresholdActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
             android:name=".TestHitActivity"
             android:exported="false"
             android:theme="@style/Theme.CakePet.FullscreenTitle" />

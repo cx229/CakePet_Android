@@ -118,7 +118,25 @@ data class PetConfigData(
     // 资源包：开启后使用 assets/芝麻酥/ 新图（关于页开关，默认关 = 沿用 assets/img/ 旧图）
     val useNewSprite: Boolean = ConfigDefaults.USE_NEW_SPRITE,           // 使用新资源包
     // 仅单个碎碎念：开启=仅主实例显示碎碎念；关闭=每个实例各自显示（关于页开关，默认开）
-    val singleTrayMsg: Boolean = ConfigDefaults.SINGLE_TRAY_MSG
+    val singleTrayMsg: Boolean = ConfigDefaults.SINGLE_TRAY_MSG,
+    // 投喂（支鱼）：随机掉落的单图可拖拽浮窗（拖动给酥则消失）
+    val feedingEnabled: Boolean = ConfigDefaults.FEEDING_ENABLED,            // 投食总开关（默认开）
+    val feedingFishScale: Float = ConfigDefaults.FEEDING_FISH_SCALE,         // 支鱼大小倍率（默认 1x）
+    val feedingFishAlpha: Float = ConfigDefaults.FEEDING_FISH_ALPHA,         // 支鱼透明度（百分比 0-100，默认 70）
+    val feedingMaxCount: Int = ConfigDefaults.FEEDING_MAX_COUNT,             // 随机掉落最大数量（默认 5）
+    val feedingPeriodMin: Int = ConfigDefaults.FEEDING_PERIOD_MIN,           // 掉落频率下限（秒，默认 5）
+    val feedingPeriodMax: Int = ConfigDefaults.FEEDING_PERIOD_MAX,           // 掉落频率上限（秒，默认 10）
+    val feedingAutoExpire: Boolean = ConfigDefaults.FEEDING_AUTO_EXPIRE,     // 自动过期（默认开）
+    val feedingExpireTime: Int = ConfigDefaults.FEEDING_EXPIRE_TIME,         // 过期时间（秒，默认 60）
+    val feedingFullScreen: Boolean = ConfigDefaults.FEEDING_FULL_SCREEN,     // 全屏刷新（默认开）
+    val feedingBorderShow: Boolean = ConfigDefaults.FEEDING_BORDER_SHOW,     // 投喂边框显示（默认关）
+    val feedingEdgeRefresh: Boolean = ConfigDefaults.FEEDING_EDGE_REFRESH,   // 边缘刷新（默认关）
+    // 投喂变大：投食成功后真实增大宠物尺寸（scale 为所有分身共享，故投喂一只全部变大）
+    val feedGrowEnabled: Boolean = ConfigDefaults.FEED_GROW_ENABLED,         // 投喂变大总开关（默认开）
+    val feedGrowFactor: Float = ConfigDefaults.FEED_GROW_FACTOR,             // 变大系数（每次投喂 scale *= (1+factor)）
+    // 静态资源（定格/食物）绝对显示边界（物理坐标，单位 px；范围 -200..400）
+    val staticTopBound: Int = ConfigDefaults.STATIC_TOP_BOUND,                // 静态顶部边界（顶边最小 y，默认 120）
+    val staticBottomBound: Int = ConfigDefaults.STATIC_BOTTOM_BOUND          // 静态底部边界（底边距屏底保留距离，默认 0）
 )
 
 /**
@@ -188,6 +206,20 @@ class PetConfig(private val context: Context) {
     private val KEY_HIDE_CONTROL_LAYER = booleanPreferencesKey("hide_control_layer")
     private val KEY_HIDE_STAGE = booleanPreferencesKey("hide_stage")
     private val KEY_FORCE_OPAQUE = booleanPreferencesKey("force_opaque")
+    // 投喂（支鱼）
+    private val KEY_FEEDING_ENABLED = booleanPreferencesKey("feeding_enabled")
+    private val KEY_FEEDING_FISH_SCALE = floatPreferencesKey("feeding_fish_scale")
+    private val KEY_FEEDING_FISH_ALPHA = floatPreferencesKey("feeding_fish_alpha")
+    private val KEY_FEEDING_MAX_COUNT = androidx.datastore.preferences.core.intPreferencesKey("feeding_max_count")
+    private val KEY_FEEDING_PERIOD_MIN = androidx.datastore.preferences.core.intPreferencesKey("feeding_period_min")
+    private val KEY_FEEDING_PERIOD_MAX = androidx.datastore.preferences.core.intPreferencesKey("feeding_period_max")
+    private val KEY_FEEDING_AUTO_EXPIRE = booleanPreferencesKey("feeding_auto_expire")
+    private val KEY_FEEDING_EXPIRE_TIME = androidx.datastore.preferences.core.intPreferencesKey("feeding_expire_time")
+    private val KEY_FEEDING_FULL_SCREEN = booleanPreferencesKey("feeding_full_screen")
+    private val KEY_FEEDING_BORDER_SHOW = booleanPreferencesKey("feeding_border_show")
+    private val KEY_FEEDING_EDGE_REFRESH = booleanPreferencesKey("feeding_edge_refresh")
+    private val KEY_FEED_GROW_ENABLED = booleanPreferencesKey("feed_grow_enabled")
+    private val KEY_FEED_GROW_FACTOR = floatPreferencesKey("feed_grow_factor")
     private val KEY_SHOW_BOUND_OFFSET = booleanPreferencesKey("show_bound_offset")
     private val KEY_SHOW_SNAP_OFFSET = booleanPreferencesKey("show_snap_offset")
     private val KEY_RECT_HIT_MODE = booleanPreferencesKey("rect_hit_mode") // 旧键，仅用于迁移
@@ -227,6 +259,9 @@ class PetConfig(private val context: Context) {
     private val KEY_FORCE_NIGHT_OFF = booleanPreferencesKey("force_night_off")
     private val KEY_USE_NEW_SPRITE = booleanPreferencesKey("use_new_sprite")
     private val KEY_SINGLE_TRAY_MSG = booleanPreferencesKey("single_tray_msg")
+    // 静态资源（定格/食物）绝对显示边界
+    private val KEY_STATIC_TOP_BOUND = androidx.datastore.preferences.core.intPreferencesKey("static_top_bound")
+    private val KEY_STATIC_BOTTOM_BOUND = androidx.datastore.preferences.core.intPreferencesKey("static_bottom_bound")
 
     /** Preferences → PetConfigData 的映射。抽取为函数以便 configFlow 与 update 复用同一套默认值与钳制规则。 */
     private fun androidx.datastore.preferences.core.Preferences.toConfigData(): PetConfigData {
@@ -313,7 +348,23 @@ class PetConfig(private val context: Context) {
             forceNightOff = prefs[KEY_FORCE_NIGHT_OFF] ?: ConfigDefaults.FORCE_NIGHT_OFF,
             useNewSprite = prefs[KEY_USE_NEW_SPRITE] ?: ConfigDefaults.USE_NEW_SPRITE,
             singleTrayMsg = prefs[KEY_SINGLE_TRAY_MSG] ?: ConfigDefaults.SINGLE_TRAY_MSG,
-            forceOpaque = prefs[KEY_FORCE_OPAQUE] ?: ConfigDefaults.FORCE_OPAQUE
+            forceOpaque = prefs[KEY_FORCE_OPAQUE] ?: ConfigDefaults.FORCE_OPAQUE,
+            // 投喂（支鱼）
+            feedingEnabled = prefs[KEY_FEEDING_ENABLED] ?: ConfigDefaults.FEEDING_ENABLED,
+            feedingFishScale = prefs[KEY_FEEDING_FISH_SCALE] ?: ConfigDefaults.FEEDING_FISH_SCALE,
+            feedingFishAlpha = (prefs[KEY_FEEDING_FISH_ALPHA] ?: ConfigDefaults.FEEDING_FISH_ALPHA).coerceIn(0f, 100f),
+            feedingMaxCount = (prefs[KEY_FEEDING_MAX_COUNT] ?: ConfigDefaults.FEEDING_MAX_COUNT).coerceIn(1, 100),
+            feedingPeriodMin = (prefs[KEY_FEEDING_PERIOD_MIN] ?: ConfigDefaults.FEEDING_PERIOD_MIN).coerceIn(1, 3600),
+            feedingPeriodMax = (prefs[KEY_FEEDING_PERIOD_MAX] ?: ConfigDefaults.FEEDING_PERIOD_MAX).coerceIn(1, 3600),
+            feedingAutoExpire = prefs[KEY_FEEDING_AUTO_EXPIRE] ?: ConfigDefaults.FEEDING_AUTO_EXPIRE,
+            feedingExpireTime = (prefs[KEY_FEEDING_EXPIRE_TIME] ?: ConfigDefaults.FEEDING_EXPIRE_TIME).coerceIn(1, 360),
+            feedingFullScreen = prefs[KEY_FEEDING_FULL_SCREEN] ?: ConfigDefaults.FEEDING_FULL_SCREEN,
+            feedingBorderShow = prefs[KEY_FEEDING_BORDER_SHOW] ?: ConfigDefaults.FEEDING_BORDER_SHOW,
+            feedingEdgeRefresh = prefs[KEY_FEEDING_EDGE_REFRESH] ?: ConfigDefaults.FEEDING_EDGE_REFRESH,
+            feedGrowEnabled = prefs[KEY_FEED_GROW_ENABLED] ?: ConfigDefaults.FEED_GROW_ENABLED,
+            feedGrowFactor = (prefs[KEY_FEED_GROW_FACTOR] ?: ConfigDefaults.FEED_GROW_FACTOR).coerceIn(0.01f, 10f),
+            staticTopBound = (prefs[KEY_STATIC_TOP_BOUND] ?: ConfigDefaults.STATIC_TOP_BOUND).coerceIn(-200, 400),
+            staticBottomBound = (prefs[KEY_STATIC_BOTTOM_BOUND] ?: ConfigDefaults.STATIC_BOTTOM_BOUND).coerceIn(-200, 400)
         )
     }
 
@@ -439,6 +490,22 @@ class PetConfig(private val context: Context) {
             prefs[KEY_USE_NEW_SPRITE] = updated.useNewSprite
             prefs[KEY_SINGLE_TRAY_MSG] = updated.singleTrayMsg
             prefs[KEY_FORCE_OPAQUE] = updated.forceOpaque
+            // 投喂（支鱼）
+            prefs[KEY_FEEDING_ENABLED] = updated.feedingEnabled
+            prefs[KEY_FEEDING_FISH_SCALE] = updated.feedingFishScale
+            prefs[KEY_FEEDING_FISH_ALPHA] = updated.feedingFishAlpha
+            prefs[KEY_FEEDING_MAX_COUNT] = updated.feedingMaxCount
+            prefs[KEY_FEEDING_PERIOD_MIN] = updated.feedingPeriodMin
+            prefs[KEY_FEEDING_PERIOD_MAX] = updated.feedingPeriodMax
+            prefs[KEY_FEEDING_AUTO_EXPIRE] = updated.feedingAutoExpire
+            prefs[KEY_FEEDING_EXPIRE_TIME] = updated.feedingExpireTime
+            prefs[KEY_FEEDING_FULL_SCREEN] = updated.feedingFullScreen
+            prefs[KEY_FEEDING_BORDER_SHOW] = updated.feedingBorderShow
+            prefs[KEY_FEEDING_EDGE_REFRESH] = updated.feedingEdgeRefresh
+            prefs[KEY_FEED_GROW_ENABLED] = updated.feedGrowEnabled
+            prefs[KEY_FEED_GROW_FACTOR] = updated.feedGrowFactor
+            prefs[KEY_STATIC_TOP_BOUND] = updated.staticTopBound
+            prefs[KEY_STATIC_BOTTOM_BOUND] = updated.staticBottomBound
         }
     }
 
@@ -481,6 +548,11 @@ class PetConfig(private val context: Context) {
                     "thinkingAlpha" -> nc.copy(thinkingAlpha = s.default / 100f)
                     "thinkingOffset" -> nc.copy(thinkingOffset = s.default)
                     "thinkingBgAlpha" -> nc.copy(thinkingBgAlpha = s.default.toInt())
+                    "feedScale" -> nc.copy(feedingFishScale = s.default.coerceIn(s.from, s.to))
+                    "feedAlpha" -> nc.copy(feedingFishAlpha = s.default.coerceIn(s.from, s.to))
+                    "feedMaxCount" -> nc.copy(feedingMaxCount = s.default.toInt().coerceIn(s.from.toInt(), s.to.toInt()))
+                    "feedExpire" -> nc.copy(feedingExpireTime = s.default.toInt().coerceIn(s.from.toInt(), s.to.toInt()))
+                    "feedGrow" -> nc.copy(feedGrowFactor = s.default.coerceIn(s.from, s.to))
                     else -> nc
                 }
             }
@@ -488,6 +560,7 @@ class PetConfig(private val context: Context) {
                 when (d.key) {
                     "thinkingEmpty" -> nc = nc.copy(thinkingEmptyMin = d.defaultA.toInt(), thinkingEmptyMax = d.defaultB.toInt())
                     "randomPeriod" -> nc = nc.copy(randomPeriodMin = d.defaultA.toInt(), randomPeriodMax = d.defaultB.toInt())
+                    "feedPeriod" -> nc = nc.copy(feedingPeriodMin = d.defaultA.toInt(), feedingPeriodMax = d.defaultB.toInt())
                 }
             }
             b.switches.forEach { sw ->
@@ -519,6 +592,11 @@ class PetConfig(private val context: Context) {
                     "imeAdapt" -> nc.copy(imeAdapt = sw.default)
                     "imeResetBottomOffset" -> nc.copy(imeResetBottomOffset = sw.default)
                     "imeHide" -> nc.copy(imeHide = sw.default)
+                    "feedingEnabled" -> nc.copy(feedingEnabled = sw.default)
+                    "feedingAutoExpire" -> nc.copy(feedingAutoExpire = sw.default)
+                    "feedingFullScreen" -> nc.copy(feedingFullScreen = sw.default)
+                    "feedingBorderShow" -> nc.copy(feedingBorderShow = sw.default)
+                    "feedGrowEnabled" -> nc.copy(feedGrowEnabled = sw.default)
                     else -> nc
                 }
             }

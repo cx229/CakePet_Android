@@ -295,6 +295,71 @@ object AppBounds {
         }
         return mask
     }
+
+    // ---------------- FEEDING 页 ----------------
+    // 投喂（支鱼）：随机掉落的单图可拖拽浮窗（拖动给酥则消失）。
+    val FEEDING_SLIDERS = listOf(
+        SliderBound(
+            key = "feedScale", label = "大小", group = "投食",
+            hardMin = 0.01f, hardMax = 30f,
+            baseMin = 0.5f, baseMax = 3f,
+            from = 0.5f, to = 3f,
+            step = 0.01f, default = 1.40f
+        ),
+        SliderBound(
+            key = "feedAlpha", label = "透明度", group = "投食",
+            hardMin = 0f, hardMax = 100f,
+            baseMin = 10f, baseMax = 100f,
+            from = 10f, to = 100f,
+            step = 1f, default = 70f
+        ),
+        SliderBound(
+            key = "feedMaxCount", label = "最大数量", group = "随机掉落",
+            hardMin = 1f, hardMax = 100f,
+            baseMin = 1f, baseMax = 10f,
+            from = 1f, to = 10f,
+            step = 1f, default = 3f
+        ),
+        SliderBound(
+            key = "feedExpire", label = "过期时间", group = "自动过期",
+            hardMin = 1f, hardMax = 360f,
+            baseMin = 1f, baseMax = 120f,
+            from = 1f, to = 120f,
+            step = 1f, default = 60f
+        ),
+        SliderBound(
+            key = "feedGrow", label = "变大系数", group = "投食变大",
+            hardMin = 0.01f, hardMax = 10f,        // 极限阈值 0.01-10
+            baseMin = 0.01f, baseMax = 1f,         // 阈值 0.01-1（阈值页可放开到 10）
+            from = 0.01f, to = 1f,
+            step = 0.01f, default = 0.03f
+        )
+    )
+    val FEEDING_DUALS = listOf(
+        DualSliderBound(
+            key = "feedPeriod", label = "频率", group = "随机掉落",
+            hardMin = 1f, hardMax = 3600f,
+            baseMinA = 1f, baseMaxA = 300f,
+            baseMinB = 1f, baseMaxB = 300f,
+            fromA = 1f, toA = 300f, stepA = 1f, defaultA = 30f,
+            fromB = 1f, toB = 300f, stepB = 1f, defaultB = 120f
+        )
+    )
+    val FEEDING_SWITCHES = listOf(
+        SwitchBound("feedingEnabled", "投食", "投食", true),
+        SwitchBound("feedingAutoExpire", "自动过期", "自动过期", true),
+        SwitchBound("feedingFullScreen", "全屏范围", "刷新范围", true),
+        SwitchBound("feedingEdgeRefresh", "边缘刷新", "刷新范围", true),
+        SwitchBound("feedGrowEnabled", "投喂变大", "投食变大", true)
+    )
+    val FEEDING_ORDER = listOf(
+        "feedingEnabled",
+        "feedScale", "feedAlpha",
+        "feedingFullScreen", "feedingEdgeRefresh",
+        "feedGrowEnabled", "feedGrow",
+        "feedMaxCount", "feedPeriod",
+        "feedingAutoExpire", "feedExpire"
+    )
 }
 
 // =====================================================================
@@ -319,7 +384,7 @@ object ConfigDefaults {
     val MAX_SPEED = 7100f                // 速度上限，防止数值爆炸（px/s）
     val ALPHA = 0.7f                      // 整体透明度：0-1 小数（UI 滑块是 0-100 百分比，PetConfig 内换算）
     val CLICK_THROUGH = false             // 点击穿透：true 时宠物不拦截触摸（点击会落到底层窗口）
-    val FREEZE_DRAGGABLE = false          // 定格图层可拖动：true 时所有定格显示层可点击拖动位置（默认关=纯显示不可点击）
+    val FREEZE_DRAGGABLE = true          // 定格图层可拖动：true 时所有定格显示层可点击拖动位置（默认关=纯显示不可点击）
     val FREEZE_BORDER_SHOW = false         // 显示定格边框：true 时在每块定格显示层上叠加红色矩形边框（调试用的真实窗口边框，默认关）
     val BOUNCE_VIBRATE = true             // 落地/反弹时是否触发一次振动反馈
     val ENABLED = true                    // 总开关：false 时宠物整体停用（不渲染、不运动）
@@ -411,6 +476,27 @@ object ConfigDefaults {
     val USE_NEW_SPRITE = true
     // 仅单个碎碎念：开启=仅主实例显示碎碎念；关闭=每个实例各自显示（关于页开关，默认开）。
     val SINGLE_TRAY_MSG = true
+    // 投喂（支鱼）：随机掉落的单图可拖拽浮窗（拖动给酥则消失）
+    val FEEDING_ENABLED = true             // 投食总开关（默认开）
+    val FEEDING_FISH_SCALE = 1.40f         // 支鱼大小倍率（默认 1.40x）
+    val FEEDING_FISH_ALPHA = 70f           // 支鱼透明度（百分比 0-100，默认 70）
+    val FEEDING_MAX_COUNT = 3              // 随机掉落最大数量（默认 3）
+    val FEEDING_PERIOD_MIN = 30             // 掉落频率下限（秒，默认 30）
+    val FEEDING_PERIOD_MAX = 120            // 掉落频率上限（秒，默认 120）
+    val FEEDING_AUTO_EXPIRE = true         // 自动过期（默认开）
+    val FEEDING_EXPIRE_TIME = 60           // 过期时间（秒，默认 60）
+    val FEEDING_FULL_SCREEN = true         // 全屏刷新（默认开）
+    val FEEDING_BORDER_SHOW = false        // 投喂边框显示（默认过关）
+    val FEEDING_EDGE_REFRESH = true       // 边缘刷新（默认开；开启后支鱼刷在边界而非屏幕中间）
+    // 静态资源（定格/食物）绝对显示边界：物理坐标下静态资源的顶/底允许范围。
+    // staticTopBound=顶边最小 y（负=可出血到状态栏上）；staticBottomBound=底边距屏幕底保留距离（负=可出血到导航栏下）。
+    // 仅钳竖向；横向左/右无系统栏，保持原样。
+    val STATIC_TOP_BOUND = 120             // 静态顶部边界（px，默认 120）
+    val STATIC_BOTTOM_BOUND = 0            // 静态底部边界（px，默认 0）
+    // 投喂变大：投食成功后真实增大宠物尺寸
+    val FEED_GROW_ENABLED = true            // 投喂变大总开关（默认开）
+    val FEED_GROW_FACTOR = 0.03f            // 变大系数（默认 0.03，即每次投喂 scale += 0.03，绝对值相加）
+    val FEED_GROW_MAX_SCALE = 3f            // 仅作兜底：投喂变大实际上限取用户对「大小」设定的上界（scale 的 to，默认 3）
 }
 
 /** 颜色阈值项（预设色板 + 默认色）。字体色与背景色共用同一套预设。 */

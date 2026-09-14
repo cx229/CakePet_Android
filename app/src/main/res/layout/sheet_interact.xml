@@ -6,30 +6,25 @@
     android:orientation="vertical"
     android:padding="12dp">
 
-    <!-- 返回：与动作子页一致，纯文字（无按钮样式） -->
+    <!-- 返回 -->
     <TextView android:id="@+id/act_back" android:layout_width="match_parent"
         android:layout_height="48dp" android:gravity="center_vertical"
         android:text="‹ 返回" android:textSize="15dp" android:textColor="@color/cp_sub"/>
 
-    <!-- 行1：定格-咔嚓 -->
+    <!-- 行1：定格-咔嚓（用长按时记录的快照定格当前宠物并退出浮窗） -->
     <TextView android:id="@+id/freeze_snap" android:layout_width="match_parent"
         android:layout_height="56dp" android:gravity="center"
         android:layout_margin="4dp"
         android:text="定格-咔嚓" android:textSize="17dp" android:textColor="@color/cp_title"
         android:background="@drawable/cell_bg"/>
 
-    <!-- 行2+3：定格-清除所有 与 定格-交互 开关 同处一行；开关内文本与开关紧邻（无间距） -->
+    <!-- 行：定格-交互开关 + 定格-更多 › -->
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:layout_margin="4dp">
-        <TextView android:id="@+id/freeze_clear" android:layout_width="0dp"
-            android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
-            android:layout_marginEnd="4dp"
-            android:text="定格-清除所有" android:textSize="17dp" android:textColor="@color/cp_title"
-            android:background="@drawable/cell_bg"/>
         <LinearLayout android:id="@+id/menu_switch_freezeinteract" android:layout_width="0dp"
             android:layout_height="56dp" android:layout_weight="1" android:orientation="horizontal"
             android:gravity="center" android:background="@drawable/cell_bg"
-            android:layout_marginStart="4dp">
+            android:layout_marginEnd="4dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="定格-交互" android:textSize="16dp" android:textColor="@color/cp_title"/>
             <Switch android:id="@+id/sw_freezeinteract" android:layout_width="wrap_content"
@@ -38,9 +33,51 @@
                 android:trackTint="@color/switch_black_selector"
                 android:clickable="false" android:focusable="false"/>
         </LinearLayout>
+        <TextView android:id="@+id/freeze_more" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
+            android:layout_marginStart="4dp"
+            android:text="定格-更多 ›" android:textSize="16dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
     </LinearLayout>
 
-    <!-- 行4：分身归零 / 分身-1 / 分身+1（修改酥的数量，逻辑与关于页一致，范围 1..20） -->
+    <!-- 行：投食 + 重置大小 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_margin="4dp">
+        <TextView android:id="@+id/feed_now" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="6" android:gravity="center"
+            android:layout_marginEnd="4dp"
+            android:text="投食" android:textSize="17dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+        <TextView android:id="@+id/reset_size" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="4" android:gravity="center"
+            android:layout_marginStart="4dp"
+            android:text="重置大小" android:textSize="16dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+    </LinearLayout>
+
+    <!-- 行：投食-刷新（开关：投食随机掉落） + 投食-更多 › -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_margin="4dp">
+        <LinearLayout android:id="@+id/menu_switch_feedrefresh" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="1" android:orientation="horizontal"
+            android:gravity="center" android:background="@drawable/cell_bg"
+            android:layout_marginEnd="4dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="投食-刷新" android:textSize="16dp" android:textColor="@color/cp_title"/>
+            <Switch android:id="@+id/sw_feedrefresh" android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:thumbTint="@color/switch_black_selector"
+                android:trackTint="@color/switch_black_selector"
+                android:clickable="false" android:focusable="false"/>
+        </LinearLayout>
+        <TextView android:id="@+id/feed_more" android:layout_width="0dp"
+            android:layout_height="56dp" android:layout_weight="1" android:gravity="center"
+            android:layout_marginStart="4dp"
+            android:text="投食-更多 ›" android:textSize="16dp" android:textColor="@color/cp_title"
+            android:background="@drawable/cell_bg"/>
+    </LinearLayout>
+
+    <!-- 行：分身归零 / 分身-1 / 分身+1 -->
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:layout_margin="4dp">
         <TextView android:id="@+id/pet_zero" android:layout_width="0dp"

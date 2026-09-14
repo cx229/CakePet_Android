@@ -32,7 +32,8 @@ enum class SettingsPage(val tag: String) {
     SNAP("snap"),
     RANGE("range"),
     THINKING("thinking"),
-    RANDOM("random");
+    RANDOM("random"),
+    FEEDING("feeding");
 
     companion object {
         fun fromTag(tag: String): SettingsPage =
@@ -170,6 +171,12 @@ class PetBounds(private val context: Context) {
             duals = AppBounds.RANDOM_DUALS,
             switches = AppBounds.RANDOM_SWITCHES,
             order = AppBounds.RANDOM_ORDER
+        )
+        SettingsPage.FEEDING -> PageBounds(
+            sliders = AppBounds.FEEDING_SLIDERS,
+            duals = AppBounds.FEEDING_DUALS,
+            switches = AppBounds.FEEDING_SWITCHES,
+            order = AppBounds.FEEDING_ORDER
         )
     }
 

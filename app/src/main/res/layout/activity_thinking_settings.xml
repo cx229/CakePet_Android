@@ -167,8 +167,22 @@
                             android:orientation="vertical">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                                 android:text="频率" style="@style/SettingsOptionTitle"/>
-                            <TextView android:id="@+id/empty_range_value" android:layout_width="match_parent"
-                                android:layout_height="wrap_content" android:text="2 - 15" android:textSize="16dp"/>
+                            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:orientation="horizontal" android:gravity="center">
+                                <EditText android:id="@+id/empty_min_value" android:layout_width="0dp"
+                                    android:layout_height="wrap_content" android:layout_weight="1" android:text="2"
+                                    android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
+                                    android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"
+                                    android:textColor="@color/cp_title"/>
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="-" android:textSize="14dp" android:layout_marginStart="2dp"
+                                    android:layout_marginEnd="2dp" android:textColor="@color/cp_title"/>
+                                <EditText android:id="@+id/empty_max_value" android:layout_width="0dp"
+                                    android:layout_height="wrap_content" android:layout_weight="1" android:text="15"
+                                    android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
+                                    android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"
+                                    android:textColor="@color/cp_title"/>
+                            </LinearLayout>
                         </LinearLayout>
                         <com.google.android.material.slider.RangeSlider
                             android:id="@+id/empty_range"
@@ -270,14 +284,19 @@
                 </LinearLayout>
                 <!-- 背景透明度 -->
                 <LinearLayout style="@style/SettingsSliderRow">
-                    <LinearLayout style="@style/SettingsSwitchTexts">
+                    <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
+                        android:orientation="vertical">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="背景透明度" style="@style/SettingsOptionTitle"/>
+                        <EditText android:id="@+id/edit_thinking_bg_alpha" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" android:text="20" android:textSize="16dp"
+                            android:background="@drawable/edit_bg" android:inputType="number"
+                            android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
                     </LinearLayout>
-                    <EditText android:id="@+id/edit_thinking_bg_alpha" style="@style/SettingsValueInput"
-                        android:inputType="number" android:maxLength="3"/>
                     <com.google.android.material.slider.Slider android:id="@+id/seek_thinking_bg_alpha"
-                        style="@style/SettingsSlider"/>
+                        android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                        android:layout_marginStart="8dp" android:valueFrom="0.0" android:valueTo="100.0"
+                        android:stepSize="1.0"/>
                 </LinearLayout>
                 <!-- 背景颜色 -->
                 <LinearLayout android:id="@+id/row_bg_color" style="@style/SettingsSwitchRow">
