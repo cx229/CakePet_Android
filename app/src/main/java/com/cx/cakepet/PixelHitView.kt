@@ -16,7 +16,7 @@ import kotlin.math.round
 
 /**
  * 最小化像素级命中测试 View（同时用于验证 setTouchableRegion 的两种方案）：
- * - 绘制 assets/img/probe_head-1.png（3x 缩放居中，红色边框标记 View 边界）
+ * - 绘制 assets/芝麻酥/探头/probe_head-1.png（3x 缩放居中，红色边框标记 View 边界）
  * - DOWN 仅在“可点击区域”内才消费；区域外 return false（配合 setTouchableRegion 真穿透）
  * - regionMode 决定窗口系统层面的可点击区域：
  *     PIXEL = 像素级真实轮廓（逐非透明像素并入 Region）
@@ -59,7 +59,7 @@ class PixelHitView(context: Context) : View(context) {
 
     init {
         bitmap = try {
-            context.assets.open("img/probe_head-1.png").use { BitmapFactory.decodeStream(it) }
+            context.assets.open("芝麻酥/探头/probe_head-1.png").use { BitmapFactory.decodeStream(it) }
         } catch (e: Exception) {
             null
         }

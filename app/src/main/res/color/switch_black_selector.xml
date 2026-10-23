@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 开启态：纯黑 -->
-    <item android:state_checked="true" android:color="#FF000000" />
-    <!-- 关闭态：灰色 -->
-    <item android:state_checked="false" android:color="#FFBDBDBD" />
+    <!-- 开启态：纯黑（引用专用色 switch_on，便于后续修改） -->
+    <item android:state_checked="true" android:color="@color/switch_on" />
+    <!-- 关闭态：灰色（引用专用色 switch_off_thumb，便于后续修改） -->
+    <item android:state_checked="false" android:color="@color/switch_off_thumb" />
 </selector>

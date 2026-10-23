@@ -1,6 +1,12 @@
 package com.cx.cakepet
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.preferencesDataStoreFile
+import kotlinx.coroutines.runBlocking
+import java.util.concurrent.ConcurrentHashMap
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -49,6 +55,22 @@ data class PetConfigData(
     val tiltGravity: Boolean = ConfigDefaults.TILT_GRAVITY,
     // 速度最大值（像素/秒），范围 0-20000
     val maxSpeed: Float = ConfigDefaults.MAX_SPEED,
+    // 移动总开关：关闭后「酥」静止（不运动/不掉落），其余移动相关开关（重力/反弹…）均不生效。默认开。
+    val moveEnabled: Boolean = ConfigDefaults.MOVE_ENABLED,
+    // 抛掷开关：关闭后拖动松手不抛出（原地落下），但仍可拖起；默认开。
+    val throwEnabled: Boolean = ConfigDefaults.THROW_ENABLED,
+    // 抛掷系数：抛掷初速倍率（1=原速度，0=原地滚动但仍有 ROLL 动作），默认 1。
+    val throwCoeff: Float = ConfigDefaults.THROW_COEFF,
+    // 攀岩走壁：开启后走/蠕动撞墙不调头，转而踏上相邻墙沿屏幕四边周长循环走；默认开。
+    val wallClimb: Boolean = ConfigDefaults.WALL_CLIMB,
+    // 好动飞跃：开启后，攀岩态每次从池子捞新动作按 leapProbability 概率直接跳起(JUMP_UP)，飞向随机另一面墙；默认关。
+    val leapEnabled: Boolean = ConfigDefaults.LEAP_ENABLED,
+    // 飞跃概率（0-1 小数）：仅在攀岩态且 leapEnabled 时生效，概率越高越频繁跳起；默认 0.10。
+    val leapProbability: Float = ConfigDefaults.LEAP_PROBABILITY,
+    // 自动觅食：攀岩走壁的子开关（需先开启移动→攀岩走壁）。开启且非吸附态时，攀岩态从动作池选动作前插队优先：
+    // 遍历全部食物选直线最近者，沿墙“走”过去吃（吃到=正常投喂变大）；无食物则回落飞跃/选池。默认开。
+    val autoForage: Boolean = ConfigDefaults.AUTO_FORAGE,
+    val forageSpeed: Float = ConfigDefaults.FORAGE_SPEED,   // 自动觅食时沿墙走向食物的速度（px/s）
     // 四边边界偏移（像素）：正=向屏内收缩（宠物离屏边有间距），负=允许超出屏边。
     // 上下范围 -300~1600、默认 140；左右范围 -300~500、默认 0。
     val offsetTop: Float = ConfigDefaults.OFFSET_TOP,
@@ -115,9 +137,10 @@ data class PetConfigData(
     // 夜间模式强制开关：二者默认均关。强制打开优先级 > 强制关闭 > 跟随系统。
     val forceNightOn: Boolean = ConfigDefaults.FORCE_NIGHT_ON,         // 强制打开夜间模式
     val forceNightOff: Boolean = ConfigDefaults.FORCE_NIGHT_OFF,        // 强制关闭夜间模式
-    // 资源包：开启后使用 assets/芝麻酥/ 新图（关于页开关，默认关 = 沿用 assets/img/ 旧图）
-    val useNewSprite: Boolean = ConfigDefaults.USE_NEW_SPRITE,           // 使用新资源包
-    // 仅单个碎碎念：开启=仅主实例显示碎碎念；关闭=每个实例各自显示（关于页开关，默认开）
+    // 资源包：1=芝麻酥、2=芝麻球促销（按角色默认，默认 1=芝麻酥）。
+    // 由旧版 useNewSprite 布尔迁移而来：true→1、false→0。
+    val spritePack: Int = ConfigDefaults.DEFAULT_SPRITE_PACK,            // 当前图片资源包
+    // 仅单个碎碎念：开启=仅主实例显示碎碎念；关闭=每个实例各自显示（调试页开关，默认开）
     val singleTrayMsg: Boolean = ConfigDefaults.SINGLE_TRAY_MSG,
     // 投喂（支鱼）：随机掉落的单图可拖拽浮窗（拖动给酥则消失）
     val feedingEnabled: Boolean = ConfigDefaults.FEEDING_ENABLED,            // 投食总开关（默认开）
@@ -168,9 +191,67 @@ object RandomItemFlags {
     const val RBOUND_ALL = RBOUND_TOP or RBOUND_BOTTOM or RBOUND_LEFT or RBOUND_RIGHT
 }
 
-private val Context.dataStore by preferencesDataStore(name = "pet_config")
+private val Context.legacyDataStore by preferencesDataStore(name = "pet_config")
 
-class PetConfig(private val context: Context) {
+/**
+ * 全局/角色配置（对应 PC 端 configs.py / config.yaml），由 DataStore 持久化。
+ *
+ * 多角色并存后，每个角色持有自己的 PetConfig 实例，绑定到 pet_config_<roleId> 独立文件；
+ * 旧版单文件 pet_config 在首启动时迁移进默认角色(zhimasu)专用文件（见 [forRole]）。
+ */
+class PetConfig private constructor(
+    private val dataStore: DataStore<Preferences>,
+    // 角色 id：注意可能是【实例 id】（如 inst_xxx），也可能是模板 id（如 zhimasu）。
+    // 因实例 id 无法被 RoleRegistry.byId 直接命中，故「资源包」默认值不再用 byId(roleId)，
+    // 而是用解析后的 defaultSpritePack（见下方 forRole / 兼容构造），保证按需回退到本角色自己的资源包。
+    val roleId: String = RoleRegistry.DEFAULT.id,
+    // 本角色默认资源包 id：由角色描述符解析（实例 id → 模板 id → packId），多角色相互独立。
+    private val defaultSpritePack: Int = ConfigDefaults.DEFAULT_SPRITE_PACK
+) {
+
+    // 兼容旧调用：沿用单一 pet_config 文件（默认角色），默认资源包取其描述符 packId。
+    constructor(context: Context) : this(
+        context.legacyDataStore,
+        RoleRegistry.DEFAULT.id,
+        RoleStore.descriptorForInstance(context, RoleRegistry.DEFAULT.id)?.packId
+            ?: ConfigDefaults.DEFAULT_SPRITE_PACK
+    )
+
+    companion object {
+        /**
+         * 每个角色文件（pet_config_<roleId>）必须且只能有一个活跃 DataStore 实例，
+         * 否则会抛 "multiple DataStores active" 崩溃。这里按 roleId 缓存单例。
+         */
+        private val cache = ConcurrentHashMap<String, PetConfig>()
+
+        /**
+         * 按角色构建专用配置 DataStore（pet_config_<roleId>），同一角色永远返回同一实例。
+         * 默认角色(zhimasu)首次构建时，从旧版单文件 pet_config 迁移一次（保留老用户设置）。
+         */
+        fun forRole(context: Context, roleId: String): PetConfig = cache.computeIfAbsent(roleId) {
+            val newStore = PreferenceDataStoreFactory.create {
+                context.applicationContext.preferencesDataStoreFile("pet_config_$roleId")
+            }
+            if (roleId == RoleRegistry.DEFAULT.id) {
+                runBlocking {
+                    val legacy = context.legacyDataStore.data.first()
+                    val cur = newStore.data.first()
+                    if (cur.asMap().isEmpty() && legacy.asMap().isNotEmpty()) {
+                        newStore.edit { prefs ->
+                            legacy.asMap().forEach { (k, v) ->
+                                @Suppress("UNCHECKED_CAST")
+                                prefs[k as androidx.datastore.preferences.core.Preferences.Key<Any>] = v
+                            }
+                        }
+                    }
+                }
+            }
+            // 解析本角色默认资源包：实例 id → 模板 id → packId（预览/召唤同源，避免全部回退成芝麻酥）。
+            val defaultPack = RoleStore.descriptorForInstance(context, roleId)?.packId
+                ?: ConfigDefaults.DEFAULT_SPRITE_PACK
+            PetConfig(newStore, roleId, defaultPack)
+        }
+    }
 
     private val KEY_SCALE = floatPreferencesKey("scale")
     private val KEY_GRAVITY = floatPreferencesKey("gravity")
@@ -254,9 +335,19 @@ class PetConfig(private val context: Context) {
     private val KEY_RANDOM_PERIOD_MIN = androidx.datastore.preferences.core.intPreferencesKey("random_period_min")
     private val KEY_RANDOM_PERIOD_MAX = androidx.datastore.preferences.core.intPreferencesKey("random_period_max")
     private val KEY_REBOUND_ENABLED = booleanPreferencesKey("rebound_enabled")
+    private val KEY_MOVE_ENABLED = booleanPreferencesKey("move_enabled")
+    private val KEY_THROW_ENABLED = booleanPreferencesKey("throw_enabled")
+    private val KEY_THROW_COEFF = floatPreferencesKey("throw_coeff")
+    private val KEY_WALL_CLIMB = booleanPreferencesKey("wall_climb")
+    private val KEY_LEAP_ENABLED = booleanPreferencesKey("leap_enabled")
+    private val KEY_LEAP_PROBABILITY = floatPreferencesKey("leap_probability")
+    private val KEY_AUTO_FORAGE = booleanPreferencesKey("auto_forage")
+    private val KEY_FORAGE_SPEED = floatPreferencesKey("forage_speed")
     private val KEY_PET_COUNT = androidx.datastore.preferences.core.intPreferencesKey("pet_count")
     private val KEY_FORCE_NIGHT_ON = booleanPreferencesKey("force_night_on")
     private val KEY_FORCE_NIGHT_OFF = booleanPreferencesKey("force_night_off")
+    private val KEY_SPRITE_PACK = androidx.datastore.preferences.core.intPreferencesKey("sprite_pack")
+    // 旧版布尔键（仅用于迁移读取，不再写入）
     private val KEY_USE_NEW_SPRITE = booleanPreferencesKey("use_new_sprite")
     private val KEY_SINGLE_TRAY_MSG = booleanPreferencesKey("single_tray_msg")
     // 静态资源（定格/食物）绝对显示边界
@@ -290,6 +381,14 @@ class PetConfig(private val context: Context) {
             // 体感重力默认关闭：开启后会自动关闭四边定向重力（见 PetService 处理）。
             tiltGravity = prefs[KEY_TILT_GRAVITY] ?: ConfigDefaults.TILT_GRAVITY,
             maxSpeed = prefs[KEY_MAXSPEED] ?: ConfigDefaults.MAX_SPEED,
+            moveEnabled = prefs[KEY_MOVE_ENABLED] ?: ConfigDefaults.MOVE_ENABLED,
+            throwEnabled = prefs[KEY_THROW_ENABLED] ?: ConfigDefaults.THROW_ENABLED,
+            throwCoeff = prefs[KEY_THROW_COEFF] ?: ConfigDefaults.THROW_COEFF,
+            wallClimb = prefs[KEY_WALL_CLIMB] ?: ConfigDefaults.WALL_CLIMB,
+            leapEnabled = prefs[KEY_LEAP_ENABLED] ?: ConfigDefaults.LEAP_ENABLED,
+            leapProbability = (prefs[KEY_LEAP_PROBABILITY] ?: ConfigDefaults.LEAP_PROBABILITY).coerceIn(0f, 1f),
+            autoForage = prefs[KEY_AUTO_FORAGE] ?: ConfigDefaults.AUTO_FORAGE,
+            forageSpeed = prefs[KEY_FORAGE_SPEED] ?: ConfigDefaults.FORAGE_SPEED,
             offsetTop = (prefs[KEY_OFF_TOP] ?: ConfigDefaults.OFFSET_TOP).coerceIn(-300f, 2100f),
             offsetBottom = (prefs[KEY_OFF_BOTTOM] ?: ConfigDefaults.OFFSET_BOTTOM).coerceIn(-300f, 2100f),
             offsetLeft = (prefs[KEY_OFF_LEFT] ?: ConfigDefaults.OFFSET_LEFT).coerceIn(-300f, 1000f),
@@ -346,7 +445,15 @@ class PetConfig(private val context: Context) {
             petCount = (prefs[KEY_PET_COUNT] ?: ConfigDefaults.PET_COUNT).coerceIn(ConfigDefaults.PET_COUNT_MIN, ConfigDefaults.PET_COUNT_MAX),
             forceNightOn = prefs[KEY_FORCE_NIGHT_ON] ?: ConfigDefaults.FORCE_NIGHT_ON,
             forceNightOff = prefs[KEY_FORCE_NIGHT_OFF] ?: ConfigDefaults.FORCE_NIGHT_OFF,
-            useNewSprite = prefs[KEY_USE_NEW_SPRITE] ?: ConfigDefaults.USE_NEW_SPRITE,
+            // 资源包：优先读新 int 键；缺失时由旧版 boolean 键迁移（true→1 芝麻酥，false→0 旧图）；
+            // 仍缺失则回退到本角色自己的资源包（如芝麻球促销→2、白酥→3），而非全局默认 1（芝麻酥），
+            // 保证新角色首启动即使用正确资源包、与芝麻酥互不串用。
+            // 注意：roleId 可能是实例 id（inst_xxx），无法被 RoleRegistry.byId 命中，故用 defaultSpritePack
+            // （已由 forRole / 兼容构造按「实例 id → 模板 id → packId」解析）。
+            spritePack = prefs[KEY_SPRITE_PACK]
+                // 旧版 boolean 键：true→芝麻酥(1)；false（原旧图）已无旧图，回退到本角色自己的资源包。
+                ?: (prefs[KEY_USE_NEW_SPRITE]?.let { if (it) 1 else defaultSpritePack }
+                    ?: defaultSpritePack),
             singleTrayMsg = prefs[KEY_SINGLE_TRAY_MSG] ?: ConfigDefaults.SINGLE_TRAY_MSG,
             forceOpaque = prefs[KEY_FORCE_OPAQUE] ?: ConfigDefaults.FORCE_OPAQUE,
             // 投喂（支鱼）
@@ -368,7 +475,7 @@ class PetConfig(private val context: Context) {
         )
     }
 
-    val configFlow: Flow<PetConfigData> = context.dataStore.data.map { it.toConfigData() }
+    val configFlow: Flow<PetConfigData> = dataStore.data.map { it.toConfigData() }
 
     // 清洗已存在的非法旧数据：找出 DataStore 中可能残留的“左右同开/上下同开”组合并修正回写。
     // 仅当确实存在非法组合时才写盘（避免无谓 IO）。在配置加载入口调用一次即可。
@@ -402,7 +509,7 @@ class PetConfig(private val context: Context) {
     }
 
     suspend fun update(block: (PetConfigData) -> PetConfigData) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             // 读改写必须整体放在 edit 事务内：DataStore 保证同一时刻只有一个写事务，
             // 且事务内能读到最新已提交数据。若把读取放到 edit 之外（configFlow.first()），
             // 高频拖动滑块时多个并发协程会读到同一个旧快照并乱序写回，
@@ -441,7 +548,15 @@ class PetConfig(private val context: Context) {
             prefs[KEY_GRAVITY_ENABLED] = updated.gravityEnabled
             prefs[KEY_TILT_GRAVITY] = updated.tiltGravity
             prefs[KEY_MAXSPEED] = updated.maxSpeed
-            prefs[KEY_OFF_TOP] = updated.offsetTop
+        prefs[KEY_MOVE_ENABLED] = updated.moveEnabled
+        prefs[KEY_THROW_ENABLED] = updated.throwEnabled
+        prefs[KEY_THROW_COEFF] = updated.throwCoeff
+        prefs[KEY_WALL_CLIMB] = updated.wallClimb
+        prefs[KEY_LEAP_ENABLED] = updated.leapEnabled
+        prefs[KEY_LEAP_PROBABILITY] = updated.leapProbability
+        prefs[KEY_AUTO_FORAGE] = updated.autoForage
+        prefs[KEY_FORAGE_SPEED] = updated.forageSpeed
+        prefs[KEY_OFF_TOP] = updated.offsetTop
             prefs[KEY_OFF_BOTTOM] = updated.offsetBottom
             prefs[KEY_OFF_LEFT] = updated.offsetLeft
             prefs[KEY_OFF_RIGHT] = updated.offsetRight
@@ -487,7 +602,7 @@ class PetConfig(private val context: Context) {
             prefs[KEY_PET_COUNT] = updated.petCount
             prefs[KEY_FORCE_NIGHT_ON] = updated.forceNightOn
             prefs[KEY_FORCE_NIGHT_OFF] = updated.forceNightOff
-            prefs[KEY_USE_NEW_SPRITE] = updated.useNewSprite
+            prefs[KEY_SPRITE_PACK] = updated.spritePack
             prefs[KEY_SINGLE_TRAY_MSG] = updated.singleTrayMsg
             prefs[KEY_FORCE_OPAQUE] = updated.forceOpaque
             // 投喂（支鱼）
@@ -522,7 +637,9 @@ class PetConfig(private val context: Context) {
     // 不依赖 configFlow 的「?: 回退值」，彻底避免两处默认值不同步导致恢复出错
     // （例如体感重力、底部偏移等曾被回退值覆盖）。写盘即生效，下次启动也一致。
     suspend fun reset() {
-        update { PetConfigData() }
+        // 资源包回退到本角色自己的资源包（defaultSpritePack 已按「实例 id→模板 id→packId」解析，
+        // 如芝麻球促销→2、白酥→3），而非全局默认 1（芝麻酥）。避免「重置」后非芝麻酥角色被错误换成芝麻酥资源。
+        update { PetConfigData(spritePack = defaultSpritePack) }
     }
 
     // 按阈值页的「用户默认值」恢复：把指定页 bounds 中记录的 default 写回 PetConfig。
@@ -538,11 +655,14 @@ class PetConfig(private val context: Context) {
                     "gravity" -> nc.copy(gravity = s.default)
                     "maxSpeed" -> nc.copy(maxSpeed = s.default)
                     "rebound" -> nc.copy(reboundRatio = s.default)
+                    "throwCoeff" -> nc.copy(throwCoeff = s.default)
                     "snapThreshold" -> nc.copy(snapThreshold = s.default)
                     "offsetTop" -> nc.copy(offsetTop = s.default)
                     "offsetBottom" -> nc.copy(offsetBottom = s.default)
                     "offsetLeft" -> nc.copy(offsetLeft = s.default)
                     "offsetRight" -> nc.copy(offsetRight = s.default)
+                    "leapProbability" -> nc.copy(leapProbability = s.default)
+                    "forageSpeed" -> nc.copy(forageSpeed = s.default)
                     "imeLiftOffset" -> nc.copy(imeLiftOffset = s.default)
                     "thinkingTextSize" -> nc.copy(thinkingTextSize = s.default)
                     "thinkingAlpha" -> nc.copy(thinkingAlpha = s.default / 100f)
@@ -572,6 +692,11 @@ class PetConfig(private val context: Context) {
                     "snapRight" -> nc.copy(snapRight = sw.default)
                     "visible" -> nc.copy(visible = sw.default)
                     "clickThrough" -> nc.copy(clickThrough = sw.default)
+                    "moveEnabled" -> nc.copy(moveEnabled = sw.default)
+                    "throwEnabled" -> nc.copy(throwEnabled = sw.default)
+                    "wallClimb" -> nc.copy(wallClimb = sw.default)
+                    "leapEnabled" -> nc.copy(leapEnabled = sw.default)
+                    "autoForage" -> nc.copy(autoForage = sw.default)
                     "gravityEnabled" -> nc.copy(gravityEnabled = sw.default)
                     "bounceVibrate" -> nc.copy(bounceVibrate = sw.default)
                     "tiltGravity" -> nc.copy(tiltGravity = sw.default)

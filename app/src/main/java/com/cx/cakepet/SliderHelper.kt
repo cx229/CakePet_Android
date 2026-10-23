@@ -20,15 +20,20 @@ import com.google.android.material.slider.Slider
  *     必须配合 setLabelFormatter，否则气泡数字与设置项实际值对不上。
  */
 
-/** 统一黑色配色（与页面其它控件一致）；轨道未激活段用浅灰区分。 */
+/**
+ * 统一配色：激活（头/激活轨道/激活刻度）= slider_active（由 colors.xml 控制）；未激活段 = 浅灰（不变）。
+ * 颜色统一从 R.color 读取，便于在 colors.xml 一处调整所有滑块（单/双/取色）的激活色。
+ */
 fun Slider.applyBlackStyle() {
-    setThumbTintList(android.content.res.ColorStateList.valueOf(0xFF000000.toInt()))
-    trackActiveTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
-    trackInactiveTintList = android.content.res.ColorStateList.valueOf(0xFFBDBDBD.toInt())
+    val active = android.content.res.ColorStateList.valueOf(context.getColor(R.color.slider_active))
+    val inactive = android.content.res.ColorStateList.valueOf(context.getColor(R.color.slider_track_inactive))
+    setThumbTintList(active)
+    trackActiveTintList = active
+    trackInactiveTintList = inactive
     // 按压光晕保留透明度，纯黑会遮挡轨道
-    haloTintList = android.content.res.ColorStateList.valueOf(0x33000000)
-    tickActiveTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
-    tickInactiveTintList = android.content.res.ColorStateList.valueOf(0xFFBDBDBD.toInt())
+    haloTintList = android.content.res.ColorStateList.valueOf(context.getColor(R.color.slider_halo))
+    tickActiveTintList = active
+    tickInactiveTintList = inactive
 }
 
 /**
@@ -68,6 +73,19 @@ fun Slider.onUserValueChange(block: (Float) -> Unit) {
  */
 private val trackingSliders =
     java.util.Collections.newSetFromMap(java.util.WeakHashMap<Slider, Boolean>())
+
+/**
+ * 「刚重绑、首次回流强制回填」标记：applyBizRange 用 setValueSafe(init) 把 thumb 摆到配置对应位置后挂上本对象，
+ * setValueFromConfig 检测到则跳过 pending 比对直接回填并清标记。
+ *
+ * 解决单值滑块（bizTo==bizFrom）卡死：单值时拖动回写业务值恒为 bizFrom → pending 恒为 0（与 thumb 实际位置脱钩），
+ * 之后恢复系统/默认阈值使范围变正常，回流的目标值（如 5）与卡死的 pending(0) 永不相等 → setValueFromConfig 永远跳过回填 →
+ * thumb 停在旧位置不恢复。onResume 的 applyBizRange 重绑会摆正 thumb 并挂本标记，首次回流即强制回填、清 pending。
+ *
+ * 用单参 tag（getTag/setTag(value)）承载：Slider 无别处使用单参 tag，互不冲突。
+ */
+private object ReboundSyncMarker
+private val TAG_REBOUND_SYNC get() = ReboundSyncMarker
 
 /** 该滑块当前是否正被用户拖动（按下未抬起）。 */
 val Slider.isUserTracking: Boolean
@@ -231,6 +249,14 @@ fun Slider.setValueFromConfig(v: Float, pending: Int? = null): Boolean {
     if (trackingSliders.contains(this) && !isPressed) trackingSliders.remove(this)
     // 手指仍按在该滑块上：任何回写都会让 thumb 脱离手指，直接跳过
     if (isUserTracking) return false
+    // 刚重绑（applyBizRange 已用 setValueSafe(init) 摆正 thumb）：之前残留的 pending 必然失效，
+    // 跳过 pending 比对直接回填（覆盖单值拖动卡死等 pending 与 thumb 脱钩的场景），并清标记。
+    // 不再 userTracking 限制即可回填：重绑意味着范围/默认值变了，thumb 必须摆到新配置位置。
+    if (getTag() === TAG_REBOUND_SYNC) {
+        setTag(null)
+        setValueSafe(v)
+        return true
+    }
     // 尚未追平用户最后写入的值：本次发射是旧值，跳过回写（但宠物仍会用它更新，正是期望行为）。
     // 注意：比对必须复用 alignToStep（与赋值同一套舍入），不能用 toInt() 截断——
     // Float 换算常得出 29.999999 这类值，截断成 29 会与 pending(30) 永不相等，
@@ -307,6 +333,9 @@ fun Slider.applyBizRange(
     val span = (bizTo - bizFrom).let { if (it == 0f) 1f else it }
     val init = ((currentBiz - bizFrom) / span * 100f).coerceIn(0f, 100f)
     setValueSafe(init)
+    // 标记刚重绑：thumb 已由 setValueSafe(init) 摆到配置对应位置，之前残留的 pending 必然失效，
+    // 下次 setValueFromConfig 应跳过 pending 比对直接回填（并清本标记），避免旧 pending 拦回填导致 thumb 不恢复。
+    setTag(TAG_REBOUND_SYNC)
     setLabelText { raw -> formatter(bizFrom + raw / 100f * (bizTo - bizFrom)) }
     onUserValueChange { v ->
         onChange(bizFrom + v / 100f * (bizTo - bizFrom))

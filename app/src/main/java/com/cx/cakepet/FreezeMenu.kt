@@ -136,9 +136,9 @@ class FreezeMenu(
         v.findViewById<View>(R.id.freeze_clear).setOnClickListener {
             service.removeFreezeLayer(layer); dismiss()
         }
-        // 行3：定格-清除所有，然后退出浮窗
+        // 行3：定格-清除所有（仅本角色的全部定格层），然后退出浮窗
         v.findViewById<View>(R.id.freeze_clear_all).setOnClickListener {
-            service.clearAllFreeze(); dismiss()
+            service.clearAllFreeze(layer.roleId); dismiss()
         }
         // 行3：定格-交互 开关（单行，标题+开关同线；与“点击穿透”等竖排开关不同布局）
         val sw = v.findViewById<android.widget.Switch>(R.id.sw_freezeinteract)
@@ -153,6 +153,7 @@ class FreezeMenu(
             dismiss()
             val intent = Intent(service, SettingsActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(PetService.EXTRA_ROLE_ID, layer.roleId)
             }
             service.startActivity(intent)
         }

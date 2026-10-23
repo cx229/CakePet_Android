@@ -20,7 +20,13 @@ import kotlin.random.Random
  * 文本池给定 11 条（PHILOSOPHY1-6 / MIAO1-2 / OHU1-2 / PURR），每条带显示时长参数
  * （base_ms + 随机 random_ms）；随机抽（含重复可能，避免用完即停）。
  */
-class TrayMsgManager(private val context: Context) {
+class TrayMsgManager(private val context: Context, private val roleId: String? = null) {
+
+    /** 预览文案（设置页 UI 说明，可带角色名）：用于即时查看字号/颜色/透明度/偏移效果。 */
+    private fun previewText(): String {
+        val s = if (roleId.isNullOrEmpty()) "角色" else RoleStore.resolveShortName(context, roleId)
+        return "（${s}的碎碎念）"
+    }
 
     companion object {
         // 文本池（碎碎念），含每条显示时长参数
@@ -75,7 +81,7 @@ class TrayMsgManager(private val context: Context) {
             TrayMsgMeta(text = "彼岸……葬送！", base_ms = 1500, random_ms = 3500),
             TrayMsgMeta(text = "「刃」的存在，唯有挥剑的刹那，才能消失片刻", base_ms = 1500, random_ms = 3500),
             TrayMsgMeta(text = "千冶成刃", base_ms = 1500, random_ms = 3500),
-            TrayMsgMeta(text = "芝麻酥……不胖……不胖……", base_ms = 1500, random_ms = 3500),
+            TrayMsgMeta(text = "……不胖……不胖……", base_ms = 1500, random_ms = 3500),
             TrayMsgMeta(text = "我会一直看着你", base_ms = 1500, random_ms = 3500),
             TrayMsgMeta(text = "我有驾驶证", base_ms = 1500, random_ms = 3500),
 
@@ -97,7 +103,6 @@ class TrayMsgManager(private val context: Context) {
         private const val FIRST_SHOW_MS = 2000L
 
         // 设置页调整样式时的预览文案（不进轮播池，仅用于即时查看字号/颜色/透明度/偏移效果）
-        private const val PREVIEW_TEXT = "（酥的碎碎念）"
 
         // 摸头（双击）文案：随机显示一条，1-3s 后继续轮播池
         private val PAT_MSGS = listOf("喵喵喵", "喵" ,"喵！","喵？！？",
@@ -632,7 +637,7 @@ class TrayMsgManager(private val context: Context) {
             previewActive = false
         } else if (previewActive) {
             // 重新启用时若仍处预览态（设置页未退出），继续保持预览显示
-            textView.text = PREVIEW_TEXT
+            textView.text = previewText()
             textView.visibility = android.view.View.VISIBLE
             return
         }
@@ -864,7 +869,7 @@ class TrayMsgManager(private val context: Context) {
         pendingRunnable?.let { handler.removeCallbacks(it) }
         pendingRunnable = null
         previewActive = true
-        textView.text = PREVIEW_TEXT
+        textView.text = previewText()
         textView.visibility = android.view.View.VISIBLE
     }
 
@@ -904,5 +909,11 @@ class TrayMsgManager(private val context: Context) {
             windowManager.removeView(textView)
         } catch (_: Exception) {
         }
+    }
+
+    /** 重排宠物窗后，把本碎碎念浮窗重新置顶，避免被宠物窗盖住。 */
+    fun bringToFront() {
+        try { windowManager.removeView(textView) } catch (_: Exception) {}
+        try { windowManager.addView(textView, params) } catch (_: Exception) {}
     }
 }

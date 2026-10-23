@@ -20,7 +20,7 @@
             android:layout_weight="1" android:orientation="vertical">
             <EditText android:id="@+id/et_min"
                 android:layout_width="match_parent" android:layout_height="30dp"
-                android:inputType="numberDecimal" android:textSize="13sp" android:gravity="center"
+                android:inputType="numberSigned|numberDecimal" android:textSize="13sp" android:gravity="center"
                 android:background="@drawable/edit_bg"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="下界" android:textSize="11sp" android:textColor="@color/cp_note"
@@ -42,7 +42,7 @@
             android:layout_weight="1" android:orientation="vertical">
             <EditText android:id="@+id/et_def_a"
                 android:layout_width="match_parent" android:layout_height="30dp"
-                android:inputType="numberDecimal" android:textSize="13sp" android:gravity="center"
+                android:inputType="numberSigned|numberDecimal" android:textSize="13sp" android:gravity="center"
                 android:background="@drawable/edit_bg"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="左值默认" android:textSize="11sp" android:textColor="@color/cp_note"
@@ -64,7 +64,7 @@
             android:layout_weight="1" android:orientation="vertical">
             <EditText android:id="@+id/et_def_b"
                 android:layout_width="match_parent" android:layout_height="30dp"
-                android:inputType="numberDecimal" android:textSize="13sp" android:gravity="center"
+                android:inputType="numberSigned|numberDecimal" android:textSize="13sp" android:gravity="center"
                 android:background="@drawable/edit_bg"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="右值默认" android:textSize="11sp" android:textColor="@color/cp_note"
@@ -86,7 +86,7 @@
             android:layout_weight="1" android:orientation="vertical">
             <EditText android:id="@+id/et_max"
                 android:layout_width="match_parent" android:layout_height="30dp"
-                android:inputType="numberDecimal" android:textSize="13sp" android:gravity="center"
+                android:inputType="numberSigned|numberDecimal" android:textSize="13sp" android:gravity="center"
                 android:background="@drawable/edit_bg"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="上界" android:textSize="11sp" android:textColor="@color/cp_note"

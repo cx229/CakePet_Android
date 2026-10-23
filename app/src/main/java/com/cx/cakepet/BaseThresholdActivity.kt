@@ -37,6 +37,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     protected abstract val pageTitleText: String
 
     protected lateinit var binding: ActivityThresholdSettingsBinding
+    protected val roleId by lazy { intent?.getStringExtra("role_id") ?: RoleRegistry.DEFAULT.id }
     protected lateinit var petBounds: PetBounds
     protected lateinit var petConfig: PetConfig
     protected var current: PageBounds = PageBounds()
@@ -46,16 +47,37 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         binding = ActivityThresholdSettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        petBounds = PetBounds(this)
-        petConfig = PetConfig(this)
+        petBounds = PetBounds.forRole(this, roleId)
+        petConfig = PetConfig.forRole(this, roleId)
 
         // 与设置页一致：用占位条填满状态栏高度，标题栏黑底与状态栏连成整体覆盖状态栏
         binding.statusBarSpacer.layoutParams.height = getStatusBarHeight()
         binding.statusBarSpacer.requestLayout()
 
-        binding.tvTitle.text = "$pageTitleText · 阈值设置"
-        binding.ivBack.setOnClickListener { finish() }
-        binding.btnResetSystem.setOnClickListener { resetSystem() }
+        binding.tvTitle.text = "$pageTitleText · 阈值/默认"
+        // 标题下方小字灰色：当前页面所属角色名（与设置页一致）
+        binding.tvTitleSub.text = RoleStore.resolveDisplayName(this, roleId)
+        // 离开前先让持有焦点的输入框失焦 → 触发 onLostFocus 把挂起的默认值/边界编辑落盘，
+        // 否则直接返回时编辑值未提交，子页读到的仍是旧值（"改了不生效/需重载"）。
+        binding.ivBack.setOnClickListener { leave() }
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                leave()
+            }
+        })
+
+        // 右上角“更多”：恢复用户默认 / 重置系统默认值与阈值。
+        // 每个阈值页是独立 Activity、自带 page，重置天然只作用于本页，无需 tab 分派。
+        val btnMore = binding.btnMore
+        val moreMenu = PopupMenuHelper(
+            anchor = btnMore,
+            popupLayoutRes = R.layout.popup_threshold_more,
+            items = mapOf(
+                R.id.item_reset_user to { resetUserDefault() },
+                R.id.item_reset_system to { resetSystem() }
+            )
+        )
+        btnMore.setOnClickListener { moreMenu.show() }
 
         current = petBounds.getBlocking(page)
         render()
@@ -101,12 +123,9 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
 
         var first = true
         groupOrder.forEach { g ->
-            // 非首模块前：inflate 复用 include_module_header（分隔线 + 标题），与设置页结构完全一致
+            // 非首模块前：inflate 复用 include_module_header（仅模块标题，无模块间分隔线），与设置页一致
             val header = LayoutInflater.from(this)
                 .inflate(R.layout.include_module_header, binding.container, false)
-            // 首模块不显示分隔线（设置页首模块也无前置分隔线）
-            val sep = header.findViewById<View>(R.id.module_sep)
-            sep.visibility = if (first) View.GONE else View.VISIBLE
             header.findViewById<TextView>(R.id.tv_module_title).text = g
             binding.container.addView(header)
             first = false
@@ -114,9 +133,12 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             // 卡片容器：包裹该模块的全部内容，直接复用设置页的 card_bg + padding
             // item 内部用 layout_margin 提供左右内边距（与设置页 item 写法一致），
             // 因此卡片只需设置上下 padding，左右由 margin=16 承担。
+            // 选项间分隔线：showDividers=middle 在 item 之间自动绘制 item_divider（与设置页一致）。
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 background = getDrawable(R.drawable.card_bg)
+                showDividers = LinearLayout.SHOW_DIVIDER_MIDDLE
+                dividerDrawable = getDrawable(R.drawable.item_divider)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { setMargins(16, 0, 16, 0) }
@@ -158,6 +180,11 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         val etDef = v.findViewById<EditText>(R.id.et_default)
         val etMax = v.findViewById<EditText>(R.id.et_max)
 
+        // 派生本配置项的合理输入格式：有负号当且仅当 hardMin<0；小数位由 step 推出
+        val fmt = FieldFmt(s.hardMin < 0, decimalsOf(s.step), s.step, s.hardMin, s.hardMax)
+        val it = inputTypeFor(fmt.signed, fmt.decimals)
+        etMin.inputType = it; etDef.inputType = it; etMax.inputType = it
+
         /** 把当前数据写回三个输入框（联动后统一刷新显示）。 */
         fun refresh() {
             val cur = current.sliders[index]
@@ -165,36 +192,58 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         }
         refresh()
 
-        etMin.onLostFocus { txt ->
-            val (ok, vv) = parseInRange(txt, s.hardMin, s.hardMax) ?: return@onLostFocus
-            if (!ok) { Toast.makeText(this, "${s.label}最小值需在 ${fmt(s.hardMin)}~${fmt(s.hardMax)}", Toast.LENGTH_SHORT).show(); refresh(); return@onLostFocus }
-            val cur = current.sliders[index]
-            val newFrom = vv
-            // 最小 > 最大：把最大拉到与最小一致（联动修正）
-            val newTo = if (cur.to < newFrom) newFrom else cur.to
-            current = current.copy(sliders = current.sliders.toMutableList().also { it[index] = cur.copy(from = newFrom, to = newTo) })
-            commitOne()
-            refresh()
+        /** 统一处理：0=下界 1=默认值 2=上界。空→静默；非法→回退修改前值(缺则兜底)并提示；合法→钳制+链序联动+提示。 */
+        fun handle(which: Int, txt: String) {
+            val fieldName = when (which) { 0 -> "下界"; 1 -> "默认值"; 2 -> "上限"; else -> "" }
+            when (val r = parseInput(txt, fmt)) {
+                // 真·无输入：静默回退，不提示、不动 current
+                is ParseResult.Empty -> { refresh() }
+                // 无效输入：使用修改前值；若修改前值缺失则兜底并额外提示「需在/已修改至有效范围」
+                is ParseResult.Invalid -> {
+                    val cur = current.sliders.getOrNull(index)
+                    if (cur != null) {
+                        refresh()
+                        showThresholdToast("当前输入无效")
+                    } else {
+                        // 兜底：边界→系统自带边界默认；默认值→系统默认钳进当前上下界且不联动其它字段
+                        val fb = when (which) {
+                            0 -> s.baseMin
+                            2 -> s.baseMax
+                            else -> s.default.coerceIn(s.baseMin, s.baseMax)
+                        }
+                        current = current.copy(sliders = current.sliders.toMutableList().also {
+                            it[index] = when (which) {
+                                0 -> s.copy(from = fb)
+                                2 -> s.copy(to = fb)
+                                else -> s.copy(default = fb)
+                            }
+                        })
+                        commitOne(); refresh()
+                        showThresholdToast("当前输入无效\n" + buildMsg(s.label, fieldName, fmt, true, emptyList()))
+                    }
+                }
+                is ParseResult.Valid -> {
+                    val cur = current.sliders[index]
+                    val c = snapAndFormat(r.raw, fmt)
+                    val (nf, nd, nt, changed) = syncSingle(which, c, cur)
+                    // 无实际变化且未越硬界（如原值 1.5 又输 1.5）→ 静默；越硬界即使钳回原值也要提示
+                    if (nf == cur.from && nd == cur.default && nt == cur.to && !r.outOfHard) { refresh(); return }
+                    current = current.copy(sliders = current.sliders.toMutableList().also {
+                        it[index] = cur.copy(from = nf, default = nd, to = nt)
+                    })
+                    commitOne()
+                    refresh()
+                    showThresholdToast(buildMsg(s.label, fieldName, fmt, r.outOfHard, changed))
+                }
+            }
         }
-        etMax.onLostFocus { txt ->
-            val (ok, vv) = parseInRange(txt, s.hardMin, s.hardMax) ?: return@onLostFocus
-            if (!ok) { Toast.makeText(this, "${s.label}最大值需在 ${fmt(s.hardMin)}~${fmt(s.hardMax)}", Toast.LENGTH_SHORT).show(); refresh(); return@onLostFocus }
-            val cur = current.sliders[index]
-            val newTo = vv
-            // 最大 < 最小：把最小拉到与最大一致（联动修正）
-            val newFrom = if (cur.from > newTo) newTo else cur.from
-            current = current.copy(sliders = current.sliders.toMutableList().also { it[index] = cur.copy(from = newFrom, to = newTo) })
-            commitOne()
-            refresh()
-        }
-        etDef.onLostFocus { txt ->
-            val (ok, vv) = parseInRange(txt, s.hardMin, s.hardMax) ?: return@onLostFocus
-            if (!ok) { Toast.makeText(this, "${s.label}默认值需在 ${fmt(s.hardMin)}~${fmt(s.hardMax)}", Toast.LENGTH_SHORT).show(); refresh(); return@onLostFocus }
-            val cur = current.sliders[index]
-            current = current.copy(sliders = current.sliders.toMutableList().also { it[index] = cur.copy(default = vv) })
-            commitOne()
-            refresh()
-        }
+        etMin.onLostFocus { handle(0, it) }
+        etDef.onLostFocus { handle(1, it) }
+        etMax.onLostFocus { handle(2, it) }
+        // 回车仅确认当前框，不跳到下一个输入框（handle 已定义，放此处避免前向引用）
+        etMin.onEnterDone { handle(0, etMin.text.toString().trim()) }
+        etDef.onEnterDone { handle(1, etDef.text.toString().trim()) }
+        etMax.onEnterDone { handle(2, etMax.text.toString().trim()) }
         return v
     }
 
@@ -206,7 +255,15 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         val etDefB = v.findViewById<EditText>(R.id.et_def_b)
         val etMax = v.findViewById<EditText>(R.id.et_max)
 
-        /** 把当前数据写回四个输入框（下界=min(A,B下限)，上界=max(A,B上限)）。 */
+        // 派生各字段格式：下界/上界用 min(stepA,stepB) 作代表步进；默认值各自 step
+        val signed = d.hardMin < 0
+        val decLo = minOf(decimalsOf(d.stepA), decimalsOf(d.stepB))
+        val decA = decimalsOf(d.stepA); val decB = decimalsOf(d.stepB)
+        etMin.inputType = inputTypeFor(signed, decLo)
+        etMax.inputType = inputTypeFor(signed, decLo)
+        etDefA.inputType = inputTypeFor(signed, decA)
+        etDefB.inputType = inputTypeFor(signed, decB)
+
         fun refresh() {
             val cur = current.duals[index]
             etMin.setText(fmt(minOf(cur.fromA, cur.fromB)))
@@ -216,64 +273,67 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         }
         refresh()
 
-        // 下界：统一约束 A/B 两组下限（fromA=fromB），并钳制上限/默认值不小于它
-        etMin.onLostFocus { t ->
-            val r = parseInRange(t, d.hardMin, d.hardMax) ?: return@onLostFocus
-            if (!r.first) { Toast.makeText(this, "下界越界", Toast.LENGTH_SHORT).show(); refresh(); return@onLostFocus }
-            val c = current.duals[index]
-            // 保证 下界 < 上界（最小跨度 1）：写入值≥上界时钳到「上界-1」，避免范围塌缩与死循环
-            val hi = maxOf(c.toA, c.toB)
-            val newLo = if (r.second >= hi) hi - 1f else r.second
-            current = current.copy(duals = current.duals.toMutableList().also {
-                it[index] = c.copy(
-                    fromA = newLo, fromB = newLo,
-                    toA = maxOf(c.toA, newLo), toB = maxOf(c.toB, newLo),
-                    defaultA = c.defaultA.coerceAtLeast(newLo),
-                    defaultB = c.defaultB.coerceAtLeast(newLo)
-                )
-            })
-            commitOne(); refresh()
+        val fmtLo = FieldFmt(signed, decLo, minOf(d.stepA, d.stepB), d.hardMin, d.hardMax)
+        val fmtA = FieldFmt(signed, decA, d.stepA, d.hardMin, d.hardMax)
+        val fmtB = FieldFmt(signed, decB, d.stepB, d.hardMin, d.hardMax)
+
+        /** 统一处理：0=下界 1=左值默认 2=右值默认 3=上界。空→静默；非法→回退(缺则兜底)；合法→钳制+联动+提示。 */
+        fun handle(which: Int, txt: String, fmt: FieldFmt) {
+            val fieldName = when (which) { 0 -> "下界"; 1 -> "左值默认"; 2 -> "右值默认"; 3 -> "上限"; else -> "" }
+            when (val r = parseInput(txt, fmt)) {
+                is ParseResult.Empty -> { refresh() }
+                is ParseResult.Invalid -> {
+                    val cur = current.duals.getOrNull(index)
+                    if (cur != null) {
+                        refresh()
+                        showThresholdToast("当前输入无效")
+                    } else {
+                        // 兜底：边界→系统自带边界默认(minA,B / maxA,B)；默认值→系统默认钳进当前上下界且不联动
+                        val fb = when (which) {
+                            0 -> minOf(d.baseMinA, d.baseMinB)
+                            3 -> maxOf(d.baseMaxA, d.baseMaxB)
+                            1 -> d.defaultA.coerceIn(d.baseMinA, d.baseMaxA)
+                            else -> d.defaultB.coerceIn(d.baseMinB, d.baseMaxB)
+                        }
+                        current = current.copy(duals = current.duals.toMutableList().also {
+                            it[index] = when (which) {
+                                0 -> d.copy(fromA = fb, fromB = fb)
+                                3 -> d.copy(toA = fb, toB = fb)
+                                1 -> d.copy(defaultA = fb)
+                                else -> d.copy(defaultB = fb)
+                            }
+                        })
+                        commitOne(); refresh()
+                        showThresholdToast("当前输入无效\n" + buildMsg(d.label, fieldName, fmt, true, emptyList()))
+                    }
+                }
+                is ParseResult.Valid -> {
+                    val cur = current.duals[index]
+                    val c = snapAndFormat(r.raw, fmt)
+                    val (nlo, ndA, ndB, nhi, changed) = syncDual(which, c, cur)
+                    val curLo = minOf(cur.fromA, cur.fromB); val curHi = maxOf(cur.toA, cur.toB)
+                    // 无实际变化且未越硬界→静默；越硬界即使钳回原值也要提示
+                    if (nlo == curLo && ndA == cur.defaultA && ndB == cur.defaultB && nhi == curHi && !r.outOfHard) { refresh(); return }
+                    current = current.copy(duals = current.duals.toMutableList().also {
+                        it[index] = cur.copy(
+                            fromA = nlo, toA = nhi, defaultA = ndA,
+                            fromB = nlo, toB = nhi, defaultB = ndB
+                        )
+                    })
+                    commitOne(); refresh()
+                    showThresholdToast(buildMsg(d.label, fieldName, fmt, r.outOfHard, changed))
+                }
+            }
         }
-        // 左值默认（A 组默认）：钳制在 [下界, 上界]
-        etDefA.onLostFocus { t ->
-            val r = parseInRange(t, d.hardMin, d.hardMax) ?: return@onLostFocus
-            if (!r.first) { Toast.makeText(this, "左值默认越界", Toast.LENGTH_SHORT).show(); refresh(); return@onLostFocus }
-            val c = current.duals[index]
-            val lo = minOf(c.fromA, c.fromB); val hi = maxOf(c.toA, c.toB)
-            current = current.copy(duals = current.duals.toMutableList().also {
-                it[index] = c.copy(defaultA = r.second.coerceIn(lo, hi))
-            })
-            commitOne(); refresh()
-        }
-        // 右值默认（B 组默认）：钳制在 [下界, 上界]
-        etDefB.onLostFocus { t ->
-            val r = parseInRange(t, d.hardMin, d.hardMax) ?: return@onLostFocus
-            if (!r.first) { Toast.makeText(this, "右值默认越界", Toast.LENGTH_SHORT).show(); refresh(); return@onLostFocus }
-            val c = current.duals[index]
-            val lo = minOf(c.fromA, c.fromB); val hi = maxOf(c.toA, c.toB)
-            current = current.copy(duals = current.duals.toMutableList().also {
-                it[index] = c.copy(defaultB = r.second.coerceIn(lo, hi))
-            })
-            commitOne(); refresh()
-        }
-        // 上界：统一约束 A/B 两组上限（toA=toB），并钳制下限/默认值不大于它
-        etMax.onLostFocus { t ->
-            val r = parseInRange(t, d.hardMin, d.hardMax) ?: return@onLostFocus
-            if (!r.first) { Toast.makeText(this, "上界越界", Toast.LENGTH_SHORT).show(); refresh(); return@onLostFocus }
-            val c = current.duals[index]
-            // 保证 上界 > 下界（最小跨度 1）：写入值≤下界时钳到「下界+1」，避免范围塌缩与死循环
-            val lo = minOf(c.fromA, c.fromB)
-            val newHi = if (r.second <= lo) lo + 1f else r.second
-            current = current.copy(duals = current.duals.toMutableList().also {
-                it[index] = c.copy(
-                    toA = newHi, toB = newHi,
-                    fromA = minOf(c.fromA, newHi), fromB = minOf(c.fromB, newHi),
-                    defaultA = c.defaultA.coerceAtMost(newHi),
-                    defaultB = c.defaultB.coerceAtMost(newHi)
-                )
-            })
-            commitOne(); refresh()
-        }
+        etMin.onLostFocus { handle(0, it, fmtLo) }
+        etDefA.onLostFocus { handle(1, it, fmtA) }
+        etDefB.onLostFocus { handle(2, it, fmtB) }
+        etMax.onLostFocus { handle(3, it, fmtLo) }
+        // 回车仅确认当前框，不跳到下一个输入框（handle 与 fmt* 已定义，放此处避免前向引用）
+        etMin.onEnterDone { handle(0, etMin.text.toString().trim(), fmtLo) }
+        etDefA.onEnterDone { handle(1, etDefA.text.toString().trim(), fmtA) }
+        etDefB.onEnterDone { handle(2, etDefB.text.toString().trim(), fmtB) }
+        etMax.onEnterDone { handle(3, etMax.text.toString().trim(), fmtLo) }
         return v
     }
 
@@ -404,6 +464,8 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     /** 实际执行「重置系统阈值」：bounds 回落系统出厂；数值阈值夹紧；开关/颜色统一经 resetFromBounds 恢复出厂。
      * 与设置页「恢复默认/重置系统」走完全相同的通用逻辑，IME 等开关不再特殊。 */
     private fun resetSystemNow() {
+        // 先让仍持有焦点的输入框失焦，触发挂起提交（随后 resetSystem 清空用户值，挂起编辑被一起丢弃，符合预期）。
+        currentFocus?.clearFocus()
         runBlocking {
             petBounds.resetSystem(page)
             coerceConfigToBounds(page)
@@ -412,6 +474,38 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         current = petBounds.getBlocking(page)
         render()
         Toast.makeText(this, "已恢复系统默认阈值", Toast.LENGTH_SHORT).show()
+    }
+
+    /** 离开阈值页：先让输入框失焦以提交挂起的默认值/边界编辑，再关闭页面（覆盖 ivBack 与系统返回键）。 */
+    private fun leave() {
+        currentFocus?.clearFocus()
+        finish()
+    }
+
+    /**
+     * 恢复用户默认（把阈值页设定的默认值应用到当前运行配置），供右上角“更多”浮窗调用。先弹确认框。
+     * 与设置页「恢复用户默认」走完全相同的逻辑（config.resetFromBounds），但作用域限定在本阈值页 page。
+     */
+    private fun resetUserDefault() {
+        showConfirmDialog(
+            title = "恢复用户默认",
+            bodyHtml = "将<b>本页</b>的当前值恢复为当前默认值？",
+            subText = "默认值由「默认值与阈值」页设定",
+            positiveText = "恢复"
+        ) { resetUserDefaultNow() }
+    }
+
+    private fun resetUserDefaultNow() {
+        // 关键：先让当前仍持有焦点的输入框失焦，触发 onLostFocus → commitOne 把挂起的新默认值落盘，
+        // 否则直接点「更多→恢复用户默认」时 EditText 未失焦、编辑值从未提交，菜单读到的仍是旧默认值。
+        currentFocus?.clearFocus()
+        runBlocking {
+            petConfig.resetFromBounds(petBounds, page)
+            coerceConfigToBounds(page)
+        }
+        current = petBounds.getBlocking(page)
+        render()
+        Toast.makeText(this, "已恢复用户默认", Toast.LENGTH_SHORT).show()
     }
 
     protected suspend fun coerceConfigToBounds(p: SettingsPage) {
@@ -425,6 +519,9 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     "gravity" -> nc.copy(gravity = nc.gravity.coerceIn(s.from, s.to))
                     "maxSpeed" -> nc.copy(maxSpeed = nc.maxSpeed.coerceIn(s.from, s.to))
                     "rebound" -> nc.copy(reboundRatio = nc.reboundRatio.coerceIn(s.from, s.to))
+                    // 抛掷系数/飞跃概率：新增字段，必须纳入钳制，否则改阈值后当前值不回写、页面不刷新
+                    "throwCoeff" -> nc.copy(throwCoeff = nc.throwCoeff.coerceIn(s.from, s.to))
+                    "leapProbability" -> nc.copy(leapProbability = nc.leapProbability.coerceIn(s.from, s.to))
                     "snapThreshold" -> nc.copy(snapThreshold = nc.snapThreshold.coerceIn(s.from, s.to))
                     "offsetTop" -> nc.copy(offsetTop = nc.offsetTop.coerceIn(s.from, s.to))
                     "offsetBottom" -> nc.copy(offsetBottom = nc.offsetBottom.coerceIn(s.from, s.to))
@@ -483,6 +580,10 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         "snapRight" -> c.copy(snapRight = value)
         "visible" -> c.copy(visible = value)
         "clickThrough" -> c.copy(clickThrough = value)
+        "moveEnabled" -> c.copy(moveEnabled = value)
+        "throwEnabled" -> c.copy(throwEnabled = value)
+        "wallClimb" -> c.copy(wallClimb = value)
+        "leapEnabled" -> c.copy(leapEnabled = value)
         "gravityEnabled" -> c.copy(gravityEnabled = value)
         "bounceVibrate" -> c.copy(bounceVibrate = value)
         "tiltGravity" -> c.copy(tiltGravity = value)
@@ -523,14 +624,183 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         }
     }
 
-    /** 解析并校验 hard 范围。返回 null 表示空字符串（忽略，不保存）。 */
-    protected fun parseInRange(txt: String, min: Float, max: Float): Pair<Boolean, Float>? {
-        if (txt.isEmpty()) return null
-        val v = txt.toFloatOrNull() ?: return Pair(false, min)
-        if (v < min || v > max) return Pair(false, v)
-        return Pair(true, v)
+    /** 回车/「完成」仅确认当前框：提交并收起键盘，不跳到下一个输入框。
+     *  阈值页默认 imeOptions=UNSPECIFIED 时，IME 会把回车当成 NEXT，导致“确认+Tab”跳到下一框，不合理；
+     *  这里显式设为 IME_ACTION_DONE，软键盘「完成」与硬键盘回车都只提交当前框（与设置页输入框行为一致）。 */
+    protected fun EditText.onEnterDone(block: () -> Unit) {
+        imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+        setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                block(); clearFocus(); true
+            } else false
+        }
+        setOnKeyListener { _, keyCode, event ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_ENTER && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                block(); clearFocus(); true
+            } else false
+        }
     }
 
     protected fun fmt(v: Float): String =
         if (v == v.toLong().toFloat()) v.toLong().toString() else v.toString()
+
+    /** 显示用格式化：按本配置项的小数位渲染（消除浮点尾噪）。 */
+    private fun fmt(v: Float, decimals: Int): String {
+        if (decimals <= 0) return v.toLong().toString()
+        val s = String.format(java.util.Locale.US, "%.${decimals}f", v)
+        return s.trimEnd('0').trimEnd('.')
+    }
+
+    /** 一个配置项的输入格式元数据（由模型派生的合理格式）。 */
+    private data class FieldFmt(
+        val signed: Boolean, val decimals: Int, val step: Float,
+        val hardMin: Float, val hardMax: Float
+    )
+
+    /** 由 step 推出小数位：step>=1→0 位；0.1→1 位；0.01→2 位。step<=0 保护为 0 位。
+     *  注意：step 是 Float，0.01f 实际存为 0.009999999776482582，直接 log10 得 -2.0000000093，
+     *  ceil 会得到 3（多出一位），导致 大小/飞跃概率 等 0.01 步长字段小数位算错、显示尾噪。
+     *  故先按 1e6 就近取整吃掉 float 尾噪，再算位数。 */
+    private fun decimalsOf(step: Float): Int {
+        if (step <= 0f) return 0
+        val sd = Math.round(step * 1_000_000f) / 1_000_000f   // 收口 float 尾噪
+        return kotlin.math.ceil(-kotlin.math.log10(sd.toDouble())).toInt().coerceAtLeast(0)
+    }
+
+    /** 由正负/小数位生成软键盘类型，从源头限制非法字符。 */
+    private fun inputTypeFor(signed: Boolean, decimals: Int): Int =
+        android.text.InputType.TYPE_CLASS_NUMBER or
+            (if (signed) android.text.InputType.TYPE_NUMBER_FLAG_SIGNED else 0) or
+            (if (decimals > 0) android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL else 0)
+
+    /** 三层钳制：硬范围 → 对齐 step 整数倍 → 按显示精度收口（杜绝 0.099994 类浮点尾噪）。 */
+    private fun snapAndFormat(raw: Float, fmt: FieldFmt): Float {
+        val c = raw.coerceIn(fmt.hardMin, fmt.hardMax)
+        if (fmt.step <= 0f) return c
+        val steps = Math.round((c - fmt.hardMin) / fmt.step)
+        val snapped = fmt.hardMin + steps * fmt.step
+        // 对齐后仍可能是 0.0999998 之类，按显示小数位收口为可精确表示的值，
+        // 使“存储值”与“显示值(fmt 去尾零)”严格相等，避免输入框出现 0.099994。
+        val f = Math.pow(10.0, fmt.decimals.toDouble()).toFloat()
+        return Math.round(snapped * f) / f    // Long / Float → Float，收口到显示精度
+    }
+
+    /** 四态解析：空串/非法字符 → 回退输入前；合法数字 → 携带是否越硬界标记。 */
+    private sealed interface ParseResult {
+        object Empty : ParseResult
+        object Invalid : ParseResult
+        data class Valid(val raw: Float, val outOfHard: Boolean) : ParseResult
+    }
+
+    private fun parseInput(txt: String, fmt: FieldFmt): ParseResult {
+        val t = txt.trim()
+        if (t.isEmpty()) return ParseResult.Empty
+        val v = t.toFloatOrNull() ?: return ParseResult.Invalid
+        return ParseResult.Valid(v, v < fmt.hardMin || v > fmt.hardMax)
+    }
+
+    /** 提示合成（每行以「。」结尾，多行以 \n 连接）：
+     *  - 越硬界：首行「配置项 需在 a~b。」，次行「字段名已修改至有效范围。」
+     *  - 联动：每条改动「同步修改当前默认值、上限。」
+     *  - 普通正常修改（无越界、无联动）：「已修改{字段名}」
+     */
+    private fun buildMsg(label: String, fieldName: String, fmt: FieldFmt, outOfHard: Boolean, changed: List<String>): String {
+        val parts = mutableListOf<String>()
+        if (outOfHard) {
+            parts += "${label} 需在 ${fmt(fmt.hardMin, fmt.decimals)}~${fmt(fmt.hardMax, fmt.decimals)}。"
+            parts += "${fieldName}已修改至有效范围。"
+        }
+        if (changed.isNotEmpty()) parts += "同步修改当前" + changed.joinToString("、") + "。"
+        if (!outOfHard && changed.isEmpty()) parts += "已修改${fieldName}"
+        return parts.joinToString("\n")
+    }
+
+    /** 多行 Toast：用显式 TextView 保证「\n」换行渲染。
+     *  规避部分 ROM 把系统 Toast 设为 singleLine 导致换行失效（如「同步修改当前xxx」被接在前一行）。 */
+    private fun showThresholdToast(msg: String) {
+        if (msg.isBlank()) return
+        val dm = resources.displayMetrics.density
+        val dp = { v: Int -> (v * dm).toInt() }
+        val tv = android.widget.TextView(this).apply {
+            text = msg
+            gravity = android.view.Gravity.CENTER
+            textSize = 14f
+            setTextColor(0xFFEDEDED.toInt())
+            setLineSpacing(0f, 1.35f)
+            setPadding(dp(20), dp(14), dp(20), dp(14))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = dp(8).toFloat()
+                setColor(0xCC000000.toInt())
+            }
+        }
+        Toast(this).apply {
+            setGravity(android.view.Gravity.CENTER_HORIZONTAL or android.view.Gravity.BOTTOM, 0, dp(90))
+            duration = Toast.LENGTH_SHORT
+            view = tv
+            show()
+        }
+    }
+
+    /** 单滑块链：hardMin ≤ 下界(from) ≤ 默认值(default) ≤ 上界(to) ≤ hardMax。返回新值与被联动的字段名。 */
+    private data class SingleSync(val from: Float, val default: Float, val to: Float, val changed: List<String>)
+
+    private fun syncSingle(which: Int, c: Float, cur: SliderBound): SingleSync {
+        var from = cur.from; var def = cur.default; var to = cur.to
+        val changed = mutableListOf<String>()
+        when (which) {
+            0 -> { // 下界：右侧默认值/上界不得 < 它
+                if (def < c) { def = c; changed += "默认值" }
+                if (to < c) { to = c; changed += "上限" }
+                from = c
+            }
+            1 -> { // 默认值：左侧下界不得 > 它，右侧上界不得 < 它
+                if (from > c) { from = c; changed += "下限" }
+                if (to < c) { to = c; changed += "上限" }
+                def = c
+            }
+            2 -> { // 上界：左侧下界/默认值不得 > 它
+                if (from > c) { from = c; changed += "下限" }
+                if (def > c) { def = c; changed += "默认值" }
+                to = c
+            }
+        }
+        return SingleSync(from, def, to, changed)
+    }
+
+    /** 双滑块链：hardMin ≤ 下界(lo) ≤ 左值默认(defA) ≤ 右值默认(defB) ≤ 上界(hi) ≤ hardMax。 */
+    private data class DualSync(val lo: Float, val defA: Float, val defB: Float, val hi: Float, val changed: List<String>)
+
+    private fun syncDual(which: Int, c: Float, cur: DualSliderBound): DualSync {
+        var lo = minOf(cur.fromA, cur.fromB); var dA = cur.defaultA; var dB = cur.defaultB
+        var hi = maxOf(cur.toA, cur.toB)
+        val changed = mutableListOf<String>()
+        when (which) {
+            0 -> { // 下界
+                if (dA < c) { dA = c; changed += "左值默认" }
+                if (dB < c) { dB = c; changed += "右值默认" }
+                if (hi < c) { hi = c; changed += "上限" }
+                lo = c
+            }
+            1 -> { // 左值默认
+                if (lo > c) { lo = c; changed += "下界" }
+                if (dB < c) { dB = c; changed += "右值默认" }
+                if (hi < c) { hi = c; changed += "上限" }
+                dA = c
+            }
+            2 -> { // 右值默认
+                if (lo > c) { lo = c; changed += "下界" }
+                if (dA > c) { dA = c; changed += "左值默认" }
+                if (hi < c) { hi = c; changed += "上限" }
+                dB = c
+            }
+            3 -> { // 上界
+                if (lo > c) { lo = c; changed += "下界" }
+                if (dA > c) { dA = c; changed += "左值默认" }
+                if (dB > c) { dB = c; changed += "右值默认" }
+                hi = c
+            }
+        }
+        return DualSync(lo, dA, dB, hi, changed)
+    }
 }

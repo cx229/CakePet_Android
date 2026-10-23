@@ -36,6 +36,21 @@ _*.bak
 # 临时构建日志（排查编译错误时生成，不应提交）
 build_log.txt
 
+# ===== 排查产物（一次性分析用，提交即成噪音，不应提交）=====
+# APK 解析/清单/资源转储
+apk_badging*.txt
+apk_manifest.txt
+apk_res.txt
+# 编译与检查结果
+build_check.txt
+build_err.txt
+compile_out.txt
+# 代码差异/演变记录
+diff_*.txt
+hist_*.txt
+# UI 层级转储
+ui_dump*.xml
+
 # ===== 操作系统 =====
 .DS_Store
 Thumbs.db

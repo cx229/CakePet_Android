@@ -27,7 +27,8 @@ class RangeSettingsActivity : AppCompatActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    private val config by lazy { PetConfig(this) }
+    private val roleId by lazy { intent?.getStringExtra("role_id") ?: RoleRegistry.DEFAULT.id }
+    private val config by lazy { PetConfig.forRole(this, roleId) }
 
     // 抬高偏移预览来源标记（与四边边界判定线共用引用计数体系，互不干扰）
     private val imeOwner = Any()
@@ -50,6 +51,8 @@ class RangeSettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_range_settings)
+        // 标题下方小字灰色：当前页面所属角色名
+        findViewById<android.widget.TextView>(R.id.tv_title_sub).text = RoleStore.resolveDisplayName(this, roleId)
 
         // 纯黑占位条填充状态栏高度，与标题栏黑底连成整体覆盖状态栏
         val spacer = findViewById<View>(R.id.status_bar_spacer)
@@ -58,11 +61,12 @@ class RangeSettingsActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.iv_back).setOnClickListener { finish() }
         // 右上角“更多”图标：弹出菜单，含「默认值与阈值」「恢复用户默认」「重置系统默认值与阈值」
         val rangeBtnMore = findViewById<ImageView>(R.id.btn_more)
-        val rangeMoreMenu = SettingsMoreMenu(
+        val rangeMoreMenu = PopupMenuHelper(
             anchor = rangeBtnMore,
-            onThreshold = { startActivity(Intent(this, RangeThresholdActivity::class.java)) },
-            onResetUserDefault = { doResetDefault() },
-            onResetSystem = { doResetSystem() }
+            popupLayoutRes = R.layout.popup_settings_more_simple,
+            items = mapOf(
+                R.id.item_threshold to { startActivity(Intent(this, RangeThresholdActivity::class.java).apply { putExtra("role_id", roleId) }) }
+            )
         )
         rangeBtnMore.setOnClickListener { rangeMoreMenu.show() }
 
@@ -84,44 +88,6 @@ class RangeSettingsActivity : AppCompatActivity() {
         refreshUI()
 
         // 「恢复默认设置」已移入右上角“更多”浮窗，逻辑封装为 doResetDefault()
-    }
-
-    /** 恢复本页默认设置（活动范围四边偏移 + 键盘适应三项），默认值取阈值页设定。先弹确认框。 */
-    private fun doResetDefault() {
-        showConfirmDialog(
-            title = "恢复用户默认",
-            bodyHtml = "将<b>本页</b>的所有设置项目恢复为当前默认值？",
-            subText = "可在“默认值与阈值页”修改默认值",
-            positiveText = "恢复"
-        ) { resetDefaultNow() }
-    }
-
-    /** 实际执行「恢复本页默认」：把阈值页记录的默认值写回 PetConfig，再统一走 refreshUI 全量重建 UI。
-     * 与「重置系统」(resetSystemNow) 同一条刷新路径，避免手工逐控件回填漏项导致只恢复一部分。 */
-    private fun resetDefaultNow() {
-        runBlocking { config.resetFromBounds(PetBounds(this@RangeSettingsActivity), SettingsPage.RANGE) }
-        refreshUI()
-    }
-
-    /** 重置系统默认值与阈值：先弹确认框，确认后恢复本页上下界、默认与当前值为系统出厂。 */
-    private fun doResetSystem() {
-        showConfirmDialog(
-            title = "重置系统默认值与阈值",
-            bodyHtml = "将<b>本页</b>的所有设置项目的当前值/默认值/阈值均重置为系统预设？",
-            subText = "当前值、默认值和阈值都会重置",
-            positiveText = "重置"
-        ) { resetSystemNow() }
-    }
-
-    /** 实际执行「重置系统默认值与阈值」：bounds 回落系统出厂并联动刷新本页（重绑滑块行程到新阈值）。 */
-    private fun resetSystemNow() {
-        runBlocking {
-            PetBounds(this@RangeSettingsActivity).resetSystem(SettingsPage.RANGE)
-            config.resetFromBounds(PetBounds(this@RangeSettingsActivity), SettingsPage.RANGE)
-        }
-        // 关键：必须走 refreshUI 重绑滑块行程（setupOffset 闭包里的 from/to），
-        // 否则滑块仍按「先在阈值页改过的旧上下界」映射，重置后范围不更新、显示异常。
-        refreshUI()
     }
 
     // 四边边界判定线来源标记（所有偏移滑块共用，单指拖动下安全）
@@ -198,7 +164,7 @@ class RangeSettingsActivity : AppCompatActivity() {
     // 使从阈值页返回时滑块行程（最新上下界）即时热更新。
     // 重绑前 clear 旧监听器，避免 addOnChangeListener 叠加。
     private fun refreshUI() {
-        val bs = PetBounds(this).getBlocking(SettingsPage.RANGE)
+        val bs = PetBounds.forRole(this@RangeSettingsActivity, roleId).getBlocking(SettingsPage.RANGE)
         val bOf = { key: String -> bs.sliders.first { it.key == key } }
 
         // 拖动四边偏移时，根据四个滑块当前业务值刷新桌面边界判定线

@@ -1,116 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center_horizontal"
-    android:padding="32dp"
     android:background="@color/cp_bg">
 
-    <Space
+    <!-- 状态栏占位条：与设置页一致，高度由 Activity 按真实状态栏高度设置，与顶栏连成整体覆盖状态栏 -->
+    <View android:id="@+id/status_bar_spacer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"/>
+        android:background="@color/cp_status_bar" />
 
-    <ImageView
-        android:layout_width="96dp"
-        android:layout_height="96dp"
-        android:src="@drawable/app_icon"
-        android:layout_marginBottom="16dp"/>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/app_name"
-        android:textSize="28dp"
-        android:textStyle="bold"
-        android:layout_marginBottom="24dp"/>
-
-    <TextView
-        android:id="@+id/tv_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="未授权"
-        android:textSize="16dp"
-        android:layout_marginBottom="24dp"/>
-
-    <LinearLayout
-        android:id="@+id/btn_start"
+    <!-- 顶栏：与设置页 title_bar 同高同底色，仅保留右侧三点按钮（首页无返回/标题，CakePet 不算标题） -->
+    <LinearLayout android:id="@+id/top_bar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="52dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/bg_btn_primary"
-        android:paddingVertical="8dp"
-        android:stateListAnimator="@null"
-        android:elevation="4dp"
-        android:layout_marginBottom="14dp">
-        <TextView
-            android:id="@+id/btn_start_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/start"
-            android:textColor="@color/cp_btn_primary_text"
-            android:textSize="17sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.02"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="双击「芝麻酥」，摸摸头"
-            android:textSize="8dp"
-            android:textColor="@color/cp_hint_white"/>
+        android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/cp_bg">
+
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+        <ImageView android:id="@+id/btn_menu"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_more"
+            app:tint="@color/cp_title"
+            android:padding="12dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="更多"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true" android:focusable="true"/>
     </LinearLayout>
 
+    <!-- 内容区：与设置页一致 16dp 内边距 -->
     <LinearLayout
-        android:id="@+id/btn_settings"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="52dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/bg_btn_outline"
-        android:paddingVertical="8dp"
-        android:stateListAnimator="@null"
-        android:elevation="0dp">
-        <TextView
-            android:id="@+id/btn_settings_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/settings"
-            android:textColor="@color/cp_btn_outline_text"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.02"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="看懂了设置，才知道怎么投喂「芝麻酥」"
-            android:textSize="8dp"
-            android:textColor="@color/cp_hint_dark"/>
-    </LinearLayout>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="存在大于本质，但小鱼干先大于一切"
-        android:textSize="13dp"
-        android:layout_marginTop="32dp"
-        android:gravity="center"/>
-
-    <Space
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"/>
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@color/cp_bg">
 
-    <TextView
-        android:id="@+id/tv_author"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="初心丶CX"
-        android:textSize="12dp"
-        android:textColor="@color/cp_hint_dark"
-        android:layout_marginBottom="8dp"
-        android:gravity="center"/>
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/app_name"
+            android:textSize="36dp"
+            android:textStyle="bold"
+            android:textColor="@color/cp_title" />
+
+        <TextView
+            android:id="@+id/tv_author"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="初心丶CX"
+            android:textSize="12dp"
+            android:textColor="@color/cp_hint_dark"
+            android:gravity="center" />
+
+        <!-- 【复用素材页同款「+」按钮布局】item_add_role，保证外观与角色素材管理页完全一致
+             （text="+"、20sp 粗体、44dp 高、描边圆角）。位于角色列表【之外】的独立按钮，
+             不占 adapter position，故不参与列表绑定、预览与长按拖拽重排。
+             上外边距为 0（紧跟作者文字）；下方与列表保留 12dp 间距。
+             【注意】<include> 会【忽略】被 include 布局根元素自带的 layout_margin*——
+             item_add_role.xml 里的 marginBottom="12dp" 在此不会自动生效，必须在本标签上显式声明。
+             （该 margin 仍会正常作用于 RoleHomeManageActivity 中把它当列表 item 的场景。） -->
+        <include
+            android:id="@+id/btn_add_role"
+            layout="@layout/item_add_role"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginBottom="12dp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/role_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:scrollbars="vertical"
+            android:clipToPadding="false" />
+    </LinearLayout>
 </LinearLayout>

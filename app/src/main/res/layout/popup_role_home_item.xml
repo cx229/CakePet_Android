@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/menu_bg_popup"
+    android:padding="4dp">
+
+    <TextView
+        android:id="@+id/item_rename"
+        android:layout_width="160dp"
+        android:layout_height="44dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="重命名"
+        android:textSize="14sp"
+        android:textColor="@color/cp_title"
+        android:background="?attr/selectableItemBackground" />
+
+    <TextView
+        android:id="@+id/item_delete"
+        android:layout_width="160dp"
+        android:layout_height="44dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="删除"
+        android:textSize="14sp"
+        android:textColor="#C0392B"
+        android:background="?attr/selectableItemBackground" />
+</LinearLayout>

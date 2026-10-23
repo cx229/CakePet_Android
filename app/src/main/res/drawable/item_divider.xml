@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 选项间分隔线：1px，使用分隔线色；宽度随父容器内容区（卡片 padding 已留白）。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <size android:height="1px" />
+    <solid android:color="@color/cp_divider" />
+</shape>

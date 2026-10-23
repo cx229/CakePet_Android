@@ -1,6 +1,12 @@
 package com.cx.cakepet
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.preferencesDataStoreFile
+import kotlinx.coroutines.runBlocking
+import java.util.concurrent.ConcurrentHashMap
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -33,7 +39,8 @@ enum class SettingsPage(val tag: String) {
     RANGE("range"),
     THINKING("thinking"),
     RANDOM("random"),
-    FEEDING("feeding");
+    FEEDING("feeding"),
+    MOVEMENT("movement");
 
     companion object {
         fun fromTag(tag: String): SettingsPage =
@@ -138,9 +145,46 @@ data class PageBounds(
     }
 }
 
-private val Context.boundsStore by preferencesDataStore(name = "pet_bounds")
+private val Context.legacyBoundsStore by preferencesDataStore(name = "pet_bounds")
 
-class PetBounds(private val context: Context) {
+/**
+ * 阈值配置层（独立于 pet_config），每个角色持有自己的 PetBounds 实例，
+ * 绑定到 pet_bounds_<roleId> 独立文件。旧版单文件 pet_bounds 在首启动时迁移进默认角色。
+ */
+class PetBounds private constructor(private val dataStore: DataStore<Preferences>) {
+
+    // 兼容旧调用：沿用单一 pet_bounds 文件（设置页 Phase5 将改为按当前角色 forRole）。
+    constructor(context: Context) : this(context.legacyBoundsStore)
+
+    companion object {
+        /**
+         * 每个角色文件（pet_bounds_<roleId>）必须且只能有一个活跃 DataStore 实例，
+         * 否则会抛 "multiple DataStores active" 崩溃。这里按 roleId 缓存单例。
+         */
+        private val cache = ConcurrentHashMap<String, PetBounds>()
+
+        /** 按角色构建专用阈值 DataStore（pet_bounds_<roleId>），同一角色永远返回同一实例。 */
+        fun forRole(context: Context, roleId: String): PetBounds = cache.computeIfAbsent(roleId) {
+            val newStore = PreferenceDataStoreFactory.create {
+                context.applicationContext.preferencesDataStoreFile("pet_bounds_$roleId")
+            }
+            if (roleId == RoleRegistry.DEFAULT.id) {
+                runBlocking {
+                    val legacy = context.legacyBoundsStore.data.first()
+                    val cur = newStore.data.first()
+                    if (cur.asMap().isEmpty() && legacy.asMap().isNotEmpty()) {
+                        newStore.edit { prefs ->
+                            legacy.asMap().forEach { (k, v) ->
+                                @Suppress("UNCHECKED_CAST")
+                                prefs[k as androidx.datastore.preferences.core.Preferences.Key<Any>] = v
+                            }
+                        }
+                    }
+                }
+            }
+            PetBounds(newStore)
+        }
+    }
 
     // ===== 系统默认（基础款 + 极限款） =====
     // 所有字面量已集中到 AppDefaults.AppBounds，本处仅装配引用。
@@ -178,6 +222,11 @@ class PetBounds(private val context: Context) {
             switches = AppBounds.FEEDING_SWITCHES,
             order = AppBounds.FEEDING_ORDER
         )
+        SettingsPage.MOVEMENT -> PageBounds(
+            sliders = AppBounds.MOVEMENT_SLIDERS,
+            switches = AppBounds.MOVEMENT_SWITCHES,
+            order = AppBounds.MOVEMENT_ORDER
+        )
     }
 
     /** 系统默认清单（不可变，用于「恢复系统默认设置」）。 */
@@ -192,7 +241,7 @@ class PetBounds(private val context: Context) {
         intPreferencesKey("${page.tag}_${key}_default")
 
     /** 读取某页的当前（用户）阈值清单；未设置的字段回落基础款。 */
-    fun boundsFlow(page: SettingsPage): Flow<PageBounds> = context.boundsStore.data.map { prefs ->
+    fun boundsFlow(page: SettingsPage): Flow<PageBounds> = dataStore.data.map { prefs ->
         val sys = systemPage(page)
         PageBounds(
             sliders = sys.sliders.map { s ->
@@ -225,7 +274,7 @@ class PetBounds(private val context: Context) {
 
     /** 写回某页的用户阈值（全量覆盖传入的清单）。 */
     suspend fun updateBounds(page: SettingsPage, bounds: PageBounds) {
-        context.boundsStore.edit { prefs ->
+        dataStore.edit { prefs ->
             bounds.sliders.forEach { s ->
                 prefs[fk(page, s.key, "from")] = s.from
                 prefs[fk(page, s.key, "to")] = s.to
@@ -271,7 +320,7 @@ class PetBounds(private val context: Context) {
         sys.colors.forEach { c ->
             keys += "${page.tag}_${c.key}_default"
         }
-        context.boundsStore.edit { prefs ->
+        dataStore.edit { prefs ->
             keys.forEach { k ->
                 prefs.remove(floatPreferencesKey(k))
                 prefs.remove(booleanPreferencesKey(k))

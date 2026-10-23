@@ -94,9 +94,9 @@ class FishMenu(
         v.findViewById<View>(R.id.fish_clear).setOnClickListener {
             service.removeFish(layer); dismiss()
         }
-        // 投食-清空：清除全部鱼，然后退出浮窗
+        // 投食-清空：清除全部鱼（仅本角色的全部支鱼），然后退出浮窗
         v.findViewById<View>(R.id.fish_clear_all).setOnClickListener {
-            service.clearAllFish(); dismiss()
+            service.clearAllFish(layer.roleId); dismiss()
         }
         // 重置大小：把宠物大小恢复为用户默认值（所有分身共享、即时生效），退出浮窗
         v.findViewById<View>(R.id.fish_reset_size).setOnClickListener {
@@ -115,6 +115,7 @@ class FishMenu(
             dismiss()
             val intent = Intent(service, FeedingSettingsActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(PetService.EXTRA_ROLE_ID, layer.roleId)
             }
             service.startActivity(intent)
         }

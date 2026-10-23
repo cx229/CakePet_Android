@@ -7,15 +7,8 @@
     android:layout_width="match_parent" android:layout_height="wrap_content"
     android:orientation="vertical">
 
-    <!-- 模块间分隔线：与设置页相同（layout_weight=0.9 的 1px cp_subtle 居中） -->
-    <LinearLayout android:id="@+id/module_sep"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:gravity="center" android:layout_marginTop="24dp" android:layout_marginBottom="6dp">
-        <View android:layout_width="0dp" android:layout_height="1px"
-            android:layout_weight="0.9" android:background="@color/cp_subtle"/>
-    </LinearLayout>
-
-    <!-- 模块标题：与设置页一致（14dp / cp_sub / marginStart=4dp / marginBottom=6dp） -->
+    <!-- 模块标题：与设置页一致（14dp / cp_sub / marginStart=4dp / marginBottom=6dp）。
+         说明：阈值页不再绘制模块间分隔线（与设置页统一：模块间用卡片占位间距，选项间用 item_divider）。 -->
     <TextView android:id="@+id/tv_module_title"
         android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:textSize="14dp" android:textColor="@color/cp_sub"

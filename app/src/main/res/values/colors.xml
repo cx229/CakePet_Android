@@ -8,9 +8,19 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <!-- 开关关闭态滑块（浅灰，与开启纯黑区分） -->
-    <color name="switch_off_thumb">#FFBDBDBD</color>
+    <color name="switch_off_thumb">#88BDBDBD</color>
+    <!-- 开关开启态（白天）颜色：集中在此，后续调整只改这一处；夜间值见 color-night/switch_black_selector.xml -->
+    <color name="switch_on">#FF505050</color>
+    <!-- 以下两名为夜间专用（values-night 真正取值），此处占位声明仅为消除
+         “night 有定义但 base 无声明”的 lint 警告；非夜间配置下不会被查询到 -->
+    <color name="switch_on_night">#88000000</color>
+    <color name="switch_off_night">#9AA0A6</color>
+    <!-- 选项入口右侧箭头（chevron）颜色：独立昼夜变量，不随标题文字色变化 -->
+    <color name="icon_chevron">#AAAAAA</color>
     <!-- 滑块未激活轨道色（浅灰，与黑色激活段区分） -->
-    <color name="slider_track_inactive">#FFBDBDBD</color>
+    <color name="slider_track_inactive">#88BDBDBD</color>
+    <!-- 滑块激活色（头/激活轨道/激活刻度）：日间纯黑；夜间值在 values-night 覆盖为带灰的 #88000000 -->
+    <color name="slider_active">#FF505050</color>
     <!-- 滑块按压光晕（半透明黑，纯黑会遮挡轨道，故保留透明度） -->
     <color name="slider_halo">#33000000</color>
     <!-- 设置页背景与主要文字色 -->
@@ -33,6 +43,7 @@
     <!-- drawable 背景引用色（日间/夜间） -->
     <color name="cp_btn_primary_bg">#FF000000</color>   <!-- 主按钮底色（黑） -->
     <color name="cp_btn_outline_bg">#FFFFFFFF</color>   <!-- 描边按钮底色（白） -->
+    <color name="cp_btn_dark_bg">#FFFFFFFF</color>      <!-- 首页卡片按钮底色（日间白/夜间黑） -->
     <color name="cp_btn_outline_stroke">#FF000000</color> <!-- 描边按钮描边（黑） -->
     <color name="cp_ripple_on_dark">#40FFFFFF</color>   <!-- 黑底上的水波纹 -->
     <color name="cp_ripple_on_light">#20000000</color>  <!-- 白底上的水波纹 -->

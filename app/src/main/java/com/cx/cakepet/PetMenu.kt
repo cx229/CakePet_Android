@@ -19,7 +19,8 @@ import android.widget.FrameLayout
  */
 class PetMenu(
     private val service: PetService,
-    private val petView: PetView
+    private val petView: PetView,
+    private val roleId: String
 ) {
     private val wm = service.getSystemService(WindowManager::class.java)
     private var root: FrameLayout? = null
@@ -157,6 +158,7 @@ class PetMenu(
             dismiss()
             val intent = Intent(service, SettingsActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(PetService.EXTRA_ROLE_ID, roleId)
             }
             service.startActivity(intent)
         }
@@ -217,7 +219,7 @@ class PetMenu(
         }
         // 定格-咔嚓：用长按时记录的快照定格当前宠物并退出浮窗（互动页首行，其余后延）
         v.findViewById<View>(R.id.freeze_snap).setOnClickListener {
-            snap?.let { s -> service.addFreezeLayer(s) }
+            snap?.let { s -> service.addFreezeLayer(roleId, s) }
             dismiss()
         }
         // 定格-更多：进入定格-更多子页（咔嚓/归位/清空/交互开关/设置）
@@ -225,9 +227,9 @@ class PetMenu(
             interactView?.visibility = View.GONE
             freezeMoreView?.visibility = View.VISIBLE
         }
-        // 投食：立即刷出一条支鱼并重置随机刷出计时，随即关闭浮窗（与分身操作一致：避免浮窗遮挡）。
+        // 投食：立即刷出一条【本角色】支鱼并重置随机刷出计时，随即关闭浮窗（与分身操作一致：避免浮窗遮挡）。
         v.findViewById<View>(R.id.feed_now).setOnClickListener {
-            service.feedNow()
+            service.feedNow(roleId)
             dismiss()
         }
         // 重置大小：把宠物大小恢复为用户默认值（所有分身共享、即时生效），随即关闭浮窗
@@ -248,31 +250,33 @@ class PetMenu(
             interactView?.visibility = View.GONE
             feedMoreView?.visibility = View.VISIBLE
         }
-        // 分身 归零 / -1 / +1：修改酥的数量（petCount），逻辑与关于页一致，范围 1..20；
+        // 分身 归零 / -1 / +1：修改酥的数量（petCount），逻辑与调试页一致，范围 1..20；
         // 到达上下界时不再变化，并用系统 Toast 提示（「酥」）。
         // 注：点击后立即关闭浮窗，否则 Toast 会被浮窗遮住看不到。
         val PET_COUNT_MIN = 1
         val PET_COUNT_MAX = 20
         fun toast(msg: String) =
             android.widget.Toast.makeText(service, msg, android.widget.Toast.LENGTH_SHORT).show()
+        // 简称随角色独立：取当前菜单所属实例的 shortName（缺省“酥”）。
+        val s = RoleStore.resolveShortName(service, roleId)
         v.findViewById<View>(R.id.pet_zero).setOnClickListener {
             service.updateConfig { copy(petCount = PET_COUNT_MIN) }
             dismiss()
-            toast("「酥」已归零")
+            toast("「$s」已归零")
         }
         v.findViewById<View>(R.id.pet_minus).setOnClickListener {
             val cur = service.currentConfig().petCount
-            if (cur <= PET_COUNT_MIN) { dismiss(); toast("「酥」不能再少了"); return@setOnClickListener }
+            if (cur <= PET_COUNT_MIN) { dismiss(); toast("「$s」不能再少了"); return@setOnClickListener }
             service.updateConfig { copy(petCount = cur - 1) }
             dismiss()
-            toast("「酥」数量：" + (cur - 1))
+            toast("「$s」数量：" + (cur - 1))
         }
         v.findViewById<View>(R.id.pet_plus).setOnClickListener {
             val cur = service.currentConfig().petCount
-            if (cur >= PET_COUNT_MAX) { dismiss(); toast("「酥」不能再多了"); return@setOnClickListener }
+            if (cur >= PET_COUNT_MAX) { dismiss(); toast("「$s」不能再多了"); return@setOnClickListener }
             service.updateConfig { copy(petCount = cur + 1) }
             dismiss()
-            toast("「酥」数量：" + (cur + 1))
+            toast("「$s」数量：" + (cur + 1))
         }
         return v
     }
@@ -295,15 +299,15 @@ class PetMenu(
             interactView?.visibility = View.VISIBLE
         }
         v.findViewById<View>(R.id.freeze_snap).setOnClickListener {
-            snap?.let { s -> service.addFreezeLayer(s) }
+            snap?.let { s -> service.addFreezeLayer(roleId, s) }
             dismiss()
         }
         v.findViewById<View>(R.id.freeze_reset).setOnClickListener {
-            service.resetAllFreezeToCenter()
+            service.resetAllFreezeToCenter(roleId)
             dismiss()
         }
         v.findViewById<View>(R.id.freeze_clear).setOnClickListener {
-            service.clearAllFreeze()
+            service.clearAllFreeze(roleId)
             dismiss()
         }
         v.findViewById<View>(R.id.fm_settings).setOnClickListener {
@@ -332,7 +336,7 @@ class PetMenu(
             interactView?.visibility = View.VISIBLE
         }
         v.findViewById<View>(R.id.feed_now).setOnClickListener {
-            service.feedNow()
+            service.feedNow(roleId)
             dismiss()
         }
         v.findViewById<View>(R.id.reset_size).setOnClickListener {
@@ -340,11 +344,11 @@ class PetMenu(
             dismiss()
         }
         v.findViewById<View>(R.id.feed_reset).setOnClickListener {
-            service.resetAllFishToCenter()
+            service.resetAllFishToCenter(roleId)
             dismiss()
         }
         v.findViewById<View>(R.id.feed_clear).setOnClickListener {
-            service.clearAllFish()
+            service.clearAllFish(roleId)
             dismiss()
         }
         v.findViewById<View>(R.id.fdm_settings).setOnClickListener {

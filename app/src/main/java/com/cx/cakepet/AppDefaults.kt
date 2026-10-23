@@ -21,7 +21,7 @@ package com.cx.cakepet
  * SwitchBound 构造参数布局：
  *   (key, label, group, default)
  *
- * 二、PetConfig 字段默认值（含关于页开关默认值）：见 ConfigDefaults。
+ * 二、PetConfig 字段默认值（含调试页开关默认值）：见 ConfigDefaults。
  *   「当前值」为运行时持久值（pet_config DataStore），由 PetConfig.toConfigData() 读取，不落源码。
  *
  * ── AppBounds 与 ConfigDefaults 的关系（重要）──
@@ -64,51 +64,92 @@ object AppBounds {
             hardMin = 0f, hardMax = 100f,           // 百分比：0=全透明，100=不透明（UI 层；物理层 ALPHA 用 0-1 小数）
             baseMin = 0f, baseMax = 100f,
             from = 0f, to = 100f,
-            step = 1f, default = 70f
-        ),
+            step = 1f, default = 100f              // 与系统默认 ConfigDefaults.ALPHA=1f(100%) 对齐
+        )
+    )
+    val MAIN_SWITCHES = listOf(
+        SwitchBound("visible", "显示 / 隐藏", "显示", true),
+        SwitchBound("clickThrough", "点击穿透", "显示", false)
+    )
+    val MAIN_ORDER = listOf(
+        "scale", "alpha", "visible", "clickThrough"
+    )
+
+    // ---------------- MOVEMENT 页 ----------------
+    // 移动设置页：动动动（移动总开关 / 最大速度）、重重重（重力抛掷 / 体感重力 / 重力强度 / 四边重力）、
+    // 弹弹弹（边缘反弹 / 反弹振动 / 反弹系数 / 四边弹力）。与主设置页「移动」入口行对应。
+    val MOVEMENT_SLIDERS = listOf(
         SliderBound(
-            key = "maxSpeed", label = "最大速度", group = "移动",
+            key = "maxSpeed", label = "最大速度", group = "动动动",
             hardMin = 0f, hardMax = 80000f,
             baseMin = 0f, baseMax = 20000f,
             from = 0f, to = 20000f,
             step = 100f, default = 7100f
         ),
         SliderBound(
-            key = "gravity", label = "重力强度", group = "重力",
+            key = "gravity", label = "重力强度", group = "重重重",
             hardMin = 0f, hardMax = 80000f,
             baseMin = 0f, baseMax = 10000f,
             from = 0f, to = 10000f,
             step = 100f, default = 3000f
         ),
         SliderBound(
-            key = "rebound", label = "反弹系数", group = "反弹",
+            key = "rebound", label = "反弹系数", group = "弹弹弹",
             hardMin = 0f, hardMax = 30f,
             baseMin = 0f, baseMax = 2f,
             from = 0f, to = 2f,
             step = 0.1f, default = 0.7f
+        ),
+        SliderBound(
+            key = "throwCoeff", label = "抛掷系数", group = "抛抛抛",
+            hardMin = 0f, hardMax = 10f,
+            baseMin = 0f, baseMax = 3f,
+            from = 0f, to = 3f,
+            step = 0.05f, default = 1f
+        ),
+        SliderBound(
+            key = "leapProbability", label = "飞跃概率", group = "攀攀攀",
+            hardMin = 0f, hardMax = 1f,         // 极限上下界 0-1.00
+            baseMin = 0f, baseMax = 0.5f,        // 默认上下界 0-0.5
+            from = 0f, to = 0.5f,
+            step = 0.01f, default = 0.10f        // 默认 0.10
+        ),
+        SliderBound(
+            key = "forageSpeed", label = "觅食速度", group = "攀攀攀",
+            hardMin = 0f, hardMax = 3000f,       // 极限上下界 0-3000 px/s
+            baseMin = 0f, baseMax = 300f,        // 默认上下界 0-300 px/s
+            from = 0f, to = 300f,
+            step = 10f, default = 100f           // 默认 100 px/s（仅自动觅食时沿墙奔向食物的速度，与正常走路无关）
         )
     )
-    val MAIN_SWITCHES = listOf(
-        SwitchBound("visible", "显示 / 隐藏", "显示", true),
-        SwitchBound("clickThrough", "点击穿透", "显示", false),
-        SwitchBound("gravityEnabled", "重力抛掷", "重力", true),
-        SwitchBound("tiltGravity", "体感重力", "重力", false),
-        SwitchBound("gravityTop", "上边重力", "重力", false),
-        SwitchBound("gravityBottom", "下边重力", "重力", true),
-        SwitchBound("gravityLeft", "左边重力", "重力", false),
-        SwitchBound("gravityRight", "右边重力", "重力", false),
-        SwitchBound("reboundEnabled", "边缘反弹", "反弹", true),
-        SwitchBound("bounceVibrate", "反弹振动", "反弹", true),
-        SwitchBound("reboundTop", "上边反弹", "反弹", true),
-        SwitchBound("reboundBottom", "下边反弹", "反弹", true),
-        SwitchBound("reboundLeft", "左边反弹", "反弹", true),
-        SwitchBound("reboundRight", "右边反弹", "反弹", true)
+    val MOVEMENT_SWITCHES = listOf(
+        SwitchBound("moveEnabled", "移动", "动动动", true),
+        SwitchBound("gravityEnabled", "重力", "重重重", true),
+        SwitchBound("tiltGravity", "体感重力", "重重重", false),
+        SwitchBound("gravityTop", "上边重力", "重重重", false),
+        SwitchBound("gravityBottom", "下边重力", "重重重", true),
+        SwitchBound("gravityLeft", "左边重力", "重重重", false),
+        SwitchBound("gravityRight", "右边重力", "重重重", false),
+        SwitchBound("reboundEnabled", "边缘反弹", "弹弹弹", true),
+        SwitchBound("bounceVibrate", "反弹振动", "弹弹弹", true),
+        SwitchBound("reboundTop", "上边反弹", "弹弹弹", true),
+        SwitchBound("reboundBottom", "下边反弹", "弹弹弹", true),
+        SwitchBound("reboundLeft", "左边反弹", "弹弹弹", true),
+        SwitchBound("reboundRight", "右边反弹", "弹弹弹", true),
+        SwitchBound("throwEnabled", "抛掷", "抛抛抛", true),
+        SwitchBound("wallClimb", "攀岩走壁", "攀攀攀", true),
+        SwitchBound("autoForage", "自动觅食", "攀攀攀", ConfigDefaults.AUTO_FORAGE),
+        SwitchBound("leapEnabled", "飞跃", "攀攀攀", false)
     )
-    val MAIN_ORDER = listOf(
-        "scale", "alpha", "visible", "clickThrough",
-        "maxSpeed",
+    val MOVEMENT_ORDER = listOf(
+        "moveEnabled", "maxSpeed",
         "gravityEnabled", "tiltGravity", "gravity", "gravityTop", "gravityBottom", "gravityLeft", "gravityRight",
-        "reboundEnabled", "bounceVibrate", "rebound", "reboundTop", "reboundBottom", "reboundLeft", "reboundRight"
+        "reboundEnabled", "bounceVibrate", "rebound", "reboundTop", "reboundBottom", "reboundLeft", "reboundRight",
+        "throwEnabled", "throwCoeff",
+        "wallClimb",
+        "autoForage", "forageSpeed",
+        "leapEnabled",
+        "leapProbability"
     )
 
     // ---------------- SNAP 页 ----------------
@@ -257,7 +298,7 @@ object AppBounds {
     val RANDOM_ITEM_SPECS = listOf(
         RandomItemSpec("r_scale", "大小", RandomItemFlags.SCALE, true),
         RandomItemSpec("r_alpha", "透明度", RandomItemFlags.ALPHA, true),
-        RandomItemSpec("r_gravity_enabled", "重力抛掷", RandomItemFlags.GRAVITY_ENABLED, true),
+        RandomItemSpec("r_gravity_enabled", "重力", RandomItemFlags.GRAVITY_ENABLED, true),
         RandomItemSpec("r_tilt_gravity", "体感重力", RandomItemFlags.TILT_GRAVITY, true),
         RandomItemSpec("r_max_speed", "最大速度", RandomItemFlags.MAX_SPEED, true),
         RandomItemSpec("r_gravity", "重力强度", RandomItemFlags.GRAVITY, true),
@@ -348,7 +389,7 @@ object AppBounds {
     val FEEDING_SWITCHES = listOf(
         SwitchBound("feedingEnabled", "投食", "投食", true),
         SwitchBound("feedingAutoExpire", "自动过期", "自动过期", true),
-        SwitchBound("feedingFullScreen", "全屏范围", "刷新范围", true),
+        SwitchBound("feedingFullScreen", "全屏范围", "刷新范围", false),
         SwitchBound("feedingEdgeRefresh", "边缘刷新", "刷新范围", true),
         SwitchBound("feedGrowEnabled", "投喂变大", "投食变大", true)
     )
@@ -363,7 +404,7 @@ object AppBounds {
 }
 
 // =====================================================================
-// 二、PetConfig 字段默认值（含关于页开关默认值）
+// 二、PetConfig 字段默认值（含调试页开关默认值）
 // =====================================================================
 /**
  * PetConfig 运行时真相源默认值（物理层单位，见文件头「AppBounds 与 ConfigDefaults 的关系」）。
@@ -381,8 +422,16 @@ object ConfigDefaults {
     val REBOUND_RATIO = 0.7f              // 反弹能量保留比：0=不弹，1=完全弹性碰撞
     val WALK_SPEED = 200f                 // 走路动画时物理驱动的横向速度（px/s）
     val FOLLOW_SPEED = 400f              // 拖动释放后宠物“追手/回归”的跟随速度（px/s）
-    val MAX_SPEED = 7100f                // 速度上限，防止数值爆炸（px/s）
-    val ALPHA = 0.7f                      // 整体透明度：0-1 小数（UI 滑块是 0-100 百分比，PetConfig 内换算）
+    val MAX_SPEED = 7100f
+    val MOVE_ENABLED = true             // 移动总开关：false 时「酥」静止（不运动/不掉落）                // 速度上限，防止数值爆炸（px/s）
+    val THROW_ENABLED = true             // 抛掷开关：关闭后拖动松手不抛出（原地落下），仍可拖起，默认开
+    val THROW_COEFF = 1f                 // 抛掷系数：抛掷初速倍率，1=原速度，0=原地滚动（仍有 ROLL 动作）
+    val WALL_CLIMB = true                // 攀岩走壁：开启后走/蠕动撞墙不调头，转而踏上相邻墙沿屏周长循环走
+    val LEAP_ENABLED = false             // 好动飞跃：开启后，攀岩态每次捞新动作按概率直接跳起飞向随机另一面墙
+    val LEAP_PROBABILITY = 0.10f          // 飞跃概率（0-1 小数）：概率越高，次次起飞
+    val AUTO_FORAGE = true                 // 自动觅食：攀岩走壁子开关，开启且非吸附态时沿墙走去吃最近食物，默认开
+    val FORAGE_SPEED = 100f               // 自动觅食时沿墙走向食物的速度（px/s）；仅用于自动觅食，与正常走动作 walkSpeed 无关，独立可调
+    val ALPHA = 1f                        // 整体透明度：0-1 小数（1=完全不透明 100%）；UI 滑块是 0-100 百分比，PetConfig 内换算
     val CLICK_THROUGH = false             // 点击穿透：true 时宠物不拦截触摸（点击会落到底层窗口）
     val FREEZE_DRAGGABLE = true          // 定格图层可拖动：true 时所有定格显示层可点击拖动位置（默认关=纯显示不可点击）
     val FREEZE_BORDER_SHOW = false         // 显示定格边框：true 时在每块定格显示层上叠加红色矩形边框（调试用的真实窗口边框，默认关）
@@ -419,7 +468,7 @@ object ConfigDefaults {
     val IME_LIFT_OFFSET = 100f           // 键盘弹起时上抬的额外偏移（px）
     val IME_RESET_BOTTOM_OFFSET = true   // 键盘收起后是否把之前底部偏移复位
     val IME_HIDE = false                 // 键盘时隐藏：键盘弹出时暂时隐藏「酥」且不可点击（不修改 visible 设置），键盘收起恢复
-    // 显示/调试开关（含关于页不可改阈值的开关默认值）
+    // 显示/调试开关（含调试页不可改阈值的开关默认值）
     val SHOW_DEBUG = false                // 调试模式总开关（叠加调试信息）
     val SHOW_IMAGE_BORDER = false         // 显示边框：图片窗口黑线 + 脚锚点十字（判断图片显示位置）
     val SHOW_CONTROL_BORDER = false       // 控制边框：命中/action 彩色调试框（贴实际控制窗）
@@ -472,9 +521,10 @@ object ConfigDefaults {
     val PET_COUNT_MAX = 30                // 数量上限（UI 约束；阈值页极限范围可到 30，启动时硬限 3 防崩溃）
     val FORCE_NIGHT_ON = false            // 强制夜间模式（始终暗色调试用）
     val FORCE_NIGHT_OFF = false           // 强制关闭夜间模式
-    // 资源包：是否使用“芝麻酥”新图（关于页开关，默认关 = 沿用 assets/img/ 旧图）。
-    val USE_NEW_SPRITE = true
-    // 仅单个碎碎念：开启=仅主实例显示碎碎念；关闭=每个实例各自显示（关于页开关，默认开）。
+    // 资源包：当前使用的图片资源包。1=芝麻酥、2=芝麻球促销（角色独立，按角色默认）。
+    // 默认走芝麻酥（与旧版 USE_NEW_SPRITE=true 行为一致）。
+    val DEFAULT_SPRITE_PACK = 1
+    // 仅单个碎碎念：开启=仅主实例显示碎碎念；关闭=每个实例各自显示（调试页开关，默认开）。
     val SINGLE_TRAY_MSG = true
     // 投喂（支鱼）：随机掉落的单图可拖拽浮窗（拖动给酥则消失）
     val FEEDING_ENABLED = true             // 投食总开关（默认开）
@@ -485,7 +535,7 @@ object ConfigDefaults {
     val FEEDING_PERIOD_MAX = 120            // 掉落频率上限（秒，默认 120）
     val FEEDING_AUTO_EXPIRE = true         // 自动过期（默认开）
     val FEEDING_EXPIRE_TIME = 60           // 过期时间（秒，默认 60）
-    val FEEDING_FULL_SCREEN = true         // 全屏刷新（默认开）
+    val FEEDING_FULL_SCREEN = false        // 全屏刷新（默认关；关闭时仅在活动范围[扣除系统栏]内刷新）
     val FEEDING_BORDER_SHOW = false        // 投喂边框显示（默认过关）
     val FEEDING_EDGE_REFRESH = true       // 边缘刷新（默认开；开启后支鱼刷在边界而非屏幕中间）
     // 静态资源（定格/食物）绝对显示边界：物理坐标下静态资源的顶/底允许范围。

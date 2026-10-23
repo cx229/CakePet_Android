@@ -4,6 +4,7 @@ import android.app.Dialog
 import android.text.Html
 import android.view.LayoutInflater
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
@@ -19,12 +20,14 @@ import androidx.appcompat.app.AppCompatActivity
  * @param positiveText 确认按钮文案（如 "恢复" / "重置"）
  * @param onPositive   点击确认后的执行逻辑（弹窗先 dismiss 再回调）
  * @param subText      小字说明（8sp 灰，置于最底部居中），可空；为空则不显示
+ * @param titleColorRes 标题颜色资源 id，可空；为空则用默认标题色
  */
 fun AppCompatActivity.showConfirmDialog(
     title: String,
     bodyHtml: String,
     positiveText: String,
     subText: String? = null,
+    titleColorRes: Int? = null,
     onPositive: () -> Unit
 ) {
     val view = LayoutInflater.from(this).inflate(R.layout.dialog_confirm, null)
@@ -35,6 +38,7 @@ fun AppCompatActivity.showConfirmDialog(
     val btnPositive = view.findViewById<Button>(R.id.btn_positive)
 
     tvTitle.text = title
+    if (titleColorRes != null) tvTitle.setTextColor(androidx.core.content.ContextCompat.getColor(this, titleColorRes))
     tvBody.text = Html.fromHtml(bodyHtml, Html.FROM_HTML_MODE_LEGACY)
     if (subText.isNullOrEmpty()) {
         tvSub.visibility = android.view.View.GONE
@@ -48,12 +52,59 @@ fun AppCompatActivity.showConfirmDialog(
     val dialog = Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
     dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
     dialog.setContentView(view)
+    dialog.window?.setLayout(
+        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+    )
     dialog.setCancelable(true)
 
     btnNegative.setOnClickListener { dialog.dismiss() }
     btnPositive.setOnClickListener {
         dialog.dismiss()
         onPositive()
+    }
+    dialog.show()
+}
+
+/**
+ * 通用重命名弹窗：圆角卡片样式（与 showConfirmDialog 同款 MaterialCardView + 28dp 圆角）。
+ * 含「角色名称」「角色简称」两个带标签输入框，底部取消/保存按钮。
+ *
+ * @param title  标题（默认「角色重命名」）
+ * @param name   名称输入框初始值（留空则空）
+ * @param short  简称输入框初始值（留空则空）
+ * @param onSave 点击保存回调，参数为已 trim 的名称与简称
+ */
+fun AppCompatActivity.showRenameDialog(
+    title: String = "角色重命名",
+    name: String = "",
+    short: String = "",
+    onSave: (name: String, short: String) -> Unit
+) {
+    val view = LayoutInflater.from(this).inflate(R.layout.dialog_rename_role, null)
+    val tvTitle = view.findViewById<TextView>(R.id.tv_title)
+    val etName = view.findViewById<EditText>(R.id.et_name)
+    val etShort = view.findViewById<EditText>(R.id.et_short)
+    val btnNegative = view.findViewById<Button>(R.id.btn_negative)
+    val btnPositive = view.findViewById<Button>(R.id.btn_positive)
+
+    tvTitle.text = title
+    etName.setText(name)
+    etShort.setText(short)
+
+    val dialog = Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+    dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+    dialog.setContentView(view)
+    dialog.window?.setLayout(
+        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+    )
+    dialog.setCancelable(true)
+
+    btnNegative.setOnClickListener { dialog.dismiss() }
+    btnPositive.setOnClickListener {
+        dialog.dismiss()
+        onSave(etName.text.toString().trim(), etShort.text.toString().trim())
     }
     dialog.show()
 }

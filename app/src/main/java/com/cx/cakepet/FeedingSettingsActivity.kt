@@ -14,7 +14,7 @@ import com.cx.cakepet.PetBounds
 import com.cx.cakepet.PetConfig
 import com.cx.cakepet.PetConfigData
 import com.cx.cakepet.SettingsPage
-import com.cx.cakepet.SettingsMoreMenu
+import com.cx.cakepet.PopupMenuHelper
 import com.google.android.material.slider.RangeSlider
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.Dispatchers
@@ -23,10 +23,11 @@ import kotlinx.coroutines.withContext
 
 /** 吃吃吃（投食）设置页：投食开关 / 大小 / 透明度 / 最大数量 / 频率 / 自动过期 + 过期时间 / 全屏刷新。 */
 class FeedingSettingsActivity : AppCompatActivity() {
-    private val config by lazy { PetConfig(this) }
+    private val roleId by lazy { intent?.getStringExtra("role_id") ?: RoleRegistry.DEFAULT.id }
+    private val config by lazy { PetConfig.forRole(this, roleId) }
     // 每次调用重读最新 PetBounds（阈值页修改后即时生效），禁止缓存——否则 onResume 重绑行程仍是旧界。
-    private fun bs() = PetBounds(this).getBlocking(SettingsPage.FEEDING).sliders.associateBy { it.key }
-    private fun bd() = PetBounds(this).getBlocking(SettingsPage.FEEDING).duals.associateBy { it.key }
+    private fun bs() = PetBounds.forRole(this@FeedingSettingsActivity, roleId).getBlocking(SettingsPage.FEEDING).sliders.associateBy { it.key }
+    private fun bd() = PetBounds.forRole(this@FeedingSettingsActivity, roleId).getBlocking(SettingsPage.FEEDING).duals.associateBy { it.key }
 
     private lateinit var statusBarSpacer: View
     private lateinit var ivBack: ImageView
@@ -62,6 +63,8 @@ class FeedingSettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_feeding_settings)
+        // 标题下方小字灰色：当前页面所属角色名
+        findViewById<android.widget.TextView>(R.id.tv_title_sub).text = RoleStore.resolveDisplayName(this, roleId)
 
         statusBarSpacer = findViewById(R.id.status_bar_spacer)
         statusBarSpacer.layoutParams.height = getStatusBarHeight()
@@ -89,11 +92,12 @@ class FeedingSettingsActivity : AppCompatActivity() {
 
         // 顶部导航
         ivBack.setOnClickListener { finish() }
-        val moreMenu = SettingsMoreMenu(
+        val moreMenu = PopupMenuHelper(
             anchor = btnMore,
-            onThreshold = { startActivity(Intent(this, FeedingThresholdActivity::class.java)) },
-            onResetUserDefault = { doResetDefault() },
-            onResetSystem = { doResetSystem() }
+            popupLayoutRes = R.layout.popup_settings_more_simple,
+            items = mapOf(
+                R.id.item_threshold to { startActivity(Intent(this, FeedingThresholdActivity::class.java).apply { putExtra("role_id", roleId) }) }
+            )
         )
         btnMore.setOnClickListener { moreMenu.show() }
 
@@ -344,30 +348,6 @@ class FeedingSettingsActivity : AppCompatActivity() {
         pendingExpire = Float.NaN
         pendingGrow = Float.NaN
         pendingPeriod = null
-    }
-
-    private fun doResetDefault() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            config.resetFromBounds(PetBounds(this@FeedingSettingsActivity), SettingsPage.FEEDING)
-            withContext(Dispatchers.Main) {
-                Toast.makeText(this@FeedingSettingsActivity, "已恢复用户默认", Toast.LENGTH_SHORT).show()
-                resumePending()
-                bindBounds()
-                refreshUI()
-            }
-        }
-    }
-
-    private fun doResetSystem() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            PetBounds(this@FeedingSettingsActivity).resetSystem(SettingsPage.FEEDING)
-            withContext(Dispatchers.Main) {
-                Toast.makeText(this@FeedingSettingsActivity, "已重置为系统默认", Toast.LENGTH_SHORT).show()
-                resumePending()
-                bindBounds()
-                refreshUI()
-            }
-        }
     }
 
     private fun getStatusBarHeight(): Int {

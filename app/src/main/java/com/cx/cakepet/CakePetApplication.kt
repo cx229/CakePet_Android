@@ -1,6 +1,7 @@
 package com.cx.cakepet
 
 import android.app.Application
+import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 
 /**
@@ -11,9 +12,19 @@ import androidx.appcompat.app.AppCompatDelegate
  */
 class CakePetApplication : Application() {
 
+    companion object {
+        /** 全局 Application Context（供无 Context 处读取角色清单等）。 */
+        lateinit var appCtx: Context
+            private set
+    }
+
     override fun onCreate() {
         super.onCreate()
-        val cfg = PetConfig(this).getBlocking()
+        appCtx = this
+        // 先扫描 assets 注册预装角色（喂 PRESET_PACKS + PRESETS），再载入用户上传模板，
+        // 使 RoleRegistry.all()/byId()/DEFAULT 可在无 Activity 处解析（含 PetService）。
+        RoleRegistry.init(this)
+        val cfg = PetConfig.forRole(this, RoleRegistry.DEFAULT.id).getBlocking()
         val mode = when {
             cfg.forceNightOn -> AppCompatDelegate.MODE_NIGHT_YES
             cfg.forceNightOff -> AppCompatDelegate.MODE_NIGHT_NO

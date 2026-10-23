@@ -1,0 +1,517 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/cp_bg"
+    android:focusableInTouchMode="true"
+    android:descendantFocusability="afterDescendants">
+
+    <!-- 状态栏占位条：纯黑，高度由 Activity 按真实状态栏高度设置 -->
+    <View android:id="@+id/status_bar_spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/cp_status_bar" />
+
+    <!-- 标题栏：黑底 -->
+    <LinearLayout android:id="@+id/title_bar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/cp_bg">
+
+        <ImageView android:id="@+id/iv_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title"
+            android:padding="14dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="返回"/>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical">
+
+            <TextView android:id="@+id/tv_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="移动"
+                android:textSize="20dp"
+                android:textStyle="bold"
+                android:textColor="@color/cp_title" />
+
+            <TextView android:id="@+id/tv_title_sub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="@color/cp_hint_dark" />
+        </LinearLayout>
+
+        <ImageView android:id="@+id/btn_more"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_more"
+            app:tint="@color/cp_title"
+            android:padding="12dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="更多"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true" android:focusable="true"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- ===== 模块：动动动 ===== -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="动动动" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:dividerPadding="16dp"
+                android:paddingTop="8dp" android:paddingBottom="8dp">
+
+                <!-- 移动总开关：关闭后「酥」静止（不运动/不掉落） -->
+                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="移动" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="关闭后，「酥」将会静悄悄地"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_move_enabled" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                </LinearLayout>
+
+                <!-- 最大速度 -->
+                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="最大速度" style="@style/SettingsOptionTitle"/>
+                            <TextView android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="「酥」能跑多快"
+                                style="@style/SettingsOptionNote"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/maxspeed_value" android:layout_width="72dp"
+                            android:layout_height="wrap_content" android:text="5000" android:textSize="16dp"
+                            android:background="@drawable/edit_bg" android:inputType="number"
+                            android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/maxspeed_bar" android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块：重重重 ===== -->
+            <View android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="重重重" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:dividerPadding="16dp"
+                android:paddingTop="8dp" android:paddingBottom="8dp">
+
+                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="重力" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="万有引力，来自地心的吸引"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_gravity_enabled" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                </LinearLayout>
+
+                <!-- 体感重力（倾斜重力）-->
+                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="体感重力" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="根据手机倾斜方向和角度决定重力强度和方向"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_tilt_gravity" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                </LinearLayout>
+
+                <!-- 重力强度 -->
+                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="重力强度" style="@style/SettingsOptionTitle"/>
+                            <TextView android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="重力越大，下坠越快"
+                                style="@style/SettingsOptionNote"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/gravity_value" android:layout_width="72dp"
+                            android:layout_height="wrap_content" android:text="3000" android:textSize="16dp"
+                            android:background="@drawable/edit_bg" android:inputType="numberDecimal"
+                            android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/gravity_bar" android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
+                    android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <!-- 四边重力：一行四个，各单元方向文字与开关水平绑定 -->
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="四边重力" style="@style/SettingsOptionTitle"/>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        style="@style/SettingsOptionNote"
+                        android:text="默认的重力方向，上下互斥，左右互斥"/>
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="horizontal"
+                            android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                            android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="上" style="@style/SettingsOptionSub"/>
+                            <Switch android:id="@+id/sw_top" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="horizontal"
+                            android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                            android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="下" style="@style/SettingsOptionSub"/>
+                            <Switch android:id="@+id/sw_bottom" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="horizontal"
+                            android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                            android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="左" style="@style/SettingsOptionSub"/>
+                            <Switch android:id="@+id/sw_left" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="horizontal"
+                            android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                            android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="右" style="@style/SettingsOptionSub"/>
+                            <Switch android:id="@+id/sw_right" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块：弹弹弹 ===== -->
+            <View android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="弹弹弹" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:dividerPadding="16dp"
+                android:paddingTop="8dp" android:paddingBottom="8dp">
+
+                <!-- 反弹总开关：关闭后所有碰撞反弹失效（撞墙停靠、不反弹、不振动），四边弹力与反弹系数均不生效 -->
+                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="边缘反弹" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold"/>
+                        <TextView android:id="@+id/note_rebound" android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="「芝麻酥」撞墙会反弹"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_rebound_enabled" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                </LinearLayout>
+
+                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="反弹振动" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="边界反弹时轻微振动"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_bounce_vibrate" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                </LinearLayout>
+
+                <!-- 反弹系数 -->
+                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="反弹系数" style="@style/SettingsOptionTitle"/>
+                            <TextView android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="撞墙后弹回的力道"
+                                style="@style/SettingsOptionNote"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/rebound_value" android:layout_width="72dp"
+                            android:layout_height="wrap_content" android:text="0.70" android:textSize="16dp"
+                            android:background="@drawable/edit_bg" android:inputType="numberDecimal"
+                            android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/rebound_bar" android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
+                    android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <!-- 四边弹力：一行四个，各单元方向文字与开关水平绑定 -->
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="四边弹力" style="@style/SettingsOptionTitle"/>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        style="@style/SettingsOptionNote"
+                        android:text="触碰边界时候触发反弹"/>
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="horizontal"
+                            android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                            android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="上" style="@style/SettingsOptionSub"/>
+                            <Switch android:id="@+id/sw_rtop" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="horizontal"
+                            android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                            android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="下" style="@style/SettingsOptionSub"/>
+                            <Switch android:id="@+id/sw_rbottom" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="horizontal"
+                            android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                            android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="左" style="@style/SettingsOptionSub"/>
+                            <Switch android:id="@+id/sw_rleft" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="horizontal"
+                            android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
+                            android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="右" style="@style/SettingsOptionSub"/>
+                            <Switch android:id="@+id/sw_rright" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块：抛抛抛 ===== -->
+            <View android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="抛抛抛" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:dividerPadding="16dp"
+                android:paddingTop="8dp" android:paddingBottom="8dp">
+
+                <!-- 抛掷开关 -->
+                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="抛掷" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="拖动「酥」，抛出去！"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_throw" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                </LinearLayout>
+
+                <!-- 抛掷系数 -->
+                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="抛掷系数" style="@style/SettingsOptionTitle"/>
+                            <TextView android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="抛出去的速度倍率"
+                                style="@style/SettingsOptionNote"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/throwcoeff_value" android:layout_width="72dp"
+                            android:layout_height="wrap_content" android:text="1.00" android:textSize="16dp"
+                            android:background="@drawable/edit_bg" android:inputType="numberDecimal"
+                            android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/throwcoeff_bar" android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== 模块：攀攀攀 ===== -->
+            <View android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="攀攀攀" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:dividerPadding="16dp"
+                android:paddingTop="8dp" android:paddingBottom="8dp">
+
+                <!-- 攀岩走壁开关 -->
+                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="攀岩走壁" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="无视重力，踏壁而行，如履平地！"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_wallclimb" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                </LinearLayout>
+
+                <!-- 自动觅食开关（攀岩走壁子开关，需先开启 移动→攀岩走壁） -->
+                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="自动觅食" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="「酥」会沿着边缘自己找吃的"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_auto_forage" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                </LinearLayout>
+
+                <!-- 觅食速度：攀岩走壁自动觅食时沿墙奔向食物的速度（px/s） -->
+                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="觅食速度" style="@style/SettingsOptionTitle"/>
+                            <TextView android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="「酥」飞快奔向小鱼干"
+                                style="@style/SettingsOptionNote"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/foragespeed_value" android:layout_width="72dp"
+                            android:layout_height="wrap_content" android:text="100" android:textSize="16dp"
+                            android:background="@drawable/edit_bg" android:inputType="numberDecimal"
+                            android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/foragespeed_bar" android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="0.0" android:valueTo="300.0" android:stepSize="10.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                </LinearLayout>
+
+                <!-- 好动飞跃开关（置于自动觅食之后） -->
+                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="飞跃" style="@style/SettingsOptionTitle"
+                            android:textStyle="bold"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="起跳，起飞！"
+                            style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <Switch android:id="@+id/sw_leap" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
+                </LinearLayout>
+
+                <!-- 飞跃概率 -->
+                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="飞跃概率" style="@style/SettingsOptionTitle"/>
+                            <TextView android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="概率越高，次次起飞"
+                                style="@style/SettingsOptionNote"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/leap_prob_value" android:layout_width="72dp"
+                            android:layout_height="wrap_content" android:text="0.10" android:textSize="16dp"
+                            android:background="@drawable/edit_bg" android:inputType="numberDecimal"
+                            android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/leap_prob_bar" android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="0.0" android:valueTo="1.0" android:stepSize="0.01" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

@@ -8,4 +8,4 @@
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="0"
     android:packageNames="@null"
-    android:settingsActivity="com.cx.cakepet/.AboutActivity" />
+    android:settingsActivity="com.cx.cakepet/.DebugActivity" />

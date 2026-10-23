@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_btn_outline"
+    android:clickable="true"
+    android:focusable="true"
+    android:longClickable="true"
+    android:padding="12dp"
+    android:layout_marginBottom="12dp">
+
+    <!-- 行：预览图 + 名称 + 删除(仅用户上传) + 导入 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/role_thumb"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:scaleType="fitCenter"
+            android:background="@drawable/bg_thumb_border"
+            android:clipToOutline="true"
+            android:padding="4dp"
+            android:layout_marginEnd="12dp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <!-- 标题行：名称 + 已加入数量（小号灰字，实时更新）。数量底部对齐左侧标题。 -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="bottom">
+                <TextView
+                    android:id="@+id/role_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/cp_title" />
+
+                <TextView
+                    android:id="@+id/role_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:textSize="11sp"
+                    android:textColor="@color/cp_note"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- 作者列表：小号灰字署名，无作者时隐藏。 -->
+            <TextView
+                android:id="@+id/role_authors"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textSize="12sp"
+                android:textColor="@color/cp_note"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- 删除：仅用户上传素材(FILES)可见，预装 GONE。 -->
+        <ImageView
+            android:id="@+id/iv_delete"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_delete"
+            app:tint="@color/cp_title"
+            android:padding="6dp"
+            android:layout_marginStart="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="删除" />
+
+        <Button
+            android:id="@+id/btn_import"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="加入"
+            android:textColor="@color/cp_btn_outline_text"
+            app:backgroundTint="@color/cp_btn_dark_bg"
+            app:strokeColor="@color/cp_btn_outline_stroke"
+            app:strokeWidth="1.5dp"
+            app:cornerRadius="14dp"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+</LinearLayout>

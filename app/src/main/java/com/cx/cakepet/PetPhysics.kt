@@ -24,6 +24,16 @@ class PetPhysics {
     var anchorOffX = 0f
     var anchorOffY = 0f
 
+    // 锚点固定(foot-fixed) 的【幂等基准】：记录“上一帧已应用平移的锚点偏移”与对应的 scaleFactor（<0 未初始化）。
+    // 平移逻辑已移入 PetView.tick/syncCurrentBitmap（主线程、每帧渲染前必执行），用本基准作“旧锚点”：
+    // 仅当 scaleFactor 真变时平移一次，使“尺寸刷新”与“位置修正”在同一帧原子完成，彻底消除投喂/直接输入等大跨度
+    // 瞬变时“先变尺寸、左上角固定、过一瞬才跳到锚点对齐”的一帧错位（根因是旧实现把平移放在随配置异步触发的
+    // recalcBoundsFor，后台协程写 scaleFactor 与主线程读 physics.x 存在非 volatile 可见性一帧滞后）。
+    // 两次缩放间发生旋转时，基准每帧同步为当前旋转锚点，故缩放时旧基准与实时锚点同旋转、脚不跳位。
+    var lastFixAnchorX = 0f
+    var lastFixAnchorY = 0f
+    var lastFixScale = -1f   // 最近一次已应用 foot-fixed 平移的 scale；<0 表示尚未初始化
+
     // 速度（像素/秒）
     var vx = 0f
     var vy = 0f
@@ -70,6 +80,9 @@ class PetPhysics {
     var snapRight = true
     // 重力/抛掷总开关：false 时拖动即静止，不施加重力、拖动不赋予抛掷速度（类似 PC）
     var gravityEnabled = true
+    // 抛掷开关/系数：抛掷开关关闭后拖动松手不抛出（原地落下），系数放大抛掷初速（1=原速度）
+    var throwEnabled = true
+    var throwCoeff = 1f
     // 体感重力（倾斜重力）开关：开启后由 tiltGx/tiltGy 向量决定重力方向（来自手机重力传感器），
     // 覆盖四边定向重力（四边开关应置 false），但保留边界反弹。
     var tiltGravity = false
@@ -83,7 +96,7 @@ class PetPhysics {
     var maxSpeed = 2000f
 
     // 静止阈值：速度低于此值且无重力作用时停止
-    private val stillThreshold = 30f
+    private val stillThreshold = 10f
 
     var isDragging = false
 
@@ -93,6 +106,15 @@ class PetPhysics {
     // 被贴附的边（0=底,1=左,2=右,3=顶），脚朝向该边；吸附时同步给 gravityDir。
     var snapSide = 0
 
+    // 攀爬态标志：独立于重力开关/体感的“贴墙走壁”专用状态位（替代旧版“篡改重力方向”做法）。
+    // 攀爬时仅锁定“垂直接触轴”并完全不受重力，脚朝向由 climbSide 经 PetView.climbRotation 表达，
+    // 从而攀岩与四边/体感重力互不干扰（拖拽松手不再残留错误重力方向）。
+    var isClimbing = false
+    // 所攀的墙（0=底,1=左,2=右,3=顶），与 snapSide 同义但用于攀爬态。
+    var climbSide = 0
+    // 好动飞跃飞行中：物理跳过重力（替代旧版“四边重力全关”做法，不再污染重力开关状态）。
+    var inLeapFlight = false
+
     // 吸附判定阈值（物理坐标，像素）：松手速度低于 snapSpeed 且距离某边 < snapDist 即吸附。
     private val snapSpeed = 800f
     // 吸附距离阈值（像素）：由 PetConfig.snapThreshold 注入，默认 100。
@@ -101,12 +123,45 @@ class PetPhysics {
     // 抛掷进行中标志：对应 PC 的 is_throw_follow，期间动画恒定 ROLL，不按速度切
     var isThrowing = false
 
+    // 边界反弹抑制（好动飞跃飞行中置 true）：飞行期间贴边不反弹、直接钳到边界并清零该轴速度，
+    // 避免飞跃被 stepAxis 弹回导致无法落点。
+    var suppressBounce = false
+
     // 抛掷结束回调（对应 PC throw_end -> change_next_mode -> 掉落-跟随）
     var onThrowEnd: (() -> Unit)? = null
 
     // 边界反弹回调（side：反弹边；speed：反弹前速度绝对值，用于决定振动强度）
     // side 常量：BOUNCE_LEFT/RIGHT/TOP/BOTTOM
     var onBounce: ((side: Int, speed: Float) -> Unit)? = null
+
+    // 非反弹边“停靠”回调：宠物以【非反弹】方式停在某边（反弹总关/该边反弹关/非飞行）时上报，
+    // 由上层决定落地行为（如开启攀岩则在落地点直接攀岩、或先判飞跃概率）。飞行(suppressBounce)不触发；
+    // 抛掷/翻滚(ROLL)中撞到非反弹边也照常上报——上层 decideLanding 会先硬停 ROLL 再决策，否则 isThrowing
+    // 在持续体感重力下永不结束、onThrowEnd 永不了触发，攀岩/飞跃永远进不去、且一直卡在 ROLL 动作。
+    // side 采用 0底/1左/2右/3顶（与 landingWall/setClimb 一致）。
+    var onNonReboundLand: ((side: Int) -> Unit)? = null
+    // 非反弹边停靠去重：避免同一次停靠每帧重复回调。离开所有边后由 step 末尾复位。
+    private var lastEdgeStopSide = -1
+
+    // 上报非反弹边停靠（去重 + 排除飞行），供上层落地决策（攀岩/飞跃）。
+    // 注意：抛掷/翻滚(ROLL)不在此屏蔽——由上层 decideLanding 硬停 ROLL 后处理，而非丢弃上报。
+    private fun reportNonReboundLand(side: Int) {
+        if (suppressBounce) return
+        if (side == lastEdgeStopSide) return
+        lastEdgeStopSide = side
+        android.util.Log.d("CakePetDBG", "reportNonReboundLand side=$side isThrowing=$isThrowing tiltRolling=$tiltRolling lastEdgeStopSide(was set)=$side")
+        onNonReboundLand?.invoke(side)
+    }
+
+    // 硬停翻滚（非反弹边停靠时由上层 decideLanding 调用）：终止 ROLL 生命周期，使上层落地决策
+    // （攀岩/飞跃/换其他动作）能接管。区别于 step 自然结束（走 onThrowEnd→JUMP_DOWN），
+    // 此处直接清状态、不播 JUMP_DOWN，由上层决定后续动作（主重力边除外，其保留滚动落地流程）。
+    internal fun endTiltRoll() {
+        isThrowing = false
+        tiltRolling = false
+        tiltRollCooldown = tiltRollCooldownMs   // 防立刻又进 ROLL
+        vx = 0f; vy = 0f; remX = 0f; remY = 0f
+    }
 
     // 体感翻滚阈值（像素/秒）：体感模式下合成速度超过此值即视为“滚得够快”，进入翻滚（ROLL）。
     // 默认 1500，可随手感调整。
@@ -170,6 +225,9 @@ class PetPhysics {
         isDragging = false
         isSnapped = false
         snapSide = 0
+        isClimbing = false
+        climbSide = 0
+        inLeapFlight = false
     }
 
     /** 用户拖拽拉出时解除吸附态（由 setDragging/拖拽入口调用） */
@@ -305,9 +363,22 @@ class PetPhysics {
             if (tiltRollCooldown < 0) tiltRollCooldown = 0
         }
 
+        // 攀爬态：贴墙锁位 + 完全不受重力。仅锁“垂直接触轴”并清零其速度，
+        // 平行轴速度由 walk 每帧写入，继续走下方 stepAxis 沿墙移动（与吸附同级的独立状态）。
+        if (isClimbing) {
+            when (climbSide) {
+                0 -> { y = maxY; vy = 0f }
+                3 -> { y = minY; vy = 0f }
+                1 -> { x = minX; vx = 0f }
+                2 -> { x = maxX; vx = 0f }
+            }
+        }
+
         // --- 重力加速度（四边重力 / 体感重力）---
         // gravityEnabled=false 时完全不施加重力（拖动即静止，类似 PC）
-        if (gravityEnabled) {
+        // 攀爬态/飞跃飞行中跳过重力：攀爬由专属 climbSide 锁轴表达、不靠重力吸附；
+        // 飞跃由 PetView 直接驱动位移，二者都不应受四边/体感重力干扰。
+        if (gravityEnabled && !isClimbing && !inLeapFlight) {
             if (tiltGravity) {
                 // 体感重力：重力方向由 tiltGx/tiltGy 向量（来自手机重力传感器）决定，连续无方向限制。
                 // 倾斜越大分量越大，等效重力越大；平放时两分量趋近 0，宠物几乎不受力。
@@ -388,6 +459,22 @@ class PetPhysics {
                 } else if (gravityLeft) {
                     vx -= gravity * interval   // 左边开启：向左加速（负方向）
                 }
+                // 普通四边重力下的“空中速度达到阈值→翻滚”，与上方体感(tiltGravity)对称：
+                // 仅在【未贴任何重力边（贴边含沿边行走）】且合成速度超进入阈值时切 ROLL，
+                // 复用抛掷生命周期 + 滞回(tiltRollExitSpeed) + 冷却(tiltRollCooldown)守卫。
+                // 用【位置】判定贴边（不依赖速度方向），避免沿边高速行走被误判为翻滚。
+                val groundedNow = (gravityBottom && y >= maxY - 0.5f) ||
+                                  (gravityTop && y <= minY + 0.5f) ||
+                                  (gravityRight && x >= maxX - 0.5f) ||
+                                  (gravityLeft && x <= minX + 0.5f)
+                if (!groundedNow && tiltRollCooldown <= 0 && !tiltRolling && !isThrowing) {
+                    val spAir = kotlin.math.sqrt(vx * vx + vy * vy)
+                    if (spAir > tiltRollSpeed) {
+                        tiltRolling = true
+                        isThrowing = true
+                        onTiltRoll?.invoke(true)
+                    }
+                }
             }
         }
 
@@ -467,12 +554,23 @@ class PetPhysics {
             } else {
             isThrowing = false
             // 体感翻滚借用了 isThrowing 生命周期，落地结束同步清掉翻滚态，使下次超阈值可重新进入。
-            // 滞回：仅当合成速度已低于退出阈值才真正退出翻滚；否则保留翻滚态，
-            // 避免落地瞬间重力残余速度（仍在 200~500 区间）把宠物立刻又推回 ROLL。
-            val spNow = kotlin.math.sqrt(vx * vx + vy * vy)
-            if (tiltRolling && spNow > tiltRollExitSpeed) {
-                // 仍在滞回区间内：不退出翻滚、不清零速度，交给下方贴边/重力继续演化，
-                // 等速度自然衰减到退出阈值以下再走真正的落地收尾。
+            // 滞回退出判据：统一按【主重力方向速度分量】判定（与 effectiveMainGravityDir 同口径）。
+            // 体感重力开启时四边开关仅被 tiltGravity 分支优先接管，四个 b/l/r/t 标志仍保留用户原值，
+            // 故体感同样有"主重力方向"，应与四边/多重力走同一逻辑（底/顶看 |vy|、左/右看 |vx|），
+            // 而非沿用合成速度。若不区分、统一用总速度，则底边重力下水平残速 vx(地面无摩擦长期保留)
+            // 与已衰减到 0 的竖直 vy 合成后总速度≈vx 仍 > 退出阈值，翻滚被无限续命 →
+            // 重力方向已 0 速度还在地面一股脑平滚不落地(与"反弹衰减到重力方向≈0 就直接落地"预期相悖)。
+            // 仅当四边标志全关(无主重力)时退回合成速度判据。
+            val exitSp = if (!gravityBottom && !gravityTop && !gravityLeft && !gravityRight) {
+                kotlin.math.sqrt(vx * vx + vy * vy)
+            } else if (gravityBottom || gravityTop) {
+                kotlin.math.abs(vy)
+            } else {
+                kotlin.math.abs(vx)
+            }
+            if (tiltRolling && exitSp > tiltRollExitSpeed) {
+                // 仍在滞回区间内(重力方向分量仍超阈值)：不退出翻滚、不清零速度，
+                // 交给下方贴边/重力继续演化，等速度自然衰减到退出阈值以下再走真正的落地收尾。
                 isThrowing = true
             } else {
                 tiltRolling = false
@@ -488,6 +586,11 @@ class PetPhysics {
             }
             }
         }
+        // 离开所有边且未攀爬/未吸附/未飞行：复位非反弹边停靠去重标记，使下次停靠重新触发落地决策。
+        if (!isClimbing && !isSnapped && !inLeapFlight &&
+            x > minX + 0.5f && x < maxX - 0.5f && y > minY + 0.5f && y < maxY - 0.5f) {
+            lastEdgeStopSide = -1
+        }
     }
 
     private fun stepAxisX(interval: Float, reboundScale: Float) {
@@ -501,7 +604,9 @@ class PetPhysics {
         if (vx > 0) {
             // 向右
             if (next >= maxX) {
-                if (reboundEnabled && reboundRight) {
+                // 攀岩走壁态：撞界【绝不反弹】——语义上应走过相邻墙(setClimb)，由 PetView.tick 的 blocked 分支负责；
+                // 若在此先反转速度，tick 就再也判不出 blocked → 上墙失败，且 onBounce 会误报振动。
+                if (reboundEnabled && reboundRight && !suppressBounce && !isClimbing) {
                     x = maxX
                     // 右边无重力且速度极小：停靠静止，不再反弹出微小反向速度（消微抖）。
                     // 注意：有重力时始终反弹并回调，否则左/顶方向（重力推向墙）会被
@@ -516,10 +621,11 @@ class PetPhysics {
                         vx = -vx * reboundRatio * reboundScale
                     }
                 } else {
-                    // 反弹总开关关闭或右边无引力：停靠该边，水平速度清零（不反弹、不振动）
+                    // 反弹总开关关闭 / 右边无引力 / 飞行抑制反弹：停靠该边，水平速度清零（不反弹、不振动）
                     x = maxX
                     remX = 0f
                     vx = 0f
+                    reportNonReboundLand(2)   // 右(side=2，与 landingWall/setClimb 一致)
                 }
             } else {
                 x = next
@@ -527,7 +633,8 @@ class PetPhysics {
         } else if (vx < 0) {
             // 向左
             if (next <= minX) {
-                if (reboundEnabled && reboundLeft) {
+                // 攀岩走壁态：撞界不反弹，改为停靠+交由 tick 的 setClimb 上墙（同上，见 BOUNCE_RIGHT 注释）。
+                if (reboundEnabled && reboundLeft && !suppressBounce && !isClimbing) {
                     x = minX
                     if (!gravityLeft && abs(vx) < stillThreshold) {
                         remX = 0f
@@ -541,6 +648,7 @@ class PetPhysics {
                     x = minX
                     remX = 0f
                     vx = 0f
+                    reportNonReboundLand(1)   // 左(side=1)
                 }
             } else {
                 x = next
@@ -560,7 +668,9 @@ class PetPhysics {
         if (vy > 0) {
             // 向下
             if (next >= maxY) {
-                if (reboundEnabled && reboundBottom) {
+                // 攀岩走壁态：撞界【绝不反弹】——应走过相邻墙(setClimb)，由 PetView.tick 统一处理，
+                // 否则宠物被弹离边界后 tick 判不出 blocked → 上墙失败且误报振动（见 stepAxisX 说明）。
+                if (reboundEnabled && reboundBottom && !suppressBounce && !isClimbing) {
                     y = maxY
                     // 底边无重力且速度极小：停靠静止，不再反弹出微小反向速度（消微抖）。
                     // 有重力时始终反弹并回调（避免左/顶方向反弹振动失效，见 stepAxisX 说明）。
@@ -573,10 +683,11 @@ class PetPhysics {
                         vy = -vy * reboundRatio * reboundScale
                     }
                 } else {
-                    // 反弹总开关关闭或底边无引力：停靠该边，竖直速度清零（不反弹、不振动）
+                    // 反弹总开关关闭 / 底边无引力 / 飞行抑制反弹：停靠该边，竖直速度清零（不反弹、不振动）
                     y = maxY
                     remY = 0f
                     vy = 0f
+                    reportNonReboundLand(0)   // 底(side=0)
                 }
             } else {
                 y = next
@@ -584,7 +695,8 @@ class PetPhysics {
         } else if (vy < 0) {
             // 向上
             if (next <= minY) {
-                if (reboundEnabled && reboundTop) {
+                // 攀岩走壁态：撞界不反弹，改为停靠+交由 tick 的 setClimb 上墙（同上）。
+                if (reboundEnabled && reboundTop && !suppressBounce && !isClimbing) {
                     y = minY
                     if (!gravityTop && abs(vy) < stillThreshold) {
                         remY = 0f
@@ -598,6 +710,7 @@ class PetPhysics {
                     y = minY
                     remY = 0f
                     vy = 0f
+                    reportNonReboundLand(3)   // 顶(side=3)
                 }
             } else {
                 y = next

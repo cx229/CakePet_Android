@@ -35,32 +35,71 @@
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".DebugActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 关于页：全局页，不绑定角色；页内无输入框，无需 windowSoftInputMode -->
+        <activity
+            android:name=".AboutActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <!-- 隐私协议页：WebView 渲染 assets/privacy.html（与 Gitee Pages 同一份文件）；无输入框 -->
+        <activity
+            android:name=".PrivacyActivity"
+            android:exported="false"
             android:theme="@style/Theme.CakePet.FullscreenTitle" />
 
         <activity
-            android:name=".AboutActivity"
+            android:name=".RoleManageActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
+            android:name=".RoleHomeManageActivity"
             android:exported="false"
             android:theme="@style/Theme.CakePet.FullscreenTitle" />
 
         <activity
             android:name=".RandomSettingsActivity"
             android:exported="false"
-            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+            android:theme="@style/Theme.CakePet.FullscreenTitle"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".ThinkingSettingsActivity"
             android:exported="false"
-            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+            android:theme="@style/Theme.CakePet.FullscreenTitle"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".SnapSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".MovementSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".MovementThresholdActivity"
             android:exported="false"
             android:theme="@style/Theme.CakePet.FullscreenTitle" />
 
         <activity
             android:name=".RangeSettingsActivity"
             android:exported="true"
-            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+            android:theme="@style/Theme.CakePet.FullscreenTitle"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".MainThresholdActivity"
@@ -90,7 +129,8 @@
         <activity
             android:name=".FeedingSettingsActivity"
             android:exported="false"
-            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+            android:theme="@style/Theme.CakePet.FullscreenTitle"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".FeedingThresholdActivity"

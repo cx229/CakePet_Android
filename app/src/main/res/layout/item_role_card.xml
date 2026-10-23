@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_btn_outline"
+    android:clickable="true"
+    android:focusable="true"
+    android:longClickable="true"
+    android:padding="12dp"
+    android:layout_marginBottom="12dp">
+
+    <!-- 顶部行：预览图 + 名称/状态 + 设置(右上角，尺寸不变) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/role_thumb"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:scaleType="fitCenter"
+            android:background="@drawable/bg_thumb_border"
+            android:clipToOutline="true"
+            android:padding="4dp"
+            android:layout_marginEnd="12dp"/>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/role_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/cp_title"/>
+            <TextView
+                android:id="@+id/role_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="@color/cp_hint_dark"
+                android:layout_marginTop="4dp"/>
+        </LinearLayout>
+
+        <!-- 设置：移到顶部右上角，尺寸保持普通按钮(wrap_content)，不拉伸 -->
+        <Button
+            android:id="@+id/btn_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="设置"
+            android:textColor="@color/cp_btn_outline_text"
+            app:backgroundTint="@color/cp_btn_dark_bg"
+            app:strokeColor="@color/cp_btn_outline_stroke"
+            app:strokeWidth="1.5dp"
+            app:cornerRadius="14dp"
+            android:layout_marginStart="8dp"/>
+    </LinearLayout>
+
+    <!-- 底部按钮行（设置已移到顶部）：
+         未召唤 → 仅 [召唤] 独占一行、全宽(召回 GONE)；
+         已召唤 → [归位](=召唤按钮) 与 [召回] 各 weight=1，各占一半。 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="12dp">
+        <Button
+            android:id="@+id/btn_summon"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="召唤"
+            android:textColor="@color/cp_btn_outline_text"
+            app:backgroundTint="@color/cp_btn_dark_bg"
+            app:strokeColor="@color/cp_btn_outline_stroke"
+            app:strokeWidth="1.5dp"
+            app:cornerRadius="14dp"/>
+        <Button
+            android:id="@+id/btn_recall"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="召回"
+            android:textColor="@color/cp_btn_outline_text"
+            app:backgroundTint="@color/cp_btn_dark_bg"
+            app:strokeColor="@color/cp_btn_outline_stroke"
+            app:strokeWidth="1.5dp"
+            app:cornerRadius="14dp"
+            android:layout_marginStart="6dp"/>
+    </LinearLayout>
+</LinearLayout>

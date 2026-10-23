@@ -33,13 +33,28 @@
             android:layout_gravity="center_vertical"
             android:contentDescription="返回"/>
 
-        <TextView android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="碎碎念设置"
-            android:textSize="20dp"
-            android:textStyle="bold"
-            android:textColor="@color/cp_title"/>
-        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical">
+
+            <TextView android:id="@+id/tv_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="底部消息"
+                android:textSize="20dp"
+                android:textStyle="bold"
+                android:textColor="@color/cp_title" />
+
+            <TextView android:id="@+id/tv_title_sub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="@color/cp_hint_dark" />
+        </LinearLayout>
+
         <ImageView android:id="@+id/btn_more"
             android:layout_width="48dp" android:layout_height="48dp"
             android:scaleType="fitCenter"
@@ -68,8 +83,8 @@
                 android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:padding="16dp">
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="底部消息" style="@style/SettingsOptionTitle"/>
@@ -79,7 +94,7 @@
                     <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_thinking_enabled"
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:minWidth="0dp" android:minHeight="0dp"
-                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
+                        android:paddingStart="6dp" android:paddingEnd="6dp" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </LinearLayout>
             </LinearLayout>
 
@@ -90,136 +105,164 @@
             <LinearLayout android:id="@+id/card_display"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:padding="16dp">
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 字号 -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginBottom="14dp">
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
-                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="字号" style="@style/SettingsOptionTitle"/>
-                            <EditText android:id="@+id/text_size_value" android:layout_width="match_parent"
+                    android:orientation="vertical" android:layout_marginBottom="0dp">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="字号" style="@style/SettingsOptionTitle"/>
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="碎碎念文字的大小"
+                style="@style/SettingsOptionNote"/>
+        </LinearLayout>
+        <EditText android:id="@+id/text_size_value" android:layout_width="72dp"
                                 android:layout_height="wrap_content" android:text="10" android:textSize="16dp"
                                 android:background="@drawable/edit_bg" android:inputType="number"
-                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
-                        </LinearLayout>
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/text_size_bar" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
-                            android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"/>
-                    </LinearLayout>
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/text_size_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
                 </LinearLayout>
 
                 <!-- 透明度 -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginBottom="14dp">
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
-                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="透明度" style="@style/SettingsOptionTitle"/>
-                            <EditText android:id="@+id/text_alpha_value" android:layout_width="match_parent"
+                    android:orientation="vertical" android:layout_marginBottom="0dp">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="透明度" style="@style/SettingsOptionTitle"/>
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="碎碎念文字的可见程度"
+                style="@style/SettingsOptionNote"/>
+        </LinearLayout>
+        <EditText android:id="@+id/text_alpha_value" android:layout_width="72dp"
                                 android:layout_height="wrap_content" android:text="100" android:textSize="16dp"
                                 android:background="@drawable/edit_bg" android:inputType="number"
-                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
-                        </LinearLayout>
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/text_alpha_bar" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
-                            android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"/>
-                    </LinearLayout>
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/text_alpha_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
                 </LinearLayout>
 
                 <!-- 位置偏移（由设置页迁移而来） -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginBottom="14dp">
+                    android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="96dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                                 android:text="位置偏移" style="@style/SettingsOptionTitle"/>
-                            <EditText android:id="@+id/offset_value" android:layout_width="match_parent"
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                style="@style/SettingsOptionNote"
+                                android:text="碎碎念在屏幕底部的显示位置"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/offset_value" android:layout_width="72dp"
                                 android:layout_height="wrap_content" android:text="0" android:textSize="16dp"
                                 android:background="@drawable/edit_bg" android:inputType="number"
-                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
-                        </LinearLayout>
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/offset_bar" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
-                            android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"/>
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
                     </LinearLayout>
-                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                        style="@style/SettingsOptionNote"
-                        android:text="碎碎念在屏幕底部的显示位置"/>
+                    <com.google.android.material.slider.Slider
+                            android:id="@+id/offset_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
                 </LinearLayout>
 
                 <!-- 频率：合并进「显示」模块，位于「颜色」之前 -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginBottom="14dp">
+                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <!-- 顶行：左标题+备注(占满) / 右双数值输入框 -->
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                                 android:text="频率" style="@style/SettingsOptionTitle"/>
-                            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:orientation="horizontal" android:gravity="center">
-                                <EditText android:id="@+id/empty_min_value" android:layout_width="0dp"
-                                    android:layout_height="wrap_content" android:layout_weight="1" android:text="2"
-                                    android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
-                                    android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"
-                                    android:textColor="@color/cp_title"/>
-                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:text="-" android:textSize="14dp" android:layout_marginStart="2dp"
-                                    android:layout_marginEnd="2dp" android:textColor="@color/cp_title"/>
-                                <EditText android:id="@+id/empty_max_value" android:layout_width="0dp"
-                                    android:layout_height="wrap_content" android:layout_weight="1" android:text="15"
-                                    android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
-                                    android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"
-                                    android:textColor="@color/cp_title"/>
-                            </LinearLayout>
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                style="@style/SettingsOptionNote"
+                                android:text="碎碎念的更新时间间隔（秒）"/>
                         </LinearLayout>
-                        <com.google.android.material.slider.RangeSlider
-                            android:id="@+id/empty_range"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginTop="0dp"
-                            android:stepSize="1.0"
-                            android:valueFrom="1.0"
-                            android:valueTo="60.0"
-                            app:thumbColor="@color/black"
-                            app:haloColor="@color/slider_halo"
-                            app:trackColorActive="@color/black"
-                            app:trackColorInactive="@color/slider_track_inactive"
-                            app:tickColorActive="@color/black"
-                            app:tickColorInactive="@color/slider_track_inactive"
-                            app:values="@array/empty_range_initial"/>
+                        <LinearLayout android:layout_width="120dp" android:layout_height="wrap_content"
+                            android:orientation="horizontal" android:gravity="center"
+                            android:layout_marginStart="8dp">
+                            <EditText android:id="@+id/empty_min_value" android:layout_width="0dp"
+                                android:layout_height="wrap_content" android:layout_weight="1" android:text="2"
+                                android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"
+                                android:textColor="@color/cp_title"/>
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="-" android:textSize="14dp" android:layout_marginStart="2dp"
+                                android:layout_marginEnd="2dp" android:textColor="@color/cp_title"/>
+                            <EditText android:id="@+id/empty_max_value" android:layout_width="0dp"
+                                android:layout_height="wrap_content" android:layout_weight="1" android:text="15"
+                                android:textSize="14dp" android:background="@drawable/edit_bg" android:inputType="number"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"
+                                android:textColor="@color/cp_title"/>
+                        </LinearLayout>
                     </LinearLayout>
-                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                        style="@style/SettingsOptionNote"
-                        android:text="碎碎念的更新时间间隔（秒）"/>
+
+                    <!-- 底行：满宽细双滑块 -->
+                    <com.google.android.material.slider.RangeSlider
+                        android:id="@+id/empty_range"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:stepSize="1.0"
+                        android:valueFrom="1.0"
+                        android:valueTo="60.0"
+                        app:thumbColor="@color/slider_active"
+                        app:haloColor="@color/slider_halo"
+                        app:trackColorActive="@color/slider_active"
+                        app:trackColorInactive="@color/slider_track_inactive"
+                        app:tickColorActive="@color/slider_active"
+                        app:tickColorInactive="@color/slider_track_inactive"
+                        app:values="@array/empty_range_initial"
+                        app:trackHeight="2dp"
+                        app:thumbRadius="5dp"
+                        android:layout_marginTop="0dp"/>
                 </LinearLayout>
 
                 <!-- 颜色入口：整行可点击（与设置页「显示-其他」入口布局一致，但点击打开取色浮窗而非新页）。
                      左侧标题 + 备注，右侧当前色块 + › 箭头。 -->
                 <LinearLayout android:id="@+id/row_color"
                     style="@style/SettingsSwitchRow"
-                    android:layout_marginTop="4dp">
+                    android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
+                    android:paddingStart="20dp" android:paddingEnd="20dp"
+                    android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="颜色" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="碎碎念文字颜色"
+                            style="@style/SettingsOptionNote"/>
                     </LinearLayout>
                     <View android:id="@+id/color_dot"
                         android:layout_width="26dp" android:layout_height="26dp"
                         android:layout_marginEnd="10dp"/>
                     <ImageView android:layout_width="22dp" android:layout_height="22dp"
                         android:src="@drawable/ic_chevron_right"
+                        app:tint="@color/icon_chevron"
                         android:layout_marginStart="12dp"/>
                 </LinearLayout>
             </LinearLayout>
@@ -231,10 +274,11 @@
             <LinearLayout android:id="@+id/card_flash"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:padding="16dp">
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 文字闪现：控制显形特效（空白结束 -> 文字出现） -->
-                <LinearLayout style="@style/SettingsSwitchRow">
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="文字闪现" style="@style/SettingsOptionTitle"/>
@@ -244,11 +288,11 @@
                     <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_flash_in"
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:minWidth="0dp" android:minHeight="0dp"
-                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
+                        android:paddingStart="6dp" android:paddingEnd="6dp" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </LinearLayout>
 
                 <!-- 文字闪回：控制退场特效（文字消失 -> 进入空白） -->
-                <LinearLayout style="@style/SettingsSwitchRow">
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="文字闪回" style="@style/SettingsOptionTitle"/>
@@ -258,7 +302,7 @@
                     <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_flash_out"
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:minWidth="0dp" android:minHeight="0dp"
-                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
+                        android:paddingStart="6dp" android:paddingEnd="6dp" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </LinearLayout>
 
             </LinearLayout>
@@ -270,9 +314,10 @@
             <LinearLayout android:id="@+id/card_bg"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:padding="16dp">
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
                 <!-- 气泡背景 -->
-                <LinearLayout style="@style/SettingsSwitchRow">
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="气泡背景" style="@style/SettingsOptionTitle"/>
@@ -280,35 +325,54 @@
                             android:text="碎碎念是否显示气泡背景" style="@style/SettingsOptionNote"/>
                     </LinearLayout>
                     <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_thinking_bg_enabled"
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                        android:layout_width="wrap_content" android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </LinearLayout>
                 <!-- 背景透明度 -->
-                <LinearLayout style="@style/SettingsSliderRow">
-                    <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                        android:orientation="vertical">
-                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:text="背景透明度" style="@style/SettingsOptionTitle"/>
-                        <EditText android:id="@+id/edit_thinking_bg_alpha" android:layout_width="match_parent"
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="背景透明度" style="@style/SettingsOptionTitle"/>
+                            <TextView android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="气泡背景的可见程度"
+                                style="@style/SettingsOptionNote"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/edit_thinking_bg_alpha" android:layout_width="72dp"
                             android:layout_height="wrap_content" android:text="20" android:textSize="16dp"
                             android:background="@drawable/edit_bg" android:inputType="number"
-                            android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
+                            android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"
+                            android:gravity="center" android:layout_marginStart="8dp"/>
                     </LinearLayout>
                     <com.google.android.material.slider.Slider android:id="@+id/seek_thinking_bg_alpha"
-                        android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                        android:layout_marginStart="8dp" android:valueFrom="0.0" android:valueTo="100.0"
-                        android:stepSize="1.0"/>
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"
+                        app:trackHeight="2dp" app:thumbRadius="5dp"
+                        android:layout_marginTop="0dp"/>
                 </LinearLayout>
                 <!-- 背景颜色 -->
-                <LinearLayout android:id="@+id/row_bg_color" style="@style/SettingsSwitchRow">
+                <LinearLayout android:id="@+id/row_bg_color" style="@style/SettingsSwitchRow"
+                    android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
+                    android:paddingStart="20dp" android:paddingEnd="20dp"
+                    android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="背景颜色" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="气泡背景颜色"
+                            style="@style/SettingsOptionNote"/>
                     </LinearLayout>
                     <View android:id="@+id/bg_color_dot"
                         android:layout_width="26dp" android:layout_height="26dp"
                         android:layout_marginEnd="10dp"/>
                     <ImageView android:layout_width="22dp" android:layout_height="22dp"
                         android:src="@drawable/ic_chevron_right"
+                        app:tint="@color/icon_chevron"
                         android:layout_marginStart="12dp"/>
                 </LinearLayout>
             </LinearLayout>

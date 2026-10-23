@@ -23,7 +23,7 @@
         <!-- Customize your theme here. -->
     </style>
 
-    <!-- 设置页/关于页（无 ActionBar）夜间配色：开关/滑块改用浅色强调色 -->
+    <!-- 设置页/调试页（无 ActionBar）夜间配色：开关/滑块改用浅色强调色 -->
     <style name="Theme.CakePet.FullscreenTitle" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorSecondary">@color/black</item>
         <item name="colorSecondaryVariant">@color/black</item>

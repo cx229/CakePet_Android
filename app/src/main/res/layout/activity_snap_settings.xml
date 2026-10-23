@@ -33,13 +33,28 @@
             android:layout_gravity="center_vertical"
             android:contentDescription="返回"/>
 
-        <TextView android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="贴边边设置"
-            android:textSize="20dp"
-            android:textStyle="bold"
-            android:textColor="@color/cp_title"/>
-        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical">
+
+            <TextView android:id="@+id/tv_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="吸附边缘"
+                android:textSize="20dp"
+                android:textStyle="bold"
+                android:textColor="@color/cp_title" />
+
+            <TextView android:id="@+id/tv_title_sub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="@color/cp_hint_dark" />
+        </LinearLayout>
+
         <ImageView android:id="@+id/btn_more"
             android:layout_width="48dp" android:layout_height="48dp"
             android:scaleType="fitCenter"
@@ -68,11 +83,12 @@
                 android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:padding="16dp">
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 吸附边缘总开关：直接控制 snapEnabled，不影响子选项值 -->
                 <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
-                    android:layout_marginBottom="0dp">
+                    android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="吸附边缘" style="@style/SettingsOptionTitle"/>
@@ -82,17 +98,18 @@
                     <Switch android:id="@+id/sw_snap_enabled"
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:minWidth="0dp" android:minHeight="0dp"
-                        android:paddingStart="6dp" android:paddingEnd="6dp"/>
+                        android:paddingStart="6dp" android:paddingEnd="6dp" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </LinearLayout>
 
                 <!-- 四边吸附（原 bg_cell_gray 横排四宫格，id 保持不变） -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                     style="@style/SettingsOptionTitle"
-                    android:layout_marginTop="14dp" android:layout_marginBottom="4dp"
                     android:text="四边吸附"/>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="2dp" android:layout_marginBottom="2dp">
+                    android:orientation="horizontal" android:gravity="center_vertical">
                     <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:orientation="horizontal"
                         android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
@@ -100,7 +117,7 @@
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="上" style="@style/SettingsOptionSub"/>
                         <Switch android:id="@+id/sw_stop" android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"/>
+                            android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                     </LinearLayout>
                     <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:orientation="horizontal"
@@ -109,7 +126,7 @@
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="下" style="@style/SettingsOptionSub"/>
                         <Switch android:id="@+id/sw_sbottom" android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"/>
+                            android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                     </LinearLayout>
                     <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:orientation="horizontal"
@@ -118,7 +135,7 @@
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="左" style="@style/SettingsOptionSub"/>
                         <Switch android:id="@+id/sw_sleft" android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"/>
+                            android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                     </LinearLayout>
                     <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:orientation="horizontal"
@@ -127,34 +144,33 @@
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="右" style="@style/SettingsOptionSub"/>
                         <Switch android:id="@+id/sw_sright" android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"/>
+                            android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                     </LinearLayout>
+                </LinearLayout>
                 </LinearLayout>
 
                 <!-- 吸附距离（原设置页同款：id snap_threshold_bar，range 0-600，备注不变） -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginTop="16dp">
+                    android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                                 android:text="吸附距离" style="@style/SettingsOptionTitle"/>
-                            <EditText android:id="@+id/snap_threshold_value" android:layout_width="match_parent"
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="拖拽松手时，数值越大，越容易被吸附在边缘"
+                                style="@style/SettingsOptionNote"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/snap_threshold_value" android:layout_width="72dp"
                                 android:layout_height="wrap_content" android:text="100" android:textSize="16dp"
                                 android:background="@drawable/edit_bg" android:inputType="number"
-                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true"/>
-                        </LinearLayout>
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/snap_threshold_bar" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
-                            android:valueFrom="0.0" android:valueTo="600.0" android:stepSize="1.0"
-                            android:layout_marginBottom="0dp"/>
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
                     </LinearLayout>
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="拖拽松手时，数值越大，越容易被吸附在边缘"
-                        style="@style/SettingsOptionNote"
-                        android:layout_marginBottom="4dp"/>
+                    <com.google.android.material.slider.Slider
+                            android:id="@+id/snap_threshold_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="0.0" android:valueTo="600.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>

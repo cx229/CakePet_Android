@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 覆写 Material Slider 默认的控件最小高度(库内为 48dp)，
+         使单滑块可压扁为细扁样式(仅高度下限，轨道/拇指仍由 trackHeight/thumbRadius 控制)。
+         全局影响所有 com.google.android.material.slider.Slider。 -->
+    <dimen name="mtrl_slider_widget_height">8dp</dimen>
+    <!-- 覆写轨道左右内边距(库内默认约 12dp)，使滑块轨道满宽、拇指可达左右边缘。
+         全局影响所有 Slider/RangeSlider（与 widget_height 同为全局覆写）。 -->
+    <dimen name="mtrl_slider_track_side_padding">8dp</dimen>
+</resources>

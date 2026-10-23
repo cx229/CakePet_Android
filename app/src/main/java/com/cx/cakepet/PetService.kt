@@ -1,6 +1,7 @@
 package com.cx.cakepet
 
 import androidx.appcompat.app.AppCompatDelegate
+import java.io.InputStream
 import kotlin.random.Random
 import android.app.Notification
 import android.app.NotificationChannel
@@ -42,6 +43,7 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -63,6 +65,7 @@ data class PetInstance(
     var displayAdded: Boolean,
     var controlAdded: Boolean,
     var petMsg: TrayMsgManager,
+    var roleId: String = "",
     var lastW: Int = -1,
     var lastH: Int = -1
 )
@@ -77,9 +80,47 @@ class PetService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var petView: PetView   // 主实例 pets[0].view 的别名，供既有主实例逻辑使用
     private lateinit var layoutParams: WindowManager.LayoutParams  // 主实例 pets[0] 的别名
+    // 当前操作中角色的 config（每次角色操作/手势交互前同步为该角色，供既有 currentConfig 使用）
     private lateinit var config: PetConfig
+    // 当前操作中角色 id（operating role），供 currentBounds 回落；手势/操作时同步。
+    private var currentRoleId: String = RoleRegistry.DEFAULT.id
+    // 当前操作角色的简称（随实例独立重命名）；辅助线/红框吐槽等文案按此显示，避免硬编码“酥”。
+    private var currentShortName: String = "角色"
 
-    // 多实例：所有宠物实例集合。pets[0] 为主实例（调试浮层 / 菜单动作 / 体感方向基准）。
+    // 多角色：每个已召唤角色一份完全独立的运行态（各自 config/bounds/配置观察者/随机循环），互不干扰。
+    private data class RoleRuntime(
+        val roleId: String,
+        var config: PetConfig,
+        var bounds: PetBounds,
+        // 资源包状态：按角色独立（不再用 PetService 全局变量，避免多角色互相覆盖导致全部渲染成同一角色）。
+        var spritePackId: Int = ConfigDefaults.DEFAULT_SPRITE_PACK,
+        var descriptor: RoleDescriptor? = null,
+        var configJob: Job? = null,
+        var randomJob: Job? = null,
+        var tiltStrength: Float = 3000f,  // 本角色「重力强度」，体感按角色独立量化
+        // 投喂（支鱼）：完全按角色独立（各自刷出循环 / 频率 / 数量 / 倍率 / 透明度，互不干扰）
+        var fishSpawning: Boolean = false,
+        var fishSpawnRunnable: Runnable? = null,
+        var lastFeedingEnabled: Boolean = ConfigDefaults.FEEDING_ENABLED,
+        var lastFeedingFishScale: Float = ConfigDefaults.FEEDING_FISH_SCALE,
+        var lastFeedingFishAlpha: Float = ConfigDefaults.FEEDING_FISH_ALPHA,
+        var lastFeedingMaxCount: Int = ConfigDefaults.FEEDING_MAX_COUNT,
+        var lastFeedingAutoExpire: Boolean = ConfigDefaults.FEEDING_AUTO_EXPIRE,
+        var lastFeedingExpireTime: Int = ConfigDefaults.FEEDING_EXPIRE_TIME,
+        var lastFeedingFullScreen: Boolean = ConfigDefaults.FEEDING_FULL_SCREEN,
+        var lastFeedingBorderShow: Boolean = ConfigDefaults.FEEDING_BORDER_SHOW,
+        var lastFeedingPeriodMin: Int = ConfigDefaults.FEEDING_PERIOD_MIN,
+        var lastFeedingPeriodMax: Int = ConfigDefaults.FEEDING_PERIOD_MAX,
+        // 定格（咔嚓）：完全按角色独立（可拖动 / 边框按角色各自设置）
+        var lastFreezeDraggable: Boolean = ConfigDefaults.FREEZE_DRAGGABLE,
+        var lastFreezeBorderShow: Boolean = ConfigDefaults.FREEZE_BORDER_SHOW,
+        // 随机切换周期：按角色独立检测变更
+        var lastRandomPeriodMin: Int = ConfigDefaults.RANDOM_PERIOD_MIN,
+        var lastRandomPeriodMax: Int = ConfigDefaults.RANDOM_PERIOD_MAX
+    )
+    private val engines = LinkedHashMap<String, RoleRuntime>()
+
+    // 多实例：所有宠物实例集合（跨角色共存）。pets[0] 为主实例（调试浮层 / 菜单动作 / 体感方向基准）。
     private val pets = mutableListOf<PetInstance>()
 
     // 上次生效的宠物数量，用于检测配置中 petCount 变化并触发重建
@@ -92,7 +133,8 @@ class PetService : Service() {
     val lp: WindowManager.LayoutParams,
     val time: Long,
     val note: String = "",
-    val borderView: View? = null  // 显示定格边框开关开启时的红色真实窗口边框（NOT_TOUCHABLE，不拦截交互）
+    val borderView: View? = null,  // 显示定格边框开关开启时的红色真实窗口边框（NOT_TOUCHABLE，不拦截交互）
+    val roleId: String = ""   // 归属角色：应用「可拖动/边框」时按角色独立，避免串到其它角色
     )
     private val freezeLayers = mutableListOf<FreezeLayer>()
     // 投喂（支鱼）浮窗：随机掉落的单图可拖拽浮窗；拖动给酥则消失（纯清除）。
@@ -101,25 +143,22 @@ class PetService : Service() {
         val lp: WindowManager.LayoutParams,
         val time: Long = System.currentTimeMillis(),  // 投食（支鱼）掉落的时刻，供食物浮窗顶部展示
         val borderView: View? = null,   // 投喂边框开关开启时的红色真实窗口边框（NOT_TOUCHABLE）
-        var expireRunnable: Runnable? = null
+        var expireRunnable: Runnable? = null,
+        val crop: Bitmap? = null,        // 本角色支鱼裁剪图（按 packId 缓存，避免多角色串图）
+        val packId: Int = 1,             // 本角色资源包 id，供尺寸/重载按角色取图
+        val roleId: String = ""          // 归属角色：频率/数量/倍率/清除均按角色独立
     )
     private val fishLayers = mutableListOf<FishLayer>()
-    private var fishBitmap: Bitmap? = null        // 原始支鱼图（按 useNewSprite 选资源包）
-    private var fishCropBitmap: Bitmap? = null      // 裁剪到最小不透明像素矩形后的图（窗口按此尺寸 * 倍率）
-    private var fishSpawning = false
-    // 上次生效的投喂配置，用于检测变化并即时作用于全部已有支鱼浮窗
-    private var lastFeedingEnabled = ConfigDefaults.FEEDING_ENABLED
-    private var lastFeedingFishScale = ConfigDefaults.FEEDING_FISH_SCALE
-    private var lastFeedingFishAlpha = ConfigDefaults.FEEDING_FISH_ALPHA
-    private var lastFeedingMaxCount = ConfigDefaults.FEEDING_MAX_COUNT
-    private var lastFeedingAutoExpire = ConfigDefaults.FEEDING_AUTO_EXPIRE
-    private var lastFeedingExpireTime = ConfigDefaults.FEEDING_EXPIRE_TIME
-    private var lastFeedingFullScreen = ConfigDefaults.FEEDING_FULL_SCREEN
-    private var lastFeedingBorderShow = ConfigDefaults.FEEDING_BORDER_SHOW
-    // 上次生效的定格-拖动开关，用于检测变化并即时作用于全部已有定格层
-    private var lastFreezeDraggable = ConfigDefaults.FREEZE_DRAGGABLE
-    // 上次生效的显示定格边框开关，用于检测变化并即时叠加/移除红色窗口边框
-    private var lastFreezeBorderShow = ConfigDefaults.FREEZE_BORDER_SHOW
+    // 当前正被用户手指拖动的鱼。用于自动觅食吃判定：拖动中不吃(在手上)，放生才可能吃到。
+    // 同一时刻仅一根手指，故单值；不挂在 FishLayer(data class) 上，以免被多处 copy() 重置。
+    private var draggingFish: FishLayer? = null
+    // 自动觅食：每只宠物(per-PetView)当前偏好目标食物引用（滞回后的“锁定”）。按角色独立，互不影响。
+    // 非硬锁：每帧在本宠物活动范围内重选最近食物，仅当新目标比当前目标近 ≥1×(显示层宽+高) 才换（防墙角锚点抖动横跳）。
+    private val forageFoodByView = mutableMapOf<PetView, FishLayer?>()
+    // 支鱼图按资源包 id 分角色缓存（避免多角色并存时某角色包覆盖全局、导致投食鱼串角色）。
+    private val fishCropBitmaps = mutableMapOf<String, Bitmap?>()   // 裁剪到最小不透明像素矩形后的图，key=roleId
+    // 注：投喂 / 定格 / 随机的「上次生效值缓存」「刷出循环状态」已下沉到 RoleRuntime（按角色独立），
+    // 不再使用全局单例，避免多角色并存时互相覆盖（见 registerConfigObserver / loadConfig / teardownRole）。
 
     // 定格层拖动 + 长按：可拖动时既能跟随手指位移（delta，不触发提起/抛掷），又能长按弹出定格菜单。
     private class FreezeDragState {
@@ -163,6 +202,7 @@ class PetService : Service() {
                 true
             }
             MotionEvent.ACTION_MOVE -> {
+                pets.firstOrNull { it.view === v }?.roleId?.let { syncRole(it) }
                 val dx = e.rawX - st.lastX
                 val dy = e.rawY - st.lastY
                 st.lastX = e.rawX; st.lastY = e.rawY
@@ -174,7 +214,9 @@ class PetService : Service() {
                     st.longPressFired = false
                 }
                 lp.x += dx.toInt()
-                lp.y = clampStaticY(lp.y + dy.toInt(), lp.height, currentConfig().staticTopBound, currentConfig().staticBottomBound)
+                // 静态边界钳制使用【该定格层所属角色】的设置，而非全局 currentConfig()，保证定格按角色独立。
+                val frid = freezeLayers.firstOrNull { it.iv === v }?.roleId
+                lp.y = clampStaticY(lp.y + dy.toInt(), lp.height, roleConfig(frid).staticTopBound, roleConfig(frid).staticBottomBound)
                 try { windowManager.updateViewLayout(v, lp) } catch (_: Exception) {}
                 // 同步红色边框（若存在）跟随定格层移动
                 freezeLayers.firstOrNull { it.iv === v }?.borderView?.let { bv ->
@@ -202,6 +244,7 @@ class PetService : Service() {
         val st = (v.tag as? FreezeDragState) ?: FreezeDragState().also { v.tag = it }
         when (e.action) {
             MotionEvent.ACTION_DOWN -> {
+                draggingFish = fishLayers.firstOrNull { it.iv === v }   // 记录正被拖动的鱼(供觅食吃判定排除)
                 st.lastX = e.rawX; st.lastY = e.rawY
                 st.moved = false; st.longPressFired = false; st.feedOverPet = false
                 st.entered = false; st.enterX = 0f; st.enterY = 0f
@@ -227,7 +270,17 @@ class PetService : Service() {
                     st.longPressFired = false
                 }
                 lp.x += dx.toInt()
-                lp.y = clampStaticY(lp.y + dy.toInt(), lp.height, currentConfig().staticTopBound, currentConfig().staticBottomBound)
+                lp.y += dy.toInt()
+                // 关全屏→钳进所属角色活动范围(边界偏移矩形)，与宠物移动范围完全一致且跟着变；
+                // 开全屏→不钳(任意位置)。范围比鱼小则 coerceIn 自动拉到最近边。
+                val fishRid = fishLayers.firstOrNull { it.iv === v }?.roleId
+                fishRid?.let { rid ->
+                    fishAllowedRect(rid)?.let { rect ->
+                        val wpx = lp.width; val hpx = lp.height
+                        lp.x = lp.x.coerceIn(rect.left, (rect.right - wpx).coerceAtLeast(rect.left))
+                        lp.y = lp.y.coerceIn(rect.top, (rect.bottom - hpx).coerceAtLeast(rect.top))
+                    }
+                }
                 try { windowManager.updateViewLayout(v, lp) } catch (_: Exception) {}
                 fishLayers.firstOrNull { it.iv === v }?.borderView?.let { bv ->
                     val blp = bv.layoutParams as? WindowManager.LayoutParams ?: return@let
@@ -247,6 +300,7 @@ class PetService : Service() {
                 true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                draggingFish = null   // 松手/取消：不再处于拖动中，恢复可被吃
                 st.pending?.let { mainHandler.removeCallbacks(it) }
                 st.pending = null
                 if (st.longPressFired && !st.moved) {
@@ -255,18 +309,22 @@ class PetService : Service() {
                     // 拖动给酥：松手点落在宠物显示层矩形内则消失，并触发投食动作
                     val layer = fishLayers.firstOrNull { it.iv === v } ?: return@OnTouchListener true
                     if (fishDroppedOnPet(e.rawX, e.rawY)) {
-                        val inst = findPetAt(e.rawX, e.rawY)
+                        val inst = findPetAt(e.rawX, e.rawY) ?: return@OnTouchListener true
+                        // 先记录角色：食物属于谁（系数来源）、谁吃下（放大对象），removeFish 后 layer 仍可取字段
+                        val foodRoleId = layer.roleId
+                        val eatRoleId = inst.roleId
                         removeFish(layer)
                         // 投喂成功：用鱼首次进入宠物判定区（振动点）相对宠物中心的左右决定镜像；
                         // 未记录到进入点（理论不会，因投喂必经 MOVE 进入）则用松手点兜底。
                         val ix = if (st.entered) st.enterX else e.rawX
                         val iy = if (st.entered) st.enterY else e.rawY
-                        val dlp = inst?.displayLp
+                        val dlp = inst.displayLp
                         val (relX, relY) = if (dlp != null) {
                             (ix - (dlp.x + dlp.width / 2f)) to (iy - (dlp.y + dlp.height / 2f))
                         } else (0f to 0f)
                         triggerFeedAction(inst, relX, relY)
-                        growPetOnFeed()    // 投喂成功后真实增大宠物尺寸（受开关/系数/上限约束）
+                        // 谁吃谁变大；倍率/开关取决于【被吃食物】的角色（吃什么用什么倍率）
+                        growPetOnFeed(eatRoleId, foodRoleId)
                     }
                 }
                 true
@@ -278,12 +336,16 @@ class PetService : Service() {
     /** 长按定格层：找到对应层并弹出定格菜单（样式与长按宠物一致）。 */
     private fun openFreezeMenu(v: View) {
         val layer = freezeLayers.firstOrNull { it.iv === v } ?: return
+        // 先把当前角色切到该定格层所属角色，菜单内 currentConfig()/updateConfig 才会落到正确角色。
+        syncRole(layer.roleId)
         FreezeMenu(this, layer).show()
     }
 
-    /** 在指定位置创建一个静态 Bitmap 定格显示层（纯展示；可拖动性由当前 freezeDraggable 决定）。 */
-    fun addFreezeLayer(snap: PetView.FreezeSnapshot) {
-        val draggable = currentConfig().freezeDraggable
+    /** 在指定位置创建一个静态 Bitmap 定格显示层（纯展示；可拖动性由【该角色】freezeDraggable 决定）。 */
+    fun addFreezeLayer(roleId: String, snap: PetView.FreezeSnapshot) {
+        // 读【该角色自身】配置：定格可拖动 / 边框 / 静态边界都随角色独立，不再用全局 currentConfig()。
+        val rc = roleConfig(roleId)
+        val draggable = rc.freezeDraggable
         val iv = ImageView(this).apply {
             setImageBitmap(snap.bmp)
             scaleType = ImageView.ScaleType.FIT_XY
@@ -303,14 +365,14 @@ class PetService : Service() {
             width = snap.w
             height = snap.h
             x = snap.left
-            y = clampStaticY(snap.top, snap.h, currentConfig().staticTopBound, currentConfig().staticBottomBound)
+            y = clampStaticY(snap.top, snap.h, rc.staticTopBound, rc.staticBottomBound)
         }
         if (draggable) iv.setOnTouchListener(freezeDragListener)
         try { windowManager.addView(iv, lp) } catch (_: Exception) { snap.bmp.recycle(); return }
-        val layer = FreezeLayer(iv, lp, snap.time, TrayMsgManager.randomMutter())
+        val layer = FreezeLayer(iv, lp, snap.time, TrayMsgManager.randomMutter(), roleId = roleId)
         freezeLayers.add(layer)
         // 显示定格边框开关开启时，叠加红色真实窗口边框（调试用，不拦截交互）
-        if (currentConfig().freezeBorderShow) setFreezeBorder(layer, true)
+        if (rc.freezeBorderShow) setFreezeBorder(layer, true)
     }
 
     /** 为指定定格层创建红色真实窗口边框（NOT_TOUCHABLE，不拦截拖动/长按）。 */
@@ -347,21 +409,23 @@ class PetService : Service() {
         }
     }
 
-    /** 清除所有定格显示层（回收 Bitmap，防泄漏），并清空列表。 */
-    fun clearAllFreeze() {
-        for (layer in freezeLayers) {
+    /** 清除定格显示层（回收 Bitmap，防泄漏）。roleId 为 null 时清除全部；否则仅清除【该角色】的定格层。 */
+    fun clearAllFreeze(roleId: String? = null) {
+        val list = if (roleId == null) freezeLayers.toList() else freezeLayers.filter { it.roleId == roleId }
+        for (layer in list) {
             try { windowManager.removeView(layer.iv) } catch (_: Exception) {}
             (layer.iv.drawable as? BitmapDrawable)?.bitmap?.recycle()
             layer.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         }
-        freezeLayers.clear()
+        freezeLayers.removeAll(list)
     }
 
-    /** 全部定格显示层重置位置到屏幕中心（y 受静态边界约束）。 */
-    fun resetAllFreezeToCenter() {
+    /** 全部定格显示层重置位置到屏幕中心（y 受静态边界约束）。roleId 为 null 时重置全部；否则仅重置【该角色】的定格层。 */
+    fun resetAllFreezeToCenter(roleId: String? = null) {
         val (sw, sh) = screenRealSize()
-        val cfg = currentConfig()
-        for (layer in freezeLayers) {
+        val cfg = roleConfig(roleId)
+        val list = if (roleId == null) freezeLayers.toList() else freezeLayers.filter { it.roleId == roleId }
+        for (layer in list) {
             val cx = (sw - layer.lp.width) / 2
             val cy = clampStaticY((sh - layer.lp.height) / 2, layer.lp.height, cfg.staticTopBound, cfg.staticBottomBound)
             layer.lp.x = cx
@@ -386,9 +450,9 @@ class PetService : Service() {
         freezeLayers[idx] = freezeLayers[idx].copy(note = note)
     }
 
-    /** 定格-拖动开关变化：即时作用于全部已有定格层（开→可点击拖动；关→纯显示不可点击）。 */
-    private fun applyFreezeDraggable(on: Boolean) {
-        for (layer in freezeLayers) {
+    /** 定格-拖动开关变化：即时作用于【该角色】已有定格层（开→可点击拖动；关→纯显示不可点击），不串其它角色。 */
+    private fun applyFreezeDraggable(roleId: String, on: Boolean) {
+        for (layer in freezeLayers.filter { it.roleId == roleId }) {
             // 始终保持 FLAG_LAYOUT_NO_LIMITS：定格层位置不受屏幕/活动范围约束，可任意摆放。
             layer.lp.flags = if (on) WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                              else WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
@@ -418,36 +482,37 @@ class PetService : Service() {
     private var showDebug = false
     private var showImageBorder = false
     private var showControlBorder = false
-    private var hideControlLayer = false
-    private var hideStage = false
-    // 用户「点击穿透」开关：语义上等同于“隐藏控制层”（显示窗本就 NOT_TOUCHABLE，
-    // 屏蔽控制窗即可让点击穿透到下层 app，且宠物仍可见）。统一走 syncControlWindows，
-    // 不再单独维护一套 flag 舞蹈（原 applyClickThrough 已删除，因其与 hideControlLayer 状态机互相打架）。
-    private var clickThrough = false
-    // 调试：强制显示无透明（默认关）。开启时显示窗去掉 FLAG_NOT_TOUCHABLE（配合宠物窗口 alpha=1），
-    // 避开 InputDispatcher 对“NOT_TOUCHABLE 且窗口 alpha>0.8 必然钳制半透明”的逻辑，使宠物可 100% 不透明。
-    // 与 controlHidden（hideControlLayer||clickThrough）互斥：二者任一开时显示窗必须恢复 NOT_TOUCHABLE 以保点击穿透/控制层隐藏生效。
-    private var forceOpaque = false
+    // 用户「点击穿透」：语义上等同于“隐藏控制层”（显示窗本就 NOT_TOUCHABLE，屏蔽控制窗即可让点击
+    // 穿透到下层 app 且宠物仍可见），统一走 syncControlWindows。调试「强制无透明」：开启时显示窗去掉
+    // FLAG_NOT_TOUCHABLE（配合宠物窗口 alpha=1）以避开系统对“NOT_TOUCHABLE 且 alpha>0.8 必钳半透明”
+    // 的逻辑，使宠物 100% 不透明；与“隐藏控制层/点击穿透”互斥（二者任一开显示窗须恢复 NOT_TOUCHABLE）。
+    //
+    // ⚠️ 这些开关（hideControlLayer / clickThrough / forceOpaque / hideStage）必须【按角色独立】，
+    // 不得共享全局变量：原全局镜像会导致多角色并存时一个角色改值污染另一个角色的窗口状态。
+    // 改为按 roleId 直接读该角色自己的 PetConfig（engines[roleId].config），调用点均按 roleId 过滤。
+    private fun roleCfg(roleId: String): PetConfigData? = engines[roleId]?.config?.getBlocking()
+    /** 该角色控制窗是否应隐藏：隐藏控制层 或 点击穿透，二者任一即隐藏。 */
+    private fun roleControlHidden(roleId: String): Boolean =
+        roleCfg(roleId)?.let { it.hideControlLayer || it.clickThrough } ?: false
+    /** 该角色显示窗是否应带 FLAG_NOT_TOUCHABLE：控制层隐藏/穿透/隐藏画布 或 未强制无透明 → 带（穿透）；
+     *  强制无透明且控制层可见 → 不带（100% 不透明，代价是显示层吃宠物区点击）。 */
+    private fun roleDisplayNotTouchable(roleId: String): Boolean =
+        roleControlHidden(roleId) || !(roleCfg(roleId)?.forceOpaque ?: false)
+    /** 该角色是否隐藏画布（调试：隐藏显示窗）。 */
+    private fun roleHideStage(roleId: String): Boolean = roleCfg(roleId)?.hideStage ?: false
     // 宠物整体透明度（0.1~1，1=完全不透明），需逐显示窗设置；单独记账以便 hideStage 重挂后保持。
     private var petAlpha = 1f
 
-    /** 控制窗是否应隐藏：调试隐藏控制层 或 用户点击穿透，二者任一即隐藏。 */
-    private val controlHidden: Boolean get() = hideControlLayer || clickThrough
-
-    /** 显示窗是否应带 FLAG_NOT_TOUCHABLE：控制层隐藏(穿透/诊断) 或 未强制无透明 → 带（保持穿透）；
-     *  强制无透明且控制层可见 → 不带（避开系统半透明钳制，宠物可 100% 不透明，代价是显示层吃掉宠物区点击）。 */
-    private val displayNotTouchable: Boolean get() = controlHidden || !forceOpaque
-
     /**
-     * 按 displayNotTouchable（controlHidden || !forceOpaque）实时增删各显示窗的 FLAG_NOT_TOUCHABLE。
+     * 按【该角色】displayNotTouchable 实时增删其各显示窗的 FLAG_NOT_TOUCHABLE（按 roleId 独立，不串其它角色）。
      * 配合宠物窗口 alpha=1：去掉该 flag 即避开 InputDispatcher 对“NOT_TOUCHABLE 且 alpha>0.8 必然钳制半透明”的逻辑，
-     * 使宠物可 100% 不透明；恢复该 flag 则回到点击穿透/控制层隐藏生效的默认态。运行时改配置即时生效，无需重建窗口。
+     * 使该角色宠物可 100% 不透明；恢复该 flag 则回到点击穿透/控制层隐藏生效的默认态。运行时改配置即时生效，无需重建窗口。
      */
-    private fun applyDisplayTouchFlags() {
-        for (inst in pets) {
+    private fun applyDisplayTouchFlags(roleId: String) {
+        for (inst in pets.filter { it.roleId == roleId }) {
             val dlp = inst.displayLp ?: continue
             val disp = inst.displayView ?: continue
-            val newFlags = if (displayNotTouchable) {
+            val newFlags = if (roleDisplayNotTouchable(roleId)) {
                 dlp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             } else {
                 dlp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
@@ -480,11 +545,19 @@ class PetService : Service() {
     private var trayMsgManager: TrayMsgManager? = null
     private var thinkingEnabled = false
     private var thinkingOffsetY = 0f   // 碎碎念距屏幕底部的偏移（像素），与 trayMsgManager 同步，供辅助线计算
-    // 仅单个碎碎念：开启=仅主实例(index 0)显示；关闭=每个实例各自显示（关于页开关，默认开）
+    // 仅单个碎碎念：开启=仅主实例(index 0)显示；关闭=每个实例各自显示（调试页开关，默认开）
     private var singleTrayMsg = ConfigDefaults.SINGLE_TRAY_MSG
-    // 资源包：当前是否“使用新资源”（关于页开关映射）及已构建的新包缓存（assets 扫描仅一次）。
-    private var useNewSpriteFlag = false
-    private var zhimasuSpritePack: SpritePack? = null
+    // 资源包缓存：各预装资源包构建缓存（assets 扫描仅一次，按 packId 缓存，与具体角色无关）。
+    private val spritePackCache = mutableMapOf<Int, SpritePack>()
+    // 注意：当前“资源包 id / 角色素材描述符”已下放到每角色 RoleRuntime（spritePackId / descriptor），
+    // 不再用 PetService 全局变量，避免多角色并存时互相覆盖导致全部渲染成同一角色（详见 resolveCurrentSpritePack）。
+
+    /** 解析指定角色的精灵包：FILES 上传包按 rootPath 走私有存储；预装按 packId 走映射。 */
+    private fun resolveCurrentSpritePack(rt: RoleRuntime): SpritePack {
+        val d = rt.descriptor
+        return if (d != null && d.source == RoleSource.FILES) buildSpritePackForRole(this, d)
+        else spritePackFor(rt.spritePackId)
+    }
 
     // 设置页调整“边界偏移/碎碎念偏移”时显示的黑色虚线辅助层（GuideLineView）。
     // 它是【独立窗口】（NOT_TOUCHABLE、显式尺寸），由 syncGuideWindow 按需挂载/卸载，
@@ -578,6 +651,71 @@ class PetService : Service() {
                 for (inst in pets) inst.view.stepPhysics(PHYS_STEP_MS / 1000f)
                 physAccumulator -= PHYS_STEP_MS
             }
+            // 自动觅食驱动（攀岩走壁子开关）：在动画推进前计算每只宠物的觅食状态，
+            // 选最近食物/沿墙走/吃到投喂。优先级高于飞跃但不拦截（无食物则回落飞跃/选池）。
+            for (inst in pets) {
+                val v = inst.view
+                val rc = roleConfig(inst.roleId)
+                // 生效条件：攀岩已开(上级移动+攀岩) 且 本开关开 且 当前攀岩态 且 非吸附态（吸附态不喜乱动）。
+                v.forageSpeed = rc.forageSpeed   // 自动觅食速度：按角色配置写入，PetView 沿墙奔向食物用
+                v.autoForage = rc.autoForage     // 自动觅食开关：供 PetView 落地决策判定是否插队进入攀岩态
+                val effForage = v.wallClimb && rc.autoForage && v.physics.isClimbing && !v.physics.isSnapped
+                if (!effForage) {
+                    forageFoodByView.remove(v)
+                    v.setForage(false, 0f, 0f)
+                    continue
+                }
+                // 候选过滤 + 目标选择：本层只过滤活动范围，坐标交给 PetView.tick，
+                // 由其与「转方向」同帧、直接用【沿墙两段剩余弧长】的最小值选目标并定向（无任何阈值）。
+                val dispW = inst.displayLp?.width?.toFloat() ?: 0f
+                val dispH = inst.displayLp?.height?.toFloat() ?: 0f
+                val pcx = (inst.displayLp?.x ?: 0) + dispW / 2f
+                val pcy = (inst.displayLp?.y ?: 0) + dispH / 2f
+                // 纯静态判定：只看「鱼中心」是否落在【本角色活动范围】矩形内。
+                // 该矩形由「边界偏移」算出，与宠物当前位置/朝向/动画帧锚点【完全无关】，
+                // 因此结果稳定，不会时而能追、时而不能。
+                val act = roleActivityRect(inst.roleId)
+                val inRange: (FishLayer) -> Boolean = { fl ->
+                    val fcx = fl.lp.x + fl.lp.width / 2f
+                    val fcy = fl.lp.y + fl.lp.height / 2f
+                    fcx >= act.left && fcx <= act.right && fcy >= act.top && fcy <= act.bottom
+                }
+                // 候选：仅本宠物活动范围内可达（跨角色、含拖动中鱼，均为既有特性）
+                val cand = fishLayers.filter(inRange)
+                // 无食物：不拦截，回落飞跃/选池。
+                if (cand.isEmpty()) {
+                    forageFoodByView.remove(v)
+                    v.setForage(false, 0f, 0f)
+                    continue
+                }
+                val xs = FloatArray(cand.size) { cand[it].lp.x + cand[it].lp.width / 2f }
+                val ys = FloatArray(cand.size) { cand[it].lp.y + cand[it].lp.height / 2f }
+                v.setForageCandidates(true, xs, ys)
+                // 回读 tick 选中的目标（按坐标原样匹配，避免候选数组下标因增删而错位）
+                val cX = v.forageChosenX
+                val cY = v.forageChosenY
+                val locked = if (!cX.isNaN()) cand.firstOrNull {
+                    (it.lp.x + it.lp.width / 2f) == cX && (it.lp.y + it.lp.height / 2f) == cY
+                } else null
+                forageFoodByView[v] = locked
+                if (locked == null) continue
+                val fcx = locked.lp.x + locked.lp.width / 2f
+                val fcy = locked.lp.y + locked.lp.height / 2f
+                // 吃到判定：复用正常投喂的「显示层边界命中」逻辑（与拖鱼投喂同一套 findPetAt），
+                // 不再自写 50px 中心距；宠物显示层矩形覆盖到食物中心即视为吃到，方向/投食动作/变大均走正常链路。
+                val eaten = findPetAt(fcx, fcy) == inst && locked !== draggingFish
+                if (eaten) {
+                    // 吃到：正常投喂+变大，移除食物，解除锁定 → 下一帧继续选池（可能有下一个食物）。
+                    removeFish(locked)
+                    triggerFeedAction(inst, fcx - pcx, fcy - pcy)
+                    growPetOnFeed(inst.roleId, locked.roleId)
+                    forageFoodByView.remove(v)
+                    v.setForage(false, 0f, 0f)
+                } else {
+                    // 未吃到：朝该食物中心沿墙走去（PetView.tick 内按所攀墙轴向转向）。
+                    v.setForage(true, fcx, fcy)
+                }
+            }
             // 动画推进：用真实 dt（时延精确），绝不控制位置。每实例独立。
             for (inst in pets) inst.view.tick(dt)
             // 边界重算统一在本帧（tick 已刷新 currentFrameAnchor 快照之后）执行：
@@ -590,29 +728,34 @@ class PetService : Service() {
             // 吸附态：snapRotation 由 updateAnimByState 按贴附边赋值，边界必须用同一旋转重算，
             // 否则 snapTo 落点/钳制基于旧的重力态边界，浮窗与旋转后的图片错位。
             // 仅吸附态每帧轻量重算（仅几次加减），非吸附态边界已随配置/缩放变化触发，无需每帧。
-            for (inst in pets) if (inst.view.physics.isSnapped) recalcBoundsFor(inst.view, getScreenBounds())
+            for (inst in pets) if (inst.view.physics.isSnapped) recalcBoundsFor(inst.view, getScreenBounds(), inst.roleId)
             // 单一位置写入点：物理循环统一写入窗口左上角（physics.x/y 即浮窗左上角真值）。
             // 坐标语义：physics.x/y = 浮窗左上角（屏幕坐标）；脚锚点 = physics ∓ anchorOff 仅贴边/snap 时派生。
             // 钳制已在 physics.setBounds 内完成（min/max 为窗口范围，由 recalcBoundsFor 用 getBaseAnchorScaled
             // 同源换算）。移动/速度/拖拽/抛掷直接改 physics.x/y，与锚点解耦 → 锚点变化不再牵动位置。
             // 主实例尺寸 (w,h) 同时用于调试浮层/吸附线绘制。
-            val v0 = petView
+            // 主实例 = 实时 pets[0]，禁止再用缓存别名 petView/layoutParams。
+            // 别名仅在“最后召唤角色”创建时赋值一次，多角色并存或召回后易与 pets[0] 错位，
+            // 会导致主实例控制窗被帧循环漏更（且被 i>=1 克隆循环跳过）→ 控制窗卡死、显示窗照动。
+            val mainInst = pets.getOrNull(0)
+            val v0 = mainInst?.view ?: petView
+            val mlp = mainInst?.layoutParams ?: layoutParams
             // 主实例整帧尺寸（调试浮层/吸附线仍按整只宠物绘制，与命中模式无关）。
             // 必须用 getBaseBitmapSize()：与 recalcBounds/getBaseAnchorScaled（基准帧 baseFrameW/H）
             // 及 render/PetStageView 实际绘制窗口完全同源；getBitmapSize()(globalW) 与之不符会导致控制窗尺寸错位。
             // 控制窗定位：单一数据源 placeControlWindow（CORE=脚盒、其余=整帧），尺寸变化才写 width/height。
-            if (placeControlWindow(v0, layoutParams, lastW, lastH)) {
-                lastW = layoutParams.width
-                lastH = layoutParams.height
+            if (placeControlWindow(v0, mlp, lastW, lastH)) {
+                lastW = mlp.width
+                lastH = mlp.height
             }
             // 主实例整帧尺寸（调试浮层 updateDebug 仍按整只宠物绘制，与命中模式无关）。
             val (w, h) = v0.getBaseBitmapSize()
             try {
-                windowManager.updateViewLayout(petView, layoutParams)
+                windowManager.updateViewLayout(v0, mlp)
             } catch (_: Exception) {
             }
             // 主实例显示窗同步（位置/尺寸与位图矩形一致；窗外穿透由 NOT_TOUCH_MODAL 保证）。
-            pets.getOrNull(0)?.let { syncDisplayWindow(it) }
+            mainInst?.let { syncDisplayWindow(it) }
             // 其余实例：各自写位置 + 尺寸 + 刷新（不依赖主实例 lastW/lastH）。
             for (i in 1 until pets.size) {
                 val inst = pets[i]
@@ -692,8 +835,10 @@ class PetService : Service() {
                 Intent.ACTION_SCREEN_OFF -> pause()
                 Intent.ACTION_SCREEN_ON -> resume()
                 Intent.ACTION_CONFIGURATION_CHANGED -> {
-                    recalcBounds()
-                    refreshCachedRotation()  // 旋转/折叠屏变化后更新体感重力方向基准
+                    if (engines.isNotEmpty()) {
+                        recalcBounds()
+                        refreshCachedRotation()  // 旋转/折叠屏变化后更新体感重力方向基准
+                    }
                 }
             }
         }
@@ -709,7 +854,7 @@ class PetService : Service() {
         }
         instance = this
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        config = PetConfig(this)
+        // 引擎启动在 onCreate 末尾由 summonRole 统一完成（config 在 startEngine 内按角色创建）
         // 碎碎念独立浮窗由各宠物实例（PetInstance）各自持有一个，与服务生命周期绑定，
         // 主实例的 petMsg 别名存于 trayMsgManager，由 initPetView() 赋值。
         createNotificationChannel()
@@ -720,20 +865,11 @@ class PetService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        initPetView()
-        loadConfig()
-        // 夜间模式已在 CakePetApplication.onCreate 中根据“系统夜间状态 + 用户强制开关”
-        // 最早应用（全局生效，覆盖 Service/浮窗/Activity），此处仅做补偿性同步。
-        applyNightMode(config.getBlocking())
-        registerConfigObserver()
-        registerScreenReceiver()
-        // 屏幕旋转监听常驻：横屏/折叠屏切换时刷新体感方向基准与活动边界（对所有宠物均有益）。
-        // 用 DisplayManager.DisplayListener 取真实屏幕旋转（后台/overlay 可靠），替代不可靠的 OrientationEventListener。
+        setupDebugWindows()
         initDisplayRotationListener()
 
         // 初始位置已在 initPetView 的 addView 前算好（底部中心），此处仅同步可见区并刷新边界。
-        lastVisRect = getScreenBounds()
-        recalcBounds()
+        // 初始位置/边界在 startEngine 内算（initPetView 的 addView 前已算好底部中心）
 
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -742,16 +878,17 @@ class PetService : Service() {
         }
         registerReceiver(screenReceiver, filter)
 
-        startLoop()
+        // 角色召唤交由 onStartCommand 处理（EXTRA_ROLE_ID 指定角色；无意图则恢复默认角色）。
     }
 
-    private fun initPetView() {
+    private fun initPetView(roleId: String) {
         // 先创建主实例（index 0），它承载调试浮层（吸附线 / 调试文本 / 辅助线）与菜单动作基准。
-        // 启动瞬间：数量上限限 3（关于页允许设到 10，但启动只生成最多 3，避免一次性过多；
+        // 启动瞬间：数量上限限 3（调试页允许设到 10，但启动只生成最多 3，避免一次性过多；
         // 启动后用户改数量走 registerConfigObserver，不受此上限，下次启动仍从 3 起）。
         val count = config.getBlocking().petCount.coerceIn(1, 3)
         for (i in 0 until count) {
-            val inst = createPetInstance(i)
+            val inst = createPetInstance(i, roleId)
+            inst.roleId = roleId
             pets.add(inst)
             if (i == 0) {
                 petView = inst.view
@@ -762,45 +899,15 @@ class PetService : Service() {
 
         // 诊断开关 hideStage：开启时完全不创建/移除显示窗（宠物仅剩透明控制窗，即 9.27 几何），
         // 用于二分点击拦截来源。显示窗在 createPetInstance 中按 hideStage 决定是否挂载。
-        // 调试信息浮层（左下角，初始隐藏）—— 仅主实例对应一份
-        debugView = android.widget.TextView(this).apply {
-            setTextColor(0xFFFFFF00.toInt())
-            textSize = 11f
-            typeface = android.graphics.Typeface.MONOSPACE  // 等宽字体：配合固定位宽数字，避免窗口跳动
-            setBackgroundColor(0x80000000.toInt())
-            setPadding(8, 4, 8, 4)
-            visibility = android.view.View.GONE
-        }
-        debugParams = WindowManager.LayoutParams().apply {
-            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            format = PixelFormat.TRANSLUCENT
-            // FLAG_LAYOUT_IN_SCREEN：调试窗原点对齐物理屏幕左上角，坐标不受状态栏显隐影响。
-            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-            gravity = Gravity.BOTTOM or Gravity.START
-            width = WindowManager.LayoutParams.WRAP_CONTENT
-            height = WindowManager.LayoutParams.WRAP_CONTENT
-        }
-        windowManager.addView(debugView, debugParams)
-
-        // 辅助线层（初始隐藏）：设置页调整偏移时显示黑色虚线。
-        // 它是【独立窗口】（NOT_TOUCHABLE、显式尺寸），按需由 syncGuideWindow 挂载/卸载，
-        // 不再依赖共享全屏画布。仅设置期/调试出现，低频，不波及日常其它 app。
-        guideLineView = GuideLineView(this).apply {
-            visibility = android.view.View.GONE
-            isClickable = false
-            isFocusable = false
-            isFocusableInTouchMode = false
-        }
+        // 调试浮层与辅助线浮窗改为在 setupDebugWindows() 中一次性创建（避免角色切换时重复 addView），
+        // 不再在此处创建。下方 lastPetCount 仍在此记录。
         // 记录已创建的实例数量（与 initPetView 生成数口径一致），避免 registerConfigObserver
         // 首个配置事件因 petCount 与初始值不同而立即重建
         lastPetCount = config.getBlocking().petCount.coerceIn(1, 20)
     }
 
     // 创建第 index 个宠物实例：独立 View / 物理 / 碎碎念 / 位置。主实例额外挂吸附线浮层。
-    private fun createPetInstance(index: Int): PetInstance {
+    private fun createPetInstance(index: Int, roleId: String): PetInstance {
         val view = PetView(this)
         val lp = WindowManager.LayoutParams().apply {
             type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -816,18 +923,26 @@ class PetService : Service() {
             width = WindowManager.LayoutParams.WRAP_CONTENT
             height = WindowManager.LayoutParams.WRAP_CONTENT
         }
-        val petMsg = TrayMsgManager(this)
+        val petMsg = TrayMsgManager(this, roleId)
 
         view.onLongPress = { showMenu(view) }
+        // 交互前先切到本实例所属角色（长按不拖动也会触发，确保菜单/双击等都落在正确角色配置上）。
+        view.setOnTouchListener { v, e ->
+            if (e.action == MotionEvent.ACTION_DOWN) {
+                pets.firstOrNull { it.view === v }?.roleId?.let { syncRole(it) }
+            }
+            false // 返回 false，仍交由 PetView 自身 onTouchEvent 处理拖拽/双击等
+        }
         view.onDoubleTap = {
-            // 摸头（双击）：吸附态下播放“吸附探头摸摸头”，结束后自动切回吸附探头；非吸附态播放普通摸头。
+            // 摸头（双击）：吸附态播放“吸附探头摸摸头”(SNAP_PAT_HEAD)，结束后回吸附态；
+            // 其余（含攀岩态）播放普通静坐摸摸头(PAT_HEAD)，攀岩态下由 climbRotation 把脚旋向所攀墙、播完仍回攀岩态。
             if (view.physics.isSnapped) {
                 view.playOnce(ImageModeManager.SNAP_PAT_HEAD)
             } else {
                 view.playOnce(ImageModeManager.PAT_HEAD)
             }
             // 摸头（双击）：碎碎念显示摸头文案，1-3s 后继续轮播池
-            if (thinkingEnabled) {
+            if (thinkingOn(pets.firstOrNull { it.view === view }?.roleId)) {
                 petMsg.showPat()
             }
         }
@@ -875,7 +990,7 @@ class PetService : Service() {
         // 注：原“多宠物拖动置顶”已移除——removeView+addView 会重建 Surface 导致卡顿，
         // 流畅度优先级高于层级问题；显示层跟手已由 onPositionChanged 同步处理。
         view.onDragStateChanged = { dragging ->
-            if (thinkingEnabled) {
+            if (thinkingOn(pets.firstOrNull { it.view === view }?.roleId)) {
                 if (dragging) {
                     petMsg.showLift()
                 } else {
@@ -888,7 +1003,7 @@ class PetService : Service() {
         view.onTap = {}
         // 真正落地（拖拽/抛掷触底，进入 JUMP_DOWN 动画那一刻）：显示落地文案，之后先空白再轮播
         view.onLand = {
-            if (thinkingEnabled) petMsg.showLand()
+            if (thinkingOn(pets.firstOrNull { it.view === view }?.roleId)) petMsg.showLand()
         }
 
         // 关键：addView 之前先把浮窗位置算到底部中心，避免先出现在左上角(0,0)再闪回底部。
@@ -930,7 +1045,7 @@ class PetService : Service() {
             flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    (if (displayNotTouchable) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0)
+                    (if (roleDisplayNotTouchable(roleId)) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0)
             gravity = Gravity.TOP or Gravity.START
             // physics.x/y（baseX/baseY）为窗口左上角真值，直接作为浮窗左上角。
             x = baseX.toInt()
@@ -945,7 +1060,7 @@ class PetService : Service() {
         view.petAlpha = petAlpha
         // 诊断开关 hideStage：开启时不挂显示窗（仅透明控制窗，即 9.27 几何），用于二分点击拦截来源。
         var dispAdded = false
-        if (!hideStage) {
+        if (!roleHideStage(roleId)) {
             windowManager.addView(disp, dispLp)
             dispAdded = true
         }
@@ -953,7 +1068,7 @@ class PetService : Service() {
         // 控制窗是否挂载：调试“隐藏控制层”或用户“点击穿透”任一为真即不挂（二者语义等价，
         // 显示窗本就 NOT_TOUCHABLE，屏蔽控制窗后点击穿透到下层 app 且宠物仍可见）。
         var controlAdded = false
-        if (!controlHidden) {
+        if (!roleControlHidden(roleId)) {
             windowManager.addView(view, lp)
             controlAdded = true
         }
@@ -974,19 +1089,23 @@ class PetService : Service() {
     //   移除时**同时清理控制窗与显示窗**（旧 rebuildPets 漏删显示窗，导致改数量后残留旧画面 + 位图/Surface 泄漏）。
     // - 新实例经 applySharedConfig + 资源包拿到共享配置（与现有一致）；现有实例重应用幂等、位置/物理不复位。
     // 接收最新配置 c（来自 configFlow），避免重读 DataStore 造成竞态/重复重建。
-    private fun adjustPetCount(c: PetConfigData) {
+    private fun adjustPetCount(roleId: String, c: PetConfigData) {
         val target = c.petCount.coerceIn(1, 20)
-        // 多退：从末尾移除多余实例（始终保留 index 0 主实例）。
-        while (pets.size > target) {
-            val inst = pets.removeAt(pets.lastIndex)
+        val rolePets = pets.filter { it.roleId == roleId }.toMutableList()
+        // 多退：从该角色末尾移除多余实例（始终保留 index 0 主实例）。
+        while (rolePets.size > target) {
+            val inst = rolePets.removeAt(rolePets.lastIndex)
             // 显示窗（PetDisplayView）必须显式 removeView，否则残留屏幕且强引用旧 PetView/位图 → 泄漏。
             if (inst.displayAdded) try { windowManager.removeView(inst.displayView) } catch (_: Exception) {}
             if (inst.controlAdded) try { windowManager.removeView(inst.view) } catch (_: Exception) {}
             try { inst.petMsg.destroy() } catch (_: Exception) {}
+            pets.remove(inst)
         }
-        // 少补：末尾追加新实例，index 用真实 pets.size（createPetInstance 依 index 做水平错开）。
-        while (pets.size < target) {
-            val inst = createPetInstance(pets.size)
+        // 少补：该角色末尾追加新实例，index 用真实 rolePets.size（createPetInstance 依 index 做水平错开）。
+        while (rolePets.size < target) {
+            val inst = createPetInstance(rolePets.size, roleId)
+            inst.roleId = roleId
+            rolePets.add(inst)
             pets.add(inst)
             if (pets.size == 1) {   // 安全兜底：若此前为空，首位即主实例
                 petView = inst.view
@@ -994,27 +1113,45 @@ class PetService : Service() {
                 trayMsgManager = inst.petMsg
             }
         }
-        // 重新应用当前共享配置（物理参数/缩放/碎碎念样式/点击穿透等），新实例据此拿到配置、现有实例幂等刷新。
-        applySharedConfig(c)
-        // 资源包：按当前开关重应用（避免改数量时退回默认资源）。
-        if (useNewSpriteFlag) {
-            val pack = spritePackFor(true)
-            pets.forEach { it.view.applySpritePack(pack) }
-        }
+        // 重新应用本角色共享配置（物理参数/缩放/碎碎念样式/点击穿透等），新实例据此拿到配置、现有实例幂等刷新。
+        val rt = engines[roleId] ?: return
+        applySharedConfig(rt)
+        // 资源包：按当前选择重应用（避免改数量时退回默认资源）。
+        val pack = resolveCurrentSpritePack(rt)
+        pets.filter { it.roleId == roleId }.forEach { it.view.applySpritePack(pack) }
         recalcBounds()
+        // 实例数量变化（新增/移除）后，重新置顶辅助浮层（宠物窗叠放保持召唤顺序、不再重排）。
+        reapplyZOrder()
     }
 
     // 将共享配置同步到所有宠物实例（物理参数、缩放、命中模式、碎碎念样式/可见性、点击穿透等）。
     // 各实例的「当前动作 / 位置 / 拖拽 / 吸附 / 碎碎念内容」相互独立，不在此同步。
     // 碎碎念位置按实例序号错开（第 i 个 = 设置偏移 + i * TRAY_ROW_STEP），避免多宠物时重叠。
-    private fun applySharedConfig(c: PetConfigData) {
-        pets.forEachIndexed { index, inst ->
+    private fun applySharedConfig(rt: RoleRuntime) {
+        val c = rt.config.getBlocking()
+        // 仅把配置应用到本角色实例；全局快照字段（petAlpha/thinkingEnabled 等）仍保留供 createPetInstance 取初始值。
+        petAlpha = c.alpha.coerceIn(0f, 1f)
+        thinkingEnabled = c.thinkingEnabled
+        singleTrayMsg = c.singleTrayMsg
+        showImageBorder = c.showImageBorder
+        showControlBorder = c.showControlBorder
+        tiltStrength = c.gravity
+        rt.tiltStrength = c.gravity
+        pets.filter { it.roleId == rt.roleId }.forEachIndexed { index, inst ->
             val v = inst.view
+            val effectiveGravity = c.gravityEnabled && c.moveEnabled
             v.setConfig(c.scale, c.gravity, c.reboundRatio,
                 c.gravityTop, c.gravityBottom, c.gravityLeft, c.gravityRight,
                 c.reboundTop, c.reboundBottom, c.reboundLeft, c.reboundRight,
-                c.gravityEnabled, c.maxSpeed)
-            v.useStaticPool = !c.gravityEnabled   // 重力·抛掷关闭 -> 静止池
+                effectiveGravity, c.maxSpeed, c.throwEnabled, c.throwCoeff)
+            // 层级门控：移动（总开关）→ 攀岩 → 飞跃。上级关则下级一并失效。
+            val effClimb = c.moveEnabled && c.wallClimb          // 攀岩是移动下级：移动关则攀岩关
+            val effLeap  = effClimb && c.leapEnabled             // 飞跃是攀岩下级：攀岩关则飞跃关
+            v.useStaticPool = !c.moveEnabled   // 静止池只看"移动"总开关（重力关仅关重力，不进静止池）
+            v.wallClimb = effClimb            // 攀岩走壁开关（已被移动总开关门控）
+            v.setLeapParams(effLeap, c.leapProbability)  // 好动飞跃：仅在攀岩态按概率跳起（已被攀岩/移动门控）
+            v.syncClimbState(effClimb)   // 攀岩走壁开启即进攀爬态（平地=贴地墙），好动飞跃方可触发
+            if (v.useStaticPool && v.climbWall >= 0) v.restoreBaseGravity()  // 移动关：退出攀爬还原
             v.setPetScale(c.scale)
             v.showImageBorder = showImageBorder
             v.showControlBorder = showControlBorder
@@ -1041,13 +1178,23 @@ class PetService : Service() {
             inst.petMsg.applyBackground(c.thinkingBgEnabled, c.thinkingBgColor, c.thinkingBgAlpha)
             inst.petMsg.setVisible(showForThis && c.visible && c.enabled)
         }
+        // 按角色独立应用窗口开关：控制层增删 / 显示层增删 / 显示窗 NOT_TOUCHABLE（强制无透明）。
+        // 均按 rt.roleId 过滤，且各 sync 幂等（先比对当前窗口状态再决定是否 removeView/addView），
+        // 多角色各自独立、互不污染（修复旧全局变量导致的跨角色串味）。
+        syncControlWindows(rt.roleId)
+        syncDisplayWindows(rt.roleId)
+        applyDisplayTouchFlags(rt.roleId)
         applyImeHide(keyboardUp)
     }
 
-    /** 根据开关选择资源包：默认=旧图；开启=“芝麻酥”新图（assets 扫描仅一次并缓存）。 */
-    private fun spritePackFor(useNew: Boolean): SpritePack =
-        if (useNew) (zhimasuSpritePack ?: ImageModeManager.zhimasuPack(this).also { zhimasuSpritePack = it })
-        else ImageModeManager.DEFAULT_SPRITE_PACK
+    /** 根据资源包 id 选择资源包：1=芝麻酥、2=芝麻球促销、3=白酥（assets 扫描仅一次并缓存）；0/未知回退到芝麻酥。 */
+    /** 根据资源包 id 选择资源包；未知键回退默认（1=芝麻酥）。结果按 id 缓存，避免重复构建。 */
+    private fun spritePackFor(packId: Int): SpritePack {
+        spritePackCache[packId]?.let { return it }
+        val pack = buildSpritePack(this, packId)
+        spritePackCache[packId] = pack
+        return pack
+    }
 
     // ======================== 投喂（支鱼）浮窗 ========================
 
@@ -1081,8 +1228,8 @@ class PetService : Service() {
     }
 
     // 与宠物管线一致：源文件先下采样到最长边 256（超采样源），再紧裁提取像素变边框。
-    private fun decodeFishBitmap(path: String): Bitmap? {
-        val istr1 = try { assets.open(path) } catch (_: Exception) { return null }
+    private fun decodeFishBitmap(open: () -> InputStream?): Bitmap? {
+        val istr1 = try { open() } catch (_: Exception) { return null } ?: return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeStream(istr1, null, bounds)
         istr1.close()
@@ -1093,7 +1240,7 @@ class PetService : Service() {
         val scale = 256f / longSide
         val outW = (rw * scale).toInt().coerceAtLeast(1)
         val outH = (rh * scale).toInt().coerceAtLeast(1)
-        val istr2 = try { assets.open(path) } catch (_: Exception) { return null }
+        val istr2 = try { open() } catch (_: Exception) { return null } ?: return null
         val opts = BitmapFactory.Options().apply { inSampleSize = inSample }
         val base = BitmapFactory.decodeStream(istr2, null, opts) ?: run { istr2.close(); return null }
         istr2.close()
@@ -1101,23 +1248,42 @@ class PetService : Service() {
         else Bitmap.createScaledBitmap(base, outW, outH, true).also { if (it != base) base.recycle() }
     }
 
-    // 加载并裁剪支鱼位图（按 useNewSprite 选资源包）；已缓存则直接复用。
-    private fun ensureFishBitmap() {
-        if (fishCropBitmap != null && !fishCropBitmap!!.isRecycled) return
+    // 加载并裁剪投喂食物位图：按【角色自身】资源包的 resources["food"] 取图（预装走 assets / 上传包走 filesDir），
+    // 逐角色缓存，避免多角色并存时食物串图；已缓存则直接复用。
+    private fun ensureFishBitmap(roleId: String) {
+        val existing = fishCropBitmaps[roleId]
+        if (existing != null && !existing.isRecycled) return
         try {
-            val path = if (useNewSpriteFlag) "芝麻酥/支鱼/fish-1.png" else "img/支鱼/fish-1.png"
-            fishBitmap?.recycle()
-            fishBitmap = decodeFishBitmap(path)
-            fishCropBitmap = fishBitmap?.let { cropToTightLocal(it) }
+            val d = descriptorForRole(roleId)
+            val foodPath = (if (d != null && d.source == RoleSource.FILES) {
+                buildSpritePackForRole(this, d).resources["food"]
+            } else {
+                buildSpritePack(this, d?.packId ?: ConfigDefaults.DEFAULT_SPRITE_PACK).resources["food"]
+            }) ?: run {
+                fishCropBitmaps[roleId] = null
+                return
+            }
+            val raw = if (d != null && d.source == RoleSource.FILES) {
+                decodeFishBitmap { openPackResource(this, d.rootPath, RoleSource.FILES, foodPath) }
+            } else {
+                val base = d?.rootPath ?: RoleRegistry.DEFAULT.rootPath
+                decodeFishBitmap { assets.open("$base/$foodPath") }
+            }
+            fishCropBitmaps[roleId] = raw?.let { cropToTightLocal(it) }
+            raw?.recycle()
         } catch (_: Exception) {
-            fishBitmap = null
-            fishCropBitmap = null
+            fishCropBitmaps[roleId] = null
         }
     }
 
-    private fun getFishCropBitmap(): Bitmap? {
-        ensureFishBitmap()
-        return fishCropBitmap
+    // 解析某角色对应的素材模板描述符（上传包按实例 id 映射到模板，预装按 id 直达）。
+    private fun descriptorForRole(roleId: String): RoleDescriptor? {
+        return RoleStore.descriptorForInstance(this, roleId) ?: RoleRegistry.byId(roleId)
+    }
+
+    private fun getFishCropBitmap(roleId: String): Bitmap? {
+        ensureFishBitmap(roleId)
+        return fishCropBitmaps[roleId]
     }
 
     // 支鱼显示尺寸：源已缩到 256（长边）仅作解码清晰度缓冲，1x 显示基准与宠物一致为 128（长边），
@@ -1130,21 +1296,19 @@ class PetService : Service() {
         return wpx to hpx
     }
 
-    // 资源包切换时重载支鱼位图，并同步应用到全部已有浮窗。
-    private fun reloadFishBitmap() {
-        fishBitmap?.recycle()
-        fishCropBitmap?.recycle()
-        fishBitmap = null
-        fishCropBitmap = null
-        ensureFishBitmap()
-        val crop = fishCropBitmap ?: return
-        val c = currentConfig()
-        val (wpx, hpx) = fishDisplaySize(crop, c)
-        for (layer in fishLayers) {
+    // 资源包切换时重载支鱼位图：按每条鱼自身 packId 取本角色图（避免跨角色串图）。
+    /** 资源包切换后重裁支鱼位图。roleId 为 null 时重载全部角色；否则仅重载【该角色】的支鱼，并保留该角色自己的 feedingFishScale/Alpha（不串其它角色）。 */
+    private fun reloadFishBitmap(roleId: String? = null) {
+        val list = if (roleId == null) fishLayers.toList() else fishLayers.filter { it.roleId == roleId }
+        for (layer in list) {
+            ensureFishBitmap(layer.roleId)
+            val crop = fishCropBitmaps[layer.roleId] ?: continue
             layer.iv.setImageBitmap(crop)
-            layer.lp.width = wpx
-            layer.lp.height = hpx
-            layer.iv.imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
+            val c = roleConfig(layer.roleId)
+            val (w, h) = fishDisplaySize(crop, c)   // 用该角色自己的缩放，而非原始位图尺寸
+            layer.lp.width = w
+            layer.lp.height = h
+            layer.iv.alpha = c.feedingFishAlpha / 100f
             try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) {}
             layer.borderView?.let { bv ->
                 val blp = bv.layoutParams as? WindowManager.LayoutParams
@@ -1155,20 +1319,116 @@ class PetService : Service() {
         }
     }
 
-    // 活动范围（受状态栏等影响的当前窗口尺寸）；全屏刷新则改用 screenRealSize()。
-    private fun screenActiveBounds(): Rect {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            windowManager.currentWindowMetrics.bounds
-        } else {
-            val r = Rect()
-            windowManager.defaultDisplay.getRectSize(r)
-            r
+    /**
+     * 该角色宠物的【活动范围】矩形（屏幕绝对坐标，FLAG_LAYOUT_IN_SCREEN 原点=物理(0,0)）。
+     * 纯静态：仅由「边界偏移」+ 可见屏 + 屏幕旋转决定，
+     * 与宠物【当前位置/朝向/动画帧锚点】完全无关（= physics.snapMin/Max，不含图片 inset、不随脚朝向变）。
+     * 故判定结果稳定，不会时好时坏。无宠物实例时按本角色偏移配置同源兜底。
+     */
+    private fun roleActivityRect(roleId: String): Rect {
+        val cfg = roleConfig(roleId)
+        val sb = pets.firstOrNull { it.roleId == roleId }?.view?.physics
+        if (sb != null) {
+            return Rect(sb.snapMinX.toInt(), sb.snapMinY.toInt(), sb.snapMaxX.toInt(), sb.snapMaxY.toInt())
+        }
+        val vis = getScreenBounds()
+        val ob = rotatedBoundOffsets(floatArrayOf(
+            cfg.offsetTop.coerceIn(-300f, 2100f),
+            cfg.offsetBottom.coerceIn(-300f, 2100f),
+            cfg.offsetLeft.coerceIn(-300f, 1000f),
+            cfg.offsetRight.coerceIn(-300f, 1000f)
+        ))
+        return Rect(
+            (vis.left + ob[3]).toInt(),
+            (vis.top + ob[0]).toInt(),
+            (vis.right - ob[1]).toInt(),
+            (vis.bottom - ob[2]).toInt()
+        )
+    }
+
+    // 支鱼刷新范围(屏幕绝对坐标，与宠物浮窗同源 FLAG_LAYOUT_IN_SCREEN、原点=物理(0,0))：
+    // 全屏=物理屏整块(含系统栏)；关闭全屏=改用【该角色的活动范围】= 与宠物移动/吸附边界同源的「边界偏移矩形」
+    // (physics.snapMin/Max)，即 getScreenBounds() 叠加本角色 offsetTop/Bottom/Left/Right 后的矩形。
+    // 这样鱼只在该角色真实可活动区内刷新，与宠物移动、吸附边界完全同一坐标系(不再用系统栏 inset 这种不同基准)。
+    private fun feedSpawnArea(c: PetConfigData, roleId: String): Rect {
+        if (c.feedingFullScreen) {
+            val (W, H) = screenRealSize()
+            return Rect(0, 0, W, H)
+        }
+        // 关全屏：取该角色宠物的「边界偏移矩形」(snap 边界，不含图片 inset、不随脚朝向变，与设置页边界偏移线同几何)。
+        val sb = pets.firstOrNull { it.roleId == roleId }?.view?.physics
+        if (sb != null) {
+            return Rect(sb.snapMinX.toInt(), sb.snapMinY.toInt(), sb.snapMaxX.toInt(), sb.snapMaxY.toInt())
+        }
+        // 兜底(理论上该角色已有宠物实例)：按本角色偏移配置直接算 snap 边界(与 recalcBoundsFor 同源)。
+        val vis = getScreenBounds()
+        val ob = rotatedBoundOffsets(floatArrayOf(
+            c.offsetTop.coerceIn(-300f, 2100f),
+            c.offsetBottom.coerceIn(-300f, 2100f),
+            c.offsetLeft.coerceIn(-300f, 1000f),
+            c.offsetRight.coerceIn(-300f, 1000f)
+        ))
+        return Rect(
+            (vis.left + ob[3]).toInt(),
+            (vis.top + ob[0]).toInt(),
+            (vis.right - ob[1]).toInt(),
+            (vis.bottom - ob[2]).toInt()
+        )
+    }
+
+    /**
+     * 鱼当前允许的【活动范围】矩形（屏幕绝对坐标，FLAG_LAYOUT_IN_SCREEN 原点=物理(0,0)，与宠物 snap 边界同源）。
+     * 返回 null 表示「全屏范围」开启：不钳制（任意位置）。
+     * 关全屏：= 所属角色宠物的活动范围（边界偏移矩形 physics.snapMin/Max）；无宠物实例时按本角色偏移配置同源兜底。
+     * 仅作为【钳制】基准，不含系统栏/静态边界 inset，严格等于宠物可活动区（与「鱼活动范围=宠物活动范围」需求一致）。
+     */
+    private fun fishAllowedRect(roleId: String): Rect? {
+        val cfg = roleConfig(roleId)
+        if (cfg.feedingFullScreen) return null
+        val sb = pets.firstOrNull { it.roleId == roleId }?.view?.physics
+        if (sb != null) {
+            return Rect(sb.snapMinX.toInt(), sb.snapMinY.toInt(), sb.snapMaxX.toInt(), sb.snapMaxY.toInt())
+        }
+        // 兜底(理论上该角色已有宠物实例)：按本角色偏移配置直接算 snap 边界(与 recalcBoundsFor 同源)。
+        val vis = getScreenBounds()
+        val ob = rotatedBoundOffsets(floatArrayOf(
+            cfg.offsetTop.coerceIn(-300f, 2100f),
+            cfg.offsetBottom.coerceIn(-300f, 2100f),
+            cfg.offsetLeft.coerceIn(-300f, 1000f),
+            cfg.offsetRight.coerceIn(-300f, 1000f)
+        ))
+        return Rect(
+            (vis.left + ob[3]).toInt(),
+            (vis.top + ob[0]).toInt(),
+            (vis.right - ob[1]).toInt(),
+            (vis.bottom - ob[2]).toInt()
+        )
+    }
+
+    /**
+     * 把全部角色的支鱼重钳进各自允许活动范围（关全屏时）；开全屏则不钳（保持当前位置）。
+     * 范围比鱼还小时强制拉到最近边(coerceIn)。仅在「范围变化」后调用一次（recalcBounds 末尾 / 归位按钮），不每帧。
+     * 已在区间内的鱼跳过 updateViewLayout，避免无谓重排。
+     */
+    private fun reclampAllFish() {
+        for (layer in fishLayers) {
+            val rect = fishAllowedRect(layer.roleId) ?: continue
+            val lp = layer.lp
+            val wpx = lp.width; val hpx = lp.height
+            val nx = lp.x.coerceIn(rect.left, (rect.right - wpx).coerceAtLeast(rect.left))
+            val ny = lp.y.coerceIn(rect.top, (rect.bottom - hpx).coerceAtLeast(rect.top))
+            if (nx == lp.x && ny == lp.y) continue
+            lp.x = nx; lp.y = ny
+            try { windowManager.updateViewLayout(layer.iv, lp) } catch (_: Exception) {}
+            try { layer.borderView?.let { windowManager.updateViewLayout(it, lp) } } catch (_: Exception) {}
         }
     }
 
     // 长按支鱼：振动并弹出菜单（清除 / 清除全部 / 投喂设置）。
     private fun openFishMenu(v: View) {
         val layer = fishLayers.firstOrNull { it.iv === v } ?: return
+        // 先把当前角色切到该支鱼所属角色，菜单内 currentConfig()/updateConfig 才会落到正确角色。
+        syncRole(layer.roleId)
         FishMenu(this, layer).show()
     }
 
@@ -1218,7 +1478,7 @@ class PetService : Service() {
      * 投食结束【不还原】镜像，下一动作沿用该朝向。
      */
     private fun triggerFeedAction(inst: PetInstance?, relX: Float, relY: Float) {
-        if (inst == null || !useNewSpriteFlag) return
+        if (inst == null) return
         val view = inst.view
         val name = when {
             view.physics.isSnapped -> ImageModeManager.SNAP_FEED_FISH
@@ -1242,20 +1502,29 @@ class PetService : Service() {
     }
 
     /**
-     * 投喂成功后按「投喂变大」真实增大宠物尺寸：scale += feedGrowFactor（绝对值相加），
+     * 投喂成功后按「投喂变大」真实增大宠物尺寸：scale += factor（绝对值相加），
      * 上限取用户在「大小」项设置的上界（PetBounds MAIN 页 scale 的 to，阈值页可改），
      * 达到该上界后投喂不再变大；scale 为所有分身共享，故投喂一只全部变大。
-     * 受总开关与系数约束。
+     *
+     * 多角色语义：系数/开关取自【被吃的食物】所属角色（吃什么用什么倍率，a 用 a 的、b 用 b 的），
+     * 而放大的对象是该【吃者宠物】所属角色（谁吃谁变大）。两者一般是不同角色
+     * （如 B 吃 A 的 a：B 变大、用 A 的倍率），故必须分别传参，绝不能再依赖全局别名 config。
+     *
+     * @param eatRoleId  吃下食物的那只宠物所属角色（被放大者）
+     * @param foodRoleId 被吃食物所属角色（系数/开关来源）
      */
-    private fun growPetOnFeed() {
-        val c = config.getBlocking()
-        if (!c.feedGrowEnabled) return
-        val factor = c.feedGrowFactor.coerceAtLeast(0.01f)
-        // 投喂变大的上限 = 用户对「大小」设定的上界（不是绝对阈值），阈值页修改后此处随之生效
-        val scaleUserMax = PetBounds(this).getBlocking(SettingsPage.MAIN)
+    private fun growPetOnFeed(eatRoleId: String, foodRoleId: String) {
+        val foodRt = engines[foodRoleId] ?: return
+        val foodCfg = foodRt.config.getBlocking()
+        if (!foodCfg.feedGrowEnabled) return
+        val factor = foodCfg.feedGrowFactor.coerceAtLeast(0.01f)
+        // 投喂变大的上限 = 吃者角色对「大小」设定的上界（不是绝对阈值），阈值页修改后此处随之生效
+        val scaleUserMax = foodRt.bounds.getBlocking(SettingsPage.MAIN)
             .sliders.firstOrNull { it.key == "scale" }?.to ?: ConfigDefaults.FEED_GROW_MAX_SCALE
-        val newScale = (c.scale + factor).coerceAtMost(scaleUserMax)
-        if (newScale > c.scale) scope.launch { config.update { it.copy(scale = newScale) } }
+        val eatRt = engines[eatRoleId] ?: return
+        val eatCfg = eatRt.config.getBlocking()
+        val newScale = (eatCfg.scale + factor).coerceAtMost(scaleUserMax)
+        if (newScale > eatCfg.scale) scope.launch { eatRt.config.update { it.copy(scale = newScale) } }
     }
 
     /** 重置宠物大小为用户默认值（ConfigDefaults.SCALE，所有分身共享，即时生效）。 */
@@ -1272,9 +1541,9 @@ class PetService : Service() {
         return y.coerceIn(minY, maxY)
     }
 
-    // 刷出一条支鱼（随机位置 / 当前倍率 / 透明度 / 边框 / 自动过期）。
-    private fun spawnFish(c: PetConfigData) {
-        val crop = getFishCropBitmap() ?: return
+    // 刷出一条投喂食物（按本角色 id 取各自包的 resources["food"]，避免多角色串图；随机位置 / 当前倍率 / 透明度 / 边框 / 自动过期），并归属 roleId。
+    private fun spawnFish(c: PetConfigData, roleId: String) {
+        val crop = getFishCropBitmap(roleId) ?: return
         val (wpx, hpx) = fishDisplaySize(crop, c)
         val iv = ImageView(this).apply {
             setImageBitmap(crop)
@@ -1291,35 +1560,40 @@ class PetService : Service() {
             width = wpx
             height = hpx
         }
-        val (sw, sh) = if (c.feedingFullScreen) screenRealSize() else (screenActiveBounds().width() to screenActiveBounds().height())
+        // 刷新范围：全屏=物理屏整块(含系统栏)；关闭全屏=该角色活动范围(边界偏移矩形，与宠物移动/吸附边界同源)。
+        // 是否贴边由 feedingEdgeRefresh 单独决定，与全屏无关。
+        val area = feedSpawnArea(c, roleId)
+        val areaW = (area.right - area.left).coerceAtLeast(1)
+        val areaH = (area.bottom - area.top).coerceAtLeast(1)
         if (c.feedingEdgeRefresh) {
-            // 边缘刷新：支鱼紧贴边界（全屏=物理屏四边；非全屏=活动范围四边），随机选一边，鱼边贴边。
-            // 顶/底边：鱼顶/底边贴顶/底静态边界；左/右边：鱼左/右边贴左/右边界（横向无系统栏，直接 0/宽）。
+            // 边缘刷新：支鱼紧贴活动区边界（全屏=物理屏四边；非全屏=活动范围四边），随机选一边，鱼边贴边。
+            // 刷新位置直接落在 area(角色活动范围) 内，不再叠加调试页「静态边界」(staticTop/Bottom) 二次钳制；
+            // 否则竖向会被屏幕物理绝对坐标的静态边界切割，导致刷新范围 ≠ 活动范围(且坐标系不一致)。
             when (Random.nextInt(4)) {
-                0 -> { // 上边
-                    lp.x = Random.nextInt(0, (sw - wpx).coerceIn(1, 99999))
-                    lp.y = clampStaticY(c.staticTopBound, hpx, c.staticTopBound, c.staticBottomBound)
+                0 -> { // 上边：鱼顶贴活动区上边
+                    lp.x = area.left + Random.nextInt(0, (areaW - wpx).coerceIn(1, 99999))
+                    lp.y = area.top
                 }
-                1 -> { // 下边：鱼底贴底边界
-                    lp.x = Random.nextInt(0, (sw - wpx).coerceIn(1, 99999))
-                    lp.y = clampStaticY(sh - c.staticBottomBound - hpx, hpx, c.staticTopBound, c.staticBottomBound)
+                1 -> { // 下边：鱼底贴活动区下边
+                    lp.x = area.left + Random.nextInt(0, (areaW - wpx).coerceIn(1, 99999))
+                    lp.y = area.bottom - hpx
                 }
-                2 -> { // 左边：鱼左贴左边界
-                    lp.x = 0
-                    lp.y = clampStaticY(Random.nextInt(0, (sh - hpx).coerceIn(1, 99999)), hpx, c.staticTopBound, c.staticBottomBound)
+                2 -> { // 左边：鱼左贴活动区左边
+                    lp.x = area.left
+                    lp.y = area.top + Random.nextInt(0, (areaH - hpx).coerceIn(1, 99999))
                 }
-                else -> { // 右边：鱼右贴右边界
-                    lp.x = (sw - wpx).coerceIn(0, 99999)
-                    lp.y = clampStaticY(Random.nextInt(0, (sh - hpx).coerceIn(1, 99999)), hpx, c.staticTopBound, c.staticBottomBound)
+                else -> { // 右边：鱼右贴活动区右边
+                    lp.x = area.right - wpx
+                    lp.y = area.top + Random.nextInt(0, (areaH - hpx).coerceIn(1, 99999))
                 }
             }
         } else {
-            lp.x = Random.nextInt(0, (sw - wpx).coerceIn(1, 99999))
-            lp.y = clampStaticY(Random.nextInt(0, (sh - hpx).coerceIn(1, 99999)), hpx, c.staticTopBound, c.staticBottomBound)
+            lp.x = area.left + Random.nextInt(0, (areaW - wpx).coerceIn(1, 99999))
+            lp.y = area.top + Random.nextInt(0, (areaH - hpx).coerceIn(1, 99999))
         }
         iv.setOnTouchListener(fishDragListener)
         try { windowManager.addView(iv, lp) } catch (_: Exception) { return }
-        val layer = FishLayer(iv, lp)
+        val layer = FishLayer(iv, lp, crop = crop, packId = descriptorForRole(roleId)?.packId ?: 1, roleId = roleId)
         fishLayers.add(layer)
         if (c.feedingBorderShow) setFishBorder(layer, true)
         if (c.feedingAutoExpire) scheduleFishExpire(layer, c.feedingExpireTime)
@@ -1346,20 +1620,31 @@ class PetService : Service() {
         fishLayers.removeAt(idx)
     }
 
-    // 清除全部支鱼。
-    fun clearAllFish() {
-        for (layer in fishLayers.toList()) removeFish(layer)
+    // 清除支鱼浮窗。roleId 为 null 时清除全部；否则仅清除【该角色】的支鱼（含其过期计时与边框）。
+    fun clearAllFish(roleId: String? = null) {
+        val list = if (roleId == null) fishLayers.toList() else fishLayers.filter { it.roleId == roleId }
+        for (layer in list) removeFish(layer)
     }
 
-    /** 全部支鱼浮窗重置位置到屏幕中心（y 受静态边界约束）。 */
-    fun resetAllFishToCenter() {
+    /** 全部支鱼浮窗重置位置：开全屏→屏幕中心；关全屏→所属角色活动范围中心（范围比鱼小则拉到最近边）。
+     *  roleId 为 null 时重置全部；否则仅重置【该角色】的支鱼。 */
+    fun resetAllFishToCenter(roleId: String? = null) {
         val (sw, sh) = screenRealSize()
-        val cfg = currentConfig()
-        for (layer in fishLayers) {
-            val cx = (sw - layer.lp.width) / 2
-            val cy = clampStaticY((sh - layer.lp.height) / 2, layer.lp.height, cfg.staticTopBound, cfg.staticBottomBound)
-            layer.lp.x = cx
-            layer.lp.y = cy
+        val list = if (roleId == null) fishLayers.toList() else fishLayers.filter { it.roleId == roleId }
+        for (layer in list) {
+            val w = layer.lp.width; val h = layer.lp.height
+            val cx = (sw - w) / 2
+            val cy = (sh - h) / 2
+            val rect = fishAllowedRect(layer.roleId)
+            if (rect == null) {
+                // 全屏范围：回到屏幕中心，范围=整屏(比鱼小兜底用 coerceAtLeast)。
+                layer.lp.x = cx.coerceIn(0, (sw - w).coerceAtLeast(0))
+                layer.lp.y = cy.coerceIn(0, (sh - h).coerceAtLeast(0))
+            } else {
+                // 关全屏：回到活动范围中心；范围比鱼小则 coerceIn 落到最近边。
+                layer.lp.x = cx.coerceIn(rect.left, (rect.right - w).coerceAtLeast(rect.left))
+                layer.lp.y = cy.coerceIn(rect.top, (rect.bottom - h).coerceAtLeast(rect.top))
+            }
             try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) { }
             try { layer.borderView?.let { windowManager.updateViewLayout(it, layer.lp) } } catch (_: Exception) { }
         }
@@ -1396,11 +1681,12 @@ class PetService : Service() {
         return bv
     }
 
-    // 倍率 / 透明度变化：即时作用于全部已有支鱼浮窗。
-    private fun applyFishScaleAlpha(c: PetConfigData) {
-        val crop = getFishCropBitmap() ?: return
-        val (wpx, hpx) = fishDisplaySize(crop, c)
-        for (layer in fishLayers) {
+    // 倍率 / 透明度变化：即时作用于【该角色】已有支鱼浮窗（尺寸按每条鱼自身裁剪图计算，避免跨角色串尺寸）。
+    private fun applyFishScaleAlpha(rt: RoleRuntime) {
+        val c = rt.config.getBlocking()
+        for (layer in fishLayers.filter { it.roleId == rt.roleId }) {
+            val crop = layer.crop ?: continue
+            val (wpx, hpx) = fishDisplaySize(crop, c)
             layer.lp.width = wpx
             layer.lp.height = hpx
             layer.iv.imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
@@ -1413,9 +1699,10 @@ class PetService : Service() {
         }
     }
 
-    // 自动过期开关 / 过期时间变化：重新排程全部支鱼的过期计时。
-    private fun applyFishAutoExpire(c: PetConfigData) {
-        for (layer in fishLayers) {
+    // 自动过期开关 / 过期时间变化：重新排程【该角色】支鱼的过期计时。
+    private fun applyFishAutoExpire(rt: RoleRuntime) {
+        val c = rt.config.getBlocking()
+        for (layer in fishLayers.filter { it.roleId == rt.roleId }) {
             layer.expireRunnable?.let { mainHandler.removeCallbacks(it) }
             val idx = fishLayers.indexOfFirst { it.iv === layer.iv }
             if (idx < 0) continue
@@ -1429,70 +1716,61 @@ class PetService : Service() {
         }
     }
 
-    // 随机刷出循环：每个周期刷出一条（不超过最大数量），间隔在 [频率下限, 频率上限] 秒之间随机。
-    private val fishSpawnRunnable = object : Runnable {
-        override fun run() {
-            if (!fishSpawning) return
-            val c = currentConfig()
-            if (c.feedingEnabled && fishLayers.size < c.feedingMaxCount) {
-                spawnFish(c)
-            }
-            scheduleFishSpawn(c)
-        }
-    }
-
-    private fun scheduleFishSpawn(c: PetConfigData) {
+    // 随机刷出循环：【每个角色独立】一个循环，周期在 [频率下限, 频率上限] 秒之间随机（参数取自该角色自身配置）。
+    private fun scheduleFishSpawn(rt: RoleRuntime) {
+        val c = rt.config.getBlocking()
         val lo = c.feedingPeriodMin.coerceAtMost(c.feedingPeriodMax)
         val hi = c.feedingPeriodMax.coerceAtLeast(c.feedingPeriodMin)
         val period = if (hi <= lo) hi else Random.nextInt(lo, hi + 1)
-        mainHandler.postDelayed(fishSpawnRunnable, period * 1000L)
-    }
-
-    private fun startFishSpawning() {
-        if (fishSpawning) return
-        fishSpawning = true
-        scheduleFishSpawn(currentConfig())
-    }
-
-    // 交互菜单「投食」：立即刷出一条支鱼（受最大数量约束），并重置随机刷出计时（关闭浮窗由调用方处理）。
-    fun feedNow() {
-        val c = currentConfig()
-        if (fishLayers.size < c.feedingMaxCount) {
-            spawnFish(c)
+        rt.fishSpawnRunnable = Runnable {
+            if (!rt.fishSpawning) return@Runnable
+            val cc = rt.config.getBlocking()
+            if (cc.feedingEnabled && fishLayers.count { it.roleId == rt.roleId } < cc.feedingMaxCount) {
+                spawnFish(cc, rt.roleId)
+            }
+            scheduleFishSpawn(rt)
         }
-        // 仅当自动刷出运行中才重置计时：取消待触发的随机刷出，从当前时刻重新排程。
-        if (fishSpawning) {
-            mainHandler.removeCallbacks(fishSpawnRunnable)
-            scheduleFishSpawn(c)
+        mainHandler.postDelayed(rt.fishSpawnRunnable!!, period * 1000L)
+    }
+
+    private fun startFishSpawning(rt: RoleRuntime) {
+        if (rt.fishSpawning) return
+        rt.fishSpawning = true
+        scheduleFishSpawn(rt)
+    }
+
+    // 交互菜单「投食」：立即刷出一条【本角色】支鱼（受该角色最大数量约束），并重置该角色随机刷出计时（关闭浮窗由调用方处理）。
+    fun feedNow(roleId: String? = null) {
+        val rt = roleId?.let { engines[it] } ?: return
+        val c = rt.config.getBlocking()
+        if (fishLayers.count { it.roleId == rt.roleId } < c.feedingMaxCount) {
+            spawnFish(c, rt.roleId)
+        }
+        // 仅当该角色自动刷出运行中才重置计时：取消待触发的随机刷出，从当前时刻重新排程。
+        if (rt.fishSpawning) {
+            rt.fishSpawnRunnable?.let { mainHandler.removeCallbacks(it) }
+            scheduleFishSpawn(rt)
         }
     }
 
-    private fun stopFishSpawning() {
-        fishSpawning = false
-        mainHandler.removeCallbacks(fishSpawnRunnable)
-        clearAllFish()
+    // 停止某角色的随机刷出循环，并仅清除该角色的支鱼（不串其它角色）。
+    private fun stopFishSpawning(rt: RoleRuntime) {
+        rt.fishSpawning = false
+        rt.fishSpawnRunnable?.let { mainHandler.removeCallbacks(it) }
+        rt.fishSpawnRunnable = null
+        clearAllFish(rt.roleId)
     }
 
-    private fun loadConfig() {
+    private fun loadConfig(roleId: String) {
+        val rt = engines[roleId] ?: return
         config.normalizeBlocking() // 启动时清洗历史残留的非法四边重力组合
         val c = config.getBlocking()
         showDebug = c.showDebug
         showImageBorder = c.showImageBorder
         showControlBorder = c.showControlBorder
-        // 控制窗隐藏开关：调试“隐藏控制层” 或 用户“点击穿透”任一变化，统一实时增删控制窗
-        // forceOpaque 与二者互斥，变化时一并刷新显示窗 NOT_TOUCHABLE（强制无透明 vs 恢复穿透）。
-        if (c.hideControlLayer != hideControlLayer || c.clickThrough != clickThrough || c.forceOpaque != forceOpaque) {
-            hideControlLayer = c.hideControlLayer
-            clickThrough = c.clickThrough
-            forceOpaque = c.forceOpaque
-            syncControlWindows()
-            applyDisplayTouchFlags()
-        }
-        // 诊断开关：隐藏画布变化时实时增删画布窗口
-        if (c.hideStage != hideStage) {
-            hideStage = c.hideStage
-            syncDisplayWindows()
-        }
+        // 控制窗/显示窗开关（隐藏控制层、点击穿透、强制无透明、隐藏画布）均为【按角色独立】设置，
+        // 其窗口增删与 NOT_TOUCHABLE 标志的实时应用已统一在 applySharedConfig(rt) 末尾按 roleId 执行，
+        // 不再依赖全局变量，避免多角色时一个角色改值污染另一个角色的窗口状态。
         showBoundOffsetFlag = c.showBoundOffset
         showSnapOffsetFlag = c.showSnapOffset
         applyDebugGuides()
@@ -1505,86 +1783,108 @@ class PetService : Service() {
         thinkingOffsetY = c.thinkingOffset
         singleTrayMsg = c.singleTrayMsg
         // 碎碎念：独立浮窗，可见性跟随宠物（visible && enabled），按实例错开高度
-        applySharedConfig(c)
-        // 资源包：根据“使用新资源”开关初始化（默认关=旧图）。pets 已在 initPetView 创建完毕。
-        useNewSpriteFlag = c.useNewSprite
-        if (useNewSpriteFlag) {
-            val pack = spritePackFor(true)
-            pets.forEach { it.view.applySpritePack(pack) }
-        }
+        applySharedConfig(rt)
+        // 资源包：根据当前选择初始化（1=芝麻酥 / 2=芝麻球促销）。pets 已在 initPetView 创建完毕。
+        rt.spritePackId = c.spritePack
+        val pack = resolveCurrentSpritePack(rt)
+        pets.filter { it.roleId == roleId }.forEach { it.view.applySpritePack(pack) }
         // 体感重力：同步开关与强度，并按需启停传感器。
         // 有效体感 = 体感开关开启 且 重力·抛掷总开关开启；重力关时体感整体失效
         // （不注册传感器、不量化方向、不触发 roll），但【不改动】tiltGravity 存储值，
         // 开关 UI 显示保持原值，开启重力后体感自动恢复生效。
         tiltStrength = c.gravity
         val effectiveTilt = c.tiltGravity && c.gravityEnabled
-        petView.physics.tiltGravity = effectiveTilt
-        updateTiltGravity(effectiveTilt)
+        updateTiltGravity(roleId, effectiveTilt)
         // 重力朝向：非体感模式按四边开关算宠物脚朝向；体感模式初始朝下(0)，
         // 实际朝向由 tiltListener 每帧根据重力向量量化（左右/上主导时临时旋转脚朝左右/上）。
         // 重力朝向：重力·抛掷关闭时强制脚朝正下(0)，与四边开关/体感无关（吸附态仍独立保留朝向）。
         // 广播给所有宠物实例（不再只写主实例 petView）：每只独立设置自身脚朝向，驱动各自渲染旋转与位移方向。
         val gTarget = if (c.gravityEnabled) (if (effectiveTilt) 0 else calcGravityDir(c)) else 0
-        pets.forEach { inst -> inst.view.gravityDir = gTarget }
-        // 投喂（支鱼）：初始化投喂状态并启动随机刷出（开关开启时）。
-        lastFeedingEnabled = c.feedingEnabled
-        lastFeedingFishScale = c.feedingFishScale
-        lastFeedingFishAlpha = c.feedingFishAlpha
-        lastFeedingMaxCount = c.feedingMaxCount
-        lastFeedingAutoExpire = c.feedingAutoExpire
-        lastFeedingExpireTime = c.feedingExpireTime
-        lastFeedingFullScreen = c.feedingFullScreen
-        lastFeedingBorderShow = c.feedingBorderShow
-        if (c.feedingEnabled) startFishSpawning()
+        pets.filter { it.roleId == roleId }.forEach { inst ->
+            if (inst.view.climbWall < 0 && !inst.view.flying) inst.view.gravityDir = gTarget
+        }
+        // 投喂（支鱼）：初始化投喂状态并启动随机刷出（开关开启时）。各角色独立缓存上次生效值。
+        rt.lastFeedingEnabled = c.feedingEnabled
+        rt.lastFeedingFishScale = c.feedingFishScale
+        rt.lastFeedingFishAlpha = c.feedingFishAlpha
+        rt.lastFeedingMaxCount = c.feedingMaxCount
+        rt.lastFeedingAutoExpire = c.feedingAutoExpire
+        rt.lastFeedingExpireTime = c.feedingExpireTime
+        rt.lastFeedingFullScreen = c.feedingFullScreen
+        rt.lastFeedingBorderShow = c.feedingBorderShow
+        rt.lastFreezeDraggable = c.freezeDraggable
+        rt.lastFreezeBorderShow = c.freezeBorderShow
+        if (c.feedingEnabled) startFishSpawning(rt)
         recalcBounds()
     }
 
-    private fun registerConfigObserver() {
-        config.configFlow.onEach { c ->
+    private fun registerConfigObserver(rt: RoleRuntime) {
+        rt.config.configFlow.onEach { c ->
             // 宠物数量（酥的数量）变化：多退少补，保留现有宠物，仅增删差异部分（见 adjustPetCount）。
             if (c.petCount != lastPetCount) {
                 lastPetCount = c.petCount
-                adjustPetCount(c)
+                adjustPetCount(rt.roleId, c)
             }
-            // 定格-拖动开关变化：即时作用于全部已有定格层（开→可点击拖动；关→纯显示不可点击）。
-            if (c.freezeDraggable != lastFreezeDraggable) {
-                lastFreezeDraggable = c.freezeDraggable
-                applyFreezeDraggable(c.freezeDraggable)
+            // 定格-拖动开关变化：即时作用于【该角色】已有定格层（开→可点击拖动；关→纯显示不可点击），不串其它角色。
+            if (c.freezeDraggable != rt.lastFreezeDraggable) {
+                rt.lastFreezeDraggable = c.freezeDraggable
+                applyFreezeDraggable(rt.roleId, c.freezeDraggable)
             }
-            // 显示定格边框开关变化：即时叠加/移除全部已有定格层的红色真实窗口边框
-            if (c.freezeBorderShow != lastFreezeBorderShow) {
-                lastFreezeBorderShow = c.freezeBorderShow
-                for (layer in freezeLayers) setFreezeBorder(layer, c.freezeBorderShow)
+            // 显示定格边框开关变化：即时叠加/移除【该角色】已有定格层的红色真实窗口边框
+            if (c.freezeBorderShow != rt.lastFreezeBorderShow) {
+                rt.lastFreezeBorderShow = c.freezeBorderShow
+                for (layer in freezeLayers.filter { it.roleId == rt.roleId }) setFreezeBorder(layer, c.freezeBorderShow)
             }
-            // 投喂（支鱼）：开关变化启停随机刷出；其余参数变化即时作用于已有浮窗。
-            if (c.feedingEnabled != lastFeedingEnabled) {
-                lastFeedingEnabled = c.feedingEnabled
-                if (c.feedingEnabled) startFishSpawning() else stopFishSpawning()
+            // 投喂（支鱼）：开关变化启停【该角色】随机刷出；其余参数变化即时作用于该角色已有浮窗（互不干扰）。
+            if (c.feedingEnabled != rt.lastFeedingEnabled) {
+                rt.lastFeedingEnabled = c.feedingEnabled
+                if (c.feedingEnabled) startFishSpawning(rt) else stopFishSpawning(rt)
             }
-            if (c.feedingFishScale != lastFeedingFishScale || c.feedingFishAlpha != lastFeedingFishAlpha) {
-                lastFeedingFishScale = c.feedingFishScale
-                lastFeedingFishAlpha = c.feedingFishAlpha
-                applyFishScaleAlpha(c)
+            if (c.feedingFishScale != rt.lastFeedingFishScale || c.feedingFishAlpha != rt.lastFeedingFishAlpha) {
+                rt.lastFeedingFishScale = c.feedingFishScale
+                rt.lastFeedingFishAlpha = c.feedingFishAlpha
+                applyFishScaleAlpha(rt)
             }
-            if (c.feedingMaxCount != lastFeedingMaxCount) {
-                lastFeedingMaxCount = c.feedingMaxCount
-                while (fishLayers.size > c.feedingMaxCount) removeFish(fishLayers.last())
+            if (c.feedingMaxCount != rt.lastFeedingMaxCount) {
+                rt.lastFeedingMaxCount = c.feedingMaxCount
+                while (fishLayers.count { it.roleId == rt.roleId } > c.feedingMaxCount) {
+                    removeFish(fishLayers.last { it.roleId == rt.roleId })
+                }
             }
-            if (c.feedingAutoExpire != lastFeedingAutoExpire || c.feedingExpireTime != lastFeedingExpireTime) {
-                lastFeedingAutoExpire = c.feedingAutoExpire
-                lastFeedingExpireTime = c.feedingExpireTime
-                applyFishAutoExpire(c)
+            if (c.feedingAutoExpire != rt.lastFeedingAutoExpire || c.feedingExpireTime != rt.lastFeedingExpireTime) {
+                rt.lastFeedingAutoExpire = c.feedingAutoExpire
+                rt.lastFeedingExpireTime = c.feedingExpireTime
+                applyFishAutoExpire(rt)
             }
-            if (c.feedingFullScreen != lastFeedingFullScreen) {
-                lastFeedingFullScreen = c.feedingFullScreen
+            if (c.feedingFullScreen != rt.lastFeedingFullScreen) {
+                rt.lastFeedingFullScreen = c.feedingFullScreen
                 // 仅影响下一次刷出位置范围，无需即时处理。
             }
-            if (c.feedingBorderShow != lastFeedingBorderShow) {
-                lastFeedingBorderShow = c.feedingBorderShow
-                for (layer in fishLayers) setFishBorder(layer, c.feedingBorderShow)
+            if (c.feedingBorderShow != rt.lastFeedingBorderShow) {
+                rt.lastFeedingBorderShow = c.feedingBorderShow
+                for (layer in fishLayers.filter { it.roleId == rt.roleId }) setFishBorder(layer, c.feedingBorderShow)
             }
-            // 物理参数同步：遍历所有实例（共享配置，各实例物理独立生效）。
-            pets.forEach { inst ->
+            if (c.feedingPeriodMin != rt.lastFeedingPeriodMin || c.feedingPeriodMax != rt.lastFeedingPeriodMax) {
+                rt.lastFeedingPeriodMin = c.feedingPeriodMin
+                rt.lastFeedingPeriodMax = c.feedingPeriodMax
+                // 频率周期变化：若该角色投食正在运行，立即用新频率重排下一次掉落的计时器；
+                // 否则旧周期会跑完才生效（用户诉求：当前开启该功能时，修改应即时生效）。各角色独立重排。
+                if (rt.fishSpawning) {
+                    rt.fishSpawnRunnable?.let { mainHandler.removeCallbacks(it) }
+                    scheduleFishSpawn(rt)
+                }
+            }
+            if (c.randomPeriodMin != rt.lastRandomPeriodMin || c.randomPeriodMax != rt.lastRandomPeriodMax) {
+                rt.lastRandomPeriodMin = c.randomPeriodMin
+                rt.lastRandomPeriodMax = c.randomPeriodMax
+                // 随机切换周期变化：若随机模式正在运行，立即打断当前等待、以新周期重新计时；
+                // 否则要等旧周期跑完才生效。仅开启时重排，未开启不打扰。
+                if (c.randomEnabled) requestRandomReset()
+            }
+            // 物理参数同步：仅作用于本角色实例（各实例物理独立生效）。
+            // 有效重力 = 重力·抛掷开关 且 移动总开关（移动关闭则整体静止，与“关闭后「酥」静悄悄地”一致）。
+            val effectiveGravity = c.gravityEnabled && c.moveEnabled
+            pets.filter { it.roleId == rt.roleId }.forEach { inst ->
                 val p = inst.view.physics
                 p.gravity = c.gravity
                 p.reboundRatio = c.reboundRatio
@@ -1592,6 +1892,10 @@ class PetService : Service() {
                 p.gravityBottom = c.gravityBottom
                 p.gravityLeft = c.gravityLeft
                 p.gravityRight = c.gravityRight
+                // 攀岩开关（或移动总开关）关闭时若仍在墙上，立即退出攀爬态（仅清专用状态位，绝不碰全局重力/体感）。
+                if (inst.view.climbWall >= 0 && !(c.moveEnabled && c.wallClimb)) {
+                    inst.view.restoreBaseGravity()
+                }
                 p.reboundTop = c.reboundTop
                 p.reboundBottom = c.reboundBottom
                 p.reboundLeft = c.reboundLeft
@@ -1603,19 +1907,26 @@ class PetService : Service() {
                 p.snapEnabled = c.snapEnabled   // 吸附边缘总开关：关闭则完全不吸附
                 p.reboundEnabled = c.reboundEnabled   // 反弹总开关：关闭则所有碰撞反弹失效（撞墙停靠、不振动）
                 p.snapDist = c.snapThreshold   // 吸附判定距离阈值（像素）
-                p.gravityEnabled = c.gravityEnabled
+                p.gravityEnabled = effectiveGravity
                 p.maxSpeed = c.maxSpeed
-                inst.view.useStaticPool = !c.gravityEnabled   // 重力·抛掷关闭 -> 静止池
+                p.throwEnabled = c.throwEnabled
+                p.throwCoeff = c.throwCoeff
+                inst.view.useStaticPool = !c.moveEnabled   // 静止池只看"移动"总开关（重力关仅关重力，不进静止池）
             }
-            // 重力·抛掷关闭（吸附态除外）时，立刻清零速度并复位抛掷态，使物理停止位移。
+            // 进入静止模式（移动总开关关闭）时，立刻清零速度并复位抛掷态，使物理停止位移。
+            // 仅由"移动"总开关决定；关重力不动这里——关重力只关重力、宠物仍在正常池可抛掷滚动。
             // 覆盖所有来源：设置页/菜单页手动关闭、随机模式改关等。
             // 注意：这里只清物理状态，不调 enterIdle()/cancelForced()——避免误杀菜单正在播放的
             // 非移动一次性动作（摸头/炸毛/摇头）。动画切回静坐由 PetView.updateAnimByState 每帧处理：
-            // 当重力关且未播放一次性动作时才切 SIT_CLAM，播放中则保留动作（符合"仅播放非移动池"）。
-            if (!c.gravityEnabled) {
-                pets.forEach { inst ->
+            // 当移动关且未播放一次性动作时才切 SIT_CLAM，播放中则保留动作（符合"仅播放非移动池"）。
+            if (!c.moveEnabled) {
+                pets.filter { it.roleId == rt.roleId }.forEach { inst ->
                     val p = inst.view.physics
-                    if (!p.isSnapped) {
+                    if (inst.view.flying) {
+                        // 飞行中关闭移动总开关：强制停飞并切静坐（而非继续飞到目的地才落地），
+                        // 与滚动态关闭移动即停下的表现一致。
+                        inst.view.stopLeapFlightToIdle()
+                    } else if (!p.isSnapped) {
                         p.vx = 0f
                         p.vy = 0f
                         p.isThrowing = false   // 复位抛掷态，避免 updateAnimByState 抢回 ROLL
@@ -1623,10 +1934,11 @@ class PetService : Service() {
                     }
                 }
             }
-            boundOffsetTop = c.offsetTop
-            boundOffsetBottom = c.offsetBottom
-            boundOffsetLeft = c.offsetLeft
-            boundOffsetRight = c.offsetRight
+            // 与 recalcBounds/loadConfig 一致的 coerce 范围，避免越界值进入全局回落（辅助线用）。
+            boundOffsetTop = c.offsetTop.coerceIn(-300f, 2100f)
+            boundOffsetBottom = c.offsetBottom.coerceIn(-300f, 2100f)
+            boundOffsetLeft = c.offsetLeft.coerceIn(-300f, 1000f)
+            boundOffsetRight = c.offsetRight.coerceIn(-300f, 1000f)
             imeAdaptEnabled = c.imeAdapt
             imeLiftOffset = c.imeLiftOffset
             imeResetBottomOffset = c.imeResetBottomOffset
@@ -1635,20 +1947,9 @@ class PetService : Service() {
             showDebug = c.showDebug
             showImageBorder = c.showImageBorder
             showControlBorder = c.showControlBorder
-            // 控制窗隐藏开关：调试“隐藏控制层” 或 用户“点击穿透”任一变化，统一实时增删控制窗
-            // forceOpaque 与二者互斥，变化时一并刷新显示窗 NOT_TOUCHABLE（强制无透明 vs 恢复穿透）。
-            if (c.hideControlLayer != hideControlLayer || c.clickThrough != clickThrough || c.forceOpaque != forceOpaque) {
-                hideControlLayer = c.hideControlLayer
-                clickThrough = c.clickThrough
-                forceOpaque = c.forceOpaque
-                syncControlWindows()
-                applyDisplayTouchFlags()
-            }
-            // 诊断开关：隐藏画布变化时实时增删画布窗口
-            if (c.hideStage != hideStage) {
-                hideStage = c.hideStage
-                syncDisplayWindows()
-            }
+            // 控制窗/显示窗开关（隐藏控制层、点击穿透、强制无透明、隐藏画布）均为【按角色独立】设置，
+            // 其窗口增删与 NOT_TOUCHABLE 标志的实时应用已统一在 applySharedConfig(rt) 末尾按 roleId 执行，
+            // 不再依赖全局变量，避免多角色时一个角色改值污染另一个角色的窗口状态。
             showBoundOffsetFlag = c.showBoundOffset
             showSnapOffsetFlag = c.showSnapOffset
             applyDebugGuides()
@@ -1660,36 +1961,35 @@ class PetService : Service() {
             }
             singleTrayMsg = c.singleTrayMsg
             thinkingOffsetY = c.thinkingOffset
-            applySharedConfig(c)
-            // 资源包切换：仅当开关变化时才重建 ImageModeManager 并复位到静坐（低频，可接受短暂停顿）。
-            if (c.useNewSprite != useNewSpriteFlag) {
-                useNewSpriteFlag = c.useNewSprite
-                val pack = spritePackFor(useNewSpriteFlag)
-                pets.forEach { it.view.applySpritePack(pack) }
-                reloadFishBitmap()
+            applySharedConfig(rt)
+            // 资源包切换：仅当包 id 变化时才重建 ImageModeManager 并复位到静坐（低频，可接受短暂停顿）。
+            if (c.spritePack != rt.spritePackId) {
+                rt.spritePackId = c.spritePack
+                val pack = resolveCurrentSpritePack(rt)
+                pets.filter { it.roleId == rt.roleId }.forEach { it.view.applySpritePack(pack) }
+                reloadFishBitmap(rt.roleId)
             }
             // 体感重力：强度随设置页“重力强度”联动；开关变化启停传感器。
             // 有效体感 = 体感开关开启 且 重力·抛掷总开关开启；重力关时体感整体失效，
             // 但 tiltGravity 存储值不变，开关 UI 显示保持原值。
             tiltStrength = c.gravity
-            val effectiveTilt = c.tiltGravity && c.gravityEnabled
-            petView.physics.tiltGravity = effectiveTilt
-            updateTiltGravity(effectiveTilt)
+            val effectiveTilt = c.tiltGravity && effectiveGravity
+            updateTiltGravity(rt.roleId, effectiveTilt)
             // 重力朝向：重力·抛掷关闭时强制脚朝正下(0)，与四边开关/体感无关（吸附态仍独立保留朝向）。
             // 注意：必须用 c.gravityEnabled 单独守卫，不能只依赖 effectiveTilt（=tiltGravity && gravityEnabled），
             // 否则关重力时 effectiveTilt=false 会落入下方 calcGravityDir 分支，用仍残留的旧四边方向算出
             // 非下方向并触发 enterTiltRoll，造成“先错误方向、再被 updateAnimByState 强制 0 纠正”的闪烁。
             // 脚朝向广播给所有宠物实例（不再只写主实例 petView）：每只独立设置/进 ROLL，
             // 吸附态各自保留朝向、忽略全局方向突变。
-            if (c.gravityEnabled) {
+            if (effectiveGravity) {
                 if (effectiveTilt) {
-                    pets.forEach { inst -> if (!inst.view.physics.isSnapped) inst.view.gravityDir = 0 }
+                    pets.filter { it.roleId == rt.roleId }.forEach { inst -> if (!inst.view.physics.isSnapped && !inst.view.physics.isClimbing) inst.view.gravityDir = 0 }
                 } else {
                     val target = calcGravityDir(c)
-                    pets.forEach { inst ->
+                    pets.filter { it.roleId == rt.roleId }.forEach { inst ->
                         val v = inst.view
-                        // 吸附态：忽略脚朝向突变触发的 ROLL（等待用户手动拉出/召回才退出吸附）。
-                        if (v.physics.isSnapped) return@forEach
+                        // 吸附态/攀岩态：忽略脚朝向突变触发的 ROLL（等待用户手动拉出/召回才退出对应态）。
+                        if (v.physics.isSnapped || v.physics.isClimbing) return@forEach
                         // 脚朝向突变：主动进 ROLL 掩盖旧模式（非对称）帧被新旋转角硬转一帧的闪，
                         // 对齐体感 updateTiltGravityDir 行为。方向未变（如改其他设置）不进 ROLL。
                         if (target != v.gravityDir) {
@@ -1700,7 +2000,7 @@ class PetService : Service() {
                 }
             } else {
                 // 关重力：无条件脚朝正下(0)，且跳过方向突变 ROLL（updateAnimByState 每帧也会兜底纠正）。
-                pets.forEach { inst -> if (!inst.view.physics.isSnapped) inst.view.gravityDir = 0 }
+                pets.filter { it.roleId == rt.roleId }.forEach { inst -> if (!inst.view.physics.isSnapped && !inst.view.physics.isClimbing) inst.view.gravityDir = 0 }
             }
             recalcBounds()  // 偏移/scale 变化需重算边界（固定基准，不会每帧抖动；与方向检测解耦，无条件重算）
             // 夜间模式强制开关变化：即时重应用（强制打开优先级 > 强制关闭 > 跟随系统）。
@@ -1710,7 +2010,7 @@ class PetService : Service() {
             } else {
                 resume()
             }
-        }.launchIn(scope)
+        }.launchIn(scope).also { rt.configJob = it }
     }
 
     /**
@@ -1793,19 +2093,21 @@ class PetService : Service() {
                 // 归一：传感器标称约 9.8。倾斜分量 / 9.8 得 [0,1] 倾斜比例，再乘以设置重力强度，
                 // 得到屏幕坐标系下的加速度（像素/秒^2）。平放时 sx,sy≈0 -> 宠物几乎不受力。
                 // TILT_GAIN：体感专属增益，只作用于体感，不改变四边重力的 gravity 语义。
-                val k = tiltStrength / 9.8f * TILT_GAIN
                 pets.forEach { inst ->
-                    inst.view.physics.tiltGx = sx * k
-                    inst.view.physics.tiltGy = sy * k
+                    // 仅本角色开启体感才写入设备重力向量；未开启的角色不受影响。
+                    if (!inst.view.physics.tiltGravity) return@forEach
+                    val kr = (engines[inst.roleId]?.tiltStrength ?: tiltStrength) / 9.8f * TILT_GAIN
+                    inst.view.physics.tiltGx = sx * kr
+                    inst.view.physics.tiltGy = sy * kr
                 }
                 dbgCount++
                 if (dbgCount % 30 == 0) {
-                    Log.d("CakePetTilt", "sensor gx=$gx gy=$gy rot=$cachedRotation sx=$sx sy=$sy k=$k -> tiltGx=${petView.physics.tiltGx} tiltGy=${petView.physics.tiltGy}")
+                    Log.d("CakePetTilt", "sensor gx=$gx gy=$gy rot=$cachedRotation sx=$sx sy=$sy -> tiltGx=${petView.physics.tiltGx} tiltGy=${petView.physics.tiltGy}")
                 }
                 // 由重力向量量化“脚朝向”：左右分量远大于上下时脚朝左右，上分量主导时脚朝上，
                 // 其余（下主导/平衡/平放）脚朝下。旋转会同步影响渲染姿态与 walk/蠕动/扒鱼位移方向，
                 // 并在切换时重算边界（窗口为正方形，旋转后尺寸不变，仅锚点偏移随 rotateOffset 变化）。
-                updateTiltGravityDir(k)
+                updateTiltGravityDir()
             } catch (e: Throwable) {
                 // 兜底：任何异常都不应导致 App 闪退，仅打印日志便于定位
                 Log.e("CakePetTilt", "onSensorChanged error", e)
@@ -1900,10 +2202,41 @@ class PetService : Service() {
      * 返回是否真改了尺寸（调用方用于更新 lastW/lastH；本函数不直接写 lastW/lastH，保持无副作用）。
      * 注：CORE 下必须用 controlWindowRect() 而非 physics-anchor，否则拖拽时控制窗会错复位到整帧左上。
      */
+    /**
+     * 锚点固定(foot-fixed)：缩放使窗口尺寸变化时，反向平移 physics.x/y 使【脚锚点屏幕位置不变】
+     * （脚 = 左上角 + anchorOff，符号恒 +）。必须在【渲染定位处、与 getBaseBitmapSize() 同一函数/同一条主线程执行流】
+     * 内调用：这样“尺寸(scaleFactor)”与“位置修正(physics.x)”在同一帧原子完成，彻底消除投喂/直接输入等大跨度瞬变时
+     * “先变尺寸、左上角固定、过一瞬才跳到锚点对齐”的一帧竞态（后台协程写 scaleFactor 若落在 tick 与定位之间，会让该帧
+     * 尺寸新、位置旧）。仅 scaleFactor 真变时平移一次，用每帧同步的 lastFixAnchor 作旧基准（含旋转更新）→ 两次缩放间
+     * 旋转也正确；动画/旋转帧切换不算缩放 → 不平移（锚点变化由绘图层容忍，符合原设计）。
+     */
+    private fun applyFootFixed(v: PetView) {
+        val ph = v.physics
+        val newScale = v.getScale()
+        val (ax, ay) = v.getBaseAnchorScaled()
+        if (ph.lastFixScale < 0f) {
+            ph.lastFixAnchorX = ax
+            ph.lastFixAnchorY = ay
+            ph.lastFixScale = newScale
+        } else if (kotlin.math.abs(newScale - ph.lastFixScale) > 1e-4f) {
+            ph.x += (ph.lastFixAnchorX - ax)
+            ph.y += (ph.lastFixAnchorY - ay)
+            ph.lastFixAnchorX = ax
+            ph.lastFixAnchorY = ay
+            ph.lastFixScale = newScale
+        } else {
+            ph.lastFixAnchorX = ax
+            ph.lastFixAnchorY = ay
+            ph.lastFixScale = newScale
+        }
+        ph.clampToBounds()
+    }
+
     private fun placeControlWindow(
         v: PetView, lp: WindowManager.LayoutParams,
         lastW: Int, lastH: Int
     ): Boolean {
+        applyFootFixed(v)   // 与下方 getBaseBitmapSize() 同帧同流：尺寸/位置原子完成，杜绝一帧竞态
         if (v.hitMode == ConfigDefaults.HIT_CORE) {
             val r = v.controlWindowRect()
             lp.x = r.left.toInt()
@@ -1934,6 +2267,7 @@ class PetService : Service() {
         val dlp = inst.displayLp ?: return
         if (!inst.displayAdded) return
         val v = inst.view
+        applyFootFixed(v)   // 与下方 getBaseBitmapSize() 同帧同流：尺寸/位置原子完成，杜绝一帧竞态
         val (iw, ih) = v.getBaseBitmapSize()
         // physics.x/y 已是窗口左上角真值，直接作为浮窗左上角（无需锚点减法）。
         val nx = v.physics.x.toInt()
@@ -1954,14 +2288,14 @@ class PetService : Service() {
     }
 
     /** 按 hideStage 开关增删各宠物的显示窗（诊断用，实时生效）。 */
-    private fun syncDisplayWindows() {
-        for (inst in pets) {
+    private fun syncDisplayWindows(roleId: String) {
+        for (inst in pets.filter { it.roleId == roleId }) {
             val disp = inst.displayView ?: continue
             val dlp = inst.displayLp ?: continue
-            if (hideStage && inst.displayAdded) {
+            if (roleHideStage(roleId) && inst.displayAdded) {
                 try { windowManager.removeView(disp) } catch (_: Exception) {}
                 inst.displayAdded = false
-            } else if (!hideStage && !inst.displayAdded) {
+            } else if (!roleHideStage(roleId) && !inst.displayAdded) {
                 // 重挂时窗内位图已带当前透明度（petAlpha 在 view 上），窗口 alpha 保持 1，无需设 disp.alpha
                 try { windowManager.addView(disp, dlp) } catch (_: Exception) {}
                 inst.displayAdded = true
@@ -1969,13 +2303,13 @@ class PetService : Service() {
         }
     }
 
-    /** 按 controlHidden（hideControlLayer || clickThrough）增删各宠物控制窗，实时生效，无需整组重建。 */
-    private fun syncControlWindows() {
-        for (inst in pets) {
-            if (controlHidden && inst.controlAdded) {
+    /** 按【该角色】controlHidden（hideControlLayer || clickThrough）增删各宠物控制窗，按 roleId 独立，无需整组重建。 */
+    private fun syncControlWindows(roleId: String) {
+        for (inst in pets.filter { it.roleId == roleId }) {
+            if (roleControlHidden(roleId) && inst.controlAdded) {
                 try { windowManager.removeView(inst.view) } catch (_: Exception) {}
                 inst.controlAdded = false
-            } else if (!controlHidden && !inst.controlAdded) {
+            } else if (!roleControlHidden(roleId) && !inst.controlAdded) {
                 try { windowManager.addView(inst.view, inst.layoutParams) } catch (_: Exception) {}
                 inst.controlAdded = true
             }
@@ -2033,11 +2367,21 @@ class PetService : Service() {
 
     // 启停体感重力：开启时注册传感器监听并强制关闭四边定向重力（避免两套重力叠加），
     // 关闭时注销监听并清零向量。
-    private fun updateTiltGravity(enabled: Boolean) {
-        tiltGravityEnabled = enabled
-        Log.d("CakePetTilt", "updateTiltGravity called enabled=$enabled")
+    private fun updateTiltGravity(roleId: String, enabled: Boolean) {
+        // 仅本角色实例开启/关闭体感（其余角色不受影响）。
+        for (inst in pets.filter { it.roleId == roleId }) {
+            inst.view.physics.tiltGravity = enabled
+        }
+        // 体感传感器为共享单例：任意角色体感有效即需注册；全部关闭才整体注销。
+        val anyEnabled = engines.values.any { rt ->
+            val c = rt.config.getBlocking()
+            c.tiltGravity && c.gravityEnabled
+        }
+        if (anyEnabled == tiltGravityEnabled) return
+        tiltGravityEnabled = anyEnabled
+        Log.d("CakePetTilt", "updateTiltGravity anyEnabled=$anyEnabled")
         try {
-            if (enabled) {
+            if (anyEnabled) {
                 if (sensorManager == null) {
                     sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
                     gravitySensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GRAVITY)
@@ -2049,12 +2393,10 @@ class PetService : Service() {
                 if (gravitySensor == null) {
                     gravitySensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
                 }
-                Log.d("CakePetTilt", "updateTiltGravity(true) gravityEnabled=${petView.physics.gravityEnabled} sensorType=${gravitySensor?.type} strength=$tiltStrength")
                 // 体感模式下置 tiltGravity=enabled（即有效体感，已含 gravityEnabled 判断），
                 // 【不改动】四边定向重力的存储值与物理字段，关闭体感后四边开关原值自动恢复生效。
                 // step() 已用 if (gravityEnabled) 与 if (tiltGravity) 分支优先体感，四边值仅被忽略不被使用。
-                // 体感方向是共享配置，广播给所有宠物实例。
-                pets.forEach { inst -> inst.view.physics.tiltGravity = enabled }
+                // 体感方向按各角色自身状态独立量化（见 updateTiltGravityDir）。
                 // 设备无重力传感器时不注册，避免异常
                 if (gravitySensor != null) {
                     sensorManager?.registerListener(
@@ -2088,17 +2430,23 @@ class PetService : Service() {
      * 窗口为正方形，旋转后尺寸不变，仅锚点偏移随 rotateOffset 变化，recalcBounds 即可对齐贴边。
      * 注意：仅体感开启时调用（由 tiltListener 每帧触发），非体感方向由 calcGravityDir 离散决定。
      */
-    private fun updateTiltGravityDir(k: Float) {
+    private fun updateTiltGravityDir() {
         if (!tiltGravityEnabled) return
-        // 体感方向是共享配置，广播给所有宠物实例（各实例独立按自身状态决定翻滚/重算边界）。
-        pets.forEach { inst -> updateTiltGravityDirFor(inst.view, k) }
+        // 体感方向按各角色自身重力强度独立量化（其余状态各实例按自身决定翻滚/重算边界）。
+        pets.forEach { inst ->
+            val kr = (engines[inst.roleId]?.tiltStrength ?: tiltStrength) / 9.8f * TILT_GAIN
+            updateTiltGravityDirFor(inst.view, kr)
+        }
     }
 
     private fun updateTiltGravityDirFor(view: PetView, k: Float) {
-        // 吸附态：忽略体感重力方向变化（不滚、不重算边界），等待用户手动拉出/召回才退出。
-        if (view.physics.isSnapped) return
+        // 吸附态/攀岩态：忽略体感重力方向变化（不滚、不重算边界），等待用户手动拉出/召回才退出对应态。
+        if (view.physics.isSnapped || view.physics.isClimbing) return
         // 重力·抛掷关闭时强制脚朝正下(0)，不随体感量化改朝向（onEach 已设 0）。
         if (!view.physics.gravityEnabled) return
+        // 仅本角色开启体感才按设备方向量化脚朝向；未开启体感的角色脚方向保持自身设置（四边/固定），
+        // 不随共享传感器被全局串成同一朝向。
+        if (!view.physics.tiltGravity) return
         val gx = view.physics.tiltGx
         val gy = view.physics.tiltGy
         val magX = kotlin.math.abs(gx)
@@ -2112,7 +2460,7 @@ class PetService : Service() {
             gy < 0 -> 3                                       // 上主导 -> 脚朝上
             else -> 0                                         // 下主导/平衡 -> 脚朝下
         }
-        if (target != view.gravityDir) {
+        if (target != view.gravityDir && view.climbWall < 0 && !view.flying) {
             if (view.physics.isDragging) {
                 // 提起态：直接更新脚朝向（=主重力方向），提起动画 LIFT_UP 实时旋转，
                 // 不触发翻滚（roll 为独立逻辑，此处不动）。否则 enterTiltRoll 在拖动态会被
@@ -2142,11 +2490,128 @@ class PetService : Service() {
     // 消除“脚方向变化→锚点变→位置被改→又重算”的跳变/抖动回归。
     @Volatile private var boundsDirty = false
 
-    // 所有宠物实例边界相同（共享屏幕范围与偏移配置），遍历重算。
+    // 各角色边界独立：按已召唤角色逐一重算（偏移配置来自各自 pet_bounds_<id>）。
+    // 键盘适应「画布整体顶起」：记录每个角色已施加的 Y 向位移(shiftY)，用于在键盘状态变化时计算 delta，
+    // 仅对宠物 physics.y 与该角色食物 lp.y 做一次性平移，使其与活动范围(本身在 recalcBoundsFor 按 shiftY 平移)同向同量移动。
+    private val imeShiftY = mutableMapOf<String, Float>()
+
     private fun recalcBounds() {
         val vis = getScreenBounds()
         lastVisRect = vis
-        pets.forEach { inst -> recalcBoundsFor(inst.view, vis) }
+        for ((rid, rt) in engines) {
+            val c = rt.config.getBlocking()
+            boundOffsetTop = c.offsetTop.coerceIn(-300f, 2100f)
+            boundOffsetBottom = c.offsetBottom.coerceIn(-300f, 2100f)
+            boundOffsetLeft = c.offsetLeft.coerceIn(-300f, 1000f)
+            boundOffsetRight = c.offsetRight.coerceIn(-300f, 1000f)
+            // 键盘适应「画布整体顶起」：本角色当前 shiftY 与已施加值的差，同步到宠物位置与该角色食物位置，
+            // 使【宠物/食物/活动范围】作为整体一起上移(键盘出现)/复原(键盘消失)。范围本身由 recalcBoundsFor 按 shiftY 平移。
+            // 仅键盘状态真变化(di≠0)时才搬移位置，避免无谓移动；位置与范围同向同量，故相对布局不变。
+            val imeActive = c.imeAdapt && (viewImeInset > 0f || globalImeInset > 0f)
+            val imeKb = if (imeActive) maxOf(viewImeInset, globalImeInset) else 0f
+            val imeL = if (imeActive) c.imeLiftOffset else 0f
+            val newShiftY = if (imeActive) -(imeKb + imeL) else 0f
+            val prevShiftY = imeShiftY.getOrPut(rid) { 0f }
+            // 位移量按【绝对目标取整】而非「增量取整」：Σ(round(目标)−round(上次)) 可连锁相消，
+            // 最终位移恒等于 round(最终shiftY)，与浮点边界差 <0.5px，且不随键盘动画帧数累积漂移。
+            val di = Math.round(newShiftY) - Math.round(prevShiftY)
+            // 重算【前】的活动范围：用于判定鱼的贴边关系（必须在施加 di 位移之前取）。
+            val oldRect = if (c.feedingFullScreen) null else activityRectOf(rid)
+            // 记录每条鱼在【旧边界】贴的是哪条边（判定须用 di 位移前的位置）。
+            val gluedEdges = if (oldRect != null) {
+                fishLayers.filter { it.roleId == rid }.map { fl -> fl to detectGlueEdge(oldRect, fl.lp) }
+            } else emptyList()
+            if (di != 0) {
+                // 宠物与食物必须用【同一整数】位移量，否则浮点(pet)/整型(food) 分歧会让贴底食物偏离底边。
+                // 1) 该角色全部宠物当前位置同步上移 di（窗口左上角真值 physics.y，与食物同量）
+                for (inst in pets.filter { it.roleId == rid }) {
+                    inst.view.physics.y += di
+                }
+                // 2) 该角色全部食物浮窗同步上移 di（lp.y 为 Int，与宠物同量）
+                for (fl in fishLayers.filter { it.roleId == rid }) {
+                    fl.lp.y += di
+                    try { windowManager.updateViewLayout(fl.iv, fl.lp) } catch (_: Exception) {}
+                    fl.borderView?.let { bv ->
+                        val blp = bv.layoutParams as? WindowManager.LayoutParams
+                        if (blp != null) {
+                            blp.y = fl.lp.y
+                            try { windowManager.updateViewLayout(bv, blp) } catch (_: Exception) {}
+                        }
+                    }
+                }
+                imeShiftY[rid] = newShiftY
+            }
+            pets.filter { it.roleId == rid }.forEach { inst -> recalcBoundsFor(inst.view, vis, rid) }
+            // 重算【后】的活动范围：若发生变化，把「贴边」的鱼重钉到新边界的对应边。
+            // 必要原因：键盘态且 imeResetBottomOffset 开启时，recalcBoundsFor 会把上下偏移归零
+            // (topOff/botOff=0)，使活动区底边额外下移 rotBottom，而上面的位移只搬了 shiftY
+            // → 所有底部鱼恒定悬空 rotBottom；且悬空后仍在界内，reclampAllFish 的 coerceIn 不校正它。
+            val newRect = if (c.feedingFullScreen) null else activityRectOf(rid)
+            if (oldRect != null && newRect != null && oldRect != newRect) {
+                repinGluedFish(gluedEdges, newRect)
+            }
+        }
+        // 宠物活动范围(边界偏移)变化后，把支鱼重钳进各自允许范围：关全屏→跟随活动范围；开全屏→不钳。
+        // 覆盖「修改偏移/重置/键盘偏移/复位/全屏开关/旋转」等所有经 recalcBounds 的范围变更，且仅触发一次。
+        reclampAllFish()
+    }
+
+    /** 该角色宠物的活动范围矩形（physics.snapMin/Max，屏幕绝对坐标），无宠物实例时返回 null。 */
+    private fun activityRectOf(roleId: String): Rect? {
+        val sb = pets.firstOrNull { it.roleId == roleId }?.view?.physics ?: return null
+        return Rect(sb.snapMinX.toInt(), sb.snapMinY.toInt(), sb.snapMaxX.toInt(), sb.snapMaxY.toInt())
+    }
+
+    /** 判定鱼的窗口相对活动区贴的是哪条边：2=下 1=上 3=左 4=右 0=非贴边(随机位)。容差 2px。 */
+    private fun detectGlueEdge(rect: Rect, lp: WindowManager.LayoutParams): Int {
+        val gluedBottom = Math.abs((lp.y + lp.height) - rect.bottom) <= EDGE_GLUE_TOL
+        val gluedTop = Math.abs(lp.y - rect.top) <= EDGE_GLUE_TOL
+        val gluedLeft = Math.abs(lp.x - rect.left) <= EDGE_GLUE_TOL
+        val gluedRight = Math.abs((lp.x + lp.width) - rect.right) <= EDGE_GLUE_TOL
+        // 角落鱼可能同时贴两边：按「下→上→左→右」取首选，确保底部鱼优先被重钉到底边
+        // （这正是 imeResetBottomOffset 归零下偏移后需要修正的那条边）。
+        return when {
+            gluedBottom -> 2
+            gluedTop -> 1
+            gluedLeft -> 3
+            gluedRight -> 4
+            else -> 0
+        }
+    }
+
+    /** 贴边判定容差(px)：鱼边与活动区边距离 ≤ 此值即视为「贴边刷新」产生的贴边鱼。 */
+    private val EDGE_GLUE_TOL = 2
+
+    /**
+     * 把「贴边」的鱼重钉到【新】活动区的对应边（非贴边/随机位鱼保持原平移，不动）。
+     * 用于修正：键盘弹出且 imeResetBottomOffset 开启时，活动区底边因偏移归零而额外下移 rotBottom，
+     * 但已有鱼只按 shiftY 平移 → 所有底部鱼恒定悬空；且悬空后仍在界内，reclampAllFish 不校正。
+     */
+    private fun repinGluedFish(glued: List<Pair<FishLayer, Int>>, newRect: Rect) {
+        for ((fl, edge) in glued) {
+            if (edge == 0) continue
+            val lp = fl.lp
+            val nx = when (edge) {
+                3 -> newRect.left
+                4 -> newRect.right - lp.width
+                else -> lp.x
+            }
+            val ny = when (edge) {
+                1 -> newRect.top
+                2 -> newRect.bottom - lp.height
+                else -> lp.y
+            }
+            if (nx == lp.x && ny == lp.y) continue
+            lp.x = nx; lp.y = ny
+            try { windowManager.updateViewLayout(fl.iv, lp) } catch (_: Exception) {}
+            fl.borderView?.let { bv ->
+                val blp = bv.layoutParams as? WindowManager.LayoutParams
+                if (blp != null) {
+                    blp.x = lp.x; blp.y = lp.y
+                    try { windowManager.updateViewLayout(bv, blp) } catch (_: Exception) {}
+                }
+            }
+        }
     }
 
     // 用户配置的边界偏移是“物理”语义（竖屏自然朝向）：
@@ -2172,7 +2637,15 @@ class PetService : Service() {
     }
 
     // 为单个宠物实例计算并设置边界（探头/出界模型，详见 recalcBounds 旧注释）。
-    private fun recalcBoundsFor(view: PetView, vis: android.graphics.Rect) {
+    private fun recalcBoundsFor(view: PetView, vis: android.graphics.Rect, roleId: String) {
+        // 多角色隔离：边界偏移与键盘适应均取自【本角色】配置，绝不再读服务级全局别名
+        // （boundOffset*/imeAdaptEnabled 等为单例 scratch，多角色下会被最后加载角色覆盖，导致串角色）。
+        val rt = engines[roleId] ?: return
+        val rc = rt.config.getBlocking()
+        val offTop = rc.offsetTop.coerceIn(-300f, 2100f)
+        val offBottom = rc.offsetBottom.coerceIn(-300f, 2100f)
+        val offLeft = rc.offsetLeft.coerceIn(-300f, 1000f)
+        val offRight = rc.offsetRight.coerceIn(-300f, 1000f)
         // physics.x/y 为【窗口左上角坐标】（位置真值），脚锚点 = physics ∓ anchorOff 仅在贴边/snap 时派生。
         // 边界模型（探头/出界）：脚朝向的那一侧为【锚点边】——只约束“锚点(脚)不超可见区”，
         // 图底可越过屏幕外（被裁切=探头）；其余三侧仍为【PNG 四边】约束（图边不超可见区）。
@@ -2186,15 +2659,26 @@ class PetService : Service() {
         // 尺寸用固定基准 getBaseBitmapSize（globalMax×scale），不随帧变 → 不抖动/不横跳。
         val (w, h) = view.getBaseBitmapSize()
         val (ax, ay) = view.getBaseAnchorScaled()
-        val rotDeg = if (view.physics.isSnapped) view.snapRotation else view.gravityRotation
+        // 旋转/脚朝向必须与实际渲染严格同源（stateRotation: flying>isClimbing>isSnapped>重力）。
+        // 之前只特判了吸附态，漏掉攀爬态——攀爬渲染用 climbRotation/climbSide（图被旋 90/270°、脚朝侧墙），
+        // 边界却按重力直立算，导致“哪条边是锚点边”错位：左右墙向下 walk 时图底越出下边界才换墙。
+        val rotDeg = when {
+            view.physics.isSnapped -> view.snapRotation
+            view.physics.isClimbing -> view.climbRotation
+            else -> view.gravityRotation
+        }
         val (halfW, halfH) = view.getRotatedHalfExtents(w, h, rotDeg)
         val acx = ax - w / 2f
         val acy = ay - h / 2f
-        // 脚朝向：吸附态=snapSide(0底/1左/2右/3顶)，非吸附态=gravityDir(0下/1左/2右/3上)。
+        // 脚朝向：吸附态=snapSide(0底/1左/2右/3顶)，攀爬态=climbSide(同上)，非二者=gravityDir(0下/1左/2右/3上)。
         // 脚朝向的那一侧为【锚点边】：只约束“锚点(脚)不超可见区”，图底可越过屏幕外（探头/出界）；
         // 其余三侧仍为【PNG 四边】约束（图边不超可见区）。这样 sit 脚贴边、SNAP 脚贴边且身体下垂出界、
-        // 未来任何动作按各自脚锚点贴边，互不干扰。
-        val footDir = if (view.physics.isSnapped) view.physics.snapSide else view.gravityDir
+        // 攀爬脚朝墙、身体沿墙、图边按旋转后包围盒精确贴边，互不干扰。
+        val footDir = when {
+            view.physics.isSnapped -> view.physics.snapSide
+            view.physics.isClimbing -> view.physics.climbSide
+            else -> view.gravityDir
+        }
         // 锚点→旋转后图片四缘的内缩（图边不超界时用的距离）
         val leftInset = halfW + acx   // 锚点→图左缘
         val rightInset = halfW - acx  // 锚点→图右缘
@@ -2207,37 +2691,51 @@ class PetService : Service() {
         val botIsAnchor = footDir == 0    // 脚朝下 → 底部锚点边
         // 用户偏移按真实屏幕旋转重映射到屏幕边：[屏Top, 屏Right, 屏Bottom, 屏Left]。
         // 这样横屏时状态栏(物理上)内缩落在屏幕左/右，屏幕上下用 0，左右溢出与“上下误缩”一并消失。
-        val ob = rotatedBoundOffsets()
+        val ob = rotatedBoundOffsets(floatArrayOf(offTop, offBottom, offLeft, offRight))
         val rotLeft = ob[3]
         val rotRight = ob[1]
         val rotTop = ob[0]
         val rotBottom = ob[2]
         val minX = vis.left.toFloat() + (if (leftIsAnchor) 0f else leftInset) + rotLeft
         val maxX = (vis.right.toFloat() - (if (rightIsAnchor) 0f else rightInset) - rotRight).coerceAtLeast(minX)
-        // 仅当“输入法防误触=开”且键盘真实弹出（存在输入法内缩）时，底部才内缩，宠物落到键盘上方。
-        val imeActive = imeAdaptEnabled && (viewImeInset > 0f || globalImeInset > 0f)
+        // 键盘适应（新版「画布整体顶起」模型）：不再【削小】活动范围(仅抬下界)，
+        // 而是把【整个坐标系】(宠物当前位置/活动范围/食物当前位置/食物活动范围/范围辅助线)统一上移 shiftY。
+        // shiftY=-(键盘高度+lift)：键盘出现即为负(上移)，消失归零；范围大小不变、仅整体抬升，
+        // 宠物/食物/范围线保持相对位置一起被键盘顶起，键盘消失 shiftY=0 整体复原。
+        // 注意：宠物 physics.y 与该角色全部食物 lp.y 的同步位移由 recalcBounds 按 delta(新shiftY-旧shiftY)施加，
+        // 使其与范围同向同量移动；本函数只负责按 shiftY 平移【范围本身】。
+        val imeActive = rc.imeAdapt && (viewImeInset > 0f || globalImeInset > 0f)
         val imeBottomInset = if (imeActive) maxOf(viewImeInset, globalImeInset) else 0f
         // 抬高偏移：仅在输入法防误触开启且键盘真实弹出时，才在键盘地面之上额外抬高，正=更高、负=更低。
-        val lift = if (imeActive) imeLiftOffset else 0f
+        val lift = if (imeActive) rc.imeLiftOffset else 0f
         // 键盘适应-重置偏移：键盘弹出时无视“物理”上/下边界偏移（rotTop/rotBottom 归零），
-        // 仅用键盘高度(imeBottomInset) + 抬高偏移(lift) 决定活动下边界，避免高底部偏移导致键盘弹起时宠物进一步位移。
-        val imeResetActive = imeResetBottomOffset && imeActive
+        // 仅以键盘高度+lift 决定顶起幅度（底座仍落在键盘上方），避免高底部偏移导致键盘弹起时额外位移。
+        val imeResetActive = rc.imeResetBottomOffset && imeActive
         val topOff = if (imeResetActive) 0f else rotTop
         val botOff = if (imeResetActive) 0f else rotBottom
-        // 顶部为锚点边 → minY 直接 = 屏幕顶（脚贴顶，图顶可出界）；否则图顶不超屏幕顶
-        val minY = vis.top.toFloat() + (if (topIsAnchor) 0f else topInset) + topOff
-        // 底部为锚点边 → maxY 直接 = 屏幕底（脚贴底，图底可出界下垂）；否则图底不超屏幕底
-        val maxY = (vis.bottom.toFloat() - (if (botIsAnchor) 0f else botInset) - botOff - imeBottomInset - lift).coerceAtLeast(minY)
+        // 活动范围【基底】(不含键盘)：顶/底按锚点边与用户偏移照常计算。
+        val minY0 = vis.top.toFloat() + (if (topIsAnchor) 0f else topInset) + topOff
+        val maxY0 = (vis.bottom.toFloat() - (if (botIsAnchor) 0f else botInset) - botOff).coerceAtLeast(minY0)
+        // 统一顶起位移 shiftY（自洽：与 recalcBounds 中按同一公式算出的 newShiftY 完全一致）。
+        val shiftY = if (imeActive) -(imeBottomInset + lift) else 0f
+        // 顶部为锚点边 → minY 直接 = 屏幕顶+shiftY（脚贴顶，图顶可出界）；否则图顶不超屏幕顶+shiftY
+        val minY = minY0 + shiftY
+        // 底部为锚点边 → maxY 直接 = 屏幕底+shiftY（脚贴底，图底可出界下垂）；否则图底不超屏幕底+shiftY
+        val maxY = maxY0 + shiftY
         // physics.x/y = 窗口左上角真值；活动范围换算为窗口范围 = 脚范围(上面 min/max) − 锚点偏移(ax,ay)。
         // 旋转/缩放只改该范围、不再改写 physics.x/y → 锚点变化不会触发窗口跳变（脚锚点按需派生）。
+        // 活动范围 = 脚范围(min/max) − 锚点偏移(ax,ay)。此处【只设定活动范围，不钳制 physics.x/y】。
+        // 原因：缩放变更时若先 clamp，会破坏缩放前原始脚锚点的屏幕位置，导致随后 applyFootFixed 的脚固定平移
+        // 基于“已被钳制过的位置”去平移，最终窗口被推离边界、留下空隙（放大/瞬变最明显）。
+        // 统一由 applyFootFixed 在脚固定平移之后做一次钳制（每帧、布局前执行）：窗口紧贴边界、无空隙，且仍防越界。
         view.physics.setBounds(minX - ax, minY - ay, maxX - ax, maxY - ay)
         // 纯偏移吸附边界线（与边界偏移线/吸附环带同几何，不含图片 inset、不随脚朝向变）：
         // = 屏幕可见区 ± 用户偏移（按旋转重映射后的屏幕边偏移）。imeResetActive 时上下偏移归零（与 setBounds 一致）。
         view.physics.setSnapBounds(
             vis.left.toFloat() + rotLeft,
-            vis.top.toFloat() + topOff,
+            vis.top.toFloat() + topOff + shiftY,
             vis.right.toFloat() - rotRight,
-            vis.bottom.toFloat() - botOff
+            vis.bottom.toFloat() - botOff + shiftY
         )
     }
 
@@ -2277,8 +2775,9 @@ class PetService : Service() {
         if (showSnapOffsetFlag) showSnapGuide(DEBUG_SNAP_OWNER) else releaseGuide(DEBUG_SNAP_OWNER)
         // 调试控制边框画在控制窗自身（与命中区几何严格同源，CORE 脚盒/整帧都精确贴合，
         // 且不受 hideStage 影响；hideControlLayer 时控制窗被移除、边框一并隐藏，符合“隐藏控制层”语义）。
+        // 注意：控制边框是【按角色独立】设置（applySharedConfig 已逐实例写入 inst.view.showControlBorder），
+        // 禁止用服务级全局 showControlBorder 广播覆盖，否则改 A 角色边框会串到全部角色。
         for (inst in pets) {
-            inst.view.showControlBorder = showControlBorder
             inst.view.invalidate()
         }
         drawCurrentGuide()
@@ -2503,7 +3002,15 @@ class PetService : Service() {
      */
     private fun drawCurrentGuide() {
         if (guideOwners.isEmpty()) return
-        val vis = getScreenBounds()
+        // 键盘适应「画布整体顶起」：辅助线(活动范围/吸附/键盘预览)随真实运行一起上移 shiftY，
+        // 与宠物/食物/活动范围保持同一坐标系，避免键盘弹起时辅助线仍画在原屏幕位置。
+        var vis = getScreenBounds()
+        val gc = config.getBlocking()
+        val gImeActive = gc.imeAdapt && (viewImeInset > 0f || globalImeInset > 0f)
+        val gKb = if (gImeActive) maxOf(viewImeInset, globalImeInset) else 0f
+        val gLift = if (gImeActive) gc.imeLiftOffset else 0f
+        val gShiftY = if (gImeActive) -(gKb + gLift) else 0f
+        if (gShiftY != 0f) vis = android.graphics.Rect(vis.left, (vis.top + gShiftY).toInt(), vis.right, (vis.bottom + gShiftY).toInt())
         val hasSnap = guideOwnerKinds.values.any { it == GuideKind.SNAP }
         val hasBoundOnly = guideOwnerKinds.values.any { it == GuideKind.BOUND }
         val hasTray = guideOwnerKinds.values.any { it == GuideKind.TRAY }
@@ -2565,13 +3072,14 @@ class PetService : Service() {
             val snapMaster = phys?.snapEnabled ?: true
             val anyDirOn = topOn || botOn || leftOn || rightOn
             val rangeEmpty = rightX <= leftX || botY <= topY
+            val s = currentShortName
             val snapWarn: Pair<String, String>? = when {
                 !snapMaster || !anyDirOn ->
-                    "都不让贴边边！\n「酥」怎么贴贴贴？" to "当前没有被打开的吸附方向"
+                    "都不让贴边边！\n「${s}」怎么贴贴贴？" to "当前没有被打开的吸附方向"
                 rangeEmpty ->
-                    "都没有活动范围？\n「酥」只能一直贴边边了！" to "当前活动范围不存在，超容易吸附边缘。"
+                    "都没有活动范围？\n「${s}」只能一直贴边边了！" to "当前活动范围不存在，超容易吸附边缘。"
                 snapRingEmpty ->
-                    "贴边边太容易太舒服了，\n酥要一直贴边边！" to "活动范围内，全是吸附区域，超容易贴边边。"
+                    "贴边边太容易太舒服了，\n${s}要一直贴边边！" to "活动范围内，全是吸附区域，超容易贴边边。"
                 else -> null
             }
             this.snapWarnSpec = snapWarn
@@ -2621,17 +3129,17 @@ class PetService : Service() {
         // 仅判定“当前正在调整的参数”是否越界；未拖动的参数不参与。
         val petWarn: Pair<String, String>? = when {
             hasSize && cfg.scale < 0.5f ->
-                "那么小的「酥」？\n 还能找的到吗？" to "超迷你的「酥」，很难被抓住的哦"
+                "那么小的「${currentShortName}」？\n 还能找的到吗？" to "超迷你的「${currentShortName}」，很难被抓住的哦"
             hasSize && cfg.scale > 5f ->
-                "那么大的「酥」？\n手机重重的！重重的！" to "超巨大的「酥」，手机不堪重负"
+                "那么大的「${currentShortName}」？\n手机重重的！重重的！" to "超巨大的「${currentShortName}」，手机不堪重负"
             hasRebound && cfg.reboundEnabled && cfg.reboundRatio > 1f ->
-                "每次反弹「酥」都将踩下油门！\n冲冲冲！" to "每次反弹，速度都会变大，会超速的！"
+                "每次反弹「${currentShortName}」都将踩下油门！\n冲冲冲！" to "每次反弹，速度都会变大，会超速的！"
             hasSpeed && cfg.maxSpeed > 14000f ->
-                "「酥」掌握了超速的技巧。\n会吊销驾照的！" to "「酥」真的能达到那么快吗？"
+                "「${currentShortName}」掌握了超速的技巧。\n会吊销驾照的！" to "「${currentShortName}」真的能达到那么快吗？"
             hasSpeed && cfg.maxSpeed < 500f ->
                 "限速警告！" to "严禁超速！！！！！！！"
             hasGravity && cfg.gravity > 8000f ->
-                "被重力狠狠抓住？\n「酥」将会狠狠的撞击手机" to "重力过大，每次弹起，都会迅速被拉会地面。"
+                "被重力狠狠抓住？\n「${currentShortName}」将会狠狠的撞击手机" to "重力过大，每次弹起，都会迅速被拉会地面。"
             else -> null
         }
         // 红框 ↔ 振动：跳变边沿触发一次（与 drawWarnBox 红框同步）。
@@ -2817,11 +3325,15 @@ class PetService : Service() {
     // 不改写任何 config（visible/clickThrough 保持原样），键盘收起（keyboardUp=false）即按 effectiveVisible 恢复。
     private fun applyImeHide(kbUp: Boolean) {
         if (pets.isEmpty()) return
-        val hide = imeHideEnabled && kbUp
         for (inst in pets) {
+            // 多角色隔离：键盘时隐藏 与 恢复可见性 均按【本实例角色】配置，不再用服务级全局别名
+            // （imeHideEnabled/effectiveVisible 为单例 scratch，多角色下被最后加载角色覆盖）。
+            val rc = engines[inst.roleId]?.config?.getBlocking()
+            val hide = (rc?.imeHide ?: imeHideEnabled) && kbUp
+            val eff = rc?.let { it.visible && it.enabled } ?: effectiveVisible
             inst.view.visibility =
                 if (hide) android.view.View.GONE
-                else if (effectiveVisible) android.view.View.VISIBLE
+                else if (eff) android.view.View.VISIBLE
                 else android.view.View.GONE
         }
     }
@@ -2830,12 +3342,12 @@ class PetService : Service() {
     private var lastAppliedImeInset = -1f
 
     private fun startLoop() {
+        if (engines.isEmpty()) return   // 无任何已召唤角色时不启动空帧循环
         if (running) return
         running = true
         lastFrameTime = SystemClock.uptimeMillis()
         physAccumulator = 0L
         mainHandler.postDelayed(frameRunnable, FRAME_DELAY)
-        startRandomLoop()
     }
 
     /** 随机模式周期重置信号：收到后中断当前等待，立即进入下一轮随机。 */
@@ -2845,11 +3357,11 @@ class PetService : Service() {
      * 随机模式循环：开启后按配置的[最小,最大]分钟周期，
      * 对开启的随机项生成一组合法随机值并写回 DataStore（UI 自动同步）。
      */
-    private fun startRandomLoop() {
-        scope.launch {
+    private fun startRandomLoop(rt: RoleRuntime) {
+        rt.randomJob = scope.launch {
             delay(2000L) // 起步稍等，等配置加载
             while (true) {
-                val c = config.configFlow.first()
+                val c = rt.config.configFlow.first()
                 if (!c.randomEnabled) {
                     // 未开启：阻塞等待重置信号（开启时由外部触发）再进入下一轮
                     randomResetChannel.receive()
@@ -2868,11 +3380,11 @@ class PetService : Service() {
                 // 被重置信号中断（说明外部已主动触发随机/改周期），本轮跳过随机，重新读配置进入下一轮
                 if (interrupted) continue
                 // 周期自然到点：依据当前配置随机一组值并写回
-                val c2 = config.configFlow.first()
+                val c2 = rt.config.configFlow.first()
                 if (!c2.randomEnabled) continue
                 val next = generateRandomConfig(c2)
-                config.update { _ -> next }
-                if (thinkingEnabled) trayMsgManager?.showRandomTrigger()   // 随机触发提示“变变变”
+                rt.config.update { _ -> next }
+                if (thinkingOn(rt.roleId)) thinkingPetMsg(rt.roleId)?.showRandomTrigger()   // 随机触发提示“变变变”
             }
         }
     }
@@ -2906,7 +3418,7 @@ class PetService : Service() {
                 val base = if (c.randomEnabled) c else c.copy(randomEnabled = true)
                 generateRandomConfig(base)
             }
-            if (thinkingEnabled) trayMsgManager?.showRandomTrigger()   // 随机触发提示“变变变”
+            if (thinkingOn(currentRoleId)) thinkingPetMsg(currentRoleId)?.showRandomTrigger()   // 随机触发提示“变变变”
             requestRandomReset() // 重置等待计时，从本次开始重新计时
         }
     }
@@ -3005,7 +3517,8 @@ class PetService : Service() {
         // 悬浮在其它应用之上，不进入 app task、不抢前台；仅“设置”项才进入 app。
         // target = 触发长按的宠物，菜单动作只作用于该宠物（多数量下不再错误落到主实例 index 0）。
         petMenu?.dismiss()
-        petMenu = PetMenu(this, target).apply { show() }
+        val roleId = pets.firstOrNull { it.view === target }?.roleId ?: currentRoleId
+        petMenu = PetMenu(this, target, roleId).apply { show() }
     }
 
     private fun createNotificationChannel() {
@@ -3030,7 +3543,18 @@ class PetService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        performAction(intent?.action)
+        val action = intent?.action
+        val roleId = intent?.getStringExtra(EXTRA_ROLE_ID)
+        val noAutoSummon = intent?.getBooleanExtra(EXTRA_NO_AUTO_SUMMON, false) ?: false
+        when {
+            action != null -> performAction(action)
+            roleId != null -> summonRole(roleId)
+            // 「重置软件」重启：只重新初始化服务，不召唤任何角色（重置后屏幕上不该冒出宠物，
+            // 由用户在首页卡片自行召唤）。仅【系统重启/START_STICKY 重建】才走下面的默认角色恢复。
+            noAutoSummon -> Unit
+            // 无意图（系统重启/START_STICKY 重建）：恢复默认角色（exiting 已在 onCreate 拦截）
+            else -> summonRole(RoleRegistry.DEFAULT.id)
+        }
         // 退出态下返回 NOT_STICKY，避免 START_STICKY 在进程被回收后重建服务，
         // 造成“非活非死”（通知残留 + 服务反复复活）。
         return if (isExiting) START_NOT_STICKY else START_STICKY
@@ -3038,11 +3562,23 @@ class PetService : Service() {
 
     /** 供浮窗菜单即时写入配置（如点击穿透 / 重力开关），写入即触发 applyConfig 生效 */
     fun updateConfig(block: PetConfigData.() -> PetConfigData) {
-        scope.launch { config.update(block) }
+        scope.launch { (engines[currentRoleId]?.config ?: config).update(block) }
     }
 
     /** 供浮窗菜单读取当前配置（初始化开关状态） */
     fun currentConfig(): PetConfigData = config.getBlocking()
+
+    /** 取指定角色的实时配置（按角色独立），缺省回退到当前操作角色配置。供定格/拖拽等按归属角色取设置。 */
+    private fun roleConfig(roleId: String?): PetConfigData =
+        (roleId?.let { engines[it]?.config } ?: config).getBlocking()
+
+    /** 取指定角色（缺省当前操作角色）的「碎碎念」开关，供各宠物独立判断其碎碎念是否显示。 */
+    private fun thinkingOn(roleId: String?): Boolean =
+        roleId?.let { engines[it]?.config?.getBlocking()?.thinkingEnabled } ?: thinkingEnabled
+
+    /** 取指定角色（缺省主实例）的碎碎念浮窗，供各宠物独立显示其内容。 */
+    private fun thinkingPetMsg(roleId: String?): TrayMsgManager? =
+        roleId?.let { rid -> pets.firstOrNull { it.roleId == rid }?.petMsg } ?: trayMsgManager
 
     /**
      * 处理菜单/广播/通知下发的动作（供浮窗菜单与 onStartCommand 共用）。
@@ -3058,6 +3594,7 @@ class PetService : Service() {
         }
         // tv = 实际执行动作的目标宠物（菜单动作取触发菜单的宠物，广播回落主实例）。
         val tv = target ?: petView
+        val targetRoleId = target?.let { t -> pets.firstOrNull { it.view === t }?.roleId } ?: currentRoleId
         // 吸附态：菜单里的动作切换一律忽略（探头常驻，仅用户手动拉出/召回才退出）。
         // 召回(RECALL)是用户主动退出，允许；隐藏(HIDE)只改可见性、不动吸附态，允许。
         // 用目标宠物自身的吸附态判定（多数量下每只独立吸附），而非写死主实例。
@@ -3104,7 +3641,7 @@ class PetService : Service() {
                 tv.playOnce(ImageModeManager.PROBE_HEAD)
                 // 摸头：碎碎念显示“喵喵喵/~o( =∩ω∩= )m/喵”三选一，1-3s 后继续轮播池；
                 // 显示在该目标宠物自己的碎碎念浮窗（多数量下不再串到主实例）。
-                if (thinkingEnabled) {
+                if (thinkingOn(pets.firstOrNull { it.view === tv }?.roleId)) {
                     (pets.find { it.view === tv }?.petMsg ?: trayMsgManager)?.showMomentary(
                         listOf("喵喵喵", "~o( =∩ω∩= )m", "喵"), 1000L, 3000L
                     )
@@ -3114,20 +3651,22 @@ class PetService : Service() {
                 // 隐藏 = 置 visible=false（与设置页“显示宠物”开关同源同一标志），
                 // 保持服务运行，仅隐藏浮窗；不再 stopService，避免与设置页状态不同步。
                 // 碎碎念跟随隐藏。
-                trayMsgManager?.setVisible(false)
-                scope.launch { config.update { it.copy(visible = false) } }
+                thinkingPetMsg(targetRoleId)?.setVisible(false)
+                scope.launch { (target?.let { tv -> pets.firstOrNull { inst -> inst.view === tv }?.roleId?.let { engines[it]?.config } } ?: config).update { it.copy(visible = false) } }
             }
             MenuActivity.ACTION_RECALL -> {
                 // 召回：强制复位 —— 归位底部中心、静止、显示 sit-calm，
                 // 并清除抛掷/滚动/速度/加速度/拖拽等所有运动状态。
-                // 多实例：对所有宠物实例统一召回（而非只召回主实例 pets[0]）。
+                // 仅作用于【目标角色】全部实例（多分身统一召回，不串其它角色）；
+                // 无明确目标（广播/通知全局动作）时回落到全部实例，保持原有全局语义。
                 // 顺序至关重要：先复位朝向 → 再重算边界 → 最后按新边界归位。
                 // 背景：吸附期间 snapRotation 被设为贴附边朝向，帧循环【只对吸附实例】重算边界；
                 // 退出吸附后不再重算，若直接用旧的 p.maxY 归位，用的其实是吸附态包围盒的地面，
                 // 表现为“召回后位置/地面判断错误”（贴底时 snapRotation=0 恰好正确 → 呈概率性）。
-                for (inst in pets) inst.view.forceReset()
+                val rolePets = if (targetRoleId != null) pets.filter { it.roleId == targetRoleId } else pets
+                for (inst in rolePets) inst.view.forceReset()
                 recalcBounds()   // 直立朝向下重算全部实例边界，maxY 才是真实地面
-                for (inst in pets) {
+                for (inst in rolePets) {
                     val p = inst.view.physics
                     val cx = (p.minX + p.maxX) / 2f   // 底部中心（锚点屏幕坐标）
                     val cy = p.maxY
@@ -3135,9 +3674,9 @@ class PetService : Service() {
                 }
                 // 若当前处于隐藏，同步修改设置与浮窗显示（与“显示宠物”开关同源同一标志）
                 // 碎碎念跟随显示。
-                trayMsgManager?.setVisible(thinkingEnabled)
+                thinkingPetMsg(targetRoleId)?.setVisible(thinkingOn(targetRoleId))
                 scope.launch {
-                    config.update { if (!it.visible) it.copy(visible = true) else it }
+                    (target?.let { tv -> pets.firstOrNull { inst -> inst.view === tv }?.roleId?.let { engines[it]?.config } } ?: config).update { if (!it.visible) it.copy(visible = true) else it }
                 }
             }
         }
@@ -3170,10 +3709,201 @@ class PetService : Service() {
     }
 
     /** 释放浮窗、监听、传感器等资源；可被 onDestroy 与 exitApp 复用。 */
+    /**
+     * 多角色引擎入口（对应之前在 onCreate 直接初始化的逻辑）：
+     * 为指定角色按 pet_config_<id>/pet_bounds_<id> 构造配置，建宠物窗与物理循环并启动。
+     */
+    private fun startRole(roleId: String) {
+        val descriptor = RoleStore.descriptorForInstance(this, roleId) ?: RoleRegistry.byId(roleId) ?: return
+        val rt = engines.getOrPut(roleId) {
+            RoleRuntime(roleId, PetConfig.forRole(this, roleId), PetBounds.forRole(this, roleId))
+        }
+        rt.descriptor = descriptor
+        config = rt.config
+        currentRoleId = roleId
+        currentShortName = RoleStore.resolveShortName(this, roleId)
+        initPetView(roleId)
+        loadConfig(roleId)
+        applyNightMode(config.getBlocking())
+        registerConfigObserver(rt)
+        lastVisRect = getScreenBounds()
+        recalcBounds()
+        startLoop()
+        startRandomLoop(rt)
+        // 通知首页：该角色已进入在屏状态（覆盖“服务异步启动”场景，避免卡片不刷新）。
+        onActiveRolesChanged?.invoke()
+        // 新角色召唤后，重新置顶辅助浮层（宠物窗叠放保持召唤顺序、不再重排）。
+        reapplyZOrder()
+    }
+
+    private fun teardownRole(roleId: String) {
+        val rt = engines[roleId] ?: return
+        rt.configJob?.cancel(); rt.configJob = null
+        rt.randomJob?.cancel(); rt.randomJob = null
+        // 停止该角色的投食循环并仅清除该角色的支鱼（不串其它角色）。
+        stopFishSpawning(rt)
+        val removed = pets.filter { it.roleId == roleId }
+        for (inst in removed) {
+            try { if (inst.displayAdded && inst.displayView != null) windowManager.removeView(inst.displayView) } catch (_: Exception) {}
+            try { windowManager.removeView(inst.view) } catch (_: Exception) {}
+            try { inst.petMsg.destroy() } catch (_: Exception) {}
+        }
+        pets.removeAll(removed)
+        // 别名 petView/layoutParams 仅“最后召唤角色”创建时赋值，移除后必须重指到当前 pets[0]，
+        // 否则它与实时列表错位（调试浮层/拖拽/帧循环其余引用会指向旧实例）。
+        pets.getOrNull(0)?.let { first ->
+            petView = first.view
+            layoutParams = first.layoutParams
+        }
+        // 仅清除该角色的定格层（不串其它角色）。
+        clearAllFreeze(roleId)
+        engines.remove(roleId)
+        imeShiftY.remove(roleId)   // 清键盘顶起残留，避免重新召唤时 delta 误判导致宠物未随画布顶起
+        // 通知首页：该角色已退场（在屏状态变化）。
+        onActiveRolesChanged?.invoke()
+        if (engines.isEmpty()) {
+            running = false
+            mainHandler.removeCallbacks(frameRunnable)
+            try { sensorManager?.unregisterListener(tiltListener) } catch (_: Exception) {}
+        }
+    }
+
+    /** 一次性创建调试浮层与四边吸附辅助线（不在 initPetView 内，避免随角色切换重复 addView）。 */
+    private fun setupDebugWindows() {
+        debugView = android.widget.TextView(this).apply {
+            setTextColor(0xFFFFFF00.toInt())
+            textSize = 11f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setBackgroundColor(0x80000000.toInt())
+            setPadding(8, 4, 8, 4)
+            visibility = android.view.View.GONE
+        }
+        debugParams = WindowManager.LayoutParams().apply {
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            format = PixelFormat.TRANSLUCENT
+            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+            gravity = Gravity.BOTTOM or Gravity.START
+            width = WindowManager.LayoutParams.WRAP_CONTENT
+            height = WindowManager.LayoutParams.WRAP_CONTENT
+        }
+        windowManager.addView(debugView, debugParams)
+
+        guideLineView = GuideLineView(this).apply {
+            visibility = android.view.View.GONE
+            isClickable = false
+            isFocusable = false
+            isFocusableInTouchMode = false
+        }
+        // guideLineView 由 syncGuideWindow() 按需挂载（含 guideAdded 标志，避免重复 addView）
+    }
+
+    /** 当前操作中角色的阈值配置（pet_bounds_<id>）。 */
+    private fun currentBounds(): PetBounds =
+        engines[currentRoleId]?.bounds ?: PetBounds.forRole(this, currentRoleId)
+
+    /** 把“当前操作角色”切换为指定角色（手势/菜单交互前调用，使 currentConfig/currentBounds 指向正确角色）。 */
+    private fun syncRole(roleId: String) {
+        engines[roleId]?.let { config = it.config; currentRoleId = roleId }
+        currentShortName = RoleStore.resolveShortName(this, roleId)
+    }
+
+    // —— 多角色公开 API（供 MainActivity 角色卡片驱动） ——
+
+    /** 角色是否已在屏（已召唤）。 */
+    fun isRoleActive(roleId: String): Boolean = engines.containsKey(roleId)
+
+    /**
+     * 召唤指定角色（多角色并存，互不干扰）：
+     * - 若角色已在屏 → 归位（纯 reposition，窗仍在）。
+     * - 若角色未在屏 → 新建一份独立运行态并召唤（已召唤的其他角色不受影响）。
+     * 同时清除“已退出”标记，确保退出后仍能重新召唤。
+     */
+    fun summonRole(roleId: String) {
+        clearExiting()
+        if (engines.containsKey(roleId)) { returnHome(roleId); return }
+        startRole(roleId)
+    }
+
+    /** 归位：回到屏幕底部中心、静止（窗仍在，无状态变化）。卡片“召唤/归位”处于已召唤态时触发。
+     *  纯归位，不翻转角色 visible 设置（与菜单 ACTION_RECALL 不同）。 */
+    fun returnHome(roleId: String) {
+        for (inst in pets.filter { it.roleId == roleId }) inst.view.forceReset()
+        recalcBounds()
+        for (inst in pets.filter { it.roleId == roleId }) {
+            val p = inst.view.physics
+            p.resetTo((p.minX + p.maxX) / 2f, p.maxY)
+        }
+    }
+
+    /** 召回（退场）：撤该角色所有窗、停其循环，不影响其他在屏角色。不卸载、不丢配置/描述符。 */
+    fun recall(roleId: String) {
+        teardownRole(roleId)
+        // 角色移除后，重新置顶辅助浮层（宠物窗叠放保持召唤顺序、不再重排）。
+        reapplyZOrder()
+    }
+
+    /**
+     * 宠物窗堆叠顺序固定为「召唤/创建顺序」（先加显示窗、后加控制窗 → 控制层恒在该宠物显示层之上），
+     * 不再按 home_roles 做 remove/add 重排：既避免重排的 remove/add 开销与潜在闪烁，
+     * 也从根本上杜绝「显示窗被翻到控制窗之上」导致强制不透明下触摸失效的整类问题。
+     * 角色管理页里自定义的置顶顺序不再影响屏幕叠放（按需求回到默认召唤顺序）。
+     *
+     * 本函数现在只负责：在召唤/召回/改数量后，把各类辅助浮层（调试文字/辅助线/定格/投食/碎碎念）
+     * 重新置顶，避免被新创建的宠物窗盖住。宠物窗本身不再重排。
+     */
+    fun reapplyZOrder() {
+        raiseAuxiliaryWindows()
+    }
+
+    /** 重排宠物窗后，把所有辅助浮层重新置顶，避免被宠物窗盖住（调试文字/辅助线/定格/投食/碎碎念）。 */
+    private fun raiseAuxiliaryWindows() {
+        // 定格层
+        for (layer in freezeLayers) {
+            try { windowManager.removeView(layer.iv) } catch (_: Exception) {}
+            try { windowManager.addView(layer.iv, layer.lp) } catch (_: Exception) {}
+        }
+        // 投食层
+        for (layer in fishLayers) {
+            try { windowManager.removeView(layer.iv) } catch (_: Exception) {}
+            try { windowManager.addView(layer.iv, layer.lp) } catch (_: Exception) {}
+        }
+        // 辅助线（仅已挂载时）
+        if (guideAdded) {
+            guideLineView?.let { g ->
+                guideParams?.let { lp ->
+                    try { windowManager.removeView(g) } catch (_: Exception) {}
+                    try { windowManager.addView(g, lp) } catch (_: Exception) {}
+                }
+            }
+        }
+        // 调试文字
+        debugView?.let { d ->
+            debugParams?.let { lp ->
+                try { windowManager.removeView(d) } catch (_: Exception) {}
+                try { windowManager.addView(d, lp) } catch (_: Exception) {}
+            }
+        }
+        // 碎碎念（每个实例各自一个窗，全部置于宠物之上）
+        for (p in pets) {
+            try { p.petMsg.bringToFront() } catch (_: Exception) {}
+        }
+    }
+
+    /** 重命名后刷新简称缓存，避免辅助线/红框吐槽等文案滞后。
+     * 默认刷新「当前操作角色」，也可传入具体角色 id（如从设置页改名当前实例）。 */
+    fun refreshShortName(roleId: String = currentRoleId) {
+        currentShortName = RoleStore.resolveShortName(this, roleId)
+    }
+
     private fun cleanup() {
         // 兜底移除前台通知，避免退出后通知栏常驻造成“非活非死”观感。
         try { stopForeground(STOP_FOREGROUND_REMOVE) } catch (_: Exception) {}
         running = false
+        for (rt in engines.values) { rt.configJob?.cancel(); rt.randomJob?.cancel() }
+        engines.clear()
         mainHandler.removeCallbacks(frameRunnable)
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         try { petMenu?.dismiss() } catch (_: Exception) {}
@@ -3197,6 +3927,13 @@ class PetService : Service() {
         guideAdded = false
         try { if (debugView != null) windowManager.removeView(debugView) } catch (_: Exception) {}
         guideLineView = null
+        // 停止所有角色的投食循环（按角色独立持有的 runnable），并清除全部支鱼（回收 Bitmap，防泄漏）
+        for (rt in engines.values) {
+            rt.fishSpawnRunnable?.let { mainHandler.removeCallbacks(it) }
+            rt.fishSpawnRunnable = null
+            rt.fishSpawning = false
+        }
+        clearAllFish()
         // 清除所有定格显示层（回收 Bitmap，防泄漏）
         clearAllFreeze()
         trayMsgManager = null
@@ -3207,8 +3944,15 @@ class PetService : Service() {
     companion object {
         // 供设置页（同进程）直接驱动辅助线浮层，避免引入广播样板。
         var instance: PetService? = null
+        /** 角色在屏状态（召唤/召回）变化回调：首页 MainActivity 注册以即时刷新卡片。
+         *  用 companion 级静态回调，使服务尚未创建（instance 为 null）时的异步召唤也能通知到已打开的页面。 */
+        @JvmStatic var onActiveRolesChanged: (() -> Unit)? = null
         const val CHANNEL_ID = "cakepet_channel"
         const val NOTIFICATION_ID = 1001
+        const val EXTRA_ROLE_ID = "role_id"
+        // 「重置软件」重启服务的标记：仅用于重新初始化服务（清内存态、重读已清空的角色数据），
+        // 明确【不要】自动召唤任何角色。缺省 false，故系统重启/START_STICKY 重建不受影响。
+        const val EXTRA_NO_AUTO_SUMMON = "no_auto_summon"
         // 吸附阈值兜底值：与 PetConfigData.snapThreshold 默认值保持一致，
         // 仅在 petView 尚未初始化（服务刚启动）时用于绘制辅助线。
         private const val DEFAULT_SNAP_DIST = 100f

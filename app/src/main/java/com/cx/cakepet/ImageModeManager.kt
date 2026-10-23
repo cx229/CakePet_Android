@@ -6,10 +6,11 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 /**
  * 图片资源包：抽象“不同套美术资源”的加载策略。
- * - [resolve]：resName(如 "sit_clam-1.png") -> assets 相对路径(如 "img/sit_clam-1.png"
+ * - [resolve]：resName(如 "sit_clam-1.png") -> assets 相对路径(如 "芝麻酥/sit_clam-1.png"
  *   / "芝麻酥/安静/sit_clam-1.png")；返回 null 表示该包不含此帧（加载时回退到 fallback）。
  * - [decodeTarget]：物理解码目标边长(px)；0 = 保持原始尺寸（默认包，原生 128）。
  *   新包原图 1000×1000，设为 256 ⇒ 解码期超采样到 256（最长边），作 2x 抗锯齿源；
@@ -18,17 +19,84 @@ import org.json.JSONObject
  * - [anchorRes]：逻辑分辨率（锚点/画布/UI 坐标系的“1”单位，恒为 128）。
  *   与 decodeTarget 解耦：decodeTarget=256、anchorRes=128 ⇒ 解码超采样 2x、逻辑仍 128。
  *   默认包 decodeTarget=0（原生=128=逻辑），此字段不生效。
- * - [forceBottomCenterAnchor]：true 时忽略逐帧 anchorX/anchorY，统一用“图底中心”。
- *   （先期约定：新包所有动作锚点都先假设在图片底部中心。）
+ * - 锚点完全由逐帧 anchorX/anchorY 决定（JSON 未给 anchorY 时回退贴底 0），不假设“图底中心”。
  */
 data class SpritePack(
     val id: String,
+    val base: String = "",                           // 资源根目录（assets/<base> 或 filesDir/roles/<base>）
+    val source: RoleSource = RoleSource.ASSETS,      // 存储类型（预装=ASSETS / 用户上传=FILES）
     val resolve: (String) -> String?,
-    val configPath: String? = null,   // 该包的动画/帧/锚点配置（assets 内相对路径），如 "img/modes.json" / "芝麻酥/modes.json"
-    val decodeTarget: Int = 0,         // 物理超采样解码边长（0=原生）；新包 256
-    val anchorRes: Int = 128,          // 逻辑分辨率（锚点/画布/UI 坐标系单位），恒 128
-    val forceBottomCenterAnchor: Boolean = false
+    val configPath: String? = null,   // 该包的动画/帧/锚点配置（assets 内相对路径），如 "芝麻酥/modes.json" / "芝麻球促销/modes.json"
+    val decodeTarget: Int = 0,         // 物理超采样解码边长（0=原生）；新包 256（由 modes.json 覆盖）
+    val anchorRes: Int = 128,          // 逻辑分辨率（锚点/画布/UI 坐标系单位），恒 128（由 modes.json 覆盖）
+    val name: String = "",             // 资源包中文名（modes.json 指定，v1.0 必填），仅展示用
+    val shortName: String = "",         // 资源包默认简称（modes.json 指定，v1.0 必填）：每个角色各自定义，不全局写死
+    val resources: Map<String, String> = emptyMap()   // 资源清单（modes.json 指定）：键=资源名(如 food)，值=相对路径；为其它图片资源预留扩展
 )
+
+/**
+ * 资源包目录：选择键(Int，持久化于 pet_config) -> (包 id, 资源根目录 base, 存储类型)。
+ * 由 [RoleRegistry.refreshPresets] 启动时按其内唯一的 [PRESET_FOLDERS] 映射
+ * （packId -> assets 目录）填入：遍历各目录读取 modes.json 得到 id/base，其余元数据都来自 JSON。
+ * 包级元数据（名称/尺寸/锚点/预览/鱼路径等）全部来自各包 modes.json，不做预装特化。
+ * 用户上传包将来由 RoleRegistry.scanUserRoles 扫描 filesDir/roles/<id>/ 发现，走同一加载路径。
+ */
+data class PackRef(val id: String, val base: String, val source: RoleSource)
+
+/**
+ * 预装包映射（运行时由 [setPresetPacks] 填充）。初始为空，[RoleRegistry.refreshPresets]
+ * 在 Application 最早点扫描 assets 写入；[buildSpritePack] 也内置按 RoleRegistry 的动态回落，
+ * 故即便早于填充被调用也不会崩。
+ */
+var PRESET_PACKS: Map<Int, PackRef> = emptyMap()
+    internal set
+
+/** 由 RoleRegistry 扫描 assets 后写入预装包映射。 */
+internal fun setPresetPacks(map: Map<Int, PackRef>) { PRESET_PACKS = map }
+
+private fun parseResources(root: JSONObject): Map<String, String> {
+    val out = mutableMapOf<String, String>()
+    val obj = root.optJSONObject("resources") ?: return out
+    val keys = obj.keys()
+    while (keys.hasNext()) {
+        val k = keys.next()
+        val v = obj.optString(k, "")
+        if (v.isNotBlank()) out[k] = v
+    }
+    return out
+}
+
+/** 按选择键构建完整 SpritePack（包级元数据来自对应 modes.json）。未知键回退默认包 / 或按 RoleRegistry 动态解析。 */
+fun buildSpritePack(ctx: android.content.Context, packId: Int): SpritePack {
+    val ref = PRESET_PACKS[packId]
+        ?: RoleRegistry.PRESETS.firstOrNull { it.packId == packId }?.let { PackRef(it.id, it.rootPath, it.source) }
+        ?: PRESET_PACKS[ConfigDefaults.DEFAULT_SPRITE_PACK]
+        ?: RoleRegistry.DEFAULT.let { PackRef(it.id, it.rootPath, it.source) }
+    return loadPackMeta(ctx, ref.base, ref.source)
+}
+
+/** 读取某包 modes.json 的「包级元数据」并覆盖到 Skeleton；解析失败回退 Skeleton（默认 0/false/默认图）。 */
+fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource): SpritePack {
+    val skeleton = SpritePack(
+        id = base, base = base, source = source,
+        resolve = { "$base/$it" }, configPath = "$base/modes.json"
+    )
+    val raw = try {
+        when (source) {
+            RoleSource.ASSETS -> ctx.assets.open(skeleton.configPath!!).bufferedReader().use { it.readText() }
+            RoleSource.FILES -> File(ctx.filesDir, "roles/${skeleton.configPath}").bufferedReader().use { it.readText() }
+        }
+    } catch (_: Exception) { return skeleton }
+    val root = try { JSONObject(raw) } catch (_: Exception) { return skeleton }
+    return skeleton.copy(
+        id = if (root.has("id")) root.optString("id", base) else base,
+        decodeTarget = if (root.has("decodeTarget")) root.optInt("decodeTarget", 0) else 0,
+        anchorRes = if (root.has("anchorRes")) root.optInt("anchorRes", 128) else 128,
+        name = if (root.has("name")) root.optString("name", "") else "",
+        shortName = if (root.has("shortName")) root.optString("shortName", "") else "",
+        resources = parseResources(root)
+    )
+}
 
 /**
  * 动画模式管理：每帧时延严格对齐 PC（image_modes.py）。
@@ -38,7 +106,8 @@ data class SpritePack(
  */
 class ImageModeManager(
     private val ctx: android.content.Context,
-    initialPack: SpritePack = DEFAULT_SPRITE_PACK
+    // 默认资源包=芝麻酥（已不再使用旧图 assets/img/）。
+    initialPack: SpritePack = packForId(ctx, ConfigDefaults.DEFAULT_SPRITE_PACK)
 ) {
 
     companion object {
@@ -46,6 +115,7 @@ class ImageModeManager(
         const val PAT_HEAD = "pat_head"
         const val SHAKE_HEAD = "shake_head"
         const val JUMP_DOWN = "jump_down"
+        const val JUMP_UP = "jump_up"
         const val LIFT_UP = "lift_up"
         const val SIT_CLAM = "sit_clam"
         const val SIT_PUFFED = "sit_puffed"
@@ -62,33 +132,12 @@ class ImageModeManager(
         const val LIE = "lie"
         const val PORTAL = "portal"
 
-        /** 默认资源包：assets/img/ 下按原图尺寸加载，沿用逐帧锚点。 */
-        val DEFAULT_SPRITE_PACK = SpritePack(
-            id = "default",
-            resolve = { "img/$it" },
-            configPath = "img/modes.json"
-        )
-
         /**
-         * 构建“芝麻酥”新资源包：扫描 assets/芝麻酥/ 下所有 png，
-         * 以文件名(含扩展名)为 key 映射到完整相对路径（按子目录归类，如 安静/sit_clam-1.png）。
-         * 仅加载与默认包【同名】的帧（多出来的 sit_thinking/probe_pat_head/sir_look/jump/side_walk 暂不接入）。
+         * 按资源包 id 取得对应资源包；未知键回退默认（芝麻酥）。
+         * 资源包位置/存储类型在 [PRESET_PACKS] 唯一映射，包级元数据（尺寸/锚点/预览/鱼路径等）全部来自各包 modes.json，
+         * 实现资源与程序解耦——新增/上传素材包无需改动此文件。
          */
-        /**
-         * “芝麻酥”资源包：modes.json 中的 res 直接以“子目录/文件名”给出（如 "安静/sit_clam-1.png"），
-         * 这里只拼 “芝麻酥/” 前缀即可定位，无需在初始化时递归扫描 assets 目录。
-         */
-        @Suppress("UNUSED_PARAMETER")
-        fun zhimasuPack(ctx: android.content.Context): SpritePack {
-            return SpritePack(
-                id = "zhimasu",
-                resolve = { "芝麻酥/$it" },
-                configPath = "芝麻酥/modes.json",
-                decodeTarget = 256,                // 物理超采样 2x（逻辑仍为 anchorRes=128）
-                anchorRes = 128,
-                forceBottomCenterAnchor = true
-            )
-        }
+        fun packForId(ctx: android.content.Context, packId: Int): SpritePack = buildSpritePack(ctx, packId)
     }
 
     /** 单帧定义：资源名、下一帧索引（null=序列结束）、时延(ms)、锚点(图片像素坐标，对齐 PC image_meta) */
@@ -99,8 +148,7 @@ class ImageModeManager(
         val anchorX: Int = -1,          // 图片像素锚点 X（<0 表示用图宽/2 居中）
         // 图片像素锚点 Y（距【底】边，左下角原点，Y 向上）。
         // 合法范围 [-128, 128]：0=贴底，128=贴顶，负数=脚在图底下方（图外，如 walk/wriggle 的脚实际在地面以下）。
-        // null 表示未设置：当 pack 强制底部中心(forceBottomCenterAnchor)时按 0(贴底)处理，否则也按 0。
-        // 注意：当 pack.forceBottomCenterAnchor=true 时，仅当本帧在 JSON 显式给出 anchorY 才覆盖默认底中，否则沿用底中。
+        // null 表示未设置：回退贴底 0（脚贴地）。锚点完全由逐帧 anchorX/anchorY 决定，不假设“图底中心”。
         val anchorY: Int? = null,
         // 帧位移偏移(px)，对齐 PC 的 QPoint(x,0) offset：每帧把该偏移累加到锚点坐标，
         // 实现“拉鱼/扒鱼”这类【帧驱动】位移（区别于物理速度驱动的 walk/roll）。
@@ -142,7 +190,7 @@ class ImageModeManager(
     private var forcedOnEnd: (() -> Unit)? = null
     private var timeNextAcc = 0L
     private var timeNextTarget = 0L
-    /** 当前生效的资源包；默认=默认包，可由 setPack 运行时切换（关于页“使用新资源”）。 */
+    /** 当前生效的资源包；默认=芝麻酥包，可由 setPack 运行时按角色资源包切换。 */
     var currentPack: SpritePack = initialPack
 
     /** 当前行走方向与位移速度（>0 表示正在行走位移，由物理引擎驱动水平移动） */
@@ -181,9 +229,41 @@ class ImageModeManager(
      */
     var useStaticPool: Boolean = false
 
-    // 根据开关选择当前待机池
-    private fun currentStandbyPool(): List<String> =
+    /**
+     * 好动飞跃开关：由 PetService 同步为 leapEnabled。
+     * 仅当开启且当前处于攀岩态（inClimbing）时，每次从池子捞新动作按 leapProbability 概率直接跳起。
+     */
+    var leapEnabled: Boolean = false
+
+    /** 自动觅食开关：由 PetView 每帧同步（仅当攀岩态且已锁定食物时为真）。
+     *  优先级高于飞跃：觅食中从动作池捞动作时直接返回 WALK 继续沿墙走，不跳起。 */
+    var forageActive: Boolean = false
+
+    /** 飞跃概率（0-1 小数）：由 PetService 同步为 leapProbability。 */
+    var leapProbability: Float = 0.10f
+
+    /** 当前是否处于攀岩态：由 PetView 每帧同步。决定捞新动作时是否掷骰跳起。 */
+    var inClimbing: Boolean = false
+
+    /** 当前是否处于飞跃飞行态：由 PetView 每帧同步。飞行中锁定为 JUMP_UP，禁止 nextFrame 切换动作。 */
+    var isFlying: Boolean = false
+
+    // 根据开关选择当前待机池：静止池 > 完整待机池
+    private fun currentPool(): List<String> =
         if (useStaticPool) staticPool else standbyPool
+
+    /**
+     * 从池子捞一个新动作（排除当前动作）；若开启好动飞跃且处于攀岩态，按 leapProbability 概率直接跳起。
+     * 供：一次性动画收尾、主循环收尾、定时随机切换 三处统一调用。
+     */
+    fun pickStandbyMode(exclude: String): String {
+        // 自动觅食优先于飞跃：觅食中锁定食物则继续沿墙 WALK，不跳起（不拦截其他逻辑，仅插队）。
+        if (forageActive) return WALK
+        // 先按飞跃概率判断是否直接跳起；不飞跃再正常从池子捞其他动作
+        if (leapEnabled && inClimbing && Random.nextFloat() < leapProbability) return JUMP_UP
+        val pool = currentPool().filter { it != exclude }
+        return if (pool.isNotEmpty()) pool.random() else DEFAULT_MODE
+    }
 
     init {
         var loaded = false
@@ -496,12 +576,18 @@ class ImageModeManager(
      * 解析失败由调用方捕获并回退到内建模式，本函数不抛未处理异常。
      */
     private fun loadModesFromJson(path: String) {
-        val text = ctx.assets.open(path).bufferedReader().use { it.readText() }
+        val text = openPackStream(path)?.bufferedReader()?.use { it.readText() } ?: return
         val root = JSONObject(text)
-        // 包级：是否强制底部中心锚点（覆盖 currentPack 默认值，便于 JSON 驱动）
-        val forceBottom = if (root.has("forceBottomCenterAnchor"))
-            root.getBoolean("forceBottomCenterAnchor") else currentPack.forceBottomCenterAnchor
-        currentPack = currentPack.copy(forceBottomCenterAnchor = forceBottom)
+        // 包级元数据：全部来自 modes.json 根节点（覆盖 currentPack/Skeleton 默认值，实现资产与程序解耦）。
+        val decodeTarget = if (root.has("decodeTarget")) root.optInt("decodeTarget", currentPack.decodeTarget) else currentPack.decodeTarget
+        val anchorRes = if (root.has("anchorRes")) root.optInt("anchorRes", currentPack.anchorRes) else currentPack.anchorRes
+        val id = if (root.has("id")) root.optString("id", currentPack.id) else currentPack.id
+        val name = if (root.has("name")) root.optString("name", currentPack.name) else currentPack.name
+        val resources = parseResources(root)
+        currentPack = currentPack.copy(
+            id = id, decodeTarget = decodeTarget, anchorRes = anchorRes,
+            name = name, resources = resources
+        )
         // 清空旧模式，按 JSON 重建
         modes.clear()
         val modesObj = root.getJSONObject("modes")
@@ -593,7 +679,7 @@ class ImageModeManager(
     fun isPlayingForced(): Boolean = forcedSeq != null
 
     /** 当前模式是否属于待机动作清单（standbyPool / staticPool）。供投喂等判断是否可切"坐姿投食"。 */
-    fun isStandbyMode(name: String = currentName): Boolean = currentStandbyPool().contains(name)
+    fun isStandbyMode(name: String = currentName): Boolean = currentPool().contains(name)
 
     /**
      * 提起(LIFT_UP)模式下，按拖动速度/方向跳到对应系列起点帧（对齐 PC DragFollowMode.drag_func）：
@@ -654,7 +740,7 @@ class ImageModeManager(
     }
 
     /**
-     * 运行时切换资源包（关于页“使用新资源”开关触发）。
+     * 运行时切换资源包（按角色资源包触发）。
      * 清空位图/尺寸缓存，重建统一画布尺寸，并复位到默认静坐模式。
      * 注意：切换会打断当前一次性动画并回到 sit_clam（配置切换属低频操作，可接受短暂停顿）。
      */
@@ -712,9 +798,8 @@ class ImageModeManager(
             if (next != null) {
                 setMode(next)
             } else {
-                // 无指定下一模式：对齐 PC change_mode，结束回待机随机池
-                val pool = currentStandbyPool().filter { it != currentName }
-                if (pool.isNotEmpty()) setMode(pool.random()) else setMode(DEFAULT_MODE)
+                // 无指定下一模式：对齐 PC change_mode，结束回待机池（攀岩态可能按概率跳起）
+                setMode(pickStandbyMode(currentName))
             }
         }
         frameIndex = 0
@@ -731,6 +816,19 @@ class ImageModeManager(
         val frame = def.frames.getOrNull(frameIndex) ?: return null
         return loadBitmap(frame.resName) ?: loadBitmap(def.fallback)
     }
+
+    /** 预览自治播放用：返回当前帧的 resName（按帧序列顺序），供缓存键与重绘判定。 */
+    fun currentResName(): String? {
+        val def = forcedSeq ?: currentDef ?: return null
+        return def.frames.getOrNull(frameIndex)?.resName
+    }
+
+    /**
+     * 预览用：返回某帧经本包“复杂变换”后的位图——即 [loadBitmap] 产物：
+     * 按包 decodeTarget 物理超采样 + 统一画布 padding（roll 居中、其余顶部对齐底部补透明）。
+     * 首页预览借此让不同资源图（1000px 高清 / 128px 原生）在预览框内尺寸一致、锚点正确。
+     */
+    fun previewFrame(resName: String): Bitmap? = loadBitmap(resName)
 
     /** 当前帧【逻辑画布】尺寸（恒 128 基准；新包解码 256 超采样但画布逻辑仍为 128）。
      *  窗口/锚点 X 居中/渲染矩形均以画布计，而非逐帧 bitmap 像素（256 超采样源）。 */
@@ -759,10 +857,10 @@ class ImageModeManager(
         }
         val r = if (currentPack.decodeTarget > 0) {
             try {
-                val istr = ctx.assets.open(path)
+                val istr = openPackStream(path)
                 val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeStream(istr, null, opts)
-                istr.close()
+                istr?.close()
                 // 逻辑尺寸：按【anchorRes=128】保比例算，而非物理 decodeTarget(256)。
                 // 锚点/画布/边界全部活在 128 逻辑空间，decodeTarget 只影响解码清晰度、不影响坐标。
                 scaledContentSize(opts.outWidth, opts.outHeight, currentPack.anchorRes)
@@ -771,7 +869,7 @@ class ImageModeManager(
             }
         } else {
             try {
-                val istr = ctx.assets.open(path)
+                val istr = openPackStream(path)
                 val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeStream(istr, null, opts)
                 opts.outWidth to opts.outHeight
@@ -826,13 +924,9 @@ class ImageModeManager(
         val frame = def.frames.getOrNull(frameIndex) ?: return 80 to 160
         val (w, _) = currentBitmapSize()   // padding 后尺寸 = globalW×globalH（仅用 w 供锚点 X 居中）
         val (_, rawH) = rawBitmapSize(frame.resName)   // 原始 PNG 尺寸（未 padding），仅用高
-        // 默认底部中心(forceBottomCenterAnchor=true)时，逐帧 anchorX/anchorY 一般被忽略；
-        // 但若某帧在 JSON 里显式给出 anchorX(>=0) / anchorY(非 null)，则该帧覆盖默认、使用自定义锚点。
-        val forced = currentPack.forceBottomCenterAnchor
-        val frameHasAx = frame.anchorX >= 0           // JSON 给了非负 anchorX 即视为显式
-        val frameHasAy = frame.anchorY != null        // JSON 给了 anchorY 即视为显式
-        val axIn = if (forced && !frameHasAx) -1 else frame.anchorX
-        val ayIn = if (forced && !frameHasAy) 0 else (frame.anchorY ?: 0)
+        // 锚点完全由逐帧 anchorX/anchorY 决定；JSON 未给 anchorY 时回退贴底 0，不再用「图片底部中心」强统一。
+        val axIn = frame.anchorX
+        val ayIn = frame.anchorY ?: 0
         val axRaw = if (axIn >= 0) axIn else w / 2   // 距左（<0 居中）
         // 输入 anchorY=距底 ⇒ 转距顶 = rawH - anchorY。合法范围 [-128,128]，负值(脚在图底下方)照常参与计算。
         val ayFromBottom = ayIn
@@ -876,15 +970,12 @@ class ImageModeManager(
                     frameIndex = 0
                 } else if (def.nextModeName != null) {
                     // 有明确下一模式（如摇头 -> 炸毛）：跳指定模式
-                    setMode(def.nextModeName)
+                    if (!isFlying) setMode(def.nextModeName)
                     return FrameStep(true)
                 } else {
                     // 无指定下一模式（美白、趴，对齐 PC "下一个无指定"）：
-                    // 与 playOnce 的 forcedOnEnd 一致，结束回待机随机池，
-                    // 保证「菜单激活」与「待机池自然选中」后续流转完全统一。
-                    val pool = currentStandbyPool().filter { it != currentName }
-                    if (pool.isNotEmpty()) setMode(pool.random())
-                    else setMode(DEFAULT_MODE)
+                    // 与 playOnce 的 forcedOnEnd 一致，结束回待机池（攀岩态可能按概率跳起）。
+                    if (!isFlying) setMode(pickStandbyMode(currentName))
                     return FrameStep(true)
                 }
             } else {
@@ -896,7 +987,7 @@ class ImageModeManager(
         // 命中概率时优先使用模式自身定义的 nextModeName（如摸头->摇头），
         // 保证即使 forcedSeq 因拖拽被 cancel，也能正确跳到指定下一模式而非回 sit；
         // 若模式无 nextModeName（纯常驻 sit 类），则在待机池 standbyPool 中随机切换。
-        if (def.timeNextEnabled) {
+        if (def.timeNextEnabled && !isFlying) {
             timeNextAcc += dtMs
             if (timeNextAcc >= timeNextTarget) {
                 timeNextAcc = 0L
@@ -913,12 +1004,9 @@ class ImageModeManager(
                         }
                         return FrameStep(true)
                     } else {
-                        // 无指定：待机池随机切换（排除当前模式）
-                        val pool = currentStandbyPool().filter { it != currentName }
-                        if (pool.isNotEmpty()) {
-                            setMode(pool.random())
-                            return FrameStep(true)
-                        }
+                        // 无指定：待机池随机切换（攀岩态可能按概率跳起）
+                        setMode(pickStandbyMode(currentName))
+                        return FrameStep(true)
                     }
                 }
             }
@@ -978,6 +1066,14 @@ class ImageModeManager(
         return fillOffset(resName, bw, bh)
     }
 
+    /** 按当前资源包打开任意资源流；ASSETS 走 assets.open，FILES 走 filesDir/roles/<base>/...。 */
+    private fun openPackStream(resolvedPath: String): java.io.InputStream? = try {
+        when (currentPack.source) {
+            RoleSource.ASSETS -> ctx.assets.open(resolvedPath)
+            RoleSource.FILES -> File(ctx.filesDir, "roles/$resolvedPath").inputStream()
+        }
+    } catch (_: Exception) { null }
+
     // 解析并缓存单帧位图。解码产物 pad 进「解码画布」(decodeTarget 边长；旧包=逻辑画布 globalW×globalH)，
     // 居中绘制（水平居中，垂直置顶、底部补透明）。
     // 新包：按 decodeTarget=256 保比例下采样（最长边 → 256，如 1000×500 → 256×128）作 2x 超采样源，
@@ -989,7 +1085,7 @@ class ImageModeManager(
             if (currentPack.decodeTarget > 0) {
                 decodeAssetScaled(path, currentPack.decodeTarget)
             } else {
-                val istr = ctx.assets.open(path)
+                val istr = openPackStream(path)
                 BitmapFactory.decodeStream(istr)
             }
         } catch (_: Exception) {
@@ -1022,16 +1118,16 @@ class ImageModeManager(
      * 真实内容尺寸由 scaledContentSize 计算，与 rawBitmapSize 共用，保证锚点/画布一致。
      */
     private fun decodeAssetScaled(path: String, target: Int): Bitmap? {
-        val istr1 = try { ctx.assets.open(path) } catch (_: Exception) { return null }
+        val istr1 = try { openPackStream(path) } catch (_: Exception) { return null }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeStream(istr1, null, bounds)
-        istr1.close()
+        istr1?.close()
         val realW = bounds.outWidth.takeIf { it > 0 } ?: return null
         val realH = bounds.outHeight.takeIf { it > 0 } ?: return null
         val (outW, outH) = scaledContentSize(realW, realH, target)   // 保比例：最长边 = target
         val longSide = if (realW > realH) realW else realH
         val inSample = ((longSide + target - 1) / target).coerceAtLeast(1)
-        val istr2 = try { ctx.assets.open(path) } catch (_: Exception) { return null }
+        val istr2 = try { openPackStream(path) } catch (_: Exception) { return null }
         val opts = BitmapFactory.Options().apply { inSampleSize = inSample }
         val base = BitmapFactory.decodeStream(istr2, null, opts) ?: return null
         return if (base.width == outW && base.height == outH) base
@@ -1055,4 +1151,28 @@ class ImageModeManager(
     fun clearCache() {
         bitmapCache.clear()
     }
+}
+
+/**
+ * 按角色描述符构建精灵包：FILES（用户上传）直接用 rootPath 走私有存储；
+ * ASSETS（预装）走包 id 映射 [PRESET_PACKS]。
+ */
+fun buildSpritePackForRole(ctx: android.content.Context, role: RoleDescriptor): SpritePack =
+    if (role.source == RoleSource.FILES) loadPackMeta(ctx, role.rootPath, RoleSource.FILES)
+    else buildSpritePack(ctx, role.packId)
+
+/**
+ * 按包基路径 + 存储类型打开某个资源文件流（FILES 走 filesDir/roles/<base>/<res>）。
+ * 供 PetService 投喂支鱼等需要直接读包内资源的场景复用，避免硬编码 assets.open。
+ */
+fun openPackResource(ctx: android.content.Context, base: String, source: RoleSource, res: String): java.io.InputStream? {
+    val resolved = "$base/$res"
+    return try {
+        if (source == RoleSource.FILES) {
+            val f = File(ctx.filesDir, "roles/$resolved")
+            if (!f.exists()) null else f.inputStream()
+        } else {
+            ctx.assets.open(resolved)
+        }
+    } catch (_: Exception) { null }
 }

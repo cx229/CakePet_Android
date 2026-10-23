@@ -33,13 +33,28 @@
             android:layout_gravity="center_vertical"
             android:contentDescription="返回" />
 
-        <TextView android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="显示-其他"
-            android:textSize="20dp"
-            android:textStyle="bold"
-            android:textColor="@color/cp_title" />
-        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical">
+
+            <TextView android:id="@+id/tv_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="显示-其他"
+                android:textSize="20dp"
+                android:textStyle="bold"
+                android:textColor="@color/cp_title" />
+
+            <TextView android:id="@+id/tv_title_sub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="@color/cp_hint_dark" />
+        </LinearLayout>
+
         <ImageView android:id="@+id/btn_more"
             android:layout_width="48dp" android:layout_height="48dp"
             android:scaleType="fitCenter"
@@ -73,99 +88,102 @@
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:padding="16dp">
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:text="边界偏移" style="@style/SettingsOptionTitle" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:text="「芝麻酥」与屏幕边缘的间距" style="@style/SettingsOptionNote" />
+                </LinearLayout>
 
                 <!-- 顶部偏移 -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginTop="12dp">
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
-                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="顶部偏移" style="@style/SettingsOptionTitle" />
-                            <EditText android:id="@+id/off_top_value" android:layout_width="match_parent"
+                    android:orientation="vertical">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="顶部偏移" style="@style/SettingsOptionTitle"/>
+        <EditText android:id="@+id/off_top_value" android:layout_width="72dp"
                                 android:layout_height="wrap_content" android:text="140" android:textSize="16dp"
                                 android:background="@drawable/edit_bg" android:inputType="numberSigned"
-                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
-                        </LinearLayout>
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/off_top_bar" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/off_top_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
                             android:valueFrom="-300" android:valueTo="2100" android:stepSize="1"
-                            android:value="140" />
-                    </LinearLayout>
+                            android:value="140" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
                 </LinearLayout>
 
                 <!-- 底部偏移 -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginTop="12dp">
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
-                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="底部偏移" style="@style/SettingsOptionTitle" />
-                            <EditText android:id="@+id/off_bottom_value" android:layout_width="match_parent"
+                    android:orientation="vertical">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="底部偏移" style="@style/SettingsOptionTitle"/>
+        <EditText android:id="@+id/off_bottom_value" android:layout_width="72dp"
                                 android:layout_height="wrap_content" android:text="140" android:textSize="16dp"
                                 android:background="@drawable/edit_bg" android:inputType="numberSigned"
-                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
-                        </LinearLayout>
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/off_bottom_bar" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/off_bottom_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
                             android:valueFrom="-300" android:valueTo="2100" android:stepSize="1"
-                            android:value="140" />
-                    </LinearLayout>
+                            android:value="140" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
                 </LinearLayout>
 
                 <!-- 左部偏移 -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginTop="12dp">
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
-                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="左部偏移" style="@style/SettingsOptionTitle" />
-                            <EditText android:id="@+id/off_left_value" android:layout_width="match_parent"
+                    android:orientation="vertical">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="左部偏移" style="@style/SettingsOptionTitle"/>
+        <EditText android:id="@+id/off_left_value" android:layout_width="72dp"
                                 android:layout_height="wrap_content" android:text="20" android:textSize="16dp"
                                 android:background="@drawable/edit_bg" android:inputType="numberSigned"
-                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
-                        </LinearLayout>
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/off_left_bar" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/off_left_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
                             android:valueFrom="-300" android:valueTo="1000" android:stepSize="1"
-                            android:value="0" />
-                    </LinearLayout>
+                            android:value="0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
                 </LinearLayout>
 
                 <!-- 右部偏移 -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginTop="12dp">
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
-                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="右部偏移" style="@style/SettingsOptionTitle" />
-                            <EditText android:id="@+id/off_right_value" android:layout_width="match_parent"
+                    android:orientation="vertical">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="右部偏移" style="@style/SettingsOptionTitle"/>
+        <EditText android:id="@+id/off_right_value" android:layout_width="72dp"
                                 android:layout_height="wrap_content" android:text="20" android:textSize="16dp"
                                 android:background="@drawable/edit_bg" android:inputType="numberSigned"
-                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
-                        </LinearLayout>
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/off_right_bar" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/off_right_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
                             android:valueFrom="-300" android:valueTo="1000" android:stepSize="1"
-                            android:value="0" />
-                    </LinearLayout>
+                            android:value="0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
                 </LinearLayout>
             </LinearLayout>
 
@@ -176,10 +194,11 @@
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:padding="16dp">
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 输入法防误触开关（与设置页开关布局一致） -->
-                <LinearLayout style="@style/SettingsSwitchRow">
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="键盘时抬高" style="@style/SettingsOptionTitle"
@@ -189,11 +208,11 @@
                             style="@style/SettingsOptionNote" />
                     </LinearLayout>
                     <Switch android:id="@+id/sw_ime_adapt" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </LinearLayout>
 
                 <!-- 重置边界（键盘适应）：开启后键盘弹出时无视上下边界偏移，仅用键盘高度+抬高偏移 -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="16dp">
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="重置边界" style="@style/SettingsOptionTitle"
@@ -203,35 +222,35 @@
                             style="@style/SettingsOptionNote" />
                     </LinearLayout>
                     <Switch android:id="@+id/sw_ime_reset_bottom" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </LinearLayout>
 
                 <!-- 抬高偏移 -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:layout_marginTop="16dp">
+                    android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="80dp" android:layout_height="wrap_content"
-                            android:orientation="vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="抬高偏移" style="@style/SettingsOptionTitle" />
-                            <EditText android:id="@+id/ime_lift_value" android:layout_width="match_parent"
+                                android:text="抬高偏移" style="@style/SettingsOptionTitle"/>
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="对「芝麻酥」抬高的高度再额外修正"
+                                style="@style/SettingsOptionNote"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/ime_lift_value" android:layout_width="72dp"
                                 android:layout_height="wrap_content" android:text="0" android:textSize="16dp"
                                 android:background="@drawable/edit_bg" android:inputType="numberSigned"
-                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" />
-                        </LinearLayout>
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/ime_lift_bar" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
-                            android:valueFrom="-800" android:valueTo="800" android:stepSize="1" />
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
                     </LinearLayout>
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="对「芝麻酥」抬高的高度再额外修正"
-                        style="@style/SettingsOptionNote" android:layout_marginBottom="4dp" />
+                    <com.google.android.material.slider.Slider
+                            android:id="@+id/ime_lift_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="-800" android:valueTo="800" android:stepSize="1" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
                 </LinearLayout>
 
                 <!-- 键盘时隐藏（默认关）：键盘弹出时暂时隐藏「酥」且不可点击，键盘收起恢复 -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="16dp">
+                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="键盘时隐藏" style="@style/SettingsOptionTitle"
@@ -241,7 +260,7 @@
                             style="@style/SettingsOptionNote" />
                     </LinearLayout>
                     <Switch android:id="@+id/sw_ime_hide" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>

@@ -20,5 +20,5 @@
         android:id="@+id/sw_value"
         android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:minWidth="0dp" android:minHeight="0dp"
-        android:paddingStart="6dp" android:paddingEnd="6dp" android:checked="false"/>
+        android:paddingStart="6dp" android:paddingEnd="6dp" android:checked="false" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
 </LinearLayout>

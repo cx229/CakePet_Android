@@ -7,7 +7,7 @@
         <item name="colorOnPrimary">@color/white</item>
         <!-- Secondary brand color. -->
         <!-- MaterialComponents 主题下 Switch 的开启色由 colorSecondary 控制（非 colorControlActivated），
-             故置纯黑让所有开关（菜单/关于/设置）开启态均为黑色。 -->
+             故置纯黑让所有开关（菜单/调试/设置）开启态均为黑色。 -->
         <item name="colorSecondary">@color/black</item>
         <item name="colorSecondaryVariant">@color/black</item>
         <item name="colorOnSecondary">@color/white</item>
@@ -22,7 +22,7 @@
         <!-- Customize your theme here. -->
     </style>
 
-    <!-- 设置页/关于页专用：无 ActionBar。状态栏不透明（黑色），标题栏上方由布局放一个
+    <!-- 设置页/调试页专用：无 ActionBar。状态栏不透明（黑色），标题栏上方由布局放一个
          高度=状态栏高度的纯黑占位条，与标题栏黑底连成整体覆盖状态栏；
          标题文字在标题栏内完整显示，不与状态栏时间/电量重叠。不使用透明/translucent 黑魔法。 -->
     <style name="Theme.CakePet.FullscreenTitle" parent="Theme.MaterialComponents.DayNight.NoActionBar">

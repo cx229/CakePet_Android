@@ -30,7 +30,8 @@ class SnapSettingsActivity : AppCompatActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    private val config by lazy { PetConfig(this) }
+    private val roleId by lazy { intent?.getStringExtra("role_id") ?: RoleRegistry.DEFAULT.id }
+    private val config by lazy { PetConfig.forRole(this, roleId) }
 
     // 视图/开关提升为字段，供 refreshUI / onResume 复用
     private lateinit var swSnapEnabled: Switch
@@ -55,6 +56,8 @@ class SnapSettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_snap_settings)
+        // 标题下方小字灰色：当前页面所属角色名
+        findViewById<android.widget.TextView>(R.id.tv_title_sub).text = RoleStore.resolveDisplayName(this, roleId)
         // 纯黑占位条填充状态栏高度，与标题栏黑底连成整体覆盖状态栏
         val spacer = findViewById<View>(R.id.status_bar_spacer)
         spacer.layoutParams.height = getStatusBarHeight()
@@ -62,11 +65,12 @@ class SnapSettingsActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.iv_back).setOnClickListener { finish() }
         // 右上角“更多”图标：弹出菜单，含「默认值与阈值」「恢复用户默认」「重置系统默认值与阈值」
         val snapBtnMore = findViewById<ImageView>(R.id.btn_more)
-        val snapMoreMenu = SettingsMoreMenu(
+        val snapMoreMenu = PopupMenuHelper(
             anchor = snapBtnMore,
-            onThreshold = { startActivity(Intent(this, SnapThresholdActivity::class.java)) },
-            onResetUserDefault = { doResetDefault() },
-            onResetSystem = { doResetSystem() }
+            popupLayoutRes = R.layout.popup_settings_more_simple,
+            items = mapOf(
+                R.id.item_threshold to { startActivity(Intent(this, SnapThresholdActivity::class.java).apply { putExtra("role_id", roleId) }) }
+            )
         )
         snapBtnMore.setOnClickListener { snapMoreMenu.show() }
 
@@ -126,22 +130,12 @@ class SnapSettingsActivity : AppCompatActivity() {
             config.configFlow.collect { applyConfigToUi(it) }
         }
 
-        // 「恢复默认设置」已移入右上角“更多”浮窗，逻辑封装为 doResetDefault()
-    }
-
-    /** 恢复本页默认设置（吸附边缘模块），默认值取阈值页设定，供右上角“更多”浮窗调用。先弹确认框。 */
-    private fun doResetDefault() {
-        showConfirmDialog(
-            title = "恢复用户默认",
-            bodyHtml = "将<b>本页</b>的所有设置项目恢复为当前默认值？",
-            subText = "可在“默认值与阈值页”修改默认值",
-            positiveText = "恢复"
-        ) { resetDefaultNow() }
+        // 「恢复默认设置」已移入右上角“更多”浮窗（现仅导航到默认值与阈值页，重置操作在阈值页内完成）。
     }
 
     /** 把当前配置刷新到本页所有滑块/开关。供 configFlow.collect 持续调用，取代冷读 configFlow.first()。 */
     private suspend fun applyConfigToUi(c: PetConfigData) {
-        val b = PetBounds(this@SnapSettingsActivity).getBlocking(SettingsPage.SNAP)
+        val b = PetBounds.forRole(this@SnapSettingsActivity, roleId).getBlocking(SettingsPage.SNAP)
         val sb = b.sliders.first { it.key == "snapThreshold" }
         suppressSnapPreview = true
         suppressEnabled = true
@@ -158,42 +152,11 @@ class SnapSettingsActivity : AppCompatActivity() {
         }
     }
 
-    /** 恢复默认 / 重置系统：把阈值默认写回 PetConfig 并重绑滑块行程；数值/开关由 configFlow.collect 自动刷新。 */
-    private fun reloadUiAfterReset() {
-        lifecycleScope.launch {
-            config.resetFromBounds(PetBounds(this@SnapSettingsActivity), SettingsPage.SNAP)
-            refreshUI()
-        }
-    }
-
-    /** 实际执行「恢复本页默认」：把阈值页记录的默认值写回 PetConfig 并刷新 UI。 */
-    private fun resetDefaultNow() {
-        reloadUiAfterReset()
-    }
-
-    /** 重置系统默认值与阈值：先弹确认框，确认后恢复本页上下界、默认与当前值为系统出厂。 */
-    private fun doResetSystem() {
-        showConfirmDialog(
-            title = "重置系统默认值与阈值",
-            bodyHtml = "将<b>本页</b>的所有设置项目的当前值/默认值/阈值均重置为系统预设？",
-            subText = "当前值、默认值和阈值都会重置",
-            positiveText = "重置"
-        ) { resetSystemNow() }
-    }
-
-    /** 实际执行「重置系统默认值与阈值」：bounds 回落系统出厂，再写回 PetConfig 并刷新本页（单协程顺序执行）。 */
-    private fun resetSystemNow() {
-        lifecycleScope.launch {
-            PetBounds(this@SnapSettingsActivity).resetSystem(SettingsPage.SNAP)
-            reloadUiAfterReset()
-        }
-    }
-
     // 吸附距离滑块：绑定 + 初始回填。抽成方法，onCreate 与 onResume 复用，
     // 使从阈值页返回时滑块行程（来自 PetBounds 的最新上下界）即时热更新。
     private fun refreshUI() {
         // 吸附距离：业务范围来自 PetBounds（阈值页可改上下界），滑块内部 0..100 归一化
-        val bs = PetBounds(this).getBlocking(SettingsPage.SNAP)
+        val bs = PetBounds.forRole(this@SnapSettingsActivity, roleId).getBlocking(SettingsPage.SNAP)
         val snapB = bs.sliders.first { it.key == "snapThreshold" }
         thresholdBar.boundGuideSlider(
             side = BoundSide.SNAP,
