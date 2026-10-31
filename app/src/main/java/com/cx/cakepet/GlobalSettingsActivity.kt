@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 
 /**
  * 应用级页面：全局设置 -> 调试 -> 无障碍点击测试。
@@ -62,6 +63,24 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 // 实验尚未实现，按需求保留空白内容区。
                 accessibilityRow.visibility = View.GONE
                 nextRow.visibility = View.GONE
+                findViewById<View>(R.id.test_buttons).visibility = View.VISIBLE
+                findViewById<View>(R.id.btn_create_test).setOnClickListener {
+                    val service = CakePetAccessibilityService.active
+                    if (service == null) {
+                        AlertDialog.Builder(this)
+                            .setMessage("你现在没有无障碍权限，或无障碍服务尚未连接。")
+                            .setPositiveButton("确定", null)
+                            .show()
+                    } else if (!service.showHitTest()) {
+                        AlertDialog.Builder(this)
+                            .setMessage("无障碍测试窗口创建失败，请检查系统限制。")
+                            .setPositiveButton("确定", null)
+                            .show()
+                    }
+                }
+                findViewById<View>(R.id.btn_close_test).setOnClickListener {
+                    CakePetAccessibilityService.active?.hideHitTest()
+                }
             }
         }
     }
