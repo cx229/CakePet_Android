@@ -11,7 +11,6 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import org.json.JSONObject
-import kotlin.math.roundToInt
 
 /**
  * 独立的无障碍全屏画布实验。青色框：窗口边界；黄色框：角色图像边界；
@@ -34,6 +33,7 @@ class AccessibilityHitTestView(context: Context) : View(context) {
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.CYAN; textSize = 28f
     }
+    var onClose: (() -> Unit)? = null
     private var index = 0
     private var nextFrameAt = 0L
     private var left = 0f
@@ -81,6 +81,7 @@ class AccessibilityHitTestView(context: Context) : View(context) {
         canvas.drawRect(dest, imageBorder)
         canvas.drawRect(1.5f, 1.5f, width - 1.5f, height - 1.5f, windowBorder)
         canvas.drawText("Accessibility overlay / window boundary", 12f, 40f, labelPaint)
+        canvas.drawText("关闭 X", width - 125f, 80f, labelPaint)
         // 在位图坐标中扫描邻接透明像素的边缘，标出实际 alpha 命中轮廓。
         val sx = drawSize / bmp.width
         val sy = drawSize / bmp.height
@@ -110,6 +111,10 @@ class AccessibilityHitTestView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                if (event.x > width - 155f && event.y < 120f) {
+                    onClose?.invoke()
+                    return true
+                }
                 dragging = pixelHit(event.x, event.y)
                 lastX = event.x; lastY = event.y
                 return dragging // 返回 false 不等于系统把事件转发给其他 App。
