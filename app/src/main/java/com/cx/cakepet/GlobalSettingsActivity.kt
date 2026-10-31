@@ -65,18 +65,13 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 nextRow.visibility = View.GONE
                 findViewById<View>(R.id.test_buttons).visibility = View.VISIBLE
                 findViewById<View>(R.id.btn_create_test).setOnClickListener {
-                    val service = CakePetAccessibilityService.active
-                    if (service == null) {
-                        AlertDialog.Builder(this)
-                            .setMessage("你现在没有无障碍权限，或无障碍服务尚未连接。")
-                            .setPositiveButton("确定", null)
-                            .show()
-                    } else if (!service.showHitTest()) {
-                        AlertDialog.Builder(this)
-                            .setMessage("无障碍测试窗口创建失败，请检查系统限制。")
-                            .setPositiveButton("确定", null)
-                            .show()
-                    }
+                    launchTest(CakePetAccessibilityService.MODE_SPLIT)
+                }
+                findViewById<View>(R.id.btn_passive_test).setOnClickListener {
+                    launchTest(CakePetAccessibilityService.MODE_PASS_THROUGH)
+                }
+                findViewById<View>(R.id.btn_full_test).setOnClickListener {
+                    launchTest(CakePetAccessibilityService.MODE_FULL_TOUCH)
                 }
                 findViewById<View>(R.id.btn_close_test).setOnClickListener {
                     CakePetAccessibilityService.active?.hideHitTest()
@@ -95,6 +90,19 @@ class GlobalSettingsActivity : AppCompatActivity() {
             )?.split(":")?.any { it.equals(expected, ignoreCase = true) } == true
             findViewById<TextView>(R.id.tv_accessibility_status).text =
                 if (enabled) "已开启" else "未开启"
+        }
+    }
+
+    private fun launchTest(mode: Int) {
+        val service = CakePetAccessibilityService.active
+        if (service == null) {
+            AlertDialog.Builder(this)
+                .setMessage("你现在没有无障碍权限，或无障碍服务尚未连接。")
+                .setPositiveButton("确定", null).show()
+        } else if (!service.showHitTest(mode)) {
+            AlertDialog.Builder(this)
+                .setMessage("无障碍测试窗口创建失败，请检查系统限制。")
+                .setPositiveButton("确定", null).show()
         }
     }
 
