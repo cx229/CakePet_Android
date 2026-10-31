@@ -2,6 +2,10 @@ package com.cx.cakepet
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.PixelFormat
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -19,6 +23,7 @@ class CakePetAccessibilityService : AccessibilityService() {
     }
 
     private var stage: AccessibilityHitTestView? = null
+    private val debugTag = "CakePetHitTest"
     private var control: View? = null
     private var controlParams: WindowManager.LayoutParams? = null
     private val wm: WindowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
@@ -63,6 +68,20 @@ class CakePetAccessibilityService : AccessibilityService() {
                     y = view.petY.toInt()
                 }
                 val touch = object : View(this) {
+                    private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.MAGENTA
+                        style = Paint.Style.STROKE
+                        strokeWidth = 4f
+                    }
+                    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.MAGENTA
+                        textSize = 20f
+                    }
+                    override fun onDraw(canvas: Canvas) {
+                        super.onDraw(canvas)
+                        canvas.drawRect(2f, 2f, width - 2f, height - 2f, borderPaint)
+                        canvas.drawText("CONTROL WINDOW", 8f, height - 12f, labelPaint)
+                    }
                     private var held = false
                     private var downX = 0f
                     private var downY = 0f
@@ -72,6 +91,8 @@ class CakePetAccessibilityService : AccessibilityService() {
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
                                 held = view.pixelHit(event.x, event.y)
+                                val alpha = view.pixelAlpha(event.x, event.y)
+                                Log.i(debugTag, "C DOWN local=(${event.x},${event.y}) raw=(${event.rawX},${event.rawY}) alpha=$alpha hit=$held window=(${lp.x},${lp.y}) pet=(${view.petX},${view.petY})")
                                 downX = event.rawX
                                 downY = event.rawY
                                 originX = view.petX
@@ -80,6 +101,7 @@ class CakePetAccessibilityService : AccessibilityService() {
                             }
                             MotionEvent.ACTION_MOVE -> {
                                 if (!held) return false
+                                Log.d(debugTag, "C MOVE raw=(${event.rawX},${event.rawY})")
                                 view.moveTo(originX + event.rawX - downX, originY + event.rawY - downY)
                                 lp.x = view.petX.toInt()
                                 lp.y = view.petY.toInt()
@@ -88,6 +110,7 @@ class CakePetAccessibilityService : AccessibilityService() {
                             }
                             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                                 val handled = held
+                                Log.i(debugTag, "C END action=${event.actionMasked} handled=$handled")
                                 held = false
                                 return handled
                             }
@@ -96,6 +119,7 @@ class CakePetAccessibilityService : AccessibilityService() {
                     }
                 }
                 wm.addView(touch, lp)
+                Log.i(debugTag, "C control created at (${lp.x},${lp.y}) size=$size")
                 control = touch
                 controlParams = lp
             }
