@@ -93,7 +93,25 @@
                     android:background="@drawable/bg_btn_primary"
                     android:textColor="@color/cp_btn_primary_text"
                     android:textSize="14sp"
-                    android:text="创建无障碍测试窗口" />
+                    android:text="实验 C：全屏画布 + 独立控制窗口" />
+                <TextView android:id="@+id/btn_passive_test"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center"
+                    android:background="@drawable/bg_btn_primary"
+                    android:textColor="@color/cp_btn_primary_text"
+                    android:textSize="14sp"
+                    android:text="实验 A：全屏无触摸（验证透传）" />
+                <TextView android:id="@+id/btn_full_test"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center"
+                    android:background="@drawable/bg_btn_primary"
+                    android:textColor="@color/cp_btn_primary_text"
+                    android:textSize="14sp"
+                    android:text="实验 B：全屏可触摸（对照）" />
                 <TextView android:id="@+id/btn_close_test"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
@@ -106,7 +124,7 @@
                 <TextView android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="青色：窗口边界；黄色：图像边界；红色：非透明像素边界。请切换至其他应用测试透明区域能否透传。"
+                    android:text="青色：全屏画布；黄色：图片矩形；红色：非透明像素外接矩形。A 不能拖动；B 可拖动但可能吞触摸；C 可拖动且画布外应透传。测试后回本页关闭窗口。"
                     android:textColor="@color/cp_sub"
                     android:textSize="12sp" />
             </LinearLayout>
