@@ -2,6 +2,9 @@ package com.cx.cakepet
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
+import android.graphics.PixelFormat
+import android.view.Gravity
+import android.view.WindowManager
 
 /**
  * 无障碍服务：用于感知当前前台应用（packageName），供桌宠互动 / 调试浮窗展示。
@@ -10,6 +13,49 @@ import android.view.accessibility.AccessibilityEvent
  * 前台包名通过 PetService 单例回传（PetService.instance.onForegroundAppChanged）。
  */
 class CakePetAccessibilityService : AccessibilityService() {
+    companion object {
+        var active: CakePetAccessibilityService? = null
+            private set
+    }
+    private var testView: AccessibilityHitTestView? = null
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        active = this
+    }
+
+    fun showHitTest(): Boolean {
+        if (testView != null) return true
+        return try {
+            val view = AccessibilityHitTestView(this)
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply { gravity = Gravity.TOP or Gravity.START }
+            (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
+            testView = view
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun hideHitTest() {
+        val view = testView ?: return
+        testView = null
+        try {
+            (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(view)
+        } finally { view.release() }
+    }
+
+    override fun onDestroy() {
+        hideHitTest()
+        if (active === this) active = null
+        super.onDestroy()
+    }
+
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
