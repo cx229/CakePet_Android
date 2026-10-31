@@ -33,6 +33,11 @@
         </activity>
 
         <activity
+            android:name=".GlobalSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:theme="@style/Theme.CakePet.FullscreenTitle"
