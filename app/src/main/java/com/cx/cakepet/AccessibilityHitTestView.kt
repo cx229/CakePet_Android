@@ -85,6 +85,13 @@ class AccessibilityHitTestView(context: Context) : View(context) {
         invalidate()
     }
 
+    fun pixelAlpha(localX: Float, localY: Float): Int {
+        val bmp = frames[index].bitmap
+        val x = (localX * bmp.width / petSize).toInt()
+        val y = (localY * bmp.height / petSize).toInt()
+        return if (x in 0 until bmp.width && y in 0 until bmp.height) Color.alpha(bmp.getPixel(x, y)) else -1
+    }
+
     fun pixelHit(localX: Float, localY: Float): Boolean {
         val bmp = frames[index].bitmap
         val x = (localX * bmp.width / petSize).toInt()
