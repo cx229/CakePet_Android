@@ -28,6 +28,7 @@ class CakePetAccessibilityService : AccessibilityService() {
         if (testView != null) return true
         return try {
             val view = AccessibilityHitTestView(this)
+            view.onClose = { hideHitTest() }
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
