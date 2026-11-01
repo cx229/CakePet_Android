@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/cp_bg">
+
+    <View android:id="@+id/status_bar_spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/cp_status_bar" />
+
+    <LinearLayout android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/cp_bg">
+        <ImageView android:id="@+id/iv_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="14dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title"
+            android:contentDescription="返回"
+            android:background="?attr/selectableItemBackgroundBorderless" />
+        <TextView android:id="@+id/tv_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/cp_title" />
+    </LinearLayout>
+
+    <ScrollView android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false">
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <LinearLayout android:id="@+id/row_accessibility"
+                style="@style/SettingsSwitchRow"
+                android:background="@drawable/card_bg"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp">
+                <LinearLayout style="@style/SettingsSwitchTexts">
+                    <TextView android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="无障碍权限"
+                        style="@style/SettingsOptionTitle" />
+                    <TextView android:id="@+id/tv_accessibility_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        style="@style/SettingsOptionNote"
+                        android:text="未开启" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/row_next"
+                style="@style/SettingsSwitchRow"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_bg"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:clickable="true"
+                android:focusable="true">
+                <LinearLayout style="@style/SettingsSwitchTexts">
+                    <TextView android:id="@+id/tv_next"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        style="@style/SettingsOptionTitle"
+                        android:text="调试" />
+                </LinearLayout>
+                <ImageView android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/icon_chevron"
+                    android:contentDescription="@null" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/test_buttons"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+                <TextView android:id="@+id/btn_create_test"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:gravity="center"
+                    android:background="@drawable/bg_btn_primary"
+                    android:textColor="@color/cp_btn_primary_text"
+                    android:textSize="14sp"
+                    android:text="实验 C：全屏画布 + 独立控制窗口" />
+                <TextView android:id="@+id/btn_passive_test"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center"
+                    android:background="@drawable/bg_btn_primary"
+                    android:textColor="@color/cp_btn_primary_text"
+                    android:textSize="14sp"
+                    android:text="实验 A：全屏无触摸（验证透传）" />
+                <TextView android:id="@+id/btn_full_test"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center"
+                    android:background="@drawable/bg_btn_primary"
+                    android:textColor="@color/cp_btn_primary_text"
+                    android:textSize="14sp"
+                    android:text="实验 B：全屏可触摸（对照）" />
+                <TextView android:id="@+id/btn_close_test"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center"
+                    android:background="@drawable/bg_btn_primary"
+                    android:textColor="@color/cp_btn_primary_text"
+                    android:textSize="14sp"
+                    android:text="关闭测试窗口" />
+                <TextView android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="青色：全屏画布；黄色：图片矩形；红色：非透明像素外接矩形。A 不能拖动；B 可拖动但可能吞触摸；C 可拖动且画布外应透传。测试后回本页关闭窗口。"
+                    android:textColor="@color/cp_sub"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

@@ -1,0 +1,50 @@
+name: Build accessibility navigation APK
+
+on:
+  push:
+    branches:
+      - feat/2610312239-accessibility-rendering
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android SDK 37
+        run: |
+          echo "Available API 37 packages:"
+          sdkmanager --list --channel=3 | grep -E "platforms;android-37|build-tools;37" || true
+          sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: bash ./gradlew --no-daemon assembleDebug
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CakePet-accessibility-navigation-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
