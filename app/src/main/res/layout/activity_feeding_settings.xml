@@ -107,7 +107,7 @@
                 android:text="大小" style="@style/SettingsOptionTitle"/>
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="投食后「酥」变大的程度"
+                android:text="「支鱼」的大小"
                 style="@style/SettingsOptionNote"/>
         </LinearLayout>
         <EditText android:id="@+id/fish_scale_value" android:layout_width="72dp"

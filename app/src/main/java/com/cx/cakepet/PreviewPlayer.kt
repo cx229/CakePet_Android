@@ -35,8 +35,10 @@ class PreviewPlayer(
         if (running) return
         running = true
         // 进入“无重力静止池”，从静坐开始（正式配置的自然起点，等同“静坐一遍”的起点）。
+        // 起点动作由素材包 functions 的 [static, sit] 提供（v1.01），代码不写死模式名；
+        // 包未提供该功能则保持当前动作（跳过，不回退）。
         mgr.useStaticPool = true
-        mgr.setMode(ImageModeManager.SIT_CLAM)
+        mgr.modeOf("static", "sit")?.let { mgr.setMode(it) }
         lastTick = System.currentTimeMillis()
         renderCurrent()     // 立即渲染起始帧
         postTick()
@@ -53,7 +55,7 @@ class PreviewPlayer(
      * 置 modeChangedFlag=true，现有 tick() 下一帧即接管渲染，pat_head-* 帧由 composedCache 复用。
      */
     fun triggerPat() {
-        mgr.playOnce(ImageModeManager.PAT_HEAD)
+        mgr.modeOf("pat_head", "pat_head")?.let { mgr.playOnce(it) }
     }
 
     private fun postTick() {

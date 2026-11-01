@@ -1,14 +1,48 @@
 {
-  "version": "1.0",
+  "version": "1.01",
   "id": "baiasu",
   "name": "白酥",
   "shortName": "酥",
   "authors": ["兰源"],
   "decodeTarget": 256,
   "anchorRes": 128,
-  "resources": { "food": "支鱼/fish-1.png" },
+  "menuPool": ["sit_clam", "sit_puffed", "shake_head", "lie", "walk", "wriggle", "walk_white", "pull_fish", "probe_head", "pat_head", "jump_down", "roll"],
   "standbyPool": ["sit_clam", "sit_puffed", "wriggle", "shake_head", "lie", "walk_white", "walk", "pull_fish"],
   "staticPool": ["sit_clam", "sit_puffed", "shake_head", "lie", "walk_white"],
+  "functions": {
+    "static": {
+      "sit": ["sit_clam"]
+    },
+    "touch": {
+      "roll": ["roll"],
+      "lift_up": ["lift_up"],
+      "jump_down": ["jump_down"],
+      "walk": ["walk"]
+    },
+    "snap": {
+      "snap_head": ["snap_head"],
+      "pat_head": {
+        "pat_head": ["snap_pat_head"]
+      },
+      "feed": {
+        "eat": ["snap_feed_fish"]
+      }
+    },
+    "climb": {
+      "walk": ["walk"],
+      "jump_up": ["jump_up"]
+    },
+    "pat_head": {
+      "pat_head": ["pat_head"],
+      "shake_head": ["shake_head"],
+      "sit_puffed": ["sit_puffed"]
+    },
+    "feed": {
+      "food": ["fish"],
+      "eat": ["feed_fish"]
+    }
+  },
+  "resources": { "fish": "支鱼/fish-1.png" },
   "modes": {
     "sit_clam": {
       "label": "静坐",

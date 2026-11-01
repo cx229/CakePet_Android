@@ -934,12 +934,14 @@ class PetService : Service() {
             false // 返回 false，仍交由 PetView 自身 onTouchEvent 处理拖拽/双击等
         }
         view.onDoubleTap = {
-            // 摸头（双击）：吸附态播放“吸附探头摸摸头”(SNAP_PAT_HEAD)，结束后回吸附态；
-            // 其余（含攀岩态）播放普通静坐摸摸头(PAT_HEAD)，攀岩态下由 climbRotation 把脚旋向所攀墙、播完仍回攀岩态。
+            // 摸头（双击）：吸附态播放「吸附探头摸头」，其余（含攀岩态）播放普通摸头，
+            // 攀岩态下由 climbRotation 把脚旋向所攀墙、播完仍回攀岩态。
+            // 模式名由素材包 functions 提供（v1.01），代码只按【功能路径】寻址：
+            // 包未提供对应功能则整段跳过，不做回退、不发空 setMode。
             if (view.physics.isSnapped) {
-                view.playOnce(ImageModeManager.SNAP_PAT_HEAD)
+                view.modeOf("snap", "pat_head", "pat_head")?.let { view.playOnce(it) }
             } else {
-                view.playOnce(ImageModeManager.PAT_HEAD)
+                view.modeOf("pat_head", "pat_head")?.let { view.playOnce(it) }
             }
             // 摸头（双击）：碎碎念显示摸头文案，1-3s 后继续轮播池
             if (thinkingOn(pets.firstOrNull { it.view === view }?.roleId)) {
@@ -1248,7 +1250,9 @@ class PetService : Service() {
         else Bitmap.createScaledBitmap(base, outW, outH, true).also { if (it != base) base.recycle() }
     }
 
-    // 加载并裁剪投喂食物位图：按【角色自身】资源包的 resources["food"] 取图（预装走 assets / 上传包走 filesDir），
+    // 加载并裁剪投喂食物位图：按【角色自身】资源包取图（预装走 assets / 上传包走 filesDir）。
+    // 食物资源的【键】由素材包 functions 的 [feed, food] 叶子给出（v1.01 契约），
+    // 代码不再写死 "food"——鱼的键名完全由各包自定（如蜂蜜猫为 fish）。
     // 逐角色缓存，避免多角色并存时食物串图；已缓存则直接复用。
     private fun ensureFishBitmap(roleId: String) {
         val existing = fishCropBitmaps[roleId]
@@ -1256,10 +1260,10 @@ class PetService : Service() {
         try {
             val d = descriptorForRole(roleId)
             val foodPath = (if (d != null && d.source == RoleSource.FILES) {
-                buildSpritePackForRole(this, d).resources["food"]
+                buildSpritePackForRole(this, d).foodRes
             } else {
-                buildSpritePack(this, d?.packId ?: ConfigDefaults.DEFAULT_SPRITE_PACK).resources["food"]
-            }) ?: run {
+                buildSpritePack(this, d?.packId ?: ConfigDefaults.DEFAULT_SPRITE_PACK).foodRes
+            }).takeIf { it.isNotEmpty() } ?: run {
                 fishCropBitmaps[roleId] = null
                 return
             }
@@ -1480,11 +1484,13 @@ class PetService : Service() {
     private fun triggerFeedAction(inst: PetInstance?, relX: Float, relY: Float) {
         if (inst == null) return
         val view = inst.view
+        // 投食动作由素材包 functions 提供（v1.01）：吸附态走 [snap, feed, eat]，待机态走 [feed, eat]。
+        // 两者末段同为 eat 但路径不同，故必须按完整路径寻址；包未提供则跳过投食动作。
         val name = when {
-            view.physics.isSnapped -> ImageModeManager.SNAP_FEED_FISH
-            view.isStandbyMode() -> ImageModeManager.FEED_FISH
-            else -> return
-        }
+            view.physics.isSnapped -> view.modeOf("snap", "feed", "eat")
+            view.isStandbyMode() -> view.modeOf("feed", "eat")
+            else -> null
+        } ?: return
         // 脚前向 Fg（屏幕向量）：非吸附用 gravityDir 映射，吸附用 snapRotation。
         // 镜像目标：让宠物"面朝鱼"。鱼在 Fg 反方向（D·Fg<0，鱼在宠物身后）则镜像。
         // 上/左/右朝向由 Fg 自身适配，无需额外旋转轴。
@@ -1518,11 +1524,14 @@ class PetService : Service() {
         val foodCfg = foodRt.config.getBlocking()
         if (!foodCfg.feedGrowEnabled) return
         val factor = foodCfg.feedGrowFactor.coerceAtLeast(0.01f)
-        // 投喂变大的上限 = 吃者角色对「大小」设定的上界（不是绝对阈值），阈值页修改后此处随之生效
-        val scaleUserMax = foodRt.bounds.getBlocking(SettingsPage.MAIN)
-            .sliders.firstOrNull { it.key == "scale" }?.to ?: ConfigDefaults.FEED_GROW_MAX_SCALE
         val eatRt = engines[eatRoleId] ?: return
         val eatCfg = eatRt.config.getBlocking()
+        // 投喂变大的上限 = 【被投喂宠物（吃者）】自己「大小」设定的上界（不是绝对阈值）。
+        // 被放大的是吃者，故必须受吃者自身上界约束；此前误取【食物角色】(foodRt) 的上界，
+        // 会出现"吃了别角色的食物后突破自身上界"的越界放大。
+        // 阈值页调整后此处随之生效。
+        val scaleUserMax = eatRt.bounds.getBlocking(SettingsPage.MAIN)
+            .sliders.firstOrNull { it.key == "scale" }?.to ?: ConfigDefaults.FEED_GROW_MAX_SCALE
         val newScale = (eatCfg.scale + factor).coerceAtMost(scaleUserMax)
         if (newScale > eatCfg.scale) scope.launch { eatRt.config.update { it.copy(scale = newScale) } }
     }
@@ -3602,51 +3611,10 @@ class PetService : Service() {
             action != MenuActivity.ACTION_RECALL && action != MenuActivity.ACTION_HIDE
         ) return
         when (action) {
-            MenuActivity.ACTION_PAT -> tv.playOnce(ImageModeManager.PAT_HEAD)
-            MenuActivity.ACTION_JUMP -> {
-                tv.playOnce(ImageModeManager.JUMP_DOWN)
-                // 给一个向上的初速度，模拟跳起（配合底部重力落回）
-                tv.physics.vx = 0f
-                tv.physics.vy = -900f
-            }
-            MenuActivity.ACTION_ROLL -> {
-                tv.playOnce(ImageModeManager.ROLL)
-                // 翻滚带水平位移
-                tv.physics.vx = 300f
-                tv.physics.vy = 0f
-            }
-            MenuActivity.ACTION_PULL_FISH -> {
-                // 扒鱼：位移 mode，但位移非循环、仅一次（单循环）。
-                // 对齐 PC PullFishMode：位移由【每帧 offset 累加】驱动（非物理速度），
-                // 在 PetView 帧切换时把各帧 dx 累加到坐标，播完即停。
-                // 镜像支持（类似 walk/蠕动）：随机面朝方向——图片资源朝右(flipX=false)，
-                // 翻转(flipX=true)则朝左；位移方向随 flipX 反向、锚点对称翻转（见 PetView）。
-                // 扒鱼结束后保留 flipX，使后续 LIE/SIT 也沿用该朝向，方向连贯。
-                // 撞墙由 PetView 累加时 coerceIn 边界处理（夹边即停，不穿透/反弹）。
-                tv.flipX = Random.nextBoolean()
-                tv.playOnce(ImageModeManager.PULL_FISH)
-            }
-            MenuActivity.ACTION_WHITE -> tv.playOnce(ImageModeManager.WALK_WHITE)
-            MenuActivity.ACTION_PUFFED -> tv.playOnce(ImageModeManager.SIT_PUFFED)
-            MenuActivity.ACTION_SIT_CLAM -> tv.playOnce(ImageModeManager.SIT_CLAM)
-            MenuActivity.ACTION_SHAKE_HEAD -> tv.playOnce(ImageModeManager.SHAKE_HEAD)
-            // WALK / WRIGGLE 是常驻循环 + 行走位移模式（walkSpeed>0），
-            // 必须用 setMode（常驻）激活，不能用 playOnce：
-            // playOnce 会把模式放进 forcedSeq，而 isWalk() 要求 forcedSeq==null，
-            // 导致行走分支不执行 → 原地踏步无位移。setMode 后 forcedSeq==null，位移生效。
-            MenuActivity.ACTION_WALK -> tv.setMode(ImageModeManager.WALK)
-            MenuActivity.ACTION_WRIGGLE -> tv.setMode(ImageModeManager.WRIGGLE)
-            MenuActivity.ACTION_LIE -> tv.playOnce(ImageModeManager.LIE)
-            MenuActivity.ACTION_PROBE_HEAD -> {
-                tv.playOnce(ImageModeManager.PROBE_HEAD)
-                // 摸头：碎碎念显示“喵喵喵/~o( =∩ω∩= )m/喵”三选一，1-3s 后继续轮播池；
-                // 显示在该目标宠物自己的碎碎念浮窗（多数量下不再串到主实例）。
-                if (thinkingOn(pets.firstOrNull { it.view === tv }?.roleId)) {
-                    (pets.find { it.view === tv }?.petMsg ?: trayMsgManager)?.showMomentary(
-                        listOf("喵喵喵", "~o( =∩ω∩= )m", "喵"), 1000L, 3000L
-                    )
-                }
-            }
+            // 说明：动作类菜单项已改为由素材包 menuPool 驱动（见 PetMenu.buildActions /
+            // PetService.performMenuMode），项数与内容随角色而异（差异化），
+            // 故此处不再保留任何固定动作分支——代码不直接引用模式名。
+            // 保留的仅为与素材包无关的系统动作（RECALL / HIDE / EXIT 等）。
             MenuActivity.ACTION_HIDE -> {
                 // 隐藏 = 置 visible=false（与设置页“显示宠物”开关同源同一标志），
                 // 保持服务运行，仅隐藏浮窗；不再 stopService，避免与设置页状态不同步。
@@ -3680,6 +3648,28 @@ class PetService : Service() {
                 }
             }
         }
+    }
+
+    /** 按包 id 取该角色的 SpritePack（ASSETS 预装 / FILES 上传包均支持）。 */
+    fun spritePackForRole(roleId: String): SpritePack =
+        descriptorForRole(roleId)?.let { buildSpritePackForRole(this, it) }
+            ?: buildSpritePack(this, ConfigDefaults.DEFAULT_SPRITE_PACK)
+
+    /**
+     * 播放【本角色 menuPool 中的某个模式】（v1.01 契约：悬浮菜单项由素材包决定）。
+     *
+     * 与 performAction 的区别：这里直接接受【模式名】而非固定的 ACTION 常量，
+     * 菜单项因此完全由素材包驱动（角色差异 = 改 JSON，不动代码）。
+     *
+     * 循环与否由素材包 modes 的 loop 声明：循环类（walk / wriggle 等带位移的常驻动作）
+     * 必须走 setMode（常驻），一次性动作走 playOnce——代码不写死哪些动作该常驻。
+     */
+    fun performMenuMode(roleId: String, mode: String?, target: PetView?) {
+        if (mode.isNullOrEmpty()) return
+        val tv = target ?: pets.firstOrNull { it.roleId == roleId }?.view ?: return
+        // 吸附态下菜单动作一律忽略（探头常驻）
+        if (tv.physics.isSnapped) return
+        if (spritePackForRole(roleId).modeLoops[mode] == true) tv.setMode(mode) else tv.playOnce(mode)
     }
 
     /** 彻底退出：持久化退出意图，释放资源，停止服务并结束整个应用进程。 */

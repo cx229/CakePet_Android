@@ -3,6 +3,7 @@ package com.cx.cakepet
 import android.app.AlertDialog
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -36,6 +37,26 @@ import net.lingala.zip4j.ZipFile
  * - 页面级「＋导入素材包(.ZIP)」：直接访问存储选择 .zip 并导入，不再跳转额外页面。
  */
 class RoleManageActivity : AppCompatActivity() {
+
+    companion object {
+        /** 导入相关日志标签：解压失败时用于在 logcat 定位完整异常栈。 */
+        private const val TAG_IMPORT = "RoleImport"
+
+        /**
+         * 从 org.json 的异常消息（形如 "Expected a ',' or ']' at 1234 [character 5 line 20]"）
+         * 中提取出错【字符位置】，并截取其前后各 100 字符作为上下文返回。
+         * 用于一眼识别多余逗号、混入注释、文件被截断等非法 JSON 情形。
+         * 返回内容已限长并压平换行，避免巨大 JSON 刷屏 logcat。
+         */
+        private fun jsonErrorContext(raw: String, message: String?): String {
+            val idx = Regex("""at\s+(\d+)""").find(message ?: "")?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: return ""
+            if (idx !in 0..raw.length) return ""
+            val from = (idx - 100).coerceAtLeast(0)
+            val to = (idx + 100).coerceAtMost(raw.length)
+            return "\n  >>> 出错位置 $idx 附近:\n  ${raw.substring(from, to).replace("\n", " ")}"
+        }
+    }
 
     private lateinit var recycler: RecyclerView
     private lateinit var adapter: CatalogAdapter
@@ -158,6 +179,12 @@ class RoleManageActivity : AppCompatActivity() {
         )
         var ok = false
         var lastErrors: List<String> = emptyList()
+        // 记录最后一次解压异常：原先 catch 直接吞掉异常，失败时无从判断是文件损坏、
+        // 文件名过长还是路径非法。现保留异常本体，失败时打印完整栈并提示摘要。
+        var lastThrowable: Throwable? = null
+        // modes.json 读取/解析失败单独留存：它走 continue 而非抛异常，若不记录，
+        // 最终提示会误报成"未找到 modes.json"（实则文件存在、只是内容非法）。
+        var jsonError: Throwable? = null
         for (cs in charsets) {
             try {
                 ZipFile(tmp).use { zip ->
@@ -192,8 +219,35 @@ class RoleManageActivity : AppCompatActivity() {
                 }
                 // 以"通过完整资源包校验"判定该编码正确，否则换下一个编码重试。
                 val modesFile = File(dest, "modes.json")
-                if (!modesFile.exists()) { dest.deleteRecursively(); dest.mkdirs(); continue }
-                val json = try { JSONObject(modesFile.readText()) } catch (_: Exception) { null }
+                if (!modesFile.exists()) {
+                    // 诊断用：打印实际解出的目录树，用于区分"多层包裹目录""条目带盘符/绝对路径前缀"
+                    // "条目名编码错误""包内根本没有 modes.json"等情况。定位后可移除。
+                    val tree = try {
+                        dest.walkTopDown().take(30).joinToString("\n  ") { it.relativeTo(dest).path }
+                    } catch (_: Exception) { "<遍历失败>" }
+                    val topLevel = dest.listFiles()?.joinToString { it.name } ?: "<空>"
+                    Log.e(TAG_IMPORT, "[$cs] 根目录无 modes.json。顶层=[$topLevel]\n  实际解出:\n  $tree")
+                    dest.deleteRecursively(); dest.mkdirs(); continue
+                }
+                val jsonText = try { modesFile.readText() } catch (e: Exception) {
+                    jsonError = e
+                    Log.e(TAG_IMPORT, "[$cs] modes.json 读取失败", e)
+                    null
+                }
+                val json = if (jsonText != null) {
+                    try { JSONObject(jsonText) } catch (e: Exception) {
+                        jsonError = e
+                        // 打印出错字符位置及其上下文：能一眼看出是多余逗号、注释还是被截断。
+                        // 消息可能极长（含整段 JSON），故统一限长，避免 logcat 刷屏。
+                        Log.e(
+                            TAG_IMPORT,
+                            "[$cs] modes.json 解析失败（${jsonText.length}字符）：${e.message?.take(300)}" +
+                                jsonErrorContext(jsonText, e.message),
+                            e
+                        )
+                        null
+                    }
+                } else null
                 if (json == null) { dest.deleteRecursively(); dest.mkdirs(); continue }
                 val validation = RolePackageContract.validate(json)
                 val missingAssets = RolePackageContract.verifyAssets(dest, json)
@@ -204,11 +258,15 @@ class RoleManageActivity : AppCompatActivity() {
                 }
                 ok = true
                 break
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                lastThrowable = e
+                Log.e(TAG_IMPORT, "解压失败（charset=$cs，文件=${tmp.length()}字节）", e)
                 dest.deleteRecursively(); dest.mkdirs() // 当前编码/解压失败，换下一个编码重试
             }
         }
         if (!ok) {
+            // 先记录大小再删除：tmp.delete() 之后 length() 恒为 0，日志会失去参考价值。
+            val zipSize = tmp.length()
             tmp.delete()
             // 若曾解出过合法包结构但资源缺失，给出具体校验错误；否则提示压缩包无效。
             if (lastErrors.isNotEmpty()) {
@@ -218,7 +276,19 @@ class RoleManageActivity : AppCompatActivity() {
                     .setPositiveButton("知道了", null)
                     .show()
             } else {
-                Toast.makeText(this, "解压失败，请确认压缩包是否完整", Toast.LENGTH_LONG).show()
+                // 把真正的失败原因暴露出来：原先只给一句笼统提示，异常被 catch 吞掉，
+                // 无法区分【压缩包损坏】【文件名过长】【Zip Slip 拦截】【磁盘空间不足】等情况。
+                // - logcat（tag=RoleImport）：完整异常栈；
+                // - Toast：异常摘要（受显示长度限制，完整信息看 logcat）。
+                // 优先取解压异常；其次取 modes.json 的读取/解析异常。
+                val t = lastThrowable ?: jsonError
+                val summary = if (t != null) {
+                    "${t.javaClass.simpleName}: ${t.message ?: "无详细信息"}"
+                } else {
+                    "未捕获到异常（多为未找到 modes.json，属包结构问题）"
+                }
+                Log.e(TAG_IMPORT, "解压失败汇总：$summary（已试编码=$charsets，文件大小=${zipSize}字节）", t)
+                Toast.makeText(this, "解压失败：$summary", Toast.LENGTH_LONG).show()
             }
             return
         }

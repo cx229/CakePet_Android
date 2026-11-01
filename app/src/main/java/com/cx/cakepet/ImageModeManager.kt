@@ -2,6 +2,7 @@ package com.cx.cakepet
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import kotlin.math.roundToInt
 import kotlin.random.Random
 import org.json.JSONArray
@@ -31,8 +32,29 @@ data class SpritePack(
     val anchorRes: Int = 128,          // 逻辑分辨率（锚点/画布/UI 坐标系单位），恒 128（由 modes.json 覆盖）
     val name: String = "",             // 资源包中文名（modes.json 指定，v1.0 必填），仅展示用
     val shortName: String = "",         // 资源包默认简称（modes.json 指定，v1.0 必填）：每个角色各自定义，不全局写死
-    val resources: Map<String, String> = emptyMap()   // 资源清单（modes.json 指定）：键=资源名(如 food)，值=相对路径；为其它图片资源预留扩展
-)
+    val resources: Map<String, String> = emptyMap(),   // 资源清单（modes.json 指定）：键=资源名，值=相对路径；为其它图片资源预留扩展
+    // v1.01 契约：功能路径 -> 该功能的候选叶子列表（叶子可能是模式名，也可能是 resources 的键）。
+    // 键为【功能路径】（如 [climb, walk]、[snap, pat_head, pat_head]），层数不限；
+    // 值为候选列表（当前多为单元素，为将来"同一功能多个动作"预留）。
+    val functions: Map<List<String>, List<String>> = emptyMap(),
+    // 悬浮菜单可触发的模式（v1.01 必填，由 modes.json 的 menuPool 提供）
+    val menuPool: List<String> = emptyList(),
+    // 模式名 → 显示名（modes 里每项的 label），供菜单等 UI 取中文名，代码不写死文案
+    val modeLabels: Map<String, String> = emptyMap(),
+    // 模式名 → 是否循环（modes 里每项的 loop）。循环类（走/蠕动等）须用 setMode 常驻，
+    // 一次性类用 playOnce；由素材包声明，代码不写死哪些动作该常驻。
+    val modeLoops: Map<String, Boolean> = emptyMap()
+) {
+    /**
+     * 食物图片路径：资源键由 functions 的 [feed, food] 叶子给出，而非在代码里写死键名。
+     * 这样"鱼在包里叫什么"完全由素材包决定（蜂蜜猫为 fish），代码零硬编码。
+     */
+    val foodRes: String
+        get() {
+            val key = functions[listOf("feed", "food")]?.firstOrNull() ?: return ""
+            return resources[key] ?: ""
+        }
+}
 
 /**
  * 资源包目录：选择键(Int，持久化于 pet_config) -> (包 id, 资源根目录 base, 存储类型)。
@@ -94,8 +116,90 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
         anchorRes = if (root.has("anchorRes")) root.optInt("anchorRes", 128) else 128,
         name = if (root.has("name")) root.optString("name", "") else "",
         shortName = if (root.has("shortName")) root.optString("shortName", "") else "",
-        resources = parseResources(root)
+        resources = parseResources(root),
+        functions = parseFunctions(root),
+        menuPool = parseStringArray(root, "menuPool"),
+        modeLabels = parseModeLabels(root),
+        modeLoops = parseModeLoops(root)
     )
+}
+
+/**
+ * 解析各模式的显示名（modes 里每项的 label）。
+ * 菜单等 UI 用它取中文名，代码里不写死任何动作文案。
+ */
+private fun parseModeLabels(root: JSONObject): Map<String, String> {
+    val modes = root.optJSONObject("modes") ?: return emptyMap()
+    val out = LinkedHashMap<String, String>()
+    val kit = modes.keys()
+    while (kit.hasNext()) {
+        val name = kit.next()
+        val label = modes.optJSONObject(name)?.optString("label", "") ?: ""
+        if (label.isNotEmpty()) out[name] = label
+    }
+    return out
+}
+
+/**
+ * 解析 v1.01 契约的 functions：递归收集「功能路径 → 候选叶子列表」。
+ *
+ * 结构（层数不限，叶子恒为数组）：
+ *   "static": {"sit": ["sit_clam"]}
+ *   "touch":  {"roll": ["roll"], "walk": ["walk"]}
+ *   "snap":   {"pat_head": {"pat_head": ["snap_pat_head"]}}
+ *
+ * 路径是完整链路，用以区分同名不同义：
+ *   [snap, pat_head, pat_head] -> snap_pat_head（吸附态摸头）
+ *   [pat_head, pat_head]       -> pat_head     （普通摸头）
+ * 故调用方必须按【完整路径】寻址，只取末段会撞车。
+ *
+ * 叶子是候选列表：当前多为单元素，为将来"同一功能多个动作（如多种 walk）"预留。
+ */
+fun parseFunctions(root: JSONObject): Map<List<String>, List<String>> {
+    val obj = root.optJSONObject("functions") ?: return emptyMap()
+    val out = LinkedHashMap<List<String>, List<String>>()
+    fun walk(node: Any?, path: List<String>) {
+        when (node) {
+            is JSONArray -> {
+                val leaves = (0 until node.length())
+                    .map { node.optString(it) }
+                    .filter { it.isNotEmpty() }
+                if (leaves.isNotEmpty()) out[path] = leaves
+            }
+            is JSONObject -> {
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    walk(node.opt(k), path + k)
+                }
+            }
+        }
+    }
+    walk(obj, emptyList())
+    return out
+}
+
+/**
+ * 解析各模式是否循环（modes 里每项的 loop）。
+ * 循环类（walk / wriggle 等带位移的常驻动作）须用 setMode；一次性类用 playOnce。
+ * 由素材包声明，代码里不写死"哪些动作该常驻"。
+ */
+private fun parseModeLoops(root: JSONObject): Map<String, Boolean> {
+    val modes = root.optJSONObject("modes") ?: return emptyMap()
+    val out = LinkedHashMap<String, Boolean>()
+    val kit = modes.keys()
+    while (kit.hasNext()) {
+        val name = kit.next()
+        val obj = modes.optJSONObject(name) ?: continue
+        if (obj.has("loop")) out[name] = obj.optBoolean("loop", false)
+    }
+    return out
+}
+
+/** 读取顶层字符串数组字段（缺失/类型不符时返回空表）。 */
+private fun parseStringArray(root: JSONObject, field: String): List<String> {
+    val arr = root.optJSONArray(field) ?: return emptyList()
+    return (0 until arr.length()).mapNotNull { arr.optString(it).takeIf { s -> s.isNotEmpty() } }
 }
 
 /**
@@ -110,27 +214,25 @@ class ImageModeManager(
     initialPack: SpritePack = packForId(ctx, ConfigDefaults.DEFAULT_SPRITE_PACK)
 ) {
 
+    /**
+     * 本角色【独立】的随机源（每角色一个实例，天然隔离）。
+     * 种子按包 id 派生：既保证多角色之间抽选序列互不干扰（角色 A 抽一次不会推进角色 B 的序列），
+     * 又便于按 id 复现问题。绝不使用 Random.Default / 全局种子。
+     */
+    private val rng = Random(initialPack.id.hashCode())
+
     companion object {
-        const val DEFAULT_MODE = "sit_clam"
-        const val PAT_HEAD = "pat_head"
-        const val SHAKE_HEAD = "shake_head"
-        const val JUMP_DOWN = "jump_down"
-        const val JUMP_UP = "jump_up"
-        const val LIFT_UP = "lift_up"
-        const val SIT_CLAM = "sit_clam"
-        const val SIT_PUFFED = "sit_puffed"
-        const val ROLL = "roll"
-        const val WALK = "walk"
-        const val WALK_WHITE = "walk_white"
-        const val WRIGGLE = "wriggle"
-        const val PULL_FISH = "pull_fish"
-        const val PROBE_HEAD = "probe_head"
-        const val FEED_FISH = "feed_fish"              // 投食成功：坐姿投食（待机态触发，结束回待机池）
-        const val SNAP_FEED_FISH = "snap_feed_fish"     // 投食成功：吸附投食（吸附态触发，结束回吸附态）
-        const val SNAP_HEAD = "snap_head"
-        const val SNAP_PAT_HEAD = "snap_pat_head"   // 吸附探头摸摸头：吸附态下的“摸头”动作，结束后回 snap_head
-        const val LIE = "lie"
-        const val PORTAL = "portal"
+        /**
+         * v1.01 起【不再定义任何动作名常量】。
+         *
+         * 背景：旧版这里写死了 sit_clam / walk / lie / pull_fish 等一整套动作名，
+         * 而各角色的动作差异很大（如蜂蜜猫没有 walk_white，却有专属的 load），
+         * 硬编码会让新角色要么动作缺失、要么切到不存在的模式而卡住。
+         *
+         * 现状：动作一律经【功能路径】寻址（modeOf("climb","walk")），
+         * 具体名字由素材包 functions 提供；待机/静止/菜单池亦然。
+         * 本 companion 只保留与动作名无关的通用能力。
+         */
 
         /**
          * 按资源包 id 取得对应资源包；未知键回退默认（芝麻酥）。
@@ -207,21 +309,18 @@ class ImageModeManager(
 
     /**
      * 待机自动轮换池：物理空闲时，按时间随机切换到池中（排除当前）的某个模式。
-     * 默认包含多个固定位常驻模式，使宠物不会一直停留在 sit_clam。
-     * 后续可按状态（如关闭重力）裁剪此池，不含位移/物理驱动类模式。
+     * 内容由【素材包】的 standbyPool 提供（v1.01 必备），代码不写死任何模式名；
+     * 载入配置后再按该包实际定义的动作裁剪，避免引用包里不存在的模式（旧版曾因此切到
+     * 空模式而卡住）。包未提供时为空表 → 不做待机轮换（优于切到不存在的动作）。
      */
-    private var standbyPool = mutableListOf(
-        SIT_CLAM, SIT_PUFFED, WRIGGLE, SHAKE_HEAD, LIE, WALK_WHITE, WALK,
-        PULL_FISH   // 扒鱼：待机可随机触发（一次性位移动作，播完回 LIE）
-    )
+    private var standbyPool: List<String> = emptyList()
 
     /**
      * 静止池：待机池去除位移/物理驱动类模式（蠕动、walk、扒鱼）。
-     * 当“重力·抛掷”关闭（gravitEnabled=false）时使用，宠物保持在原地的小动作/静坐。
+     * 当“重力·抛掷”关闭（gravityEnabled=false）时使用，宠物保持在原地的小动作/静坐。
+     * 同样由素材包的 staticPool 提供，不再硬编码。
      */
-    private var staticPool = listOf(
-        SIT_CLAM, SIT_PUFFED, SHAKE_HEAD, LIE, WALK_WHITE
-    )
+    private var staticPool: List<String> = emptyList()
 
     /**
      * true 时使用静止池 staticPool（去除蠕动/walk/扒鱼）；false 使用完整待机池。
@@ -253,16 +352,44 @@ class ImageModeManager(
         if (useStaticPool) staticPool else standbyPool
 
     /**
+     * 按【功能路径】取该功能的候选叶子（v1.01 契约）。
+     * 返回空表表示素材包未提供该功能——调用方应据此【跳过】，不要发空 setMode。
+     */
+    fun leavesOf(vararg path: String): List<String> = currentPack.functions[path.toList()] ?: emptyList()
+
+    /**
+     * 按功能路径取【模式名】（从候选里挑一个）。
+     * 候选当前多为单元素（行为不变）；将来同一功能有多个动作时，由本角色的独立随机源挑选，
+     * 各角色序列互不干扰。素材包未提供该功能时返回 null。
+     */
+    fun modeOf(vararg path: String): String? = leavesOf(*path).let { if (it.isEmpty()) null else it.random(rng) }
+
+    /**
+     * 按功能路径取【资源路径】（叶子是 resources 的键，而非模式名）。
+     * 例如 [feed, food] 的叶子 "fish" → resources["fish"] → "支鱼/fish-1.png"。
+     * 素材包未提供该功能时返回 null。
+     */
+    fun resourceOf(vararg path: String): String? {
+        val key = leavesOf(*path).firstOrNull() ?: return null
+        return currentPack.resources[key]
+    }
+
+    /**
      * 从池子捞一个新动作（排除当前动作）；若开启好动飞跃且处于攀岩态，按 leapProbability 概率直接跳起。
      * 供：一次性动画收尾、主循环收尾、定时随机切换 三处统一调用。
      */
     fun pickStandbyMode(exclude: String): String {
-        // 自动觅食优先于飞跃：觅食中锁定食物则继续沿墙 WALK，不跳起（不拦截其他逻辑，仅插队）。
-        if (forageActive) return WALK
+        // 自动觅食优先于飞跃：觅食中锁定食物则继续沿墙行走，不跳起（不拦截其他逻辑，仅插队）。
+        // 动作名由素材包 functions 提供：包未提供攀岩行走功能则不作处理，走常规池子。
+        if (forageActive) {
+            modeOf("climb", "walk")?.let { return it }
+        }
         // 先按飞跃概率判断是否直接跳起；不飞跃再正常从池子捞其他动作
-        if (leapEnabled && inClimbing && Random.nextFloat() < leapProbability) return JUMP_UP
+        if (leapEnabled && inClimbing && Random.nextFloat() < leapProbability) {
+            modeOf("climb", "jump_up")?.let { return it }
+        }
         val pool = currentPool().filter { it != exclude }
-        return if (pool.isNotEmpty()) pool.random() else DEFAULT_MODE
+        return if (pool.isNotEmpty()) pool.random() else currentName
     }
 
     init {
@@ -271,290 +398,21 @@ class ImageModeManager(
             try {
                 loadModesFromJson(currentPack.configPath!!)
                 loaded = true
-            } catch (_: Exception) {
-                // 解析失败：回退到下方写死的内建模式（保持旧行为，避免宠物崩溃）
+            } catch (e: Exception) {
+                // v1.01：modes.json 是必备字段（缺失/损坏的包在导入时即被拒），
+                // 故【不再】回退到内建硬编码动作——那会让新角色拿到默认角色的动作而串图。
+                // 载入失败时 modes 为空，宠物无动作可播，属素材包本身问题，应修包而非静默兜底。
+                Log.e("ImageModeManager", "载入 ${currentPack.configPath} 失败：该包 modes.json 缺失或非法", e)
             }
         }
-        if (!loaded) {
-        // ============ 常驻：静坐-安静（SIT_CLAM）============
-        // 帧链：1→2→3→2→1(loop)。delay 对齐 PC SitClamMode
-        registerMode(ImageModeDef(
-            SIT_CLAM, "sit_clam-1.png",
-            listOf(
-                Frame("sit_clam-1.png", 1, rnd(120, 10_000), anchorY = 1),
-                Frame("sit_clam-2.png", 2, rnd(120, 160), anchorY = 1),
-                Frame("sit_clam-3.png", 3, rnd(120, 160), anchorY = 1),
-                Frame("sit_clam-2.png", 0, rnd(120, 160), anchorY = 1)
-            ),
-            loop = true,
-            timeNextEnabled = true,
-            changeIntervalMin = 3000, changeIntervalMax = 25_000, changeProb = 1f,
-            // PC：sit 之间随机切换（常驻池），由 time_next 触发后随机选下一模式
-            onSequenceEnd = { _ -> } // 占位，实际切换在 timeNext 里处理
-        ))
 
-        // ============ 常驻：静坐-炸毛（SIT_PUFFED）============
-        registerMode(ImageModeDef(
-            SIT_PUFFED, "sit_puffed-1.png",
-            listOf(
-                Frame("sit_puffed-1.png", 1, rnd(120, 10_000), anchorY = 1),
-                Frame("sit_puffed-2.png", 2, rnd(120, 160), anchorY = 1),
-                Frame("sit_puffed-3.png", 3, rnd(120, 160), anchorY = 1),
-                Frame("sit_puffed-4.png", 4, rnd(120, 160), anchorY = 1),
-                Frame("sit_puffed-2.png", 0, rnd(120, 160), anchorY = 1)
-            ),
-            loop = true,
-            timeNextEnabled = true,
-            changeIntervalMin = 3000, changeIntervalMax = 25_000, changeProb = 1f
-        ))
-
-        // ============ 一次性：摸头（PAT_HEAD）→ 摇头 ============
-        registerMode(ImageModeDef(
-            PAT_HEAD, "sit_clam-1.png",
-            listOf(
-                Frame("pat_head-1.png", 1, rnd(105, 110), anchorY = 1),
-                Frame("pat_head-2.png", 2, rnd(100, 110), anchorY = 1),
-                Frame("pat_head-3.png", 3, rnd(100, 110), anchorY = 1),
-                Frame("pat_head-4.png", 4, rnd(105, 110), anchorY = 1),
-                Frame("pat_head-5.png", 1, rnd(105, 110), anchorY = 1)  // 闭合内部循环 1->2->3->4->5->1
-            ),
-            loop = false,                       // 循环由 timeNext 机制驱动，而非帧链 loop
-            nextModeName = SHAKE_HEAD,          // 概率跳出后的下一个模式（对齐 PC）
-            timeNextEnabled = true,             // 启用内部循环 + 概率跳出
-            changeIntervalMin = 3000,
-            changeIntervalMax = 4000,
-            changeProb = 0.95f                  // 每 3~4s 以 95% 概率跳出到 SHAKE_HEAD
-        ))
-
-        // ============ 一次性：摇头（SHAKE_HEAD）→ 炸毛 ============
-        // 对齐 PC ShakeHeadMode：两帧内部循环(1->2->1) + timeNext(1~2s, prob=1) 跳出到炸毛。
-        // PC: conf S1->S2->S1, delay randint(140,180)；change_interval 1000~2000, change_prob=1,
-        //     next=SitPuffed。
-        registerMode(ImageModeDef(
-            SHAKE_HEAD, "sit_clam-1.png",
-            listOf(
-                Frame("shake_head-1.png", 1, rnd(140, 180), anchorY = 1),  // -> 帧2
-                Frame("shake_head-2.png", 0, rnd(140, 180), anchorY = 1)   // -> 帧1（闭合 1<->2 循环）
-            ),
-            loop = false,                       // 循环由 timeNext 机制驱动，而非帧链 loop
-            nextModeName = SIT_PUFFED,
-            timeNextEnabled = true,             // 启用内部循环 + 概率跳出
-            changeIntervalMin = 1000,
-            changeIntervalMax = 2000,
-            changeProb = 1f                      // 每 1~2s 必跳出到 SIT_PUFFED（对齐 PC change_prob=1）
-        ))
-
-        // ============ 一次性：掉落（JUMP_DOWN）-> 落地停留 200~250ms -> 行走 ============
-        // 对齐 PC ThrowFallStandFollowMode(JumpDown)：帧 S1->S2->S3，delay randint(50,70)/randint(80,90)/
-        //     randint(200,250)；time_next 关闭；change_mode 依 throw_follow_enabled 决定落地后
-        //     回 Walk(默认 True) 或 Lie。安卓无跟随开关，取 PC 默认(True) → 回行走(WALK)。
-        registerMode(ImageModeDef(
-            JUMP_DOWN, "sit_clam-1.png",
-            listOf(
-                // 空中下落帧（S1/S2）：PC 默认 (宽/2, 高)=(64,128)，即"图片底部当成假设地面线"，
-                // 宠物随物理整体下落，脚相对图位置不变，表现下落途中。jump_down 是原生 128 图无 padding。
-                Frame("jump_down-1.png", 1, rnd(50, 70), anchorX = 64, anchorY = 1),
-                Frame("jump_down-2.png", 2, rnd(80, 90), anchorX = 64, anchorY = 1),
-                // 落地帧（S3）：停留 200-250ms（对齐 PC）后切 WALK。
-                // 采用"顶部填充、底部补透明"后，各落地态（WALK/sit/jump_down 落地）的脚锚点 fay 在统一画布内
-                // 由 currentAnchor 按填充规则统一给出，地面线天然一致，无需手动偏移。
-                // jump_down 是 128 原生图（无 padding，bh=128），anchorY=1 ⇒ fay=127，与 WALK 连续、无跳变。
-                // 期间可被拖拽/抛掷（cancelForced）或主动切换（菜单 ACTION_JUMP 等）打断。
-                Frame("jump_down-3.png", null, rnd(200, 250), anchorX = 64, anchorY = 1)
-            ),
-            loop = false,
-            nextModeName = WALK
-        ))
-
-        // ============ 一次性（拖拽中循环）：提（LIFT_UP）============
-        // 帧链严格对齐 PC DragFollowMode（注意 S1/S2 的 next 与 S3~S6 的 next）：
-        //  - S1(0)->S2(1)，S2(1)->S1(0)：慢速轻晃闭环 0↔1（即 PC 的 0101）。
-        //  - S3(2)->S1(0)，S4(3)->S2(1)，S5(4)->S3(2)，S6(5)->S4(3)：
-        //    高速甩动从 S3/S4/S5/S6 起点沿链 3→4→5→6→（S6.next=S4，即回 S4 再走 4→5→6）后，
-        //    经 S3->S1 / S4->S2 自然回落到轻晃链 0↔1（对齐 PC 3→1/4→2 的回归）。
-        //  delay 对齐 PC：S1/S2 randint(340,370)；S3/S4 200；S5/S6 300。
-        registerMode(ImageModeDef(
-            LIFT_UP, "sit_clam-1.png",
-            listOf(
-                Frame("lift_up-1.png", 1, rnd(340, 370), anchorY = 43),  // S1 -> S2
-                Frame("lift_up-2.png", 0, rnd(340, 370), anchorY = 43),  // S2 -> S1（轻晃闭环）
-                Frame("lift_up-3.png", 0, fixed(200), anchorY = 43),     // S3 -> S1
-                Frame("lift_up-4.png", 1, fixed(200), anchorY = 43),     // S4 -> S2
-                Frame("lift_up-5.png", 2, fixed(300), anchorY = 43),     // S5 -> S3
-                Frame("lift_up-6.png", 3, fixed(300), anchorY = 43)      // S6 -> S4
-            ),
-            loop = true   // 拖拽期间持续循环
-        ))
-
-        // ============ 一次性（抛掷中循环）：翻滚（ROLL）============
-        // PC RollAction: 每帧 offset=QPoint(-50,0)，纯平移（非重力）。
-        registerMode(ImageModeDef(
-            ROLL, "roll-6.png",
-            listOf(
-                Frame("roll-1.png", 1, rnd(140, 180), anchorX = 45, anchorY = 15),
-                Frame("roll-2.png", 2, rnd(140, 180), anchorX = 45, anchorY = 15),
-                Frame("roll-3.png", 3, rnd(140, 180), anchorX = 45, anchorY = 15),
-                Frame("roll-4.png", 4, rnd(140, 180), anchorX = 45, anchorY = 15),
-                Frame("roll-5.png", 5, rnd(140, 180), anchorX = 45, anchorY = 15),
-                Frame("roll-6.png", 0, rnd(140, 180), anchorX = 45, anchorY = 15)
-            ),
-            loop = true   // 抛掷期间持续循环
-        ))
-
-        // ============ 行走（WALK，常驻/跟随循环）============
-        // PC WalkMode: 每帧 offset=QPoint(-5,0)。
-        // 注：PC 原始 4 帧(walk-1..4)，但 Android 资源仅有 walk-1/2/3.png（无 walk-4.png），
-        // 故改为 3 帧循环（1→2→3→1），anchor (47,59) 保持与 PC 一致，每帧 100ms。
-        // 缺失帧不引用，避免 loadBitmap 回退到 fallback 重复显示 walk-1 造成节奏错位。
-        registerMode(ImageModeDef(
-            WALK, "walk-1.png",
-            listOf(
-                Frame("walk-1.png", 1, fixed(100), anchorX = 47, anchorY = 1),
-                Frame("walk-2.png", 2, fixed(100), anchorX = 47, anchorY = 1),
-                Frame("walk-3.png", 0, fixed(100), anchorX = 47, anchorY = 1)
-            ),
-            loop = true,
-            timeNextEnabled = true,                       // 常驻行走，过段时间随机切换到其他待机模式
-            changeIntervalMin = 1000,
-            changeIntervalMax = 10_000,
-            walkSpeed = 90f                               // 水平位移速度(px/s)，方向随机（对齐 PC QPoint(-5,0)）
-        ))
-
-        // ============ 美白（WALK_WHITE，一次性）============
-        registerMode(ImageModeDef(
-            WALK_WHITE, "sit_clam-1.png",
-            listOf(
-                Frame("walk_white-1.png", 1, rnd(200, 300), anchorX = 47, anchorY = 1),
-                Frame("walk_white-2.png", 2, rnd(200, 300), anchorX = 47, anchorY = 1),
-                Frame("walk_white-3.png", 3, rnd(200, 300), anchorX = 47, anchorY = 1),
-                Frame("walk_white-4.png", 4, rnd(200, 300), anchorX = 47, anchorY = 1),
-                Frame("walk_white-5.png", null, rnd(5000, 10_000), anchorX = 47, anchorY = 1)
-            ),
-            loop = false
-            // 下一个无指定：对齐 PC，美白结束后回到待机随机池（菜单与待机池激活一致）
-        ))
-
-        // ============ 蠕动（WRIGGLE，一次性/常驻）============
-        registerMode(ImageModeDef(
-            WRIGGLE, "sit_clam-1.png",
-            listOf(
-                Frame("wriggle-1.png", 1, rnd(250, 300), anchorX = 54, anchorY = 1),
-                Frame("wriggle-2.png", 0, rnd(250, 300), anchorX = 54, anchorY = 1)
-            ),
-            loop = true,
-            timeNextEnabled = true,
-            changeIntervalMin = 3000, changeIntervalMax = 4000, changeProb = 0.5f,
-            walkSpeed = 45f                                // 蠕动缓慢位移(px/s)，方向随机（对齐 PC QPoint(-3,0)）
-        ))
-
-        // ============ 探头（PROBE_HEAD，一次性）============
-        // 对齐 PC ProbeHeadMode：帧 S1->S2->S1 内部循环（图2 后回图1），
-        // delay randint(1000,5000)/randint(150,300)；timeNext 5~10s、prob=0.5 跳出到 SitClam。
-        registerMode(ImageModeDef(
-            PROBE_HEAD, "sit_clam-1.png",
-            listOf(
-                Frame("probe_head-1.png", 1, rnd(1000, 5000), anchorY = 16),
-                Frame("probe_head-2.png", 0, rnd(150, 300), anchorY = 16)   // -> 帧1（闭合 1<->2 循环）
-            ),
-            loop = false,                       // 循环由 timeNext 机制驱动，而非帧链 loop
-            nextModeName = SIT_CLAM,
-            timeNextEnabled = true,
-            changeIntervalMin = 5000,
-            changeIntervalMax = 10_000,
-            changeProb = 0.5f
-        ))
-
-        // ============ 吸附探头（SNAP_HEAD，常驻循环）============
-        // 吸附态复用的“探头”动作：帧 S1->S2->S1 内部循环（与 PROBE_HEAD 同资源），
-        // 但 loop=true 永久循环、不跳出到 SitClam，脚朝向被贴附的边（由 gravityDir 表达）。
-        // 退出吸附（用户拖出）由 PetView 切回其他状态负责。
-        registerMode(ImageModeDef(
-            SNAP_HEAD, "sit_clam-1.png",
-            listOf(
-                Frame("probe_head-1.png", 1, rnd(1000, 5000), anchorY = 16),
-                Frame("probe_head-2.png", 0, rnd(150, 300), anchorY = 16)   // -> 帧1（闭合 1<->2 循环）
-            ),
-            loop = true,                        // 常驻循环，不跳出
-            nextModeName = null,
-            timeNextEnabled = false,
-            changeProb = 0f
-        ))
-
-        // ============ 吸附探头摸摸头（SNAP_PAT_HEAD，吸附态专属）============
-        // 旧资源无独立“探头摸摸头”美术，复用 probe_head 帧；新资源用 探头摸摸头/probe_pat_head-*。
-        // 与 PAT_HEAD 类似：一次性动作，播完后由 nextModeName 回到吸附探头(SNAP_HEAD)，不落入 sit_clam。
-        registerMode(ImageModeDef(
-            SNAP_PAT_HEAD, "probe_head-1.png",
-            listOf(
-                Frame("probe_head-1.png", 1, rnd(1000, 5000), anchorY = 16),
-                Frame("probe_head-2.png", 0, rnd(150, 300), anchorY = 16)   // -> 帧1（闭合 1<->2 循环）
-            ),
-            loop = false,
-            nextModeName = SNAP_HEAD,
-            timeNextEnabled = true,
-            changeIntervalMin = 5000,
-            changeIntervalMax = 10_000,
-            changeProb = 0.5f
-        ))
-
-        // ============ 趴着（LIE，常驻单帧）============
-        // 复用 wriggle 的图片资源（无独立 lie 美术资源，PC 侧同理复用），
-        // fallback 也指向同一图，避免回退到 sit_clam。
-        registerMode(ImageModeDef(
-            LIE, "wriggle-1.png",
-            // 复用 wriggle-1.png，锚点必须与 wriggle 模式完全一致（anchorX=54, anchorY=42），
-            // 否则同一张图在不同模式下锚点不同 → 图片位置偏移。lie 是趴姿静止，单帧即可。
-            listOf(Frame("wriggle-1.png", null, rnd(3000, 7000), anchorX = 54, anchorY = 1)),
-            loop = false
-            // 下一个无指定：对齐 PC，趴着结束后回到待机随机池（菜单与待机池激活一致）
-        ))
-
-        // ============ 传送门（PORTAL，占位）============
-        registerMode(ImageModeDef(
-            PORTAL, "sit_clam-1.png",
-            listOf(Frame("sit_clam-1.png", null, fixed(3000), anchorY = -28)),
-            loop = false,
-            nextModeName = SIT_CLAM
-        ))
-
-        // ============ 扒鱼（PULL_FISH，帧偏移位移 + 一次性）============
-        // 对齐 PC PullFishMode：位移由【每帧 offset 累加】驱动（非物理速度），属于单循环位移。
-        // PC 第6~9帧带 QPoint(130/125/120/120 * ratio, 0) 水平偏移 + anchor_dy 垂直锚点变化。
-        // ratio 取 0.7~1.5 随机（与 PC 一致）。dx 为每帧水平位移，dy 为垂直位移（本模式仅水平）。
-        // 扒鱼支持镜像（类似 walk/蠕动）：图片资源朝右，flipX=true 翻转朝左；
-        // 位移方向随 flipX 反向、锚点对称翻转（见 PetView）。撞墙夹边（对齐 PC adjust_offset_screen）。
-        val pfRatio = Random.nextFloat() * 0.8f + 0.7f   // 0.7 ~ 1.5
-        registerMode(ImageModeDef(
-            PULL_FISH, "sit_clam-1.png",
-            listOf(
-                Frame("pull_fish-1.png", 1, rnd(300, 500), anchorX = 54, anchorY = 1),
-                Frame("pull_fish-2.png", 2, rnd(130, 160), anchorX = 54, anchorY = 1),
-                Frame("pull_fish-3.png", 3, rnd(160, 200), anchorX = 54, anchorY = 1),
-                Frame("pull_fish-4.png", 4, rnd(130, 160), anchorX = 54, anchorY = 1),
-                Frame("pull_fish-5.png", 5, fixed(70), anchorX = 54, anchorY = 1),
-                // 第6帧：S6 基础锚点(67,39) + anchor_dy(70*ratio)；水平位移 130*ratio
-                // 转换器：距底 = rawH(90) - 距顶(67+70*ratio) = 23 - 70*ratio
-                Frame("pull_fish-6.png", 6, fixed(70), anchorX = 67, anchorY = (23 - 70 * pfRatio).toInt(),
-                    dx = (130 * pfRatio).toInt()),
-                // 第7帧：复用 pull_fish-6.png（PC replace(anchor_dy=110*ratio)），距底 = 90 - (67+110*ratio) = 23 - 110*ratio
-                Frame("pull_fish-6.png", 7, fixed(70), anchorX = 67, anchorY = (23 - 110 * pfRatio).toInt(),
-                    dx = (125 * pfRatio).toInt()),
-                // 第8帧：复用 pull_fish-6.png（PC replace(anchor_dy=70*ratio)），距底 = 23 - 70*ratio
-                Frame("pull_fish-6.png", 8, fixed(70), anchorX = 67, anchorY = (23 - 70 * pfRatio).toInt(),
-                    dx = (120 * pfRatio).toInt()),
-                // 第9帧：收尾过渡，PC 用 Wriggle.S1（wriggle-1.png）+ anchor_dy=0 → 距底 = 43 - 81 = -38
-                Frame("wriggle-1.png", null, fixed(500), anchorX = 54, anchorY = 1,
-                    dx = (120 * pfRatio).toInt())
-            ),
-            loop = false,
-            walkSpeed = 0f,        // 非循环位移：用帧 dx 驱动，而非物理 walkSpeed
-            nextModeName = LIE
-        ))
-
-        } // end if(!loaded)
-
-        currentName = DEFAULT_MODE
-        currentDef = modes[DEFAULT_MODE] ?: modes.values.firstOrNull()
+        // 起始动作由素材包决定（优先 [static, sit]），不再写死 sit_clam。
+        // 若该包未定义，退而取包内第一个动作；仍无则留空（无动作可播），由调用方按空处理。
+        currentName = if (loaded) {
+            (currentPack.functions[listOf("static", "sit")]?.firstOrNull()
+                ?: modes.keys.firstOrNull()) ?: ""
+        } else ""
+        currentDef = modes[currentName]
         frameIndex = 0
         acc = 0L
         resetTimeNext()
@@ -621,15 +479,20 @@ class ImageModeManager(
             registerMode(ImageModeDef(name, fallback, frames, loop, timeNextEnabled,
                 changeIntervalMin, changeIntervalMax, changeProb, nextModeName, null, walkSpeed, label))
         }
-        // 待机池 / 静止池
+        // 待机池 / 静止池：内容取自素材包，并【按本包实际定义的动作裁剪】。
+        // 池里若出现包中未定义的动作（素材包版本升级时的常见疏漏），会在轮换时切到不存在的
+        // 模式而卡住/静止，故载入即剔除——与 RolePackageContract 的"引用集 ⊆ modes"一致。
+        val defined = buildSet {
+            val kit = modesObj.keys()
+            while (kit.hasNext()) add(kit.next())
+        }
         if (root.has("standbyPool")) {
-            standbyPool.clear()
             val sp = root.getJSONArray("standbyPool")
-            for (i in 0 until sp.length()) standbyPool.add(sp.getString(i))
+            standbyPool = List(sp.length()) { sp.getString(it) }.filter { it in defined }
         }
         if (root.has("staticPool")) {
             val arr = root.getJSONArray("staticPool")
-            staticPool = List(arr.length()) { arr.getString(it) }
+            staticPool = List(arr.length()) { arr.getString(it) }.filter { it in defined }
         }
     }
 
@@ -699,7 +562,8 @@ class ImageModeManager(
      */
     fun setLiftSeries(series: Int): Boolean {
         if (forcedSeq != null) return false
-        if (currentName != LIFT_UP) return false
+        // 抱起动作名由素材包 functions 提供，代码不写死
+        if (currentName != modeOf("touch", "lift_up")) return false
         if (series < 0 || series >= (currentDef?.frames?.size ?: 0)) return false
         if (frameIndex == series && acc == 0L) return false
         frameIndex = series
@@ -724,8 +588,8 @@ class ImageModeManager(
         if (forcedSeq != null) {
             forcedSeq = null
             forcedOnEnd = null
-            // 回到常驻默认模式，确保后续 setMode 能正常切换
-            if (currentName == forcedSeq?.name) setMode(DEFAULT_MODE)
+            // 回到常驻静止动作（由素材包 functions 的 [static, sit] 提供），确保后续 setMode 能正常切换
+            if (currentName == forcedSeq?.name) modeOf("static", "sit")?.let { setMode(it) }
         }
     }
 
@@ -736,7 +600,8 @@ class ImageModeManager(
     fun forceReset() {
         forcedSeq = null
         forcedOnEnd = null
-        setMode(DEFAULT_MODE)
+        // 静止动作由素材包 functions 的 [static, sit] 提供，代码不写死 sit_clam
+        modeOf("static", "sit")?.let { setMode(it) }
     }
 
     /**
@@ -752,8 +617,10 @@ class ImageModeManager(
         if (pack.configPath != null) {
             try {
                 loadModesFromJson(pack.configPath!!)
-            } catch (_: Exception) {
-                // 换包配置解析失败：保留当前已加载的 modes，避免空模式导致宠物卡死
+            } catch (e: Exception) {
+                // 换包配置解析失败：保留当前已加载的 modes，避免空模式导致宠物卡死。
+                // v1.01 下 modes.json 是必备字段，此属素材包本身问题，打日志便于定位。
+                Log.e("ImageModeManager", "换包载入 ${pack.configPath} 失败", e)
             }
         }
         val (w, h) = globalMaxSize()
@@ -761,8 +628,10 @@ class ImageModeManager(
         globalH = h
         forcedSeq = null
         forcedOnEnd = null
-        currentName = DEFAULT_MODE
-        currentDef = modes[DEFAULT_MODE] ?: modes.values.firstOrNull()
+        // 起点动作由素材包决定（优先 [static, sit]），不再写死 sit_clam
+        currentName = (currentPack.functions[listOf("static", "sit")]?.firstOrNull()
+            ?: modes.keys.firstOrNull()) ?: ""
+        currentDef = modes[currentName]
         frameIndex = 0
         acc = 0L
         resetTimeNext()
@@ -788,9 +657,11 @@ class ImageModeManager(
      *   而非固定 sit_clam（避免菜单多次激活美白后总是落回静坐）。
      * 这样「摸头 → 摇头 → 炸毛坐」等链式跳转由模式定义驱动，与 PC 一致。
      */
-    fun playOnce(name: String, endMode: String = DEFAULT_MODE) {
+    fun playOnce(name: String, endMode: String? = null) {
         val def = modes[name] ?: return
-        val next = def.nextModeName
+        // 结束后目标：优先模式自身定义的 nextModeName；其次调用方指定；
+        // 都没有则回待机随机池（由 pickStandbyMode 决定），不再固定写死 sit_clam。
+        val next = def.nextModeName ?: endMode
         forcedSeq = def
         forcedOnEnd = {
             forcedSeq = null

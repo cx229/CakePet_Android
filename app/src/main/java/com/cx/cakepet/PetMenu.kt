@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 
 /**
  * 长按宠物弹出的菜单：以 TYPE_APPLICATION_OVERLAY 浮窗承载，
@@ -142,8 +143,11 @@ class PetMenu(
             // 体感重力只切换 tiltGravity 标志，不改动四边定向重力配置（见 PetPhysics/PetService）
             service.updateConfig { copy(tiltGravity = next) }
         }
+        // 摸头：模式由素材包 functions 的 [pat_head, pat_head] 提供（v1.01），代码不写死模式名；
+        // 包未提供该功能则不执行（跳过，不回退、不发空 setMode）。
         v.findViewById<View>(R.id.menu_pat).setOnClickListener {
-            service.performAction(MenuActivity.ACTION_PAT, petView); dismiss()
+            petView.modeOf("pat_head", "pat_head")?.let { petView.playOnce(it) }
+            dismiss()
         }
         // 交互：打开交互子页面（定格-咔嚓 / 清除所有定格）
         v.findViewById<View>(R.id.menu_interact).setOnClickListener {
@@ -176,25 +180,57 @@ class PetMenu(
         return v
     }
 
+    /**
+     * 动作子页面：完全由【本角色】素材包的 menuPool 驱动（v1.01 契约）。
+     * 项数与内容随角色而异（差异化：如芝麻酥动作齐全、蜂蜜猫较少）；
+     * 显示名取 modes 各自的 label，代码零硬编码模式名与文案。
+     * 每项点击直接播放该模式（常驻类走 setMode，一次性类走 playOnce，由 PetService 判定）。
+     */
     private fun buildActions(ctx: Context): View {
         val v = LayoutInflater.from(ctx).inflate(R.layout.sheet_actions, null)
-        fun bind(id: Int, action: String) {
-            v.findViewById<View>(id).setOnClickListener {
-                service.performAction(action, petView); dismiss()
-            }
-        }
-        bind(R.id.act_sit_clam, MenuActivity.ACTION_SIT_CLAM)
-        bind(R.id.act_shake_head, MenuActivity.ACTION_SHAKE_HEAD)
-        bind(R.id.act_walk, MenuActivity.ACTION_WALK)
-        bind(R.id.act_wriggle, MenuActivity.ACTION_WRIGGLE)
-        bind(R.id.act_lie, MenuActivity.ACTION_LIE)
-        bind(R.id.act_probe_head, MenuActivity.ACTION_PROBE_HEAD)
-        bind(R.id.act_pull_fish, MenuActivity.ACTION_PULL_FISH)
-        bind(R.id.act_white, MenuActivity.ACTION_WHITE)
-        bind(R.id.act_puffed, MenuActivity.ACTION_PUFFED)
         v.findViewById<View>(R.id.act_back).setOnClickListener {
             actionsView?.visibility = View.GONE
             menuView?.visibility = View.VISIBLE
+        }
+        val container = v.findViewById<LinearLayout>(R.id.act_container)
+        val pack = service.spritePackForRole(roleId)
+        val labels = pack.modeLabels
+        val items = pack.menuPool
+        if (items.isEmpty()) return v
+
+        // 每行三列，逐行构建；末行不足三列时用等宽占位补齐，保证网格整齐
+        val COLS = 3
+        var row: LinearLayout? = null
+        for (i in items.indices) {
+            if (i % COLS == 0) {
+                row = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    val rowH = (56 * ctx.resources.displayMetrics.density).toInt()
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, rowH
+                    ).apply { topMargin = 4; bottomMargin = 4 }
+                }
+                container.addView(row)
+            }
+            val mode = items[i]
+            val cell = LayoutInflater.from(ctx)
+                .inflate(R.layout.item_menu_action, row, false) as android.widget.TextView
+            cell.text = labels[mode] ?: mode
+            cell.setOnClickListener {
+                service.performMenuMode(roleId, mode, petView)
+                dismiss()
+            }
+            row?.addView(cell)
+        }
+        // 末行补占位（不可点击、无背景），保持三列等宽
+        val tail = items.size % COLS
+        if (tail > 0) {
+            repeat(COLS - tail) {
+                val spacer = View(ctx).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+                }
+                row?.addView(spacer)
+            }
         }
         return v
     }

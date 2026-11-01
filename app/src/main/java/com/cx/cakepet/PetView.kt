@@ -33,6 +33,14 @@ class PetView @JvmOverloads constructor(
     private val imageManager = ImageModeManager(context)
     private var currentBitmap: Bitmap? = null
 
+    // ===== v1.01 契约：对外只暴露【功能寻址】，不暴露具体模式名，也不暴露内部 manager =====
+
+    /** 按功能路径取该功能的模式名；素材包未提供该功能时返回 null（调用方应跳过，勿发空 setMode）。 */
+    fun modeOf(vararg path: String): String? = imageManager.modeOf(*path)
+
+    /** 按功能路径取该功能所需的资源路径（叶子指向 resources）；未提供时返回 null。 */
+    fun resourceOf(vararg path: String): String? = imageManager.resourceOf(*path)
+
     /** 当前帧锚点【快照】：在 syncCurrentBitmap() 中与 currentBitmap 同一次、同帧写入，
      *  是“显示位图”与“定位锚点”的唯一真相源。之后所有位置计算只读它，不再回头 currentAnchor() 实时读，
      *  杜绝“显示切到帧 N+1、位置还在用帧 N 锚点”的异步错位（动作与位置不适配）。 */
@@ -461,7 +469,7 @@ class PetView @JvmOverloads constructor(
         }
         // 抛掷结束（触底静止）→ 播放落地蹲下动画，再回常驻静坐（对齐 PC ThrowFallStandFollowMode）
         physics.onThrowEnd = {
-            playOnce(ImageModeManager.JUMP_DOWN)
+            modeOf("touch", "jump_down")?.let { playOnce(it) }
             // 抛掷落地：统一收口到 decideLanding（主重力边保留滚动流程；非反弹边先判飞跃/否则攀岩）。
             val wall = landingWall()
             if (wall >= 0) decideLanding(wall)
@@ -649,7 +657,7 @@ class PetView @JvmOverloads constructor(
                 ) {
                     startLeapFlight()
                 } else if (!imageManager.isWalk()) {
-                    imageManager.setMode(ImageModeManager.WALK)
+                    modeOf("touch", "walk")?.let { imageManager.setMode(it) }
                 }
             }
         }
@@ -870,7 +878,7 @@ class PetView @JvmOverloads constructor(
         lastFrameMoveX = 0f
         lastFrameMoveY = 0f
         // 好动飞跃：跳起(JUMP_UP)激活后，朝目标墙位移；到位落地该墙并切下一动作（攀岩态可能再跳起）。
-        if (!flying && imageManager.getMode() == ImageModeManager.JUMP_UP) {
+        if (!flying && modeOf("climb", "jump_up")?.let { imageManager.getMode() == it } == true) {
             startLeapFlight()
         }
         if (flying) {
@@ -1013,10 +1021,16 @@ class PetView @JvmOverloads constructor(
             val m = imageManager.getMode()
             // 非重力时强制退出所有“移动/吸附”相关态，回到静坐；含从吸附拉出后的探头态(SNAP_HEAD/一次性 SNAP_PAT_HEAD)，
             // 否则拉出吸附后姿态仍停在探头、松手也不回静坐。常驻模式(摇头/炸毛坐等)不动，避免每帧闪一下。
-            if ((m == ImageModeManager.ROLL || m == ImageModeManager.LIFT_UP ||
-                 m == ImageModeManager.SNAP_HEAD || m == ImageModeManager.SNAP_PAT_HEAD) &&
+            // 各模式名均由功能路径取得；包未提供某项功能时该比较恒为 false（null 不相等），自然跳过。
+            val mRoll = modeOf("touch", "roll")
+            val mLiftUp = modeOf("touch", "lift_up")
+            val mSnapHead = modeOf("snap", "snap_head")
+            val mSnapPat = modeOf("snap", "pat_head", "pat_head")
+            val mSit = modeOf("static", "sit")
+            if (mSit != null &&
+                (m == mRoll || m == mLiftUp || m == mSnapHead || m == mSnapPat) &&
                 !imageManager.isPlayingForced()) {
-                imageManager.setMode(ImageModeManager.SIT_CLAM)
+                imageManager.setMode(mSit)
             }
         }
         when {
@@ -1024,8 +1038,9 @@ class PetView @JvmOverloads constructor(
                 // 用户开始拖拽：抢占一次性动作，否则动作播放期间 setMode 被忽略，
                 // 导致拖动时 mode 仍为 sit_clam（状态错乱）。
                 if (imageManager.isPlayingForced()) imageManager.cancelForced()
-                if (imageManager.getMode() != ImageModeManager.LIFT_UP) {
-                    imageManager.setMode(ImageModeManager.LIFT_UP)
+                val liftUp = modeOf("touch", "lift_up")
+                if (liftUp != null && imageManager.getMode() != liftUp) {
+                    imageManager.setMode(liftUp)
                 }
                 // 每帧根据拖动速度/方向切换提起系列（对齐 PC DragFollowMode.drag_func 每帧判定）：
                 //  - 慢速：不调 setLiftSeries，由帧链 0↔1 自然轻晃（PC 的 0101）。
@@ -1059,25 +1074,31 @@ class PetView @JvmOverloads constructor(
                 // 抛起/滚动：静止模式(移动关闭)不进入移动态；关重力仍可 ROLL——物理无重力但按抛掷初速滚动出去
                 // 同样抢占一次性动作，确保翻滚动画生效。
                 if (imageManager.isPlayingForced()) imageManager.cancelForced()
-                if (imageManager.getMode() != ImageModeManager.ROLL) {
-                    imageManager.setMode(ImageModeManager.ROLL)
+                val roll = modeOf("touch", "roll")
+                if (roll != null && imageManager.getMode() != roll) {
+                    imageManager.setMode(roll)
                 }
             }
             physics.isSnapped -> {
                 // 吸附态：常驻探头（脚朝向被贴附的边），循环播放、忽略重力。
                 // 抢占一次性动作（如摸头），确保吸附探头不被打断；
-                // 但允许“吸附探头摸摸头(SNAP_PAT_HEAD)”与“吸附投食(SNAP_FEED_FISH)”一次性动作完整播放，
-                // 结束后分别由其 nextMode 切回 SNAP_HEAD。
-                val snapForcedAllow = setOf(ImageModeManager.SNAP_PAT_HEAD, ImageModeManager.SNAP_FEED_FISH)
+                // 但允许「吸附探头摸头」与「吸附探头投食」一次性动作完整播放，
+                // 结束后分别由其 nextMode 切回吸附探头。
+                // 二者末段同名不同义（snap/pat_head/pat_head vs pat_head/pat_head），必须靠完整路径区分。
+                val snapForcedAllow = listOfNotNull(
+                    modeOf("snap", "pat_head", "pat_head"),
+                    modeOf("snap", "feed", "eat")
+                ).toSet()
                 if (imageManager.isPlayingForced() && imageManager.getMode() !in snapForcedAllow) {
                     imageManager.cancelForced()
                 }
                 // 仅本变体叠加“朝向贴附边”的旋转，不修改全局 gravityDir（不影响其他状态/方向）。
                 snapRotation = dirToRotation(physics.snapSide)
                 val curMode = imageManager.getMode()
-                if (curMode !in snapForcedAllow && curMode != ImageModeManager.SNAP_HEAD) {
-                    // 刚进入吸附的这一帧：振动一次提示（getMode 已为 SNAP_HEAD 后不再重复触发）。
-                    imageManager.setMode(ImageModeManager.SNAP_HEAD)
+                val snapHead = modeOf("snap", "snap_head")
+                if (snapHead != null && curMode !in snapForcedAllow && curMode != snapHead) {
+                    // 刚进入吸附的这一帧：振动一次提示（getMode 已为吸附探头后不再重复触发）。
+                    imageManager.setMode(snapHead)
                     // 反向镜像随机：吸附探头脚朝向固定（snapRotation），但左右/上下随机翻转，
                     // 仅存于 snapFlipX，不污染全局 flipX（退出吸附后自然失效，零状态残留）。
                     snapFlipX = kotlin.random.Random.nextBoolean()
@@ -1112,8 +1133,8 @@ class PetView @JvmOverloads constructor(
             }
             // 仅对“物理动作残留”的 LIFT_UP 做兜底复位（提起态不应在空闲时停留）。
             else -> {
-                if (imageManager.getMode() == ImageModeManager.LIFT_UP && !imageManager.isPlayingForced()) {
-                    imageManager.setMode(ImageModeManager.SIT_CLAM)
+                if (imageManager.getMode() == modeOf("touch", "lift_up") && !imageManager.isPlayingForced()) {
+                    modeOf("static", "sit")?.let { imageManager.setMode(it) }
                 }
             }
         }
@@ -1474,8 +1495,8 @@ class PetView @JvmOverloads constructor(
         // 探头/吸附类动作（吸附探头、吸附摸摸头、吸附投食）：脚底盒【中心与脚锚点对齐】（水平+垂直），
         // 即盒子以脚锚点为对称中心，而非非探头动作那种“盒底贴脚、向上抬”。这样方向无关——
         // 从任意边探头（脚朝上/下/左/右），盒子都向身体一侧延伸并覆盖整只宠物，保证摸摸头/投食/探头可命中。
-        if (mode == ImageModeManager.SNAP_HEAD || mode == ImageModeManager.SNAP_PAT_HEAD ||
-            mode == ImageModeManager.SNAP_FEED_FISH) {
+        if (mode == modeOf("snap", "snap_head") || mode == modeOf("snap", "pat_head", "pat_head") ||
+            mode == modeOf("snap", "feed", "eat")) {
             return rotateOffsetWith(offX, offY, w, h, effRot)
         }
         // 其它动作：盒底贴脚（盒中心在脚上方 hh/2+vo 处），仅水平以脚锚点为对称。
@@ -1651,7 +1672,7 @@ class PetView @JvmOverloads constructor(
         // 非主重力、非反弹边到达：先硬停 ROLL，使攀岩/飞跃决策能接管，且不再一直卡在 ROLL 动作。
         if (physics.isThrowing) physics.endTiltRoll()
         // 直接切换为 WALK（贴墙行走/站立姿态），而不是 sit 或一直 ROLL。
-        if (!imageManager.isPlayingForced()) imageManager.setMode(ImageModeManager.WALK)
+        if (!imageManager.isPlayingForced()) modeOf("climb", "walk")?.let { imageManager.setMode(it) }
         if (!wallClimb) {
             // 攀岩关：WALK 姿态下由重力自然带离该边、按原生滚动流程落地（其他动作而非 ROLL）。
             return
@@ -1720,9 +1741,9 @@ class PetView @JvmOverloads constructor(
         forageTargetY = ty
         imageManager.forageActive = active
         if (!active) { forageChosenX = Float.NaN; forageChosenY = Float.NaN }
-        // 觅食中确保处于 WALK（沿墙行走姿态），避免停在 sit/其他动作导致不走。
+        // 觅食中确保处于沿墙行走姿态，避免停在 sit/其他动作导致不走。
         if (active && !imageManager.isPlayingForced() && !imageManager.isWalk()) {
-            imageManager.setMode(ImageModeManager.WALK)
+            modeOf("climb", "walk")?.let { imageManager.setMode(it) }
         }
     }
 
@@ -1736,9 +1757,9 @@ class PetView @JvmOverloads constructor(
         forageCandX = xs
         forageCandY = ys
         if (!active) { forageChosenX = Float.NaN; forageChosenY = Float.NaN }
-        // 觅食中确保处于 WALK（沿墙行走姿态），避免停在 sit/其他动作导致不走。
+        // 觅食中确保处于沿墙行走姿态，避免停在 sit/其他动作导致不走。
         if (active && !imageManager.isPlayingForced() && !imageManager.isWalk()) {
-            imageManager.setMode(ImageModeManager.WALK)
+            modeOf("climb", "walk")?.let { imageManager.setMode(it) }
         }
     }
 
@@ -1803,8 +1824,10 @@ class PetView @JvmOverloads constructor(
         // 直接调用方（decideLanding 掷骰命中、落地插队的飞跃分支）若不自切动作，
         // 会出现"已经在飞(flying=true)却仍播着上一个动作"——表现为飞跃第一次不换动作。
         // JUMP_UP 是常驻模式（由 pickStandbyMode 产出），飞行期间由 imageManager.isFlying 锁定。
-        if (imageManager.getMode() != ImageModeManager.JUMP_UP) {
-            imageManager.setMode(ImageModeManager.JUMP_UP)
+        // 起跳：模式由 [climb, jump_up] 提供；包未提供该功能则不起跳（跳过，不回退）。
+        val jumpUp = modeOf("climb", "jump_up")
+        if (jumpUp != null && imageManager.getMode() != jumpUp) {
+            imageManager.setMode(jumpUp)
         }
         // 起飞瞬间所有紧贴墙：角落会同时贴两面墙，整组记录并排除（不能作目标、也不能作命中墙）。
         val launchTouched = mutableSetOf<Int>().apply {
@@ -2157,8 +2180,8 @@ class PetView @JvmOverloads constructor(
                     onLongPress?.invoke()
                 } else {
                     // 纯点击/短按（非拖拽、非长按）：若因历史原因停在 LIFT_UP，复位避免卡死
-                    if (imageManager.getMode() == ImageModeManager.LIFT_UP && !imageManager.isPlayingForced()) {
-                        imageManager.setMode(ImageModeManager.SIT_CLAM)
+                    if (imageManager.getMode() == modeOf("touch", "lift_up") && !imageManager.isPlayingForced()) {
+                        modeOf("static", "sit")?.let { imageManager.setMode(it) }
                     }
                     onTap?.invoke()        // 轻点置顶本宠，多宠物时让被压住的宠物下次可被点中
                 }
@@ -2188,8 +2211,9 @@ class PetView @JvmOverloads constructor(
         if (physics.isDragging || (physics.isThrowing && !force)) return
         physics.beginTiltRoll()
         if (imageManager.isPlayingForced()) imageManager.cancelForced()
-        if (imageManager.getMode() != ImageModeManager.ROLL) {
-            imageManager.setMode(ImageModeManager.ROLL)
+        val rollM = modeOf("touch", "roll")
+        if (rollM != null && imageManager.getMode() != rollM) {
+            imageManager.setMode(rollM)
         }
         // 先切 ROLL（居中对称，旋转外观不变），再改方向：下一帧 onDraw 直接看到 ROLL+新朝向，
         // 不会让旧模式帧先被新旋转角硬转一帧。

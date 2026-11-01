@@ -5,11 +5,17 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * 资源包契约（v1.0）。
- * 资源包最少需要包含的字段与动作。后续版本在此扩展，适配问题以后再处理。
+ * 资源包契约（v1.01）。
+ *
+ * v1.01 起引入 functions：以「功能路径 → 叶子（模式名 / 资源键）」声明动作用途，
+ * 代码【不再直接引用模式名】，一律经功能路径寻址；模式名标准化，角色差异只体现在
+ * 图片路径与池的构成上。新增角色动作只需改 JSON，不必改代码。
+ *
+ * v1.01 同时新增 menuPool（悬浮菜单可触发的动作），并把 resources 的键由包自定
+ * （如鱼在蜂蜜猫里叫 fish），代码依 functions 的 [feed, food] 叶子取值，不写死键名。
  */
 object RolePackageContract {
-    const val VERSION = "1.0"
+    const val VERSION = "1.01"
 
     /** 必备动作（v1.0）：待机 / 运动 / 投食 / 摸摸头 / 吸附（运动类本就无吸附态） */
     val REQUIRED_MODES = setOf(
@@ -27,10 +33,39 @@ object RolePackageContract {
         "snap_feed_fish" // 吸附-探头投食
     )
 
+    /**
+     * 必备功能路径（v1.01）。层数不限，必须按【完整路径】寻址：
+     * [snap, pat_head, pat_head]（吸附态摸头）与 [pat_head, pat_head]（普通摸头）末段同名而含义不同。
+     *
+     * 叶子是候选列表（为将来"同一功能多个动作"预留）。叶子目标类型由功能语义决定：
+     * 除 [feed, food] 指向 resources 外，其余均指向 modes。
+     */
+    val REQUIRED_FUNCTION_PATHS = listOf(
+        listOf("static", "sit"),                 // 静止：静坐
+        listOf("touch", "roll"),                 // 触摸：滚动
+        listOf("touch", "lift_up"),              // 触摸：抱起
+        listOf("touch", "jump_down"),            // 触摸：落地（跳下）
+        listOf("touch", "walk"),                 // 触摸：走
+        listOf("snap", "snap_head"),             // 吸附：探头
+        listOf("snap", "pat_head", "pat_head"),  // 吸附：探头摸头
+        listOf("snap", "feed", "eat"),           // 吸附：探头投食
+        listOf("climb", "walk"),                 // 攀岩：走
+        listOf("climb", "jump_up"),              // 攀岩：跳起
+        listOf("pat_head", "pat_head"),          // 摸头：摸头
+        listOf("pat_head", "shake_head"),        // 摸头：摇头
+        listOf("pat_head", "sit_puffed"),        // 摸头：炸毛
+        listOf("feed", "eat"),                   // 投食：吃鱼动作（模式）
+        listOf("feed", "food")                   // 投食：食物资源（指向 resources）
+    )
+
+    /** 叶子指向 resources（而非 modes）的功能路径 */
+    private val RESOURCE_LEAF_PATHS = setOf(listOf("feed", "food"))
+
     /** 必备顶层字段（v1.0）：模板默认提供，缺失即视为错误 */
     val REQUIRED_TOP_FIELDS = setOf(
         "version", "id", "name", "shortName",
-        "decodeTarget", "anchorRes", "resources", "standbyPool", "staticPool",
+        "decodeTarget", "anchorRes", "menuPool", "standbyPool", "staticPool",
+        "functions", "resources", "modes",
         "authors"
     )
 
@@ -81,14 +116,27 @@ object RolePackageContract {
         checkInt(json, "decodeTarget", errors)
         checkInt(json, "anchorRes", errors)
 
-        // 4) 资源清单（对象）：必含 food（非空字符串路径）
+        // 4) 功能清单（v1.01）：必备路径必须齐全。
+        //    必须提前解析：下一步 resources 的必备项由 [feed, food] 叶子决定。
+        //    叶子指向的【模式】是否存在留到第 6 步（拿到 definedModes 后）再校验。
+        val functions = parseFunctions(json)
+        val missingFuncs = REQUIRED_FUNCTION_PATHS.filter { it !in functions }
+        if (missingFuncs.isNotEmpty()) {
+            errors.add("缺少必备功能：${missingFuncs.joinToString(", ") { it.joinToString("/") }}")
+        }
+
+        // 5) 资源清单（对象）：必备项由 functions 的 [feed, food] 叶子给出，键名由包自定
         val resObj = json.optJSONObject("resources")
         if (resObj == null) {
             if (!json.has("resources")) errors.add("缺少必备字段：resources")
             else errors.add("resources 不是整数（应为对象）")
         } else {
-            val food = resObj.opt("food")
-            if (food !is String || food.isBlank()) errors.add("资源清单(resources)缺少必备项：food（应为非空路径）")
+            for (key in functions[listOf("feed", "food")] ?: emptyList()) {
+                val v = resObj.opt(key)
+                if (v !is String || v.isBlank()) {
+                    errors.add("资源清单(resources)缺少必备项：$key（应为非空路径）")
+                }
+            }
         }
 
         // 5) 动作清单：必含 REQUIRED_MODES，且每个动作 frames 非空
@@ -114,7 +162,19 @@ object RolePackageContract {
             }
         }
 
-        // 6) 池：standbyPool / staticPool 必须非空列表，且元素须为已定义动作
+        // 6) 功能叶子完整性：指向 modes 的叶子必须是已定义动作。
+        //    [feed, food] 的叶子指向 resources，已在第 5 步单独校验，此处跳过。
+        for ((path, leaves) in functions) {
+            if (path in RESOURCE_LEAF_PATHS) continue
+            for (leaf in leaves) {
+                if (leaf !in definedModes) {
+                    errors.add("功能 ${path.joinToString("/")} 引用未定义动作：$leaf")
+                }
+            }
+        }
+
+        // 7) 池：menuPool / standbyPool / staticPool 必须非空列表，且元素须为已定义动作
+        checkPool(json, "menuPool", definedModes, errors)
         checkPool(json, "standbyPool", definedModes, errors)
         checkPool(json, "staticPool", definedModes, errors)
 

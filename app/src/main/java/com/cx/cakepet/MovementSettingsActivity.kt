@@ -59,6 +59,11 @@ class MovementSettingsActivity : AppCompatActivity() {
         spacer.requestLayout()
         config = PetConfig.forRole(this, roleId)
         roleBounds = PetBounds.forRole(this, roleId)
+        // 【必须在收集 configFlow 之前完成初始化】bs 与滑块视图都在此先行就绪。
+        // 原写法把 getBlocking 放在 onCreate 早段、却在下方才 launch { configFlow.collect { applyConfig(it) } }，
+        // 而 configFlow 首帧会【同步立即发射】，applyConfig 可能在 maxSpeedBar 等 lateinit 视图
+        // 尚未 findViewById 时就被调用，抛 UninitializedPropertyAccessException 而闪退。
+        // 该竞态取决于 DataStore 就绪快慢，故表现为「概率性」崩溃（快速重启源于前台服务 START_STICKY 重建）。
         bs = roleBounds.getBlocking(SettingsPage.MOVEMENT).sliders.associateBy { it.key }
 
         findViewById<ImageView>(R.id.iv_back).setOnClickListener { finish() }
@@ -153,11 +158,14 @@ class MovementSettingsActivity : AppCompatActivity() {
             swAutoForage.isChecked = c.autoForage
             suppressSwitch = false
         }
+        // 【顺序至关重要】：configFlow 的首帧会同步立即发射，applyConfig 会立刻读取
+        // maxSpeedBar / bs / 各 EditText。因此收集必须放在【所有 findViewById 之后】，
+        // 否则首帧回调时 lateinit 视图尚未赋值 → UninitializedPropertyAccessException → 闪退。
+        // （原代码把 collect 放在 findViewById 之前，属竞态，概率性崩溃即源于此。）
+        setupSliders()
         lifecycleScope.launch {
             config.configFlow.collect { applyConfig(it) }
         }
-
-        setupSliders()
 
         // 四边重力互斥联动：只有【开启】本侧时才关闭对侧；【关闭】本侧时绝不碰对侧
         swTop.setOnCheckedChangeListener { _, on ->
