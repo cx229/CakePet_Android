@@ -7,12 +7,11 @@ import java.io.File
 /**
  * 资源包契约（v1.01）。
  *
- * v1.01 起引入 functions：以「功能路径 → 叶子（模式名 / 资源键）」声明动作用途，
+ * v1.02 的 functions 只承担「功能路径 → Mode ID 列表」映射，
  * 代码【不再直接引用模式名】，一律经功能路径寻址；模式名标准化，角色差异只体现在
  * 图片路径与池的构成上。新增角色动作只需改 JSON，不必改代码。
  *
- * v1.01 同时新增 menuPool（悬浮菜单可触发的动作），并把 resources 的键由包自定
- * （如鱼在蜂蜜猫里叫 fish），代码依 functions 的 [feed, food] 叶子取值，不写死键名。
+ * 任意 Mode 均可作为角色、食物或其他显示对象的动画序列。
  */
 object RolePackageContract {
     const val VERSION = "1.02"
@@ -21,8 +20,7 @@ object RolePackageContract {
      * 必备功能路径（v1.01）。层数不限，必须按【完整路径】寻址：
      * [snap, pat_head, pat_head]（吸附态摸头）与 [pat_head, pat_head]（普通摸头）末段同名而含义不同。
      *
-     * 叶子是候选列表（为将来"同一功能多个动作"预留）。叶子目标类型由功能语义决定：
-     * 除 [feed, food] 指向 resources 外，其余均指向 modes。
+     * 所有叶子都是 Mode ID 候选列表。
      */
     val REQUIRED_FUNCTION_PATHS = listOf(
         listOf("static", "sit"),                 // 静止：静坐
@@ -43,17 +41,14 @@ object RolePackageContract {
         listOf("climb", "jump_up"),              // 攀岩：跳起
         listOf("pat_head", "pat_head"),          // 摸头：摸头
         listOf("feed", "eat"),                   // 投食：吃鱼动作（模式）
-        listOf("feed", "food")                   // 投食：食物资源（指向 resources）
+        listOf("feed", "food")                   // 投食：食物动画（指向 modes）
     )
-
-    /** 叶子指向 resources（而非 modes）的功能路径 */
-    private val RESOURCE_LEAF_PATHS = setOf(listOf("feed", "food"))
 
     /** 必备顶层字段（v1.0）：模板默认提供，缺失即视为错误 */
     val REQUIRED_TOP_FIELDS = setOf(
         "version", "id", "name", "shortName",
         "decodeTarget", "anchorRes", "menuPool",
-        "functions", "resources", "modes",
+        "functions", "modes",
         "authors"
     )
 
@@ -104,27 +99,11 @@ object RolePackageContract {
         checkInt(json, "decodeTarget", errors)
         checkInt(json, "anchorRes", errors)
 
-        // 4) 功能清单（v1.01）：必备路径必须齐全。
-        //    必须提前解析：下一步 resources 的必备项由 [feed, food] 叶子决定。
-        //    叶子指向的【模式】是否存在留到第 6 步（拿到 definedModes 后）再校验。
+        // 4) 功能清单：功能路径必须存在，所有候选目标均应是 Mode。
         val functions = parseFunctions(json)
         val missingFuncs = REQUIRED_FUNCTION_PATHS.filter { it !in functions }
         if (missingFuncs.isNotEmpty()) {
             errors.add("缺少必备功能：${missingFuncs.joinToString(", ") { it.joinToString("/") }}")
-        }
-
-        // 5) 资源清单（对象）：必备项由 functions 的 [feed, food] 叶子给出，键名由包自定
-        val resObj = json.optJSONObject("resources")
-        if (resObj == null) {
-            if (!json.has("resources")) errors.add("缺少必备字段：resources")
-            else errors.add("resources 不是整数（应为对象）")
-        } else {
-            for (key in functions[listOf("feed", "food")] ?: emptyList()) {
-                val v = resObj.opt(key)
-                if (v !is String || v.isBlank()) {
-                    errors.add("资源清单(resources)缺少必备项：$key（应为非空路径）")
-                }
-            }
         }
 
         // 5) 允许自由命名 Modes；只强制 Functions 所引用的动作必须存在
@@ -150,10 +129,8 @@ object RolePackageContract {
             }
         }
 
-        // 6) 功能叶子完整性：指向 modes 的叶子必须是已定义动作。
-        //    [feed, food] 的叶子指向 resources，已在第 5 步单独校验，此处跳过。
+        // 6) 全部功能叶子，包括食物，统一指向已定义的 Mode。
         for ((path, leaves) in functions) {
-            if (path in RESOURCE_LEAF_PATHS) continue
             for (leaf in leaves) {
                 if (leaf !in definedModes) {
                     errors.add("功能 ${path.joinToString("/")} 引用未定义动作：$leaf")
@@ -189,15 +166,9 @@ object RolePackageContract {
         return ValidationResult(errors.isEmpty(), versionStr, errors)
     }
 
-    /** 文件系统级：检查 resources 各值与各动作 frames[].res 引用的图片是否真实存在。返回缺失路径列表。 */
+    /** 文件系统级：检查各 Mode 帧图片引用是否存在。 */
     fun verifyAssets(dest: File, json: JSONObject): List<String> {
         val missing = mutableListOf<String>()
-        json.optJSONObject("resources")?.let { res ->
-            res.keys().forEach { k ->
-                val p = res.optString(k, "")
-                if (p.isNotBlank() && !File(dest, p).exists()) missing.add(p)
-            }
-        }
         json.optJSONObject("modes")?.let { modes ->
             modes.keys().forEach { name ->
                 modes.optJSONObject(name)?.optJSONArray("frames")?.let { frames ->
