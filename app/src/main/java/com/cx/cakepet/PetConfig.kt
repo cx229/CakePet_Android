@@ -137,7 +137,7 @@ data class PetConfigData(
     // 夜间模式强制开关：二者默认均关。强制打开优先级 > 强制关闭 > 跟随系统。
     val forceNightOn: Boolean = ConfigDefaults.FORCE_NIGHT_ON,         // 强制打开夜间模式
     val forceNightOff: Boolean = ConfigDefaults.FORCE_NIGHT_OFF,        // 强制关闭夜间模式
-    // 资源包：1=芝麻酥、2=芝麻球促销（按角色默认，默认 1=芝麻酥）。
+    // 资源包：内置仅白酥（packId=3），导入角色仍使用自身素材包。
     // 由旧版 useNewSprite 布尔迁移而来：true→1、false→0。
     val spritePack: Int = ConfigDefaults.DEFAULT_SPRITE_PACK,            // 当前图片资源包
     // 仅单个碎碎念：开启=仅主实例显示碎碎念；关闭=每个实例各自显示（调试页开关，默认开）
@@ -246,7 +246,7 @@ class PetConfig private constructor(
                     }
                 }
             }
-            // 解析本角色默认资源包：实例 id → 模板 id → packId（预览/召唤同源，避免全部回退成芝麻酥）。
+            // 解析本角色默认资源包：实例 id → 模板 id → packId，避免导入角色错误地使用默认白酥。
             val defaultPack = RoleStore.descriptorForInstance(context, roleId)?.packId
                 ?: ConfigDefaults.DEFAULT_SPRITE_PACK
             PetConfig(newStore, roleId, defaultPack)
@@ -445,15 +445,11 @@ class PetConfig private constructor(
             petCount = (prefs[KEY_PET_COUNT] ?: ConfigDefaults.PET_COUNT).coerceIn(ConfigDefaults.PET_COUNT_MIN, ConfigDefaults.PET_COUNT_MAX),
             forceNightOn = prefs[KEY_FORCE_NIGHT_ON] ?: ConfigDefaults.FORCE_NIGHT_ON,
             forceNightOff = prefs[KEY_FORCE_NIGHT_OFF] ?: ConfigDefaults.FORCE_NIGHT_OFF,
-            // 资源包：优先读新 int 键；缺失时由旧版 boolean 键迁移（true→1 芝麻酥，false→0 旧图）；
-            // 仍缺失则回退到本角色自己的资源包（如芝麻球促销→2、白酥→3），而非全局默认 1（芝麻酥），
-            // 保证新角色首启动即使用正确资源包、与芝麻酥互不串用。
+            // 资源包：优先沿用已保存的 packId；未保存时使用本角色模板的 packId。
+            // 旧版 boolean 只表示历史图源选择，已不再对应任何有效预装素材。
             // 注意：roleId 可能是实例 id（inst_xxx），无法被 RoleRegistry.byId 命中，故用 defaultSpritePack
             // （已由 forRole / 兼容构造按「实例 id → 模板 id → packId」解析）。
-            spritePack = prefs[KEY_SPRITE_PACK]
-                // 旧版 boolean 键：true→芝麻酥(1)；false（原旧图）已无旧图，回退到本角色自己的资源包。
-                ?: (prefs[KEY_USE_NEW_SPRITE]?.let { if (it) 1 else defaultSpritePack }
-                    ?: defaultSpritePack),
+            spritePack = prefs[KEY_SPRITE_PACK] ?: defaultSpritePack,
             singleTrayMsg = prefs[KEY_SINGLE_TRAY_MSG] ?: ConfigDefaults.SINGLE_TRAY_MSG,
             forceOpaque = prefs[KEY_FORCE_OPAQUE] ?: ConfigDefaults.FORCE_OPAQUE,
             // 投喂（支鱼）
@@ -637,8 +633,7 @@ class PetConfig private constructor(
     // 不依赖 configFlow 的「?: 回退值」，彻底避免两处默认值不同步导致恢复出错
     // （例如体感重力、底部偏移等曾被回退值覆盖）。写盘即生效，下次启动也一致。
     suspend fun reset() {
-        // 资源包回退到本角色自己的资源包（defaultSpritePack 已按「实例 id→模板 id→packId」解析，
-        // 如芝麻球促销→2、白酥→3），而非全局默认 1（芝麻酥）。避免「重置」后非芝麻酥角色被错误换成芝麻酥资源。
+        // 资源包回退到本角色模板的 packId（预装白酥或上传角色），不再使用退役预装素材。
         update { PetConfigData(spritePack = defaultSpritePack) }
     }
 
