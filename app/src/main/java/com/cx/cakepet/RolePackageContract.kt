@@ -177,8 +177,10 @@ object RolePackageContract {
             for (i in 0 until frames.length()) {
                 val res = frames.optJSONObject(i)?.optString("res", "") ?: continue
                 if (res.isEmpty()) continue
-                val prev = alignByResource.putIfAbsent(res, align)
-                if (prev != null && prev != align) {
+                val prev = alignByResource[res]
+                if (prev == null) {
+                    alignByResource[res] = align
+                } else if (prev != align) {
                     errors.add("图片 $res 被不同的 verticalAlign 规则引用")
                 }
             }
