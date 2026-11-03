@@ -68,9 +68,10 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun setMode(id: String) {
         if (forced) return
         val next = assets.createClip(id) ?: return
+        val different = getMode() != id
         clip = next
         currentName = id
-        modeChanged = true
+        if (different) modeChanged = true
         updateWalkState(next.currentWalkSpeed)
     }
 

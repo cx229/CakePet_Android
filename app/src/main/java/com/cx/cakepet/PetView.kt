@@ -30,7 +30,9 @@ class PetView @JvmOverloads constructor(
 ) : View(context, attrs, defStyle) {
 
     val physics = PetPhysics()
-    private val imageManager = PetAnimationController(ImageModeManager(context))
+    private val imageManager = PetAnimationController(
+        ImageModeManager(context, buildSpritePack(context, ConfigDefaults.DEFAULT_SPRITE_PACK))
+    )
     private var currentBitmap: Bitmap? = null
 
     // ===== v1.01 契约：对外只暴露【功能寻址】，不暴露具体模式名，也不暴露内部 manager =====

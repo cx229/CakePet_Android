@@ -183,41 +183,17 @@ private fun parseStringArray(root: JSONObject, field: String): List<String> {
  * 动画模式管理：每帧时延严格对齐 PC（image_modes.py）。
  * - 每个模式有帧序列 + 与帧一一对应的时延列表（可为固定值或随机区间）。
  * - 帧序列按 next 链循环（loop=true）或在最后一帧结束后切到指定下一模式（一次性动画）。
- * - 常驻模式支持 PC 的 time_next：随机间隔后按概率切换到指定/随机下一模式。
+ * - timeNext 到期且未指定 nextMode 时，只向调用方报告事件，不自行选择其他动作。
  */
 class ImageModeManager(
     private val ctx: android.content.Context,
-    // 默认资源包=白酥。
-    initialPack: SpritePack = packForId(ctx, ConfigDefaults.DEFAULT_SPRITE_PACK)
+    initialPack: SpritePack
 ) {
 
     /**
-     * 本角色【独立】的随机源（每角色一个实例，天然隔离）。
-     * 种子按包 id 派生：既保证多角色之间抽选序列互不干扰（角色 A 抽一次不会推进角色 B 的序列），
-     * 又便于按 id 复现问题。绝不使用 Random.Default / 全局种子。
+     * 每个素材包实例持有自己的随机源，不依赖外部对象类型。
      */
     private val rng = Random(initialPack.id.hashCode())
-
-    companion object {
-        /**
-         * v1.01 起【不再定义任何动作名常量】。
-         *
-         * 背景：旧版这里写死了 sit_clam / walk / lie / pull_fish 等一整套动作名，
-         * 而各角色的动作差异很大（如蜂蜜猫没有 walk_white，却有专属的 load），
-         * 硬编码会让新角色要么动作缺失、要么切到不存在的模式而卡住。
-         *
-         * 现状：动作一律经【功能路径】寻址（modeOf("climb","walk")），
-         * 具体名字由素材包 functions 提供；待机/静止/菜单池亦然。
-         * 本 companion 只保留与动作名无关的通用能力。
-         */
-
-        /**
-         * 按资源包 id 取得对应资源包；未知键回退默认白酥。
-         * 资源包位置/存储类型在 [PRESET_PACKS] 唯一映射，包级元数据（尺寸/锚点/预览/鱼路径等）全部来自各包 modes.json，
-         * 实现资源与程序解耦——新增/上传素材包无需改动此文件。
-         */
-        fun packForId(ctx: android.content.Context, packId: Int): SpritePack = buildSpritePack(ctx, packId)
-    }
 
     /** 单帧定义：资源名、下一帧索引（null=序列结束）、时延(ms)、锚点(图片像素坐标，对齐 PC image_meta) */
     private data class Frame(

@@ -62,6 +62,13 @@ object RolePackageContract {
     /** 先提取版本号，再校验。尽量列出所有错误（非强制全量），不遇错即停。 */
     fun validate(json: JSONObject): ValidationResult {
         val errors = mutableListOf<String>()
+        // v1.02 只接受通用 Modes/Functions；旧 resources 字典和替代图片字段不再有效。
+        if (json.has("resources")) errors.add("v1.02 不再支持 resources 字典")
+        json.optJSONObject("modes")?.keys()?.forEach { id ->
+            if (json.optJSONObject("modes")?.optJSONObject(id)?.has("fallback") == true) {
+                errors.add("动画 $id 不支持 fallback 字段")
+            }
+        }
 
         // 1) 版本号：非空字符串且必须等于 VERSION（缺失/类型错也收集，不提前返回）
         val version = json.opt("version")
