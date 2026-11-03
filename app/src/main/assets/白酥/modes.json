@@ -51,7 +51,6 @@
   "modes": {
     "food_idle": {
       "label": "食物",
-      "fallback": "支鱼/fish-1.png",
       "loop": true,
       "timeNext": {"enabled": false},
       "nextMode": null,
@@ -62,7 +61,6 @@
     },
     "sit_clam": {
       "label": "静坐",
-      "fallback": "安静/sit_clam-1.png",
       "loop": true,
       "timeNext": {"enabled": true, "min": 3000, "max": 25000, "prob": 1.0},
       "nextMode": null,
@@ -76,7 +74,6 @@
     },
     "sit_puffed": {
       "label": "炸毛",
-      "fallback": "炸毛/sit_puffed-1.png",
       "loop": true,
       "timeNext": {"enabled": true, "min": 3000, "max": 25000, "prob": 1.0},
       "nextMode": null,
@@ -90,7 +87,6 @@
     },
     "pat_head": {
       "label": "摸摸头",
-      "fallback": "摸摸头/pat_head-1.png",
       "loop": false,
       "timeNext": {"enabled": true, "min": 3000, "max": 4000, "prob": 0.95},
       "nextMode": "shake_head",
@@ -105,7 +101,6 @@
     },
     "shake_head": {
       "label": "摇头",
-      "fallback": "摇头/shake_head-1.png",
       "loop": false,
       "timeNext": {"enabled": true, "min": 1000, "max": 2000, "prob": 1.0},
       "nextMode": "sit_puffed",
@@ -117,7 +112,6 @@
     },
     "jump_down": {
       "label": "落地",
-      "fallback": "落地/jump_down-3.png",
       "loop": false,
       "timeNext": {"enabled": false},
       "nextMode": "walk",
@@ -130,7 +124,6 @@
     },
     "lift_slow": {
       "label": "轻晃提起",
-      "fallback": "安静/sit_clam-1.png",
       "loop": true,
       "timeNext": {"enabled":false},
       "nextMode": null,
@@ -142,7 +135,6 @@
     },
     "lift_left_medium": {
       "label": "中速向左提起",
-      "fallback": "安静/sit_clam-1.png",
       "loop": true,
       "timeNext": {"enabled":false},
       "nextMode": null,
@@ -153,7 +145,6 @@
     },
     "lift_left_fast": {
       "label": "快速向左提起",
-      "fallback": "安静/sit_clam-1.png",
       "loop": true,
       "timeNext": {"enabled":false},
       "nextMode": null,
@@ -164,7 +155,6 @@
     },
     "lift_right_medium": {
       "label": "中速向右提起",
-      "fallback": "安静/sit_clam-1.png",
       "loop": true,
       "timeNext": {"enabled":false},
       "nextMode": null,
@@ -175,7 +165,6 @@
     },
     "lift_right_fast": {
       "label": "快速向右提起",
-      "fallback": "安静/sit_clam-1.png",
       "loop": true,
       "timeNext": {"enabled":false},
       "nextMode": null,
@@ -187,7 +176,6 @@
     "roll": {
       "verticalAlign": "center",
       "label": "滚动",
-      "fallback": "滚动/roll-6.png",
       "loop": true,
       "timeNext": {"enabled": false},
       "nextMode": null,
@@ -203,7 +191,6 @@
     },
     "walk": {
       "label": "走路",
-      "fallback": "走路/walk-1.png",
       "loop": true,
       "timeNext": {"enabled": true, "min": 1000, "max": 10000, "prob": 0.5},
       "nextMode": null,
@@ -216,7 +203,6 @@
     },
     "jump_up": {
       "label": "跳起",
-      "fallback": "跳起/jump-1.png",
       "loop": true,
       "timeNext": {"enabled": false, "min": 3000, "max": 4000, "prob": 0},
       "nextMode": null,
@@ -227,7 +213,6 @@
     },
     "walk_white": {
       "label": "美白",
-      "fallback": "安静/sit_clam-1.png",
       "loop": false,
       "timeNext": {"enabled": false},
       "nextMode": null,
@@ -242,7 +227,6 @@
     },
     "wriggle": {
       "label": "蠕动",
-      "fallback": "安静/sit_clam-1.png",
       "loop": true,
 
       "timeNext": {"enabled": true, "min": 3000, "max": 4000, "prob": 0.5},
@@ -255,7 +239,6 @@
     },
     "probe_head": {
       "label": "探头",
-      "fallback": "安静/sit_clam-1.png",
       "loop": false,
       "timeNext": {"enabled": true, "min": 5000, "max": 10000, "prob": 0.5},
       "nextMode": "sit_clam",
@@ -269,7 +252,6 @@
     },
     "snap_head": {
       "label": "吸附探头",
-      "fallback": "安静/sit_clam-1.png",
       "loop": true,
       "timeNext": {"enabled": false, "prob": 0.0},
       "nextMode": null,
@@ -283,7 +265,6 @@
     },
     "snap_pat_head": {
       "label": "吸附探头摸摸头",
-      "fallback": "探头摸摸头/probe_pat_head-1.png",
       "loop": false,
       "timeNext": {"enabled": true, "min": 3000, "max": 4000, "prob": 0.95},
       "nextMode": "snap_head",
@@ -298,7 +279,6 @@
     },
     "feed_fish": {
       "label": "投食",
-      "fallback": "投食/feed_fish-1.png",
       "loop": false,
       "timeNext": {"enabled": true, "min": 2000, "max": 3000, "prob": 0.95},
       "nextMode": "sit_clam",
@@ -317,7 +297,6 @@
     },
     "snap_feed_fish": {
       "label": "探头投食",
-      "fallback": "探头投食/feed_fish-1.png",
       "loop": false,
       "timeNext": {"enabled": true, "min": 2000, "max": 3000, "prob": 0.95},
       "nextMode": "snap_head",
@@ -336,7 +315,6 @@
     },
     "lie": {
       "label": "趴着",
-      "fallback": "蠕动/wriggle-1.png",
       "loop": false,
       "timeNext": {"enabled": false},
       "nextMode": null,
@@ -347,7 +325,6 @@
     },
     "portal": {
       "label": "传送门",
-      "fallback": "安静/sit_clam-1.png",
       "loop": false,
       "timeNext": {"enabled": false},
       "nextMode": "sit_clam",
@@ -358,7 +335,6 @@
     },
     "pull_fish": {
       "label": "扒鱼",
-      "fallback": "安静/sit_clam-1.png",
       "loop": false,
       "timeNext": {"enabled": false},
       "nextMode": "lie",

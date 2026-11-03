@@ -251,7 +251,7 @@ class RoleManageActivity : AppCompatActivity() {
                 if (json == null) { dest.deleteRecursively(); dest.mkdirs(); continue }
                 val validation = RolePackageContract.validate(json)
                 val missingAssets = RolePackageContract.verifyAssets(dest, json)
-                val errors = validation.errors + missingAssets.map { "缺少图片：$it" }
+                val errors = validation.errors + missingAssets
                 if (errors.isNotEmpty()) {
                     lastErrors = errors
                     dest.deleteRecursively(); dest.mkdirs(); continue

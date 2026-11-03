@@ -12,7 +12,7 @@ import java.io.File
 /**
  * 图片资源包：抽象“不同套美术资源”的加载策略。
  * - [resolve]：帧图片相对路径（如 "安静/sit_clam-1.png"）解析为本素材包中的实际路径；
- *   返回 null 表示素材缺失（播放时回退到当前 Mode 的 fallback）。
+ *   所有帧图片在素材包导入校验时必须齐全，播放不使用替代图片。
  * - [decodeTarget]：物理解码目标边长(px)；0 = 保持原始尺寸（默认包，原生 128）。
  *   新包原图 1000×1000，设为 256 ⇒ 解码期超采样到 256（最长边），作 2x 抗锯齿源；
  *   但【逻辑/锚点/画布】空间仍由 [anchorRes]=128 决定，渲染时把 256 位图按 ratio 缩进 128 逻辑矩形，
@@ -244,7 +244,6 @@ class ImageModeManager(
     /** 一个动画模式 */
     private data class ImageModeDef(
         val name: String,
-        val fallback: String,           // 资源缺失时的兜底图
         val frames: List<Frame>,
         val loop: Boolean,              // true: 到末尾后回到首帧（常驻循环）；false: 播完触发 onSequenceEnd
         val timeNextEnabled: Boolean = false,   // 是否启用随机定时切换下一模式（PC time_next_enabled）
@@ -428,7 +427,6 @@ class ImageModeManager(
         while (kit.hasNext()) {
             val name = kit.next()
             val m = modesObj.getJSONObject(name)
-            val fallback = if (m.has("fallback")) m.getString("fallback") else ""
             val loop = m.optBoolean("loop", false)
             val tn = if (m.has("timeNext")) m.getJSONObject("timeNext") else null
             val timeNextEnabled = tn?.optBoolean("enabled", false) ?: false
@@ -453,7 +451,7 @@ class ImageModeManager(
                 val dy = if (f.has("dy")) f.getInt("dy") else 0
                 frames.add(Frame(res, nextIndex, delay, anchorX, anchorY, dx, dy))
             }
-            registerMode(ImageModeDef(name, fallback, frames, loop, timeNextEnabled,
+            registerMode(ImageModeDef(name, frames, loop, timeNextEnabled,
                 changeIntervalMin, changeIntervalMax, changeProb, nextModeName, null, walkSpeed, label))
         }
         // 待机池 / 静止池：内容取自素材包，并【按本包实际定义的动作裁剪】。
@@ -532,7 +530,7 @@ class ImageModeManager(
             val def = modes[next] ?: break
             for (frame in def.frames) {
                 if (frame.resName !in frames) {
-                    (loadBitmap(frame.resName) ?: loadBitmap(def.fallback))?.let { frames[frame.resName] = it }
+                    loadBitmap(frame.resName)?.let { frames[frame.resName] = it }
                 }
             }
             next = def.nextModeName
@@ -729,7 +727,7 @@ class ImageModeManager(
     fun currentBitmap(): Bitmap? {
         val def = forcedSeq ?: currentDef ?: return null
         val frame = def.frames.getOrNull(frameIndex) ?: return null
-        return loadBitmap(frame.resName) ?: loadBitmap(def.fallback)
+        return loadBitmap(frame.resName)
     }
 
     /** 预览自治播放用：返回当前帧的 resName（按帧序列顺序），供缓存键与重绘判定。 */

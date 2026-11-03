@@ -2,6 +2,7 @@ package com.cx.cakepet
 
 import org.json.JSONArray
 import org.json.JSONObject
+import android.graphics.BitmapFactory
 import java.io.File
 
 /**
@@ -129,6 +130,43 @@ object RolePackageContract {
             }
         }
 
+        // Mode 是完整动画：每帧必须声明图片、有效下一帧索引和正数延时。
+        // 图片文件的存在性/有效性由 verifyAssets() 在导入时一次性校验。
+        modes?.keys()?.forEach { modeId ->
+            val mode = modes.optJSONObject(modeId) ?: return@forEach
+            val frames = mode.optJSONArray("frames") ?: return@forEach
+            for (idx in 0 until frames.length()) {
+                val frame = frames.optJSONObject(idx)
+                if (frame == null) {
+                    errors.add("动画 $modeId 第 ${idx + 1} 帧不是对象")
+                    continue
+                }
+                val res = frame.opt("res")
+                if (res !is String || res.isBlank()) errors.add("动画 $modeId 第 ${idx + 1} 帧缺少图片路径")
+                if (frame.has("next") && !frame.isNull("next")) {
+                    val next = frame.opt("next")
+                    if (next !is Int || next !in 0 until frames.length()) {
+                        errors.add("动画 $modeId 第 ${idx + 1} 帧的 next 无效")
+                    }
+                }
+                val delay = frame.opt("delay")
+                val validDelay = when (delay) {
+                    is Number -> delay.toLong() > 0
+                    is JSONArray -> delay.length() == 2 &&
+                        delay.opt(0) is Number && delay.opt(1) is Number &&
+                        delay.optLong(0) > 0 && delay.optLong(1) >= delay.optLong(0)
+                    else -> false
+                }
+                if (!validDelay) errors.add("动画 $modeId 第 ${idx + 1} 帧的 delay 无效")
+            }
+            if (mode.has("nextMode") && !mode.isNull("nextMode")) {
+                val nextMode = mode.opt("nextMode")
+                if (nextMode !is String || nextMode !in definedModes) {
+                    errors.add("动画 $modeId 引用未定义的 nextMode")
+                }
+            }
+        }
+
         // 6) 全部功能叶子，包括食物，统一指向已定义的 Mode。
         for ((path, leaves) in functions) {
             for (leaf in leaves) {
@@ -166,20 +204,30 @@ object RolePackageContract {
         return ValidationResult(errors.isEmpty(), versionStr, errors)
     }
 
-    /** 文件系统级：检查各 Mode 帧图片引用是否存在。 */
+    /** 素材包导入必须完整：检查全部 Mode 帧文件存在且可解码，不设运行时缺帧兜底。 */
     fun verifyAssets(dest: File, json: JSONObject): List<String> {
-        val missing = mutableListOf<String>()
-        json.optJSONObject("modes")?.let { modes ->
-            modes.keys().forEach { name ->
-                modes.optJSONObject(name)?.optJSONArray("frames")?.let { frames ->
-                    for (i in 0 until frames.length()) {
-                        val res = frames.optJSONObject(i)?.optString("res", null)
-                        if (!res.isNullOrBlank() && !File(dest, res).exists()) missing.add(res)
-                    }
+        val errors = mutableListOf<String>()
+        val root = dest.canonicalFile
+        val modes = json.optJSONObject("modes") ?: return errors
+        val validated = mutableSetOf<String>()
+        modes.keys().forEach { modeId ->
+            val frames = modes.optJSONObject(modeId)?.optJSONArray("frames") ?: return@forEach
+            for (i in 0 until frames.length()) {
+                val res = frames.optJSONObject(i)?.optString("res", "") ?: ""
+                if (res.isBlank() || !validated.add(res)) continue
+                val file = File(root, res).canonicalFile
+                if (!file.toPath().startsWith(root.toPath()) || !file.isFile || file.length() <= 0L) {
+                    errors.add("缺失或非法图片：$res")
+                    continue
+                }
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.absolutePath, bounds)
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                    errors.add("图片无法解码：$res")
                 }
             }
         }
-        return missing
+        return errors
     }
 
     /** 校验字段为非空字符串（非布尔/数字/空串）。 */
