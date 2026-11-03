@@ -399,7 +399,7 @@ class ImageModeManager(
                 // 锚点/画布/边界全部活在 128 逻辑空间，decodeTarget 只影响解码清晰度、不影响坐标。
                 scaledContentSize(opts.outWidth, opts.outHeight, currentPack.anchorRes)
             } catch (_: Exception) {
-                currentPack.anchorRes to currentPack.anchorRes   // 读不到边界：回退逻辑方块尺寸，避免下游异常
+                0 to 0 // 素材包必须完整；无法读取的帧不伪装为有效图片尺寸
             }
         } else {
             try {
@@ -567,7 +567,7 @@ class ImageModeManager(
      * 例：1000×500, target=128 → 128×64；128×64 再经 fillOffset 顶部对齐、底部补透明到统一画布。
      */
     private fun scaledContentSize(realW: Int, realH: Int, target: Int): Pair<Int, Int> {
-        if (realW <= 0 || realH <= 0) return target to target
+        if (realW <= 0 || realH <= 0) return 0 to 0
         val longSide = if (realW > realH) realW else realH
         val scale = target.toFloat() / longSide
         val outW = (realW * scale).roundToInt().coerceAtLeast(1)
