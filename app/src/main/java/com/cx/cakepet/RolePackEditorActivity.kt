@@ -40,8 +40,10 @@ class RolePackEditorActivity : AppCompatActivity() {
             val frames = JSONArray(root.getJSONObject("modes").getJSONObject(modeId).getJSONArray("frames").toString())
             if (fileIndex in 0 until frames.length()) frames.getJSONObject(fileIndex).put("res", "images/${file.name}")
             else {
+                val previousLast = frames.getJSONObject(frames.length() - 1)
+                val previousIndex = frames.length()
                 frames.put(JSONObject().put("res", "images/${file.name}").put("delay", 120).put("next", 0))
-                linearNext(frames)
+                if (previousLast.optInt("next", -1) == 0) previousLast.put("next", previousIndex)
             }
             change { it.getJSONObject("modes").getJSONObject(modeId).put("frames", frames) }
             showMode(modeId)
@@ -335,9 +337,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     2 -> attempt {
                         val old = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
                         require(old.length() > 1) { "至少保留一帧" }
-                        val newer = JSONArray()
-                        for (i in 0 until old.length()) if (i != index) newer.put(old.getJSONObject(i))
-                        linearNext(newer)
+                        val newer = remapFrames(old, (0 until old.length()).filter { it != index })
                         change { it.getJSONObject("modes").getJSONObject(key).put("frames", newer) }
                         showMode(key)
                     }
@@ -376,18 +376,30 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private fun optional(obj: JSONObject, key: String) = if (obj.isNull(key)) "" else obj.optString(key)
-    private fun linearNext(frames: JSONArray) {
-        for (i in 0 until frames.length()) frames.getJSONObject(i).put("next", (i + 1) % frames.length())
+    /** Preserve custom next links when rearranging or removing frames. */
+    private fun remapFrames(old: JSONArray, orderedIndices: List<Int>): JSONArray {
+        require(orderedIndices.isNotEmpty())
+        val result = JSONArray()
+        orderedIndices.forEach { index ->
+            val frame = JSONObject(old.getJSONObject(index).toString())
+            val originalNext = frame.opt("next")
+            if (originalNext is Number) {
+                val target = originalNext.toInt()
+                val surviving = if (target in orderedIndices) target
+                    else orderedIndices.firstOrNull { it > target } ?: orderedIndices.first()
+                frame.put("next", orderedIndices.indexOf(surviving))
+            }
+            result.put(frame)
+        }
+        return result
     }
     private fun move(key: String, index: Int, delta: Int) = attempt {
-        val arr = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
-        val newIndex = index + delta
-        if (newIndex !in 0 until arr.length()) return@attempt
-        val items = (0 until arr.length()).map { JSONObject(arr.getJSONObject(it).toString()) }.toMutableList()
-        items.add(newIndex, items.removeAt(index))
-        val changed = JSONArray()
-        items.forEach { changed.put(it) }
-        linearNext(changed)
+        val frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+        val to = index + delta
+        if (to !in 0 until frames.length()) return@attempt
+        val order = (0 until frames.length()).toMutableList()
+        order.add(to, order.removeAt(index))
+        val changed = remapFrames(frames, order)
         change { it.getJSONObject("modes").getJSONObject(key).put("frames", changed) }
         showMode(key)
     }
