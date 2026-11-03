@@ -59,6 +59,7 @@ object RolePackEditing {
         if (!draft.renameTo(live)) { backup.renameTo(live); error("保存失败") }
         backup.deleteRecursively()
         RoleStore.updateUserRole(ctx, id, json.optString("name"), json.optString("shortName"), parseAuthors(json))
+        PetService.instance?.refreshMaterialPack(id)
     }
     fun export(ctx: Context, role: RoleDescriptor, uri: Uri) {
         ctx.contentResolver.openOutputStream(uri)?.use { stream ->

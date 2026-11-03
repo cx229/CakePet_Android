@@ -3757,6 +3757,17 @@ class PetService : Service() {
 
     // —— 多角色公开 API（供 MainActivity 角色卡片驱动） ——
 
+    /** Apply a saved material pack to only the active instances using that template. */
+    fun refreshMaterialPack(templateId: String) {
+        val affected = RoleStore.getHomeRoles(this)
+            .filter { it.templateId == templateId && engines.containsKey(it.instanceId) }
+            .map { it.instanceId }
+        if (affected.isEmpty()) return
+        affected.forEach { teardownRole(it) }
+        affected.forEach { startRole(it) }
+        reapplyZOrder()
+    }
+
     /** 角色是否已在屏（已召唤）。 */
     fun isRoleActive(roleId: String): Boolean = engines.containsKey(roleId)
 

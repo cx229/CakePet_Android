@@ -487,8 +487,11 @@ class RolePackEditorActivity : AppCompatActivity() {
                     .setPositiveButton("知道了", null).show()
                 else AlertDialog.Builder(this).setTitle("删除未使用图片？").setMessage(relative)
                     .setNegativeButton("取消", null).setPositiveButton("删除") { _, _ ->
-                        file.delete()
-                        images()
+                        attempt {
+                            check(file.delete()) { "无法删除图片" }
+                            change { }
+                            images()
+                        }
                     }.show()
             }
         }
