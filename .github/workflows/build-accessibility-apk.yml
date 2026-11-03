@@ -1,9 +1,10 @@
-name: Build accessibility navigation APK
+name: Build CakePet v1.02 editor APK
 
 on:
   push:
     branches:
       - feat/2610312239-accessibility-rendering
+      - feat/261103-v102-mode-decoupling
   workflow_dispatch:
 
 permissions:
@@ -44,7 +45,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CakePet-accessibility-navigation-debug-apk
+          name: CakePet-v102-editor-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14

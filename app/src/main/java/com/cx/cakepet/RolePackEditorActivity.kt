@@ -32,10 +32,11 @@ class RolePackEditorActivity : AppCompatActivity() {
         if (uri != null) attempt {
             val target = File(draft, "images").apply { mkdirs() }
             val file = File(target, UUID.randomUUID().toString() + ".png")
-            contentResolver.openInputStream(uri)?.use { it.copyTo(file.outputStream()) } ?: error("无法读取图片")
-            val dimensions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(file.absolutePath, dimensions)
-            require(dimensions.outWidth > 0 && dimensions.outHeight > 0) { "无法解码图片" }
+            val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+                ?: error("无法解码图片")
+            require(bitmap.width > 0 && bitmap.height > 0 && bitmap.width.toLong() * bitmap.height <= 8_000_000)
+            try { file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } }
+            finally { bitmap.recycle() }
             val frames = JSONArray(root.getJSONObject("modes").getJSONObject(modeId).getJSONArray("frames").toString())
             if (fileIndex in 0 until frames.length()) frames.getJSONObject(fileIndex).put("res", "images/${file.name}")
             else {

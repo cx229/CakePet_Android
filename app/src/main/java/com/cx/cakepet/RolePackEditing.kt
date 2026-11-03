@@ -81,7 +81,7 @@ object RolePackEditing {
             zip.putNextEntry(ZipEntry(relative))
             ctx.assets.open(path).use { it.copyTo(zip) }
             zip.closeEntry()
-        } else children.forEach { zipAssets(ctx, "$path/$child",
+        } else children.forEach { zipAssets(ctx, "$path/$it",
             if (relative.isEmpty()) it else "$relative/$it", zip) }
     }
     /** Movie composites GIF frames; graphic control blocks provide frame delays. */
