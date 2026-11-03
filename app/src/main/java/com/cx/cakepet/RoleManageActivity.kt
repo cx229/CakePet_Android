@@ -144,7 +144,7 @@ class RoleManageActivity : AppCompatActivity() {
     }
 
     /** 从本机选择 .zip 角色素材包导入：
-     *  解压到 filesDir/roles/<uuid>/（软件私有存储），校验 modes.json，
+     *  解压到 filesDir/roles/<uuid>/（软件私有存储），校验 modes.jsonc，
      *  把素材模板写入 user_roles 清单（source=FILES）。不做校验和、不按内容去重——
      *  重复上传同一包会生成两个独立素材包。删除时仅清理本私有目录，不动用户原文件。 */
     private fun importZip(uri: Uri) {
@@ -170,7 +170,7 @@ class RoleManageActivity : AppCompatActivity() {
         // 候选文件名编码：先 UTF-8（规范包），再回退 GB18030 / GBK（中文 Windows 打的包、未置
         // UTF-8 标志位的中文名包）。接收他人 zip 时编码不可预知，逐编码完整解压后，以【能否通过
         // 资源包校验】作为该编码是否正确的判据——zip4j 不因平台差异抛 MALFORMED，且能按指定字符集
-        // 稳定解码文件名；用"完整校验通过"而非"仅看 modes.json 是否存在"来判定，避免错误编码解出的
+        // 稳定解码文件名；用"完整校验通过"而非"仅看 modes.jsonc 是否存在"来判定，避免错误编码解出的
         // 乱码文件名骗过浅校验导致后续才报错。
         val charsets = listOfNotNull(
             StandardCharsets.UTF_8,
@@ -182,8 +182,8 @@ class RoleManageActivity : AppCompatActivity() {
         // 记录最后一次解压异常：原先 catch 直接吞掉异常，失败时无从判断是文件损坏、
         // 文件名过长还是路径非法。现保留异常本体，失败时打印完整栈并提示摘要。
         var lastThrowable: Throwable? = null
-        // modes.json 读取/解析失败单独留存：它走 continue 而非抛异常，若不记录，
-        // 最终提示会误报成"未找到 modes.json"（实则文件存在、只是内容非法）。
+        // modes.jsonc 读取/解析失败单独留存：它走 continue 而非抛异常，若不记录，
+        // 最终提示会误报成"未找到 modes.jsonc"（实则文件存在、只是内容非法）。
         var jsonError: Throwable? = null
         for (cs in charsets) {
             try {
@@ -208,40 +208,40 @@ class RoleManageActivity : AppCompatActivity() {
                         }
                     }
                 }
-                // 若 zip 自带一层包裹目录，把内容上提，使 modes.json 位于根目录。
-                val modesAtRoot = File(dest, "modes.json")
+                // 若 zip 自带一层包裹目录，把内容上提，使 modes.jsonc 位于根目录。
+                val modesAtRoot = File(dest, "modes.jsonc")
                 if (!modesAtRoot.exists()) {
-                    val sub = dest.listFiles()?.firstOrNull { it.isDirectory && File(it, "modes.json").exists() }
+                    val sub = dest.listFiles()?.firstOrNull { it.isDirectory && File(it, "modes.jsonc").exists() }
                     if (sub != null) {
                         sub.listFiles()?.forEach { f -> f.renameTo(File(dest, f.name)) }
                         sub.delete()
                     }
                 }
                 // 以"通过完整资源包校验"判定该编码正确，否则换下一个编码重试。
-                val modesFile = File(dest, "modes.json")
+                val modesFile = File(dest, "modes.jsonc")
                 if (!modesFile.exists()) {
                     // 诊断用：打印实际解出的目录树，用于区分"多层包裹目录""条目带盘符/绝对路径前缀"
-                    // "条目名编码错误""包内根本没有 modes.json"等情况。定位后可移除。
+                    // "条目名编码错误""包内根本没有 modes.jsonc"等情况。定位后可移除。
                     val tree = try {
                         dest.walkTopDown().take(30).joinToString("\n  ") { it.relativeTo(dest).path }
                     } catch (_: Exception) { "<遍历失败>" }
                     val topLevel = dest.listFiles()?.joinToString { it.name } ?: "<空>"
-                    Log.e(TAG_IMPORT, "[$cs] 根目录无 modes.json。顶层=[$topLevel]\n  实际解出:\n  $tree")
+                    Log.e(TAG_IMPORT, "[$cs] 根目录无 modes.jsonc。顶层=[$topLevel]\n  实际解出:\n  $tree")
                     dest.deleteRecursively(); dest.mkdirs(); continue
                 }
                 val jsonText = try { modesFile.readText() } catch (e: Exception) {
                     jsonError = e
-                    Log.e(TAG_IMPORT, "[$cs] modes.json 读取失败", e)
+                    Log.e(TAG_IMPORT, "[$cs] modes.jsonc 读取失败", e)
                     null
                 }
                 val json = if (jsonText != null) {
-                    try { JSONObject(jsonText) } catch (e: Exception) {
+                    try { parseJsonc(jsonText) } catch (e: Exception) {
                         jsonError = e
                         // 打印出错字符位置及其上下文：能一眼看出是多余逗号、注释还是被截断。
                         // 消息可能极长（含整段 JSON），故统一限长，避免 logcat 刷屏。
                         Log.e(
                             TAG_IMPORT,
-                            "[$cs] modes.json 解析失败（${jsonText.length}字符）：${e.message?.take(300)}" +
+                            "[$cs] modes.jsonc 解析失败（${jsonText.length}字符）：${e.message?.take(300)}" +
                                 jsonErrorContext(jsonText, e.message),
                             e
                         )
@@ -280,12 +280,12 @@ class RoleManageActivity : AppCompatActivity() {
                 // 无法区分【压缩包损坏】【文件名过长】【Zip Slip 拦截】【磁盘空间不足】等情况。
                 // - logcat（tag=RoleImport）：完整异常栈；
                 // - Toast：异常摘要（受显示长度限制，完整信息看 logcat）。
-                // 优先取解压异常；其次取 modes.json 的读取/解析异常。
+                // 优先取解压异常；其次取 modes.jsonc 的读取/解析异常。
                 val t = lastThrowable ?: jsonError
                 val summary = if (t != null) {
                     "${t.javaClass.simpleName}: ${t.message ?: "无详细信息"}"
                 } else {
-                    "未捕获到异常（多为未找到 modes.json，属包结构问题）"
+                    "未捕获到异常（多为未找到 modes.jsonc，属包结构问题）"
                 }
                 Log.e(TAG_IMPORT, "解压失败汇总：$summary（已试编码=$charsets，文件大小=${zipSize}字节）", t)
                 Toast.makeText(this, "解压失败：$summary", Toast.LENGTH_LONG).show()
@@ -294,12 +294,12 @@ class RoleManageActivity : AppCompatActivity() {
         }
         tmp.delete() // 解压成功，清理临时文件
 
-        // 校验已在上方通过，重新读取 modes.json 写入清单。
-        val modesFile = File(dest, "modes.json")
-        val json = try { JSONObject(modesFile.readText()) } catch (_: Exception) { null }
+        // 校验已在上方通过，重新读取 modes.jsonc 写入清单。
+        val modesFile = File(dest, "modes.jsonc")
+        val json = try { parseJsonc(modesFile.readText()) } catch (_: Exception) { null }
         if (json == null) {
             dest.deleteRecursively()
-            Toast.makeText(this, "modes.json 解析失败", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "modes.jsonc 解析失败", Toast.LENGTH_LONG).show()
             return
         }
         val packId = try { json.getInt("packId") } catch (_: Exception) { -1 }

@@ -27,16 +27,16 @@ data class SpritePack(
     val base: String = "",                           // 资源根目录（assets/<base> 或 filesDir/roles/<base>）
     val source: RoleSource = RoleSource.ASSETS,      // 存储类型（预装=ASSETS / 用户上传=FILES）
     val resolve: (String) -> String?,
-    val configPath: String? = null,   // 本包 modes.json 路径（assets 或私有角色包目录）
-    val decodeTarget: Int = 0,         // 物理超采样解码边长（0=原生）；新包 256（由 modes.json 覆盖）
-    val anchorRes: Int = 128,          // 逻辑分辨率（锚点/画布/UI 坐标系单位），恒 128（由 modes.json 覆盖）
-    val name: String = "",             // 资源包中文名（modes.json 指定，v1.0 必填），仅展示用
-    val shortName: String = "",         // 资源包默认简称（modes.json 指定，v1.0 必填）：每个角色各自定义，不全局写死
+    val configPath: String? = null,   // 本包 modes.jsonc 路径（assets 或私有角色包目录）
+    val decodeTarget: Int = 0,         // 物理超采样解码边长（0=原生）；新包 256（由 modes.jsonc 覆盖）
+    val anchorRes: Int = 128,          // 逻辑分辨率（锚点/画布/UI 坐标系单位），恒 128（由 modes.jsonc 覆盖）
+    val name: String = "",             // 资源包中文名（modes.jsonc 指定，v1.0 必填），仅展示用
+    val shortName: String = "",         // 资源包默认简称（modes.jsonc 指定，v1.0 必填）：每个角色各自定义，不全局写死
     // v1.02：所有功能路径均映射到通用 Mode ID；Mode 可用于角色、食物及其他动画。
     // 键为【功能路径】（如 [climb, walk]、[snap, pat_head, pat_head]），层数不限；
     // 值为候选列表（当前多为单元素，为将来"同一功能多个动作"预留）。
     val functions: Map<List<String>, List<String>> = emptyMap(),
-    // 悬浮菜单可触发的模式（v1.01 必填，由 modes.json 的 menuPool 提供）
+    // 悬浮菜单可触发的模式（v1.01 必填，由 modes.jsonc 的 menuPool 提供）
     val menuPool: List<String> = emptyList(),
     // 模式名 → 显示名（modes 里每项的 label），供菜单等 UI 取中文名，代码不写死文案
     val modeLabels: Map<String, String> = emptyMap(),
@@ -95,7 +95,7 @@ class ImageModeManager(
         val changeProb: Float = 0.5f,
         val nextModeName: String? = null,       // 指定下一模式（PC next_mode_name）
         val walkSpeed: Float = 0f,              // 行走位移速度(px/s)，>0 时由物理引擎驱动水平位移（对齐 PC 帧偏移 QPoint）
-        val label: String = ""                  // 中文名：仅供阅读 modes.json 用，不参与任何代码逻辑
+        val label: String = ""                  // 中文名：仅供阅读 modes.jsonc 用，不参与任何代码逻辑
     )
 
     private fun rnd(min: Long, max: Long): () -> Long = { Random.nextLong(min, max + 1) }
@@ -136,8 +136,8 @@ class ImageModeManager(
      */
     private fun loadModesFromJson(path: String) {
         val text = openPackStream(path)?.bufferedReader()?.use { it.readText() } ?: return
-        val root = JSONObject(text)
-        // 包级元数据：全部来自 modes.json 根节点（覆盖 currentPack/Skeleton 默认值，实现资产与程序解耦）。
+        val root = parseJsonc(text)
+        // 包级元数据：全部来自 modes.jsonc 根节点（覆盖 currentPack/Skeleton 默认值，实现资产与程序解耦）。
         val decodeTarget = if (root.has("decodeTarget")) root.optInt("decodeTarget", currentPack.decodeTarget) else currentPack.decodeTarget
         val anchorRes = if (root.has("anchorRes")) root.optInt("anchorRes", currentPack.anchorRes) else currentPack.anchorRes
         val id = if (root.has("id")) root.optString("id", currentPack.id) else currentPack.id

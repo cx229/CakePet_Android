@@ -10,8 +10,8 @@ import java.io.File
 /**
  * 资源包目录：选择键(Int，持久化于 pet_config) -> (包 id, 资源根目录 base, 存储类型)。
  * 由 [RoleRegistry.refreshPresets] 启动时按其内唯一的 [PRESET_FOLDERS] 映射
- * （packId -> assets 目录）填入：遍历各目录读取 modes.json 得到 id/base，其余元数据都来自 JSON。
- * 包级元数据（名称/尺寸/锚点/预览/鱼路径等）全部来自各包 modes.json，不做预装特化。
+ * （packId -> assets 目录）填入：遍历各目录读取 modes.jsonc 得到 id/base，其余元数据都来自 JSON。
+ * 包级元数据（名称/尺寸/锚点/预览/鱼路径等）全部来自各包 modes.jsonc，不做预装特化。
  * 用户上传包将来由 RoleRegistry.scanUserRoles 扫描 filesDir/roles/<id>/ 发现，走同一加载路径。
  */
 data class PackRef(val id: String, val base: String, val source: RoleSource)
@@ -27,7 +27,7 @@ var PRESET_PACKS: Map<Int, PackRef> = emptyMap()
 /** 由 RoleRegistry 扫描 assets 后写入预装包映射。 */
 internal fun setPresetPacks(map: Map<Int, PackRef>) { PRESET_PACKS = map }
 
-/** 按选择键构建完整 SpritePack（包级元数据来自对应 modes.json）。未知键回退默认包 / 或按 RoleRegistry 动态解析。 */
+/** 按选择键构建完整 SpritePack（包级元数据来自对应 modes.jsonc）。未知键回退默认包 / 或按 RoleRegistry 动态解析。 */
 fun buildSpritePack(ctx: android.content.Context, packId: Int): SpritePack {
     val ref = PRESET_PACKS[packId]
         ?: RoleRegistry.PRESETS.firstOrNull { it.packId == packId }?.let { PackRef(it.id, it.rootPath, it.source) }
@@ -36,11 +36,11 @@ fun buildSpritePack(ctx: android.content.Context, packId: Int): SpritePack {
     return loadPackMeta(ctx, ref.base, ref.source)
 }
 
-/** 读取某包 modes.json 的「包级元数据」并覆盖到 Skeleton；解析失败回退 Skeleton（默认 0/false/默认图）。 */
+/** 读取某包 modes.jsonc 的「包级元数据」并覆盖到 Skeleton；解析失败回退 Skeleton（默认 0/false/默认图）。 */
 fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource): SpritePack {
     val skeleton = SpritePack(
         id = base, base = base, source = source,
-        resolve = { "$base/$it" }, configPath = "$base/modes.json"
+        resolve = { "$base/$it" }, configPath = "$base/modes.jsonc"
     )
     val raw = try {
         when (source) {
@@ -48,7 +48,7 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
             RoleSource.FILES -> File(ctx.filesDir, "roles/${skeleton.configPath}").bufferedReader().use { it.readText() }
         }
     } catch (_: Exception) { return skeleton }
-    val root = try { JSONObject(raw) } catch (_: Exception) { return skeleton }
+    val root = try { parseJsonc(raw) } catch (_: Exception) { return skeleton }
     return skeleton.copy(
         id = if (root.has("id")) root.optString("id", base) else base,
         decodeTarget = if (root.has("decodeTarget")) root.optInt("decodeTarget", 0) else 0,
