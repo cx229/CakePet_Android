@@ -3732,6 +3732,8 @@ class PetService : Service() {
         rt.randomJob?.cancel(); rt.randomJob = null
         // 停止该角色的投食循环并仅清除该角色的支鱼（不串其它角色）。
         stopFishSpawning(rt)
+        fishVisuals.remove(roleId)
+        fishModeManagers.remove(roleId)
         val removed = pets.filter { it.roleId == roleId }
         for (inst in removed) {
             try { if (inst.displayAdded && inst.displayView != null) windowManager.removeView(inst.displayView) } catch (_: Exception) {}
