@@ -1327,7 +1327,7 @@ class PetView @JvmOverloads constructor(
         // 计算实际绘制像素的最小包围矩形：render 已把旋转/镜像/缩放/透明度一并折进 bmp，
         // 故扫描 bmp 的不透明像素即可得到“定格内容”的真实 AABB（已含旋转/镜像结果）。
         // 据此裁剪掉透明边距并重新定位【窗口左上角】，让定格浮窗紧贴内容、不夹带多余透明区域。
-        val bounds = computeTightAlphaBounds(bmp)
+        val bounds = ModeImageProcessing.alphaBounds(bmp)
         val cropBmp: android.graphics.Bitmap
         val offX: Int
         val offY: Int
@@ -1357,32 +1357,6 @@ class PetView @JvmOverloads constructor(
             cropBmp.height,
             System.currentTimeMillis()
         )
-    }
-
-    /** 扫描位图不透明像素，返回最小包围矩形（null 表示整图透明）。 */
-    private fun computeTightAlphaBounds(bmp: android.graphics.Bitmap): android.graphics.Rect? {
-        val w = bmp.width
-        val h = bmp.height
-        if (w <= 0 || h <= 0) return null
-        val buf = IntArray(w * h)
-        bmp.getPixels(buf, 0, w, 0, 0, w, h)
-        var minX = w
-        var minY = h
-        var maxX = -1
-        var maxY = -1
-        for (y in 0 until h) {
-            val row = y * w
-            for (x in 0 until w) {
-                if ((buf[row + x] ushr 24) and 0xFF > 0) {
-                    if (x < minX) minX = x
-                    if (x > maxX) maxX = x
-                    if (y < minY) minY = y
-                    if (y > maxY) maxY = y
-                }
-            }
-        }
-        if (maxX < 0) return null
-        return android.graphics.Rect(minX, minY, maxX + 1, maxY + 1)
     }
 
     /**

@@ -125,24 +125,7 @@ private fun composePreviewBitmap(frame: Bitmap, boxPx: Int): Bitmap? {
     } catch (_: Exception) { null }
 }
 
-/** 求位图非透明内容包围盒（宠物实际像素范围），用于把“宠物锚点”而非整张画布对齐到预览窗口。 */
-private fun petContentBounds(bmp: Bitmap): RectF {
-    val w = bmp.width
-    val h = bmp.height
-    if (w == 0 || h == 0) return RectF(0f, 0f, w.toFloat(), h.toFloat())
-    var minX = w; var minY = h; var maxX = -1; var maxY = -1
-    val row = IntArray(w)
-    for (y in 0 until h) {
-        bmp.getPixels(row, 0, w, 0, y, w, 1)
-        for (x in 0 until w) {
-            if ((row[x] ushr 24) > 12) {   // alpha > ~5%，忽略半透明抗锯齿边
-                if (x < minX) minX = x
-                if (x > maxX) maxX = x
-                if (y < minY) minY = y
-                if (y > maxY) maxY = y
-            }
-        }
-    }
-    if (maxX < 0) return RectF(0f, 0f, w.toFloat(), h.toFloat())
-    return RectF(minX.toFloat(), minY.toFloat(), (maxX + 1).toFloat(), (maxY + 1).toFloat())
-}
+/** 预览版式与图片透明边界计算解耦，使用与其余动画相同的图像处理器。 */
+private fun petContentBounds(bmp: Bitmap): RectF =
+    ModeImageProcessing.alphaBounds(bmp, threshold = 12)?.let { RectF(it) }
+        ?: RectF(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat())

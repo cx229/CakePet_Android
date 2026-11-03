@@ -380,6 +380,33 @@ class ImageModeManager(
         return frames
     }
 
+    /** 模式图像显示结果。透明边缘裁剪属于可选的渲染变换，与角色/道具类型无关。 */
+    data class ModeVisual(val frames: Map<String, Bitmap>, val first: Bitmap)
+
+    // 同一个素材包实例共享解码位图、各类渲染变换和透明边界；缓存键不含具体对象类型。
+    private val modeVisualCache = mutableMapOf<Pair<String, Int?>, ModeVisual>()
+    fun modeVisual(modeId: String, alphaTrimThreshold: Int? = null): ModeVisual? {
+        val key = modeId to alphaTrimThreshold
+        modeVisualCache[key]?.let { return it }
+        val source = modeFrameBitmaps(modeId)
+        if (source.isEmpty()) return null
+        val frames = if (alphaTrimThreshold == null) {
+            source
+        } else {
+            var union: android.graphics.Rect? = null
+            for (bitmap in source.values) {
+                val tight = ModeImageProcessing.alphaBounds(bitmap, alphaTrimThreshold) ?: continue
+                if (union == null) union = android.graphics.Rect(tight) else union.union(tight)
+            }
+            val firstBitmap = source.values.first()
+            val bounds = union ?: android.graphics.Rect(0, 0, firstBitmap.width, firstBitmap.height)
+            source.mapValues { (_, bitmap) ->
+                Bitmap.createBitmap(bitmap, bounds.left, bounds.top, bounds.width(), bounds.height())
+            }
+        }
+        return ModeVisual(frames, frames.values.first()).also { modeVisualCache[key] = it }
+    }
+
     inner class ModeClip internal constructor(startMode: String) {
         private var def = requireNotNull(modes[startMode]) { "Undefined Mode: $startMode" }
         private var frameIndex = 0
@@ -476,6 +503,7 @@ class ImageModeManager(
         currentPack = pack
         bitmapCache.clear()
         rawSizeCache.clear()
+        modeVisualCache.clear()
         modes.clear()
         verticalAlignOfResource.clear()
         pack.configPath?.let { loadModesFromJson(it) }
@@ -706,7 +734,9 @@ class ImageModeManager(
 
     /** 释放位图缓存（View 销毁时调用） */
     fun clearCache() {
+        modeVisualCache.clear()
         bitmapCache.clear()
+        rawSizeCache.clear()
     }
 }
 
