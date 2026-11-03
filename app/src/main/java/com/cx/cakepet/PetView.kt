@@ -38,9 +38,6 @@ class PetView @JvmOverloads constructor(
     /** 按功能路径取该功能的模式名；素材包未提供该功能时返回 null（调用方应跳过，勿发空 setMode）。 */
     fun modeOf(vararg path: String): String? = imageManager.modeOf(*path)
 
-    /** 按功能路径取该功能所需的资源路径（叶子指向 resources）；未提供时返回 null。 */
-    fun resourceOf(vararg path: String): String? = imageManager.resourceOf(*path)
-
     /** 当前帧锚点【快照】：在 syncCurrentBitmap() 中与 currentBitmap 同一次、同帧写入，
      *  是“显示位图”与“定位锚点”的唯一真相源。之后所有位置计算只读它，不再回头 currentAnchor() 实时读，
      *  杜绝“显示切到帧 N+1、位置还在用帧 N 锚点”的异步错位（动作与位置不适配）。 */
