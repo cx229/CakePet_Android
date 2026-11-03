@@ -11,8 +11,8 @@ import java.io.File
 
 /**
  * 图片资源包：抽象“不同套美术资源”的加载策略。
- * - [resolve]：resName(如 "sit_clam-1.png") -> assets 相对路径(如 "芝麻酥/sit_clam-1.png"
- *   / "芝麻酥/安静/sit_clam-1.png")；返回 null 表示该包不含此帧（加载时回退到 fallback）。
+ * - [resolve]：帧图片相对路径（如 "安静/sit_clam-1.png"）解析为本素材包中的实际路径；
+ *   返回 null 表示素材缺失（播放时回退到当前 Mode 的 fallback）。
  * - [decodeTarget]：物理解码目标边长(px)；0 = 保持原始尺寸（默认包，原生 128）。
  *   新包原图 1000×1000，设为 256 ⇒ 解码期超采样到 256（最长边），作 2x 抗锯齿源；
  *   但【逻辑/锚点/画布】空间仍由 [anchorRes]=128 决定，渲染时把 256 位图按 ratio 缩进 128 逻辑矩形，
@@ -27,7 +27,7 @@ data class SpritePack(
     val base: String = "",                           // 资源根目录（assets/<base> 或 filesDir/roles/<base>）
     val source: RoleSource = RoleSource.ASSETS,      // 存储类型（预装=ASSETS / 用户上传=FILES）
     val resolve: (String) -> String?,
-    val configPath: String? = null,   // 该包的动画/帧/锚点配置（assets 内相对路径），如 "芝麻酥/modes.json" / "芝麻球促销/modes.json"
+    val configPath: String? = null,   // 本包 modes.json 路径（assets 或私有角色包目录）
     val decodeTarget: Int = 0,         // 物理超采样解码边长（0=原生）；新包 256（由 modes.json 覆盖）
     val anchorRes: Int = 128,          // 逻辑分辨率（锚点/画布/UI 坐标系单位），恒 128（由 modes.json 覆盖）
     val name: String = "",             // 资源包中文名（modes.json 指定，v1.0 必填），仅展示用
