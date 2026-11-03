@@ -60,6 +60,51 @@ class RoleManageActivity : AppCompatActivity() {
 
     private lateinit var recycler: RecyclerView
     private lateinit var adapter: CatalogAdapter
+    private var exportRole: RoleDescriptor? = null
+
+    private val exportZip = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        val role = exportRole
+        if (uri != null && role != null) runCatching { RolePackEditing.export(this, role, uri) }
+            .onSuccess { Toast.makeText(this, "ZIP 已导出", Toast.LENGTH_SHORT).show() }
+            .onFailure { Toast.makeText(this, it.message ?: "导出失败", Toast.LENGTH_LONG).show() }
+    }
+
+    private fun newRole() = runCatching {
+        val id = RolePackEditing.duplicate(this, RoleRegistry.DEFAULT)
+        startActivity(android.content.Intent(this, RolePackEditorActivity::class.java).putExtra("role_id", id))
+    }.onFailure { Toast.makeText(this, it.message ?: "创建失败", Toast.LENGTH_LONG).show() }
+
+    private fun copyRole(role: RoleDescriptor) = runCatching {
+        RolePackEditing.duplicate(this, role)
+        loadList()
+    }.onFailure { Toast.makeText(this, it.message ?: "复制失败", Toast.LENGTH_LONG).show() }
+
+    private fun editRole(role: RoleDescriptor) {
+        if (role.source == RoleSource.ASSETS) {
+            runCatching {
+                val id = RolePackEditing.duplicate(this, role)
+                startActivity(android.content.Intent(this, RolePackEditorActivity::class.java).putExtra("role_id", id))
+            }.onFailure { Toast.makeText(this, it.message ?: "创建编辑副本失败", Toast.LENGTH_LONG).show() }
+        } else startActivity(android.content.Intent(this, RolePackEditorActivity::class.java).putExtra("role_id", role.id))
+    }
+
+    private fun showRoleOperations(anchor: View, role: RoleDescriptor) {
+        val popup = android.widget.PopupMenu(this, anchor)
+        listOf("编辑", "复制", "导出 ZIP").forEach { popup.menu.add(it) }
+        popup.setOnMenuItemClickListener {
+            when (it.title.toString()) {
+                "编辑" -> editRole(role)
+                "复制" -> copyRole(role)
+                "导出 ZIP" -> {
+                    exportRole = role
+                    exportZip.launch(role.displayName + ".zip")
+                }
+            }
+            true
+        }
+        popup.show()
+    }
+
 
     // 直接访问存储选择 .zip 素材包（不跳转额外页面）。
     private val pickZip = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -74,6 +119,7 @@ class RoleManageActivity : AppCompatActivity() {
             requestLayout()
         }
         findViewById<ImageView>(R.id.iv_back).setOnClickListener { finish() }
+        findViewById<Button>(R.id.btn_new_role).setOnClickListener { newRole() }
         findViewById<Button>(R.id.btn_import_zip).setOnClickListener {
             // 直接打开存储选择器，不再跳转单独页面（设计细节不全部抛给用户）。
             pickZip.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
@@ -458,6 +504,7 @@ class RoleManageActivity : AppCompatActivity() {
             delete.visibility = if (isFiles) View.VISIBLE else View.GONE
             delete.setOnClickListener { confirmDelete(role) }
             importBtn.setOnClickListener { importToHome(role) }
+            holder.options?.setOnClickListener { showRoleOperations(it, role) }
         }
 
         override fun onViewRecycled(holder: VH) {
@@ -477,6 +524,7 @@ class RoleManageActivity : AppCompatActivity() {
             val authors: TextView? = itemView.findViewById(R.id.role_authors)
             val delete: ImageView? = itemView.findViewById(R.id.iv_delete)
             val importBtn: Button? = itemView.findViewById(R.id.btn_import)
+            val options: View? = itemView.findViewById(R.id.btn_role_options)
         }
     }
 }

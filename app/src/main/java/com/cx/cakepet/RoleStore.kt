@@ -56,6 +56,23 @@ object RoleStore {
         RoleRegistry.refreshUserRoles(ctx)
     }
 
+    /** Update the catalog name after a valid package edit; keep the stable template identity. */
+    fun updateUserRole(ctx: Context, id: String, name: String, shortName: String, authors: List<String>) = runBlocking {
+        ctx.userRolesStore.edit { prefs ->
+            val arr = JSONArray(prefs[KEY_USER_ROLES] ?: "[]")
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                if (obj.optString("id") == id) {
+                    obj.put("displayName", name)
+                    obj.put("shortName", shortName)
+                    obj.put("authors", JSONArray(authors))
+                }
+            }
+            prefs[KEY_USER_ROLES] = arr.toString()
+        }
+        RoleRegistry.refreshUserRoles(ctx)
+    }
+
     /** 删除一个素材模板（仅 FILES），并刷新 RoleRegistry 缓存。 */
     fun removeUserRole(ctx: Context, id: String) = runBlocking {
         ctx.userRolesStore.edit { prefs ->

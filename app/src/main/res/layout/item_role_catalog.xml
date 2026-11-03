@@ -68,6 +68,14 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <ImageView
+            android:id="@+id/btn_role_options"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:padding="8dp"
+            android:src="@android:drawable/ic_menu_more"
+            android:contentDescription="素材包操作" />
+
         <!-- 删除：仅用户上传素材(FILES)可见，预装 GONE。 -->
         <ImageView
             android:id="@+id/iv_delete"
