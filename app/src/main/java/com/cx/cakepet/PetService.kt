@@ -1,7 +1,6 @@
 package com.cx.cakepet
 
 import androidx.appcompat.app.AppCompatDelegate
-import java.io.InputStream
 import kotlin.random.Random
 import android.app.Notification
 import android.app.NotificationChannel
@@ -16,7 +15,6 @@ import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -144,9 +142,11 @@ class PetService : Service() {
         val time: Long = System.currentTimeMillis(),  // 投食（支鱼）掉落的时刻，供食物浮窗顶部展示
         val borderView: View? = null,   // 投喂边框开关开启时的红色真实窗口边框（NOT_TOUCHABLE）
         var expireRunnable: Runnable? = null,
-        val crop: Bitmap? = null,        // 本角色支鱼裁剪图（按 packId 缓存，避免多角色串图）
-        val packId: Int = 1,             // 本角色资源包 id，供尺寸/重载按角色取图
-        val roleId: String = ""          // 归属角色：频率/数量/倍率/清除均按角色独立
+        var crop: Bitmap? = null,       // 当前 Mode 全部帧共用的固定大小画布，保证拖动/碰撞尺寸稳定
+        var animation: ImageModeManager.ModeClip? = null, // 每条食物自己的完整 Mode 播放位置
+        var modeId: String = "",         // 素材作者自定的 Mode ID（由 Functions 获取，不由代码指定）
+        val packId: Int = 1,
+        val roleId: String = ""
     )
     private val fishLayers = mutableListOf<FishLayer>()
     // 当前正被用户手指拖动的鱼。用于自动觅食吃判定：拖动中不吃(在手上)，放生才可能吃到。
@@ -155,8 +155,10 @@ class PetService : Service() {
     // 自动觅食：每只宠物(per-PetView)当前偏好目标食物引用（滞回后的“锁定”）。按角色独立，互不影响。
     // 非硬锁：每帧在本宠物活动范围内重选最近食物，仅当新目标比当前目标近 ≥1×(显示层宽+高) 才换（防墙角锚点抖动横跳）。
     private val forageFoodByView = mutableMapOf<PetView, FishLayer?>()
-    // 支鱼图按资源包 id 分角色缓存（避免多角色并存时某角色包覆盖全局、导致投食鱼串角色）。
-    private val fishCropBitmaps = mutableMapOf<String, Bitmap?>()   // 裁剪到最小不透明像素矩形后的图，key=roleId
+    // 每角色复用同一个现有动画管理器（Modes 解析和图片缓存共享），食物实例仅持有各自播放游标。
+    private val fishModeManagers = mutableMapOf<String, ImageModeManager>()
+    private data class FishVisual(val frames: Map<String, Bitmap>, val first: Bitmap)
+    private val fishVisuals = mutableMapOf<String, MutableMap<String, FishVisual>>()
     // 注：投喂 / 定格 / 随机的「上次生效值缓存」「刷出循环状态」已下沉到 RoleRuntime（按角色独立），
     // 不再使用全局单例，避免多角色并存时互相覆盖（见 registerConfigObserver / loadConfig / teardownRole）。
 
@@ -718,6 +720,7 @@ class PetService : Service() {
             }
             // 动画推进：用真实 dt（时延精确），绝不控制位置。每实例独立。
             for (inst in pets) inst.view.tick(dt)
+            tickFishModes(dtMs)
             // 边界重算统一在本帧（tick 已刷新 currentFrameAnchor 快照之后）执行：
             // 传感器线程置位的 boundsDirty 在此落到主线程，与下方窗口定位用同一份锚点快照，
             // 避免脚方向变化时锚点/位置被跨线程改写后重算造成的跳变。
@@ -1221,72 +1224,56 @@ class PetService : Service() {
         return Rect(minX, minY, maxX + 1, maxY + 1)
     }
 
-    private fun cropToTightLocal(bmp: Bitmap): Bitmap? {
-        val tight = computeTightAlphaBoundsLocal(bmp) ?: return bmp
-        return try {
-            Bitmap.createBitmap(bmp, tight.left, tight.top, tight.width(), tight.height())
-        } catch (_: Exception) { bmp }
-    }
-
-    // 与宠物管线一致：源文件先下采样到最长边 256（超采样源），再紧裁提取像素变边框。
-    private fun decodeFishBitmap(open: () -> InputStream?): Bitmap? {
-        val istr1 = try { open() } catch (_: Exception) { return null } ?: return null
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeStream(istr1, null, bounds)
-        istr1.close()
-        val rw = bounds.outWidth.takeIf { it > 0 } ?: return null
-        val rh = bounds.outHeight.takeIf { it > 0 } ?: return null
-        val longSide = maxOf(rw, rh)
-        val inSample = ((longSide + 256 - 1) / 256).coerceAtLeast(1)   // 最长边粗降到 256
-        val scale = 256f / longSide
-        val outW = (rw * scale).toInt().coerceAtLeast(1)
-        val outH = (rh * scale).toInt().coerceAtLeast(1)
-        val istr2 = try { open() } catch (_: Exception) { return null } ?: return null
-        val opts = BitmapFactory.Options().apply { inSampleSize = inSample }
-        val base = BitmapFactory.decodeStream(istr2, null, opts) ?: run { istr2.close(); return null }
-        istr2.close()
-        return if (base.width == outW && base.height == outH) base
-        else Bitmap.createScaledBitmap(base, outW, outH, true).also { if (it != base) base.recycle() }
-    }
-
-    // 加载并裁剪投喂食物位图：按【角色自身】资源包取图（预装走 assets / 上传包走 filesDir）。
-    // 食物仍以单图方式显示：通过 functions.feed.food 指向的 Mode 读取 frames[0].res。
-    // 不新增任何食物运动、动画播放或投喂流程。
-    // 逐角色缓存，避免多角色并存时食物串图；已缓存则直接复用。
-    private fun ensureFishBitmap(roleId: String) {
-        val existing = fishCropBitmaps[roleId]
-        if (existing != null && !existing.isRecycled) return
-        try {
+    private fun fishManager(roleId: String): ImageModeManager =
+        fishModeManagers.getOrPut(roleId) {
             val d = descriptorForRole(roleId)
-            val foodPath = (if (d != null && d.source == RoleSource.FILES) {
-                buildSpritePackForRole(this, d).foodFramePath
-            } else {
-                buildSpritePack(this, d?.packId ?: ConfigDefaults.DEFAULT_SPRITE_PACK).foodFramePath
-            }).takeIf { it.isNotEmpty() } ?: run {
-                fishCropBitmaps[roleId] = null
-                return
+            val pack = if (d != null) buildSpritePackForRole(this, d)
+                       else buildSpritePack(this, ConfigDefaults.DEFAULT_SPRITE_PACK)
+            ImageModeManager(this, pack)
+        }
+
+    /**
+     * 读取 Mode 的全部帧及其内部 nextMode 链；统一裁剪矩形覆盖所有帧的不透明区域。
+     * 对目前的单帧白酥食物，效果与原先紧裁静态 PNG 一致。
+     * 对多帧食物，显示窗尺寸固定，不会因某帧透明区域变大/变小而抖动。
+     */
+    private fun fishVisual(roleId: String, modeId: String): FishVisual? {
+        val byMode = fishVisuals.getOrPut(roleId) { mutableMapOf() }
+        byMode[modeId]?.let { return it }
+        val source = fishManager(roleId).modeFrameBitmaps(modeId)
+        if (source.isEmpty()) return null
+        var union: Rect? = null
+        for (bmp in source.values) {
+            val tight = computeTightAlphaBoundsLocal(bmp) ?: continue
+            if (union == null) union = Rect(tight) else union.union(tight)
+        }
+        val example = source.values.first()
+        val bounds = union ?: Rect(0, 0, example.width, example.height)
+        val frames = source.mapValues { (_, bitmap) ->
+            // 动画所有帧均使用同一裁剪区域，不让帧切换改变悬浮窗坐标与触摸区域。
+            Bitmap.createBitmap(bitmap, bounds.left, bounds.top, bounds.width(), bounds.height())
+        }
+        return FishVisual(frames, frames.values.first()).also { byMode[modeId] = it }
+    }
+
+    private fun fishFrame(layer: FishLayer): Bitmap? {
+        val anim = layer.animation ?: return layer.crop
+        return fishVisuals[layer.roleId]?.get(layer.modeId)?.frames?.get(anim.currentResName)
+            ?: layer.crop
+    }
+
+    // 包含单帧食物在内，统一按照完整 Mode 帧规则推进；不改变食物的实体与投喂行为。
+    private fun tickFishModes(dtMs: Long) {
+        for (layer in fishLayers) {
+            if (layer.animation?.advance(dtMs) == true) {
+                fishFrame(layer)?.let { layer.iv.setImageBitmap(it) }
             }
-            val raw = if (d != null && d.source == RoleSource.FILES) {
-                decodeFishBitmap { openPackResource(this, d.rootPath, RoleSource.FILES, foodPath) }
-            } else {
-                val base = d?.rootPath ?: RoleRegistry.DEFAULT.rootPath
-                decodeFishBitmap { assets.open("$base/$foodPath") }
-            }
-            fishCropBitmaps[roleId] = raw?.let { cropToTightLocal(it) }
-            raw?.recycle()
-        } catch (_: Exception) {
-            fishCropBitmaps[roleId] = null
         }
     }
 
     // 解析某角色对应的素材模板描述符（上传包按实例 id 映射到模板，预装按 id 直达）。
     private fun descriptorForRole(roleId: String): RoleDescriptor? {
         return RoleStore.descriptorForInstance(this, roleId) ?: RoleRegistry.byId(roleId)
-    }
-
-    private fun getFishCropBitmap(roleId: String): Bitmap? {
-        ensureFishBitmap(roleId)
-        return fishCropBitmaps[roleId]
     }
 
     // 支鱼显示尺寸：源已缩到 256（长边）仅作解码清晰度缓冲，1x 显示基准与宠物一致为 128（长边），
@@ -1303,15 +1290,24 @@ class PetService : Service() {
     /** 资源包切换后重裁支鱼位图。roleId 为 null 时重载全部角色；否则仅重载【该角色】的支鱼，并保留该角色自己的 feedingFishScale/Alpha（不串其它角色）。 */
     private fun reloadFishBitmap(roleId: String? = null) {
         val list = if (roleId == null) fishLayers.toList() else fishLayers.filter { it.roleId == roleId }
+        val reloadIds = if (roleId == null) list.map { it.roleId }.distinct() else listOf(roleId)
+        for (id in reloadIds) {
+            fishModeManagers.remove(id)
+            fishVisuals.remove(id)
+        }
         for (layer in list) {
-            ensureFishBitmap(layer.roleId)
-            val crop = fishCropBitmaps[layer.roleId] ?: continue
-            layer.iv.setImageBitmap(crop)
+            val manager = fishManager(layer.roleId)
+            val selected = manager.modeOf("feed", "food") ?: continue
+            val visual = fishVisual(layer.roleId, selected) ?: continue
+            layer.modeId = selected
+            layer.animation = manager.createClip(selected)
+            layer.crop = visual.first
+            layer.iv.setImageBitmap(fishFrame(layer))
             val c = roleConfig(layer.roleId)
-            val (w, h) = fishDisplaySize(crop, c)   // 用该角色自己的缩放，而非原始位图尺寸
+            val (w, h) = fishDisplaySize(visual.first, c)
             layer.lp.width = w
             layer.lp.height = h
-            layer.iv.alpha = c.feedingFishAlpha / 100f
+            layer.iv.imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
             try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) {}
             layer.borderView?.let { bv ->
                 val blp = bv.layoutParams as? WindowManager.LayoutParams
@@ -1551,10 +1547,14 @@ class PetService : Service() {
 
     // 刷出一条投喂食物（按本角色函数映射的 Mode 首帧取图；保留原有单图、拖动和过期逻辑）。
     private fun spawnFish(c: PetConfigData, roleId: String) {
-        val crop = getFishCropBitmap(roleId) ?: return
+        val manager = fishManager(roleId)
+        val modeId = manager.modeOf("feed", "food") ?: return
+        val visual = fishVisual(roleId, modeId) ?: return
+        val clip = manager.createClip(modeId) ?: return
+        val crop = visual.first
         val (wpx, hpx) = fishDisplaySize(crop, c)
         val iv = ImageView(this).apply {
-            setImageBitmap(crop)
+            setImageBitmap(visual.frames[clip.currentResName] ?: crop)
             scaleType = ImageView.ScaleType.FIT_XY
             imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
         }
@@ -1601,7 +1601,8 @@ class PetService : Service() {
         }
         iv.setOnTouchListener(fishDragListener)
         try { windowManager.addView(iv, lp) } catch (_: Exception) { return }
-        val layer = FishLayer(iv, lp, crop = crop, packId = descriptorForRole(roleId)?.packId ?: 1, roleId = roleId)
+        val layer = FishLayer(iv, lp, crop = crop, animation = clip, modeId = modeId,
+            packId = descriptorForRole(roleId)?.packId ?: ConfigDefaults.DEFAULT_SPRITE_PACK, roleId = roleId)
         fishLayers.add(layer)
         if (c.feedingBorderShow) setFishBorder(layer, true)
         if (c.feedingAutoExpire) scheduleFishExpire(layer, c.feedingExpireTime)
@@ -3923,6 +3924,8 @@ class PetService : Service() {
             rt.fishSpawning = false
         }
         clearAllFish()
+        fishVisuals.clear()
+        fishModeManagers.clear()
         // 清除所有定格显示层（回收 Bitmap，防泄漏）
         clearAllFreeze()
         trayMsgManager = null
