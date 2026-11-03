@@ -11,7 +11,12 @@ import java.util.zip.*
 /** File-only functions for the v1.02 material editor. */
 object RolePackEditing {
     fun newId() = "custom_" + UUID.randomUUID().toString().replace("-", "").take(16)
-    fun dir(ctx: Context, id: String) = File(ctx.filesDir, "roles/$id")
+    fun dir(ctx: Context, id: String): File {
+        val live = File(ctx.filesDir, "roles/$id")
+        val backup = File(live.parentFile, "$id.bak")
+        if (!live.exists() && backup.exists()) backup.renameTo(live)
+        return live
+    }
     fun duplicate(ctx: Context, source: RoleDescriptor): String {
         val id = newId()
         val target = dir(ctx, id)

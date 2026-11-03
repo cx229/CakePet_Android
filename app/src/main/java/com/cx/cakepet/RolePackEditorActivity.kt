@@ -49,6 +49,20 @@ class RolePackEditorActivity : AppCompatActivity() {
             showMode(modeId)
         }
     }
+    private val resourcePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) attempt {
+            val folder = File(draft, "images").apply { mkdirs() }
+            val file = File(folder, UUID.randomUUID().toString() + ".png")
+            val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+                ?: error("无法解码图片")
+            require(bitmap.width.toLong() * bitmap.height <= 8_000_000)
+            try { file.outputStream().use {
+                check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) { "PNG 写入失败" }
+            }} finally { bitmap.recycle() }
+            change { }
+            images()
+        }
+    }
     private val gifPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) attempt {
             val frames = RolePackEditing.gif(this, uri, draft, modeId)
@@ -493,6 +507,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun images() {
         section("图片资源", "images")
+        action("＋ 导入图片到素材库") { resourcePicker.launch(arrayOf("image/*")) }
         val used = mutableSetOf<String>()
         val modes = root.getJSONObject("modes")
         modes.keys().forEach { key ->
