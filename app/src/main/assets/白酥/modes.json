@@ -44,12 +44,22 @@
       "pat_head": ["pat_head"]
     },
     "feed": {
-      "food": ["fish"],
+      "food": ["food_idle"],
       "eat": ["feed_fish"]
     }
   },
-  "resources": { "fish": "支鱼/fish-1.png" },
   "modes": {
+    "food_idle": {
+      "label": "食物",
+      "fallback": "支鱼/fish-1.png",
+      "loop": true,
+      "timeNext": {"enabled": false},
+      "nextMode": null,
+      "walkSpeed": 0,
+      "frames": [
+        {"res": "支鱼/fish-1.png", "next": 0, "delay": 1000}
+      ]
+    },
     "sit_clam": {
       "label": "静坐",
       "fallback": "安静/sit_clam-1.png",
