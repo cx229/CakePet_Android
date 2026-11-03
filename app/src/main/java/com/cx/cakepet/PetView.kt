@@ -179,8 +179,7 @@ class PetView @JvmOverloads constructor(
             else -> flipX
         }
 
-    // 提起(LIFT_UP)系列上次应用值（-1=未设/慢速轻晃链），用于守护：系列未变则不重调 setLiftSeries，
-    // 避免每帧把 frameIndex 重置回起点导致动画卡在第一帧。
+    // 记录正在生效的拖动条件，避免每帧重新选择动作和重置动画帧。
     private var activeDragFunction: String? = null
 
     // 方向(0下/1左/2右/3上) -> 渲染旋转角（度，顺时针），与 gravityDir setter 映射一致。
@@ -2198,9 +2197,8 @@ class PetView @JvmOverloads constructor(
         if (physics.isDragging || (physics.isThrowing && !force)) return
         physics.beginTiltRoll()
         if (imageManager.isPlayingForced()) imageManager.cancelForced()
-        val rollM = modeOf("touch", "roll")
-        if (rollM != null && imageManager.getMode() != rollM) {
-            imageManager.setMode(rollM)
+        if (!imageManager.isFunctionMode(imageManager.getMode(), "touch", "roll")) {
+            modeOf("touch", "roll")?.let { imageManager.setMode(it) }
         }
         // 先切 ROLL（居中对称，旋转外观不变），再改方向：下一帧 onDraw 直接看到 ROLL+新朝向，
         // 不会让旧模式帧先被新旋转角硬转一帧。
