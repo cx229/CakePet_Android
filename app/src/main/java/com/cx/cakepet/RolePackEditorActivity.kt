@@ -161,6 +161,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         section(root.optString("name") + " · 素材包编辑", "home")
         panel.addView(text("完成一次有效操作后自动保存；预览和文件修改只作用于这个素材包。"))
         action("基本信息") { info() }
+        action("菜单动作池 · menuPool") { menuPool() }
         action("全部动作 · Modes") { modes() }
         action("功能映射 · Functions") { functions() }
         action("图片资源") { images() }
@@ -169,6 +170,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         editor("角色信息") { box ->
             val name = entry(box, "名称", root.optString("name"))
             val short = entry(box, "简称", root.optString("shortName"))
+            val decode = entry(box, "图片解码尺寸 decodeTarget", root.optInt("decodeTarget").toString())
+            val anchor = entry(box, "逻辑尺寸 anchorRes", root.optInt("anchorRes", 128).toString())
             val list = root.getJSONArray("authors")
             val author = entry(box, "作者（用逗号分隔）",
                 (0 until list.length()).joinToString(",") { list.getString(it) })
@@ -177,6 +180,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                 change { json ->
                     json.put("name", name.text.toString().trim())
                     json.put("shortName", short.text.toString().trim())
+                    json.put("decodeTarget", decode.text.toString().toInt())
+                    json.put("anchorRes", anchor.text.toString().toInt())
                     json.put("authors", JSONArray().also { arr ->
                         author.text.toString().split(",", "，").map { it.trim() }
                             .filter { it.isNotEmpty() }.forEach { arr.put(it) }
@@ -186,6 +191,18 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             save
         }
+    }
+    private fun menuPool() {
+        val keys = ids()
+        val pool = root.optJSONArray("menuPool") ?: JSONArray()
+        val chosen = (0 until pool.length()).map { pool.optString(it) }.toSet()
+        val selected = BooleanArray(keys.size) { keys[it] in chosen }
+        AlertDialog.Builder(this).setTitle("菜单动作池")
+            .setMultiChoiceItems(keys.toTypedArray(), selected) { _, index, checked -> selected[index] = checked }
+            .setNegativeButton("取消", null).setPositiveButton("完成") { _, _ -> attempt {
+                change { it.put("menuPool", JSONArray(keys.filterIndexed { index, _ -> selected[index] })) }
+                home()
+            }}.show()
     }
     private fun modes() {
         section("全部动作 · Modes", "modes")
