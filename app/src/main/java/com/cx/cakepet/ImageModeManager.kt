@@ -237,9 +237,9 @@ class ImageModeManager(
     )
 
     /** 帧推进结果：changed=是否换帧。动画只管切图，绝不控制位置（位移由物理循环负责）。 */
-    data class FrameStep(
-        val changed: Boolean
-    )
+    data class FrameStep(val changed: Boolean)
+    data class ClipStep(val changed: Boolean, val ended: Boolean = false,
+                        val timerRequested: Boolean = false, val modeChanged: Boolean = false)
 
     /** 一个动画模式 */
     private data class ImageModeDef(
@@ -251,7 +251,6 @@ class ImageModeManager(
         val changeIntervalMax: Long = 4000,
         val changeProb: Float = 0.5f,
         val nextModeName: String? = null,       // 指定下一模式（PC next_mode_name）
-        val onSequenceEnd: ((() -> Unit) -> Unit)? = null,  // 序列结束回调（用于 SIT 间随机切换等）
         val walkSpeed: Float = 0f,              // 行走位移速度(px/s)，>0 时由物理引擎驱动水平位移（对齐 PC 帧偏移 QPoint）
         val label: String = ""                  // 中文名：仅供阅读 modes.json 用，不参与任何代码逻辑
     )
@@ -262,72 +261,8 @@ class ImageModeManager(
     private val modes = mutableMapOf<String, ImageModeDef>()
     /** 资源文件的垂直填充方式，取自其所属 Mode，而非文件命名。 */
     private val verticalAlignOfResource = mutableMapOf<String, String>()
-    private lateinit var currentName: String
-    private var currentDef: ImageModeDef? = null
-    private var frameIndex = 0
-    private var acc = 0L          // 当前帧已累积时间(ms)
-    private var forcedSeq: ImageModeDef? = null   // 一次性动画
-    private var forcedOnEnd: (() -> Unit)? = null
-    private var timeNextAcc = 0L
-    private var timeNextTarget = 0L
-    /** 当前生效的资源包；默认=白酥包，可由 setPack 运行时按角色资源包切换。 */
+    /** 素材包元数据，无对象行为状态。 */
     var currentPack: SpritePack = initialPack
-
-    /** 当前行走方向与位移速度（>0 表示正在行走位移，由物理引擎驱动水平移动） */
-    var walkDir = 1
-    var walkSpeed = 0f
-        private set
-
-    /**
-     * 行走状态变化回调：进入 walk 类模式时通知外部设置物理水平速度 + 镜像朝向；
-     * 离开（切到非 walk 模式）时以 (0, 1) 通知清零速度并取消镜像。
-     * PetView 注入此回调，将 (speed, dir) 映射到 physics.vx 与 flipX。
-     */
-    var onWalkStateChanged: ((speed: Float, dir: Int) -> Unit)? = null
-
-    /**
-     * 待机自动轮换池：物理空闲时，按时间随机切换到池中（排除当前）的某个模式。
-     * 内容由【素材包】的 functions.standby.pool 提供（v1.02 必备），代码不写死任何模式名；
-     * 载入配置后再按该包实际定义的动作裁剪，避免引用包里不存在的模式（旧版曾因此切到
-     * 空模式而卡住）。包未提供时为空表 → 不做待机轮换（优于切到不存在的动作）。
-     */
-    private var standbyPool: List<String> = emptyList()
-
-    /**
-     * 静止池：待机池去除位移/物理驱动类模式（蠕动、walk、扒鱼）。
-     * 当“重力·抛掷”关闭（gravityEnabled=false）时使用，宠物保持在原地的小动作/静坐。
-     * 同样由素材包的 functions.static.pool 提供，不再硬编码。
-     */
-    private var staticPool: List<String> = emptyList()
-
-    /**
-     * true 时使用静止池 staticPool（去除蠕动/walk/扒鱼）；false 使用完整待机池。
-     * 由 PetService 根据 gravityEnabled 同步。
-     */
-    var useStaticPool: Boolean = false
-
-    /**
-     * 好动飞跃开关：由 PetService 同步为 leapEnabled。
-     * 仅当开启且当前处于攀岩态（inClimbing）时，每次从池子捞新动作按 leapProbability 概率直接跳起。
-     */
-    var leapEnabled: Boolean = false
-
-    /** 自动觅食开关：由 PetView 每帧同步（仅当攀岩态且已锁定食物时为真）。
-     *  优先级高于飞跃：觅食中从动作池捞动作时直接返回 WALK 继续沿墙走，不跳起。 */
-    var forageActive: Boolean = false
-
-    /** 飞跃概率（0-1 小数）：由 PetService 同步为 leapProbability。 */
-    var leapProbability: Float = 0.10f
-
-    /** 当前是否处于攀岩态：由 PetView 每帧同步。决定捞新动作时是否掷骰跳起。 */
-    var inClimbing: Boolean = false
-
-    /** 当前是否处于飞跃飞行态：由 PetView 每帧同步。飞行中锁定为 JUMP_UP，禁止 nextFrame 切换动作。 */
-    var isFlying: Boolean = false
-
-    // 根据开关选择当前待机池：静止池 > 完整待机池
-    private fun currentPool(): List<String> =
-        if (useStaticPool) staticPool else standbyPool
 
     /**
      * 按【功能路径】取该功能的候选叶子（v1.01 契约）。
@@ -345,63 +280,11 @@ class ImageModeManager(
     /** 功能候选集判断，不调用随机选择器。 */
     fun isFunctionMode(name: String, vararg path: String): Boolean = name in leavesOf(*path)
 
-    fun isDragMode(name: String = getMode()): Boolean =
-        listOf("slow", "left_medium", "left_fast", "right_medium", "right_fast")
-            .any { isFunctionMode(name, "touch", "lift_up", it) }
-
-    /**
-     * 从池子捞一个新动作（排除当前动作）；若开启好动飞跃且处于攀岩态，按 leapProbability 概率直接跳起。
-     * 供：一次性动画收尾、主循环收尾、定时随机切换 三处统一调用。
-     */
-    fun pickStandbyMode(exclude: String): String {
-        // 自动觅食优先于飞跃：觅食中锁定食物则继续沿墙行走，不跳起（不拦截其他逻辑，仅插队）。
-        // 动作名由素材包 functions 提供：包未提供攀岩行走功能则不作处理，走常规池子。
-        if (forageActive) {
-            modeOf("climb", "walk")?.let { return it }
-        }
-        // 先按飞跃概率判断是否直接跳起；不飞跃再正常从池子捞其他动作
-        if (leapEnabled && inClimbing && Random.nextFloat() < leapProbability) {
-            modeOf("climb", "jump_up")?.let { return it }
-        }
-        val pool = currentPool().filter { it != exclude }
-        return if (pool.isNotEmpty()) pool.random() else currentName
-    }
-
     init {
-        var loaded = false
-        if (currentPack.configPath != null) {
-            try {
-                loadModesFromJson(currentPack.configPath!!)
-                loaded = true
-            } catch (e: Exception) {
-                // v1.01：modes.json 是必备字段（缺失/损坏的包在导入时即被拒），
-                // 故【不再】回退到内建硬编码动作——那会让新角色拿到默认角色的动作而串图。
-                // 载入失败时 modes 为空，宠物无动作可播，属素材包本身问题，应修包而非静默兜底。
-                Log.e("ImageModeManager", "载入 ${currentPack.configPath} 失败：该包 modes.json 缺失或非法", e)
-            }
+        currentPack.configPath?.let { path ->
+            try { loadModesFromJson(path) }
+            catch (e: Exception) { Log.e("ImageModeManager", "无效素材包: $path", e) }
         }
-
-        // 起始动作由素材包决定（优先 [static, sit]），不再写死 sit_clam。
-        // 若该包未定义，退而取包内第一个动作；仍无则留空（无动作可播），由调用方按空处理。
-        currentName = if (loaded) {
-            (currentPack.functions[listOf("static", "sit")]?.firstOrNull()
-                ?: modes.keys.firstOrNull()) ?: ""
-        } else ""
-        currentDef = modes[currentName]
-        frameIndex = 0
-        acc = 0L
-        resetTimeNext()
-    }
-
-    private fun resetTimeNext() {
-        // 用即将播放的模式（forcedSeq 优先）的间隔，避免进入一次性动画时
-        // 仍沿用上一常驻模式的超大间隔（如 sit 的 3000~25000），导致长时间不跳出。
-        val base = forcedSeq ?: currentDef
-        timeNextAcc = 0L
-        timeNextTarget = Random.nextLong(
-            base?.changeIntervalMin ?: 3000,
-            (base?.changeIntervalMax ?: 4000) + 1
-        )
     }
 
     /**
@@ -452,18 +335,8 @@ class ImageModeManager(
                 frames.add(Frame(res, nextIndex, delay, anchorX, anchorY, dx, dy))
             }
             registerMode(ImageModeDef(name, frames, loop, timeNextEnabled,
-                changeIntervalMin, changeIntervalMax, changeProb, nextModeName, null, walkSpeed, label))
+                changeIntervalMin, changeIntervalMax, changeProb, nextModeName, walkSpeed, label))
         }
-        // 待机池 / 静止池：内容取自素材包，并【按本包实际定义的动作裁剪】。
-        // 池里若出现包中未定义的动作（素材包版本升级时的常见疏漏），会在轮换时切到不存在的
-        // 模式而卡住/静止，故载入即剔除——与 RolePackageContract 的"引用集 ⊆ modes"一致。
-        val defined = buildSet {
-            val kit = modesObj.keys()
-            while (kit.hasNext()) add(kit.next())
-        }
-        // v1.02: 长期轮播范围在 Functions 声明，调度仍沿用 timeNext / nextMode。
-        standbyPool = leavesOf("standby", "pool").filter { it in defined }
-        staticPool = leavesOf("static", "pool").filter { it in defined }
     }
 
     /** delay 字段：[min,max]=随机区间；数字=固定值(ms)。 */
@@ -482,37 +355,6 @@ class ImageModeManager(
     private fun registerMode(mode: ImageModeDef) {
         modes[mode.name] = mode
     }
-
-    /** 切换常驻循环模式（如 sit_clam / sit_puffed / walk 循环） */
-    fun setMode(name: String) {
-        if (forcedSeq != null) return   // 一次性动画播放中，忽略常驻切换
-        val def = modes[name] ?: return
-        if (currentName != name) modeChangedFlag = true
-        currentName = name
-        currentDef = def
-        frameIndex = 0
-        acc = 0L
-        resetTimeNext()
-        // 行走位移：进入 walkSpeed>0 的模式时随机方向，由物理引擎驱动水平移动；
-        // 离开时清零速度并取消镜像（对齐 PC transform_flag 随机 + 边界回弹）。
-        if (def.walkSpeed > 0f) {
-            walkDir = if (Random.nextBoolean()) 1 else -1
-            walkSpeed = def.walkSpeed
-        } else {
-            walkDir = 1
-            walkSpeed = 0f
-        }
-        onWalkStateChanged?.invoke(walkSpeed, walkDir)
-    }
-
-    /** 当前是否处于行走位移模式（供 PetView 每帧同步朝向左镜像/位置） */
-    fun isWalk(): Boolean = walkSpeed > 0f && forcedSeq == null
-
-    fun getMode(): String = forcedSeq?.name ?: currentName
-    fun isPlayingForced(): Boolean = forcedSeq != null
-
-    /** 当前模式是否属于待机动作清单（standbyPool / staticPool）。供投喂等判断是否可切"坐姿投食"。 */
-    fun isStandbyMode(name: String = currentName): Boolean = currentPool().contains(name)
 
     /**
      * 创建完整 Mode 的独立播放游标，供非角色对象复用已解析的动画定义与位图缓存。
@@ -539,22 +381,27 @@ class ImageModeManager(
     }
 
     inner class ModeClip internal constructor(startMode: String) {
-        private var def = requireNotNull(modes[startMode])
+        private var def = requireNotNull(modes[startMode]) { "Undefined Mode: $startMode" }
         private var frameIndex = 0
         private var elapsed = 0L
         private var frameDelay = def.frames[0].delay().coerceAtLeast(1L)
         private var timeElapsed = 0L
-        private var timeTarget = nextTimeTarget()
-        private var ended = false
+        private var timeTarget = sampleTimeTarget()
+        var isEnded: Boolean = false
+            private set
 
         val currentResName: String get() = def.frames[frameIndex].resName
         val currentModeId: String get() = def.name
         val currentDx: Int get() = def.frames[frameIndex].dx
         val currentDy: Int get() = def.frames[frameIndex].dy
         val currentWalkSpeed: Float get() = def.walkSpeed
+        val currentAnchorX: Int get() = def.frames[frameIndex].anchorX
+        val currentAnchorY: Int? get() = def.frames[frameIndex].anchorY
+        fun currentBitmap(): Bitmap? = loadBitmap(currentResName)
+        fun currentAnchor(): Pair<Int, Int> = frameAnchor(currentResName, currentAnchorX, currentAnchorY)
 
-        private fun nextTimeTarget(): Long =
-            if (def.timeNextEnabled) rnd(def.changeIntervalMin, def.changeIntervalMax)()
+        private fun sampleTimeTarget(): Long =
+            if (def.timeNextEnabled) Random.nextLong(def.changeIntervalMin.coerceAtLeast(1L), def.changeIntervalMax.coerceAtLeast(def.changeIntervalMin.coerceAtLeast(1L)) + 1L)
             else Long.MAX_VALUE
 
         private fun switchTo(id: String): Boolean {
@@ -564,18 +411,20 @@ class ImageModeManager(
             elapsed = 0L
             timeElapsed = 0L
             frameDelay = def.frames[0].delay().coerceAtLeast(1L)
-            timeTarget = nextTimeTarget()
-            ended = false
+            timeTarget = sampleTimeTarget()
+            isEnded = false
             return true
         }
 
-        /** 返回当前显示帧是否变化；无后续 Mode 时停留末帧，不进入角色待机池。 */
-        fun advance(dtMs: Long): Boolean {
-            if (ended || dtMs <= 0) return false
+        /** 只推进动画自身的帧和 nextMode，返回完成事件供外部引擎决定下一动作。 */
+        fun advance(dtMs: Long, allowModeSwitch: Boolean = true): ClipStep {
+            if (isEnded || dtMs <= 0L) return ClipStep(false, isEnded)
             var remaining = dtMs
             var changed = false
+            var modeChanged = false
+            var timerRequested = false
             var guard = 0
-            while (remaining > 0 && !ended && guard++ < 256) {
+            while (remaining > 0 && !isEnded && guard++ < 256) {
                 val span = minOf(remaining, (frameDelay - elapsed).coerceAtLeast(1L))
                 remaining -= span
                 elapsed += span
@@ -595,146 +444,47 @@ class ImageModeManager(
                             frameDelay = def.frames[0].delay().coerceAtLeast(1L)
                             changed = true
                         }
-                        def.nextModeName != null && switchTo(def.nextModeName!!) -> changed = true
-                        else -> ended = true
+                        def.nextModeName != null && allowModeSwitch && switchTo(def.nextModeName!!) -> {
+                            changed = true
+                            modeChanged = true
+                        }
+                        else -> isEnded = true
                     }
                 }
-                if (!ended && def.timeNextEnabled && timeElapsed >= timeTarget) {
+                if (!isEnded && allowModeSwitch && def.timeNextEnabled && timeElapsed >= timeTarget) {
                     timeElapsed = 0L
-                    timeTarget = nextTimeTarget()
+                    timeTarget = sampleTimeTarget()
                     if (Random.nextFloat() < def.changeProb) {
                         val next = def.nextModeName
-                        if (next != null && switchTo(next)) changed = true
-                        // 无显式 nextMode 时交由当前对象的引擎处理，不跳入宠物待机池。
+                        if (next != null && switchTo(next)) {
+                            changed = true
+                            modeChanged = true
+                        } else {
+                            timerRequested = true
+                            break
+                        }
                     }
                 }
             }
-            return changed
+            return ClipStep(changed, isEnded, timerRequested, modeChanged)
         }
     }
 
-    /** 当前帧的水平位移偏移(px)，对齐 PC 帧 offset.x；扒鱼等一次性位移模式据此累加位移 */
-    fun curDx(): Int =
-        (forcedSeq ?: currentDef)?.frames?.getOrNull(frameIndex)?.dx ?: 0
-
-    /** 当前帧的垂直位移偏移(px)，对齐 PC 帧 offset.y */
-    fun curDy(): Int =
-        (forcedSeq ?: currentDef)?.frames?.getOrNull(frameIndex)?.dy ?: 0
-
-    /**
-     * 取消正在播放的一次性动作（forcedSeq）。用于用户开始拖拽/抛掷时抢占控制：
-     * 否则在动作播放期间 setMode 被忽略（见 setMode 顶部），拖动/翻滚的 LIFT_UP/ROLL 模式
-     * 无法生效，导致“图像是动作、mode 却仍是 sit_clam”的状态错乱（拖动时 mode 异常）。
-     */
-    fun cancelForced() {
-        if (forcedSeq != null) {
-            forcedSeq = null
-            forcedOnEnd = null
-            // 回到常驻静止动作（由素材包 functions 的 [static, sit] 提供），确保后续 setMode 能正常切换
-            if (currentName == forcedSeq?.name) modeOf("static", "sit")?.let { setMode(it) }
-        }
-    }
-
-    /**
-     * 强制复位（召回）：无论当前在播放一次性动画还是常驻模式，立即清除动作并切回静坐（sit_clam），
-     * 与 PetPhysics.resetTo 配合实现“召回归位、静止、显示 sit-calm”。
-     */
-    fun forceReset() {
-        forcedSeq = null
-        forcedOnEnd = null
-        // 静止动作由素材包 functions 的 [static, sit] 提供，代码不写死 sit_clam
-        modeOf("static", "sit")?.let { setMode(it) }
-    }
-
-    /**
-     * 运行时切换资源包（按角色资源包触发）。
-     * 清空位图/尺寸缓存，重建统一画布尺寸，并复位到默认静坐模式。
-     * 注意：切换会打断当前一次性动画并回到 sit_clam（配置切换属低频操作，可接受短暂停顿）。
-     */
+    /** 素材切换只更新定义和图片缓存，不决定对象播放什么动画。 */
     fun setPack(pack: SpritePack) {
         if (currentPack.id == pack.id) return
         currentPack = pack
         bitmapCache.clear()
         rawSizeCache.clear()
-        if (pack.configPath != null) {
-            try {
-                loadModesFromJson(pack.configPath!!)
-            } catch (e: Exception) {
-                // 换包配置解析失败：保留当前已加载的 modes，避免空模式导致宠物卡死。
-                // v1.01 下 modes.json 是必备字段，此属素材包本身问题，打日志便于定位。
-                Log.e("ImageModeManager", "换包载入 ${pack.configPath} 失败", e)
-            }
-        }
+        modes.clear()
+        verticalAlignOfResource.clear()
+        pack.configPath?.let { loadModesFromJson(it) }
         val (w, h) = globalMaxSize()
         globalW = w
         globalH = h
-        forcedSeq = null
-        forcedOnEnd = null
-        // 起点动作由素材包决定（优先 [static, sit]），不再写死 sit_clam
-        currentName = (currentPack.functions[listOf("static", "sit")]?.firstOrNull()
-            ?: modes.keys.firstOrNull()) ?: ""
-        currentDef = modes[currentName]
-        frameIndex = 0
-        acc = 0L
-        resetTimeNext()
-        modeChangedFlag = true
     }
 
-    // 供 View 检测“是否切到了新动画序列”：每次 nextFrame 后由 didModeChange() 取一次并清除标记
-    private var modeChangedFlag = false
-    private var reportedName: String? = null
-
-    /** 本次 nextFrame 是否切换了动画模式/序列（用于 View 仅在切模式时更新固定尺寸） */
-    fun didModeChange(): Boolean {
-        val c = modeChangedFlag
-        modeChangedFlag = false
-        reportedName = currentName
-        return c
-    }
-
-    /**
-     * 播放一次性动画。结束后的目标模式：
-     * - 模式自身定义了 nextModeName（如摸头 -> 摇头）：跳到该指定模式；
-     * - 模式无 nextModeName（如美白、趴，对齐 PC 的"下一个无指定"）：结束回到待机随机池，
-     *   而非固定 sit_clam（避免菜单多次激活美白后总是落回静坐）。
-     * 这样「摸头 → 摇头 → 炸毛坐」等链式跳转由模式定义驱动，与 PC 一致。
-     */
-    fun playOnce(name: String, endMode: String? = null) {
-        val def = modes[name] ?: return
-        // 结束后目标：优先模式自身定义的 nextModeName；其次调用方指定；
-        // 都没有则回待机随机池（由 pickStandbyMode 决定），不再固定写死 sit_clam。
-        val next = def.nextModeName ?: endMode
-        forcedSeq = def
-        forcedOnEnd = {
-            forcedSeq = null
-            forcedOnEnd = null
-            if (next != null) {
-                setMode(next)
-            } else {
-                // 无指定下一模式：对齐 PC change_mode，结束回待机池（攀岩态可能按概率跳起）
-                setMode(pickStandbyMode(currentName))
-            }
-        }
-        frameIndex = 0
-        acc = 0L
-        modeChangedFlag = true   // 关键：与 setMode 一致，确保 tick() 里 didModeChange() 返回 true，
-                                 // 当帧立即 syncCurrentBitmap() 刷新位图；否则位图要等节流点 +
-                                 // 首帧 delay（如探头 1~5s / lie 3~7s）才更新，
-                                 // 表现为“还显示旧图 sit_clam，延迟或失败切换”。
-        resetTimeNext()   // 一次性动画也支持内部循环 + 概率跳出，需重置定时
-    }
-
-    fun currentBitmap(): Bitmap? {
-        val def = forcedSeq ?: currentDef ?: return null
-        val frame = def.frames.getOrNull(frameIndex) ?: return null
-        return loadBitmap(frame.resName)
-    }
-
-    /** 预览自治播放用：返回当前帧的 resName（按帧序列顺序），供缓存键与重绘判定。 */
-    fun currentResName(): String? {
-        val def = forcedSeq ?: currentDef ?: return null
-        return def.frames.getOrNull(frameIndex)?.resName
-    }
+    fun frameBitmap(resName: String): Bitmap? = loadBitmap(resName)
 
     /**
      * 预览用：返回某帧经本包“复杂变换”后的位图——即 [loadBitmap] 产物：
@@ -832,99 +582,14 @@ class ImageModeManager(
      *   ROLL 不再特判，使用与所有动作相同的真实 anchorY；其旋转一致性由 PetView 在
      *   rotateOffsetWith / onDraw 中对 ROLL 改绕锚点自身旋转来保证（球状对称，外观不变）。
      */
-    fun currentAnchor(): Pair<Int, Int> {
-        val def = forcedSeq ?: currentDef ?: return 80 to 160
-        val frame = def.frames.getOrNull(frameIndex) ?: return 80 to 160
-        val (w, _) = currentBitmapSize()   // padding 后尺寸 = globalW×globalH（仅用 w 供锚点 X 居中）
-        val (_, rawH) = rawBitmapSize(frame.resName)   // 原始 PNG 尺寸（未 padding），仅用高
-        // 锚点完全由逐帧 anchorX/anchorY 决定；JSON 未给 anchorY 时回退贴底 0，不再用「图片底部中心」强统一。
-        val axIn = frame.anchorX
-        val ayIn = frame.anchorY ?: 0
-        val axRaw = if (axIn >= 0) axIn else w / 2   // 距左（<0 居中）
-        // 输入 anchorY=距底 ⇒ 转距顶 = rawH - anchorY。合法范围 [-128,128]，负值(脚在图底下方)照常参与计算。
-        val ayFromBottom = ayIn
-        val ayRaw = rawH - ayFromBottom
-        val (padX, padY) = padOf(frame.resName)
+    /** 根据当前帧的图片和声明锚点计算画布锚点，不涉及任何对象物理状态。 */
+    fun frameAnchor(resName: String, anchorX: Int, anchorY: Int?): Pair<Int, Int> {
+        val (w, _) = currentBitmapSize()
+        val (_, rawH) = rawBitmapSize(resName)
+        val axRaw = if (anchorX >= 0) anchorX else w / 2
+        val ayRaw = rawH - (anchorY ?: 0)
+        val (padX, padY) = padOf(resName)
         return (axRaw + padX) to (ayRaw + padY)
-    }
-
-    /**
-     * 时间驱动推进。dtMs：距上次调用的毫秒数。
-     * 返回 FrameStep：changed 是否换帧。
-     *
-     * 动画【只管切图】，绝不控制位置——位移完全由物理循环（重力/抛掷/拖拽）负责，
-     * 与动画帧解耦（对齐 PC：img_move_by_offset 由物理速度驱动，set_image 仅算左上角）。
-     *
-     * 采用 while 循环：当一帧累积时间超过当前帧 delay 时推进，并继续检查下一帧，
-     * 直到剩余时间不足一帧。这样即便因卡顿/高帧率导致 dt 较大，也不会漏帧，
-     * 每帧停留时长严格等于其各自的 delay（对齐 PC）。
-     */
-    fun nextFrame(dtMs: Long): FrameStep {
-        val def = forcedSeq ?: currentDef ?: return FrameStep(false)
-        acc += dtMs
-        var changed = false
-        var guard = 0
-        while (guard++ < 256) {
-            val frame = def.frames.getOrNull(frameIndex) ?: return FrameStep(changed)
-            val delay = frame.delay()
-            if (acc < delay) break
-            acc -= delay
-            changed = true
-
-            val next = frame.nextIndex
-            if (next == null) {
-                // 序列结束
-                if (forcedSeq != null) {
-                    // 一次性动画结束
-                    forcedOnEnd?.invoke()
-                    return FrameStep(true)
-                }
-                if (def.loop) {
-                    frameIndex = 0
-                } else if (def.nextModeName != null) {
-                    // 有明确下一模式（如摇头 -> 炸毛）：跳指定模式
-                    if (!isFlying) setMode(def.nextModeName)
-                    return FrameStep(true)
-                } else {
-                    // 无指定下一模式（美白、趴，对齐 PC "下一个无指定"）：
-                    // 与 playOnce 的 forcedOnEnd 一致，结束回待机池（攀岩态可能按概率跳起）。
-                    if (!isFlying) setMode(pickStandbyMode(currentName))
-                    return FrameStep(true)
-                }
-            } else {
-                frameIndex = next
-            }
-        }
-
-        // 随机定时切换 / 概率跳出（timeNextEnabled），对齐 PC：
-        // 命中概率时优先使用模式自身定义的 nextModeName（如摸头->摇头），
-        // 保证即使 forcedSeq 因拖拽被 cancel，也能正确跳到指定下一模式而非回 sit；
-        // 若模式无 nextModeName（纯常驻 sit 类），则在待机池 standbyPool 中随机切换。
-        if (def.timeNextEnabled && !isFlying) {
-            timeNextAcc += dtMs
-            if (timeNextAcc >= timeNextTarget) {
-                timeNextAcc = 0L
-                timeNextTarget = Random.nextLong(def.changeIntervalMin, def.changeIntervalMax + 1)
-                if (Random.nextFloat() < def.changeProb) {
-                    val next = def.nextModeName
-                    if (next != null) {
-                        // 有指定下一模式：一次性动画走 forcedOnEnd（已含置空+setMode），
-                        // 常驻则直接 setMode（对齐 PC change_mode 用 next_mode_name）。
-                        if (forcedSeq != null) {
-                            forcedOnEnd?.invoke()
-                        } else {
-                            setMode(next)
-                        }
-                        return FrameStep(true)
-                    } else {
-                        // 无指定：待机池随机切换（攀岩态可能按概率跳起）
-                        setMode(pickStandbyMode(currentName))
-                        return FrameStep(true)
-                    }
-                }
-            }
-        }
-        return FrameStep(changed)
     }
 
     private val bitmapCache = mutableMapOf<String, Bitmap?>()

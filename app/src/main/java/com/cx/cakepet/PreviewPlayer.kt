@@ -20,10 +20,11 @@ import android.widget.ImageView
  * 首页与素材管理页共用同一实现（不再依赖 MainActivity 内部状态）。
  */
 class PreviewPlayer(
-    private val mgr: ImageModeManager,
+    private val assets: ImageModeManager,
     private val imageView: ImageView,
     density: Float
 ) {
+    private val mgr = PetAnimationController(assets)
     private val boxPx = (64f * density).toInt().coerceAtLeast(1)
     private val composedCache = mutableMapOf<String, Bitmap?>()
     private val handler = Handler(Looper.getMainLooper())
