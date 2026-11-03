@@ -15,23 +15,7 @@ import java.io.File
  * （如鱼在蜂蜜猫里叫 fish），代码依 functions 的 [feed, food] 叶子取值，不写死键名。
  */
 object RolePackageContract {
-    const val VERSION = "1.01"
-
-    /** 必备动作（v1.0）：待机 / 运动 / 投食 / 摸摸头 / 吸附（运动类本就无吸附态） */
-    val REQUIRED_MODES = setOf(
-        "sit_clam",      // 待机-静坐
-        "lift_up",       // 运动-拖动
-        "roll",          // 运动-滚动
-        "jump_down",     // 运动-落地
-        "walk",          // 运动-走
-        "feed_fish",     // 投食-投食
-        "pat_head",      // 摸摸头-摸摸头
-        "shake_head",    // 摸摸头-摇头
-        "sit_puffed",    // 摸摸头-炸毛
-        "snap_head",     // 吸附-探头
-        "snap_pat_head", // 吸附-探头摸摸头
-        "snap_feed_fish" // 吸附-探头投食
-    )
+    const val VERSION = "1.02"
 
     /**
      * 必备功能路径（v1.01）。层数不限，必须按【完整路径】寻址：
@@ -42,8 +26,14 @@ object RolePackageContract {
      */
     val REQUIRED_FUNCTION_PATHS = listOf(
         listOf("static", "sit"),                 // 静止：静坐
+        listOf("static", "pool"),                // 静止动作池
+        listOf("standby", "pool"),               // 待机动作池
         listOf("touch", "roll"),                 // 触摸：滚动
-        listOf("touch", "lift_up"),              // 触摸：抱起
+        listOf("touch", "lift_up", "slow"),        // 提起：慢速
+        listOf("touch", "lift_up", "left_medium"), // 提起：中速向左
+        listOf("touch", "lift_up", "left_fast"),   // 提起：快速向左
+        listOf("touch", "lift_up", "right_medium"),// 提起：中速向右
+        listOf("touch", "lift_up", "right_fast"),  // 提起：快速向右
         listOf("touch", "jump_down"),            // 触摸：落地（跳下）
         listOf("touch", "walk"),                 // 触摸：走
         listOf("snap", "snap_head"),             // 吸附：探头
@@ -52,8 +42,6 @@ object RolePackageContract {
         listOf("climb", "walk"),                 // 攀岩：走
         listOf("climb", "jump_up"),              // 攀岩：跳起
         listOf("pat_head", "pat_head"),          // 摸头：摸头
-        listOf("pat_head", "shake_head"),        // 摸头：摇头
-        listOf("pat_head", "sit_puffed"),        // 摸头：炸毛
         listOf("feed", "eat"),                   // 投食：吃鱼动作（模式）
         listOf("feed", "food")                   // 投食：食物资源（指向 resources）
     )
@@ -64,7 +52,7 @@ object RolePackageContract {
     /** 必备顶层字段（v1.0）：模板默认提供，缺失即视为错误 */
     val REQUIRED_TOP_FIELDS = setOf(
         "version", "id", "name", "shortName",
-        "decodeTarget", "anchorRes", "menuPool", "standbyPool", "staticPool",
+        "decodeTarget", "anchorRes", "menuPool",
         "functions", "resources", "modes",
         "authors"
     )
@@ -139,17 +127,13 @@ object RolePackageContract {
             }
         }
 
-        // 5) 动作清单：必含 REQUIRED_MODES，且每个动作 frames 非空
+        // 5) 允许自由命名 Modes；只强制 Functions 所引用的动作必须存在
         val modes = json.optJSONObject("modes")
         val definedModes = modes?.keys()?.asSequence()?.toSet() ?: emptySet()
         if (modes == null) {
             if (!json.has("modes")) errors.add("缺少必备字段：modes")
             else errors.add("modes 不是整数（应为对象）")
         } else {
-            val missing = REQUIRED_MODES.filter { !definedModes.contains(it) }
-            if (missing.isNotEmpty()) {
-                errors.add("缺少必备动作：${missing.joinToString(", ")}")
-            }
             for (name in definedModes) {
                 val m = modes.optJSONObject(name)
                 if (m == null) {
@@ -159,6 +143,10 @@ object RolePackageContract {
                 val fr = m.optJSONArray("frames")
                 if (fr == null) errors.add("动作 $name 缺少 frames")
                 else if (fr.length() == 0) errors.add("动作 $name 没有帧数据")
+                val align = m.optString("verticalAlign", "top")
+                if (align != "top" && align != "center") {
+                    errors.add("动作 $name verticalAlign 必须为 top 或 center")
+                }
             }
         }
 
@@ -173,10 +161,28 @@ object RolePackageContract {
             }
         }
 
-        // 7) 池：menuPool / standbyPool / staticPool 必须非空列表，且元素须为已定义动作
+        // 7) 菜单池仍是素材包定义；长期状态轮播池改用 Functions 候选列表。
         checkPool(json, "menuPool", definedModes, errors)
-        checkPool(json, "standbyPool", definedModes, errors)
-        checkPool(json, "staticPool", definedModes, errors)
+        for (path in listOf(listOf("standby", "pool"), listOf("static", "pool"))) {
+            if (functions[path].isNullOrEmpty()) {
+                errors.add("功能 ${path.joinToString("/")} 必须提供非空动作池")
+            }
+        }
+        // 同一张 PNG 被多个 Mode 复用时，填充规则必须一致（位图缓存按图片资源键）。
+        val alignByResource = mutableMapOf<String, String>()
+        modes?.keys()?.forEach { modeName ->
+            val mode = modes.optJSONObject(modeName) ?: return@forEach
+            val align = mode.optString("verticalAlign", "top")
+            val frames = mode.optJSONArray("frames") ?: return@forEach
+            for (i in 0 until frames.length()) {
+                val res = frames.optJSONObject(i)?.optString("res", "") ?: continue
+                if (res.isEmpty()) continue
+                val prev = alignByResource.putIfAbsent(res, align)
+                if (prev != null && prev != align) {
+                    errors.add("图片 $res 被不同的 verticalAlign 规则引用")
+                }
+            }
+        }
 
         return ValidationResult(errors.isEmpty(), versionStr, errors)
     }
