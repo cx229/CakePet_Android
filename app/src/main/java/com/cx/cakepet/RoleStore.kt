@@ -89,8 +89,10 @@ object RoleStore {
                     displayName = o.optString("displayName", ""),
                     shortName = o.optString("shortName", "")
                 )
-            }.filter { RoleRegistry.byId(it.templateId) != null }.ifEmpty {
-                RoleRegistry.PRESETS.map { HomeRoleInstance(it.id, it.id) }
+            }.filter { RoleRegistry.byId(it.templateId) != null }.let { visible ->
+                if (visible.isEmpty() && arr.length() > 0)
+                    RoleRegistry.PRESETS.map { HomeRoleInstance(it.id, it.id) }
+                else visible
             }
         }
     }
