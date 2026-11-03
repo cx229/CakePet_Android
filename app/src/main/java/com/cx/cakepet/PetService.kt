@@ -135,7 +135,7 @@ class PetService : Service() {
     val roleId: String = ""   // 归属角色：应用「可拖动/边框」时按角色独立，避免串到其它角色
     )
     private val freezeLayers = mutableListOf<FreezeLayer>()
-    // 投喂（支鱼）浮窗：随机掉落的单图可拖拽浮窗；拖动给酥则消失（纯清除）。
+    // 投喂（支鱼）浮窗：使用 Functions 映射到通用 Mode 的动画；拖动给酥后按原有逻辑移除。
     data class FishLayer(
         val iv: ImageView,
         val lp: WindowManager.LayoutParams,
@@ -1286,8 +1286,8 @@ class PetService : Service() {
         return wpx to hpx
     }
 
-    // 资源包切换时重载支鱼位图：按每条鱼自身 packId 取本角色图（避免跨角色串图）。
-    /** 资源包切换后重裁支鱼位图。roleId 为 null 时重载全部角色；否则仅重载【该角色】的支鱼，并保留该角色自己的 feedingFishScale/Alpha（不串其它角色）。 */
+    // 资源包切换时重载食物 Mode 与帧缓存（避免不同角色之间串图）。
+    /** 素材切换后重新加载食物动画。roleId 为 null 时作用于全部角色，保持各角色的缩放和透明度。 */
     private fun reloadFishBitmap(roleId: String? = null) {
         val list = if (roleId == null) fishLayers.toList() else fishLayers.filter { it.roleId == roleId }
         val reloadIds = if (roleId == null) list.map { it.roleId }.distinct() else listOf(roleId)
@@ -1545,7 +1545,7 @@ class PetService : Service() {
         return y.coerceIn(minY, maxY)
     }
 
-    // 刷出一条投喂食物（按本角色函数映射的 Mode 首帧取图；保留原有单图、拖动和过期逻辑）。
+    // 刷出一条食物：通过 functions.feed.food 选择完整 Mode，并保留原有位置/拖动/过期规则。
     private fun spawnFish(c: PetConfigData, roleId: String) {
         val manager = fishManager(roleId)
         val modeId = manager.modeOf("feed", "food") ?: return
@@ -1690,7 +1690,7 @@ class PetService : Service() {
         return bv
     }
 
-    // 倍率 / 透明度变化：即时作用于【该角色】已有支鱼浮窗（尺寸按每条鱼自身裁剪图计算，避免跨角色串尺寸）。
+    // 倍率 / 透明度变化：即时作用于该角色食物浮窗；同一动画的全部帧使用固定裁剪尺寸。
     private fun applyFishScaleAlpha(rt: RoleRuntime) {
         val c = rt.config.getBlocking()
         for (layer in fishLayers.filter { it.roleId == rt.roleId }) {
