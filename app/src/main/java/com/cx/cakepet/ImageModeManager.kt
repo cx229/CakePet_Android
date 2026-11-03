@@ -36,6 +36,8 @@ data class SpritePack(
     // 键为【功能路径】（如 [climb, walk]、[snap, pat_head, pat_head]），层数不限；
     // 值为候选列表（当前多为单元素，为将来"同一功能多个动作"预留）。
     val functions: Map<List<String>, List<String>> = emptyMap(),
+    // Mode 定义里的首帧图片，仅用于当前仍为静态位图的食物显示；不是独立资源字典。
+    val modeFirstFrames: Map<String, String> = emptyMap(),
     // 悬浮菜单可触发的模式（v1.01 必填，由 modes.json 的 menuPool 提供）
     val menuPool: List<String> = emptyList(),
     // 模式名 → 显示名（modes 里每项的 label），供菜单等 UI 取中文名，代码不写死文案
@@ -43,7 +45,11 @@ data class SpritePack(
     // 模式名 → 是否循环（modes 里每项的 loop）。循环类（走/蠕动等）须用 setMode 常驻，
     // 一次性类用 playOnce；由素材包声明，代码不写死哪些动作该常驻。
     val modeLoops: Map<String, Boolean> = emptyMap()
-)
+) {
+    /** 当前食物仍是单张位图：通过 Function → Mode → frames[0].res 查找。 */
+    val foodFramePath: String
+        get() = functions[listOf("feed", "food")]?.firstNotNullOfOrNull { modeFirstFrames[it] } ?: ""
+}
 
 
 /**
@@ -95,10 +101,25 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
         name = if (root.has("name")) root.optString("name", "") else "",
         shortName = if (root.has("shortName")) root.optString("shortName", "") else "",
         functions = parseFunctions(root),
+        modeFirstFrames = parseModeFirstFrames(root),
         menuPool = parseStringArray(root, "menuPool"),
         modeLabels = parseModeLabels(root),
         modeLoops = parseModeLoops(root)
     )
+}
+
+/** 从模式定义读取首帧，供目前的单图食物显示使用，不创建另一套资源清单。 */
+private fun parseModeFirstFrames(root: JSONObject): Map<String, String> {
+    val modes = root.optJSONObject("modes") ?: return emptyMap()
+    val out = mutableMapOf<String, String>()
+    val keys = modes.keys()
+    while (keys.hasNext()) {
+        val id = keys.next()
+        val frame = modes.optJSONObject(id)?.optJSONArray("frames")?.optJSONObject(0)
+        val res = frame?.optString("res", "") ?: ""
+        if (res.isNotEmpty()) out[id] = res
+    }
+    return out
 }
 
 /**
@@ -187,7 +208,7 @@ private fun parseStringArray(root: JSONObject, field: String): List<String> {
  */
 class ImageModeManager(
     private val ctx: android.content.Context,
-    // 默认资源包=芝麻酥（已不再使用旧图 assets/img/）。
+    // 默认资源包=白酥。
     initialPack: SpritePack = packForId(ctx, ConfigDefaults.DEFAULT_SPRITE_PACK)
 ) {
 
@@ -212,7 +233,7 @@ class ImageModeManager(
          */
 
         /**
-         * 按资源包 id 取得对应资源包；未知键回退默认（芝麻酥）。
+         * 按资源包 id 取得对应资源包；未知键回退默认白酥。
          * 资源包位置/存储类型在 [PRESET_PACKS] 唯一映射，包级元数据（尺寸/锚点/预览/鱼路径等）全部来自各包 modes.json，
          * 实现资源与程序解耦——新增/上传素材包无需改动此文件。
          */
@@ -271,7 +292,7 @@ class ImageModeManager(
     private var forcedOnEnd: (() -> Unit)? = null
     private var timeNextAcc = 0L
     private var timeNextTarget = 0L
-    /** 当前生效的资源包；默认=芝麻酥包，可由 setPack 运行时按角色资源包切换。 */
+    /** 当前生效的资源包；默认=白酥包，可由 setPack 运行时按角色资源包切换。 */
     var currentPack: SpritePack = initialPack
 
     /** 当前行走方向与位移速度（>0 表示正在行走位移，由物理引擎驱动水平移动） */
