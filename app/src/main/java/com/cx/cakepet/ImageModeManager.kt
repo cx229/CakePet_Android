@@ -32,8 +32,7 @@ data class SpritePack(
     val anchorRes: Int = 128,          // 逻辑分辨率（锚点/画布/UI 坐标系单位），恒 128（由 modes.json 覆盖）
     val name: String = "",             // 资源包中文名（modes.json 指定，v1.0 必填），仅展示用
     val shortName: String = "",         // 资源包默认简称（modes.json 指定，v1.0 必填）：每个角色各自定义，不全局写死
-    val resources: Map<String, String> = emptyMap(),   // 资源清单（modes.json 指定）：键=资源名，值=相对路径；为其它图片资源预留扩展
-    // v1.01 契约：功能路径 -> 该功能的候选叶子列表（叶子可能是模式名，也可能是 resources 的键）。
+    // v1.02：所有功能路径均映射到通用 Mode ID；Mode 可用于角色、食物及其他动画。
     // 键为【功能路径】（如 [climb, walk]、[snap, pat_head, pat_head]），层数不限；
     // 值为候选列表（当前多为单元素，为将来"同一功能多个动作"预留）。
     val functions: Map<List<String>, List<String>> = emptyMap(),
@@ -44,17 +43,8 @@ data class SpritePack(
     // 模式名 → 是否循环（modes 里每项的 loop）。循环类（走/蠕动等）须用 setMode 常驻，
     // 一次性类用 playOnce；由素材包声明，代码不写死哪些动作该常驻。
     val modeLoops: Map<String, Boolean> = emptyMap()
-) {
-    /**
-     * 食物图片路径：资源键由 functions 的 [feed, food] 叶子给出，而非在代码里写死键名。
-     * 这样"鱼在包里叫什么"完全由素材包决定（蜂蜜猫为 fish），代码零硬编码。
-     */
-    val foodRes: String
-        get() {
-            val key = functions[listOf("feed", "food")]?.firstOrNull() ?: return ""
-            return resources[key] ?: ""
-        }
-}
+)
+
 
 /**
  * 资源包目录：选择键(Int，持久化于 pet_config) -> (包 id, 资源根目录 base, 存储类型)。
@@ -75,18 +65,6 @@ var PRESET_PACKS: Map<Int, PackRef> = emptyMap()
 
 /** 由 RoleRegistry 扫描 assets 后写入预装包映射。 */
 internal fun setPresetPacks(map: Map<Int, PackRef>) { PRESET_PACKS = map }
-
-private fun parseResources(root: JSONObject): Map<String, String> {
-    val out = mutableMapOf<String, String>()
-    val obj = root.optJSONObject("resources") ?: return out
-    val keys = obj.keys()
-    while (keys.hasNext()) {
-        val k = keys.next()
-        val v = obj.optString(k, "")
-        if (v.isNotBlank()) out[k] = v
-    }
-    return out
-}
 
 /** 按选择键构建完整 SpritePack（包级元数据来自对应 modes.json）。未知键回退默认包 / 或按 RoleRegistry 动态解析。 */
 fun buildSpritePack(ctx: android.content.Context, packId: Int): SpritePack {
@@ -116,7 +94,6 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
         anchorRes = if (root.has("anchorRes")) root.optInt("anchorRes", 128) else 128,
         name = if (root.has("name")) root.optString("name", "") else "",
         shortName = if (root.has("shortName")) root.optString("shortName", "") else "",
-        resources = parseResources(root),
         functions = parseFunctions(root),
         menuPool = parseStringArray(root, "menuPool"),
         modeLabels = parseModeLabels(root),
@@ -374,16 +351,6 @@ class ImageModeManager(
             .any { isFunctionMode(name, "touch", "lift_up", it) }
 
     /**
-     * 按功能路径取【资源路径】（叶子是 resources 的键，而非模式名）。
-     * 例如 [feed, food] 的叶子 "fish" → resources["fish"] → "支鱼/fish-1.png"。
-     * 素材包未提供该功能时返回 null。
-     */
-    fun resourceOf(vararg path: String): String? {
-        val key = leavesOf(*path).firstOrNull() ?: return null
-        return currentPack.resources[key]
-    }
-
-    /**
      * 从池子捞一个新动作（排除当前动作）；若开启好动飞跃且处于攀岩态，按 leapProbability 概率直接跳起。
      * 供：一次性动画收尾、主循环收尾、定时随机切换 三处统一调用。
      */
@@ -450,10 +417,8 @@ class ImageModeManager(
         val anchorRes = if (root.has("anchorRes")) root.optInt("anchorRes", currentPack.anchorRes) else currentPack.anchorRes
         val id = if (root.has("id")) root.optString("id", currentPack.id) else currentPack.id
         val name = if (root.has("name")) root.optString("name", currentPack.name) else currentPack.name
-        val resources = parseResources(root)
         currentPack = currentPack.copy(
-            id = id, decodeTarget = decodeTarget, anchorRes = anchorRes,
-            name = name, resources = resources
+            id = id, decodeTarget = decodeTarget, anchorRes = anchorRes, name = name
         )
         // 清空旧模式，按 JSON 重建
         modes.clear()
