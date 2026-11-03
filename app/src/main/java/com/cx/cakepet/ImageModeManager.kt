@@ -36,8 +36,6 @@ data class SpritePack(
     // 键为【功能路径】（如 [climb, walk]、[snap, pat_head, pat_head]），层数不限；
     // 值为候选列表（当前多为单元素，为将来"同一功能多个动作"预留）。
     val functions: Map<List<String>, List<String>> = emptyMap(),
-    // Mode 定义里的首帧图片，仅用于当前仍为静态位图的食物显示；不是独立资源字典。
-    val modeFirstFrames: Map<String, String> = emptyMap(),
     // 悬浮菜单可触发的模式（v1.01 必填，由 modes.json 的 menuPool 提供）
     val menuPool: List<String> = emptyList(),
     // 模式名 → 显示名（modes 里每项的 label），供菜单等 UI 取中文名，代码不写死文案
@@ -45,11 +43,7 @@ data class SpritePack(
     // 模式名 → 是否循环（modes 里每项的 loop）。循环类（走/蠕动等）须用 setMode 常驻，
     // 一次性类用 playOnce；由素材包声明，代码不写死哪些动作该常驻。
     val modeLoops: Map<String, Boolean> = emptyMap()
-) {
-    /** 当前食物仍是单张位图：通过 Function → Mode → frames[0].res 查找。 */
-    val foodFramePath: String
-        get() = functions[listOf("feed", "food")]?.firstNotNullOfOrNull { modeFirstFrames[it] } ?: ""
-}
+)
 
 
 /**
@@ -101,25 +95,10 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
         name = if (root.has("name")) root.optString("name", "") else "",
         shortName = if (root.has("shortName")) root.optString("shortName", "") else "",
         functions = parseFunctions(root),
-        modeFirstFrames = parseModeFirstFrames(root),
         menuPool = parseStringArray(root, "menuPool"),
         modeLabels = parseModeLabels(root),
         modeLoops = parseModeLoops(root)
     )
-}
-
-/** 从模式定义读取首帧，供目前的单图食物显示使用，不创建另一套资源清单。 */
-private fun parseModeFirstFrames(root: JSONObject): Map<String, String> {
-    val modes = root.optJSONObject("modes") ?: return emptyMap()
-    val out = mutableMapOf<String, String>()
-    val keys = modes.keys()
-    while (keys.hasNext()) {
-        val id = keys.next()
-        val frame = modes.optJSONObject(id)?.optJSONArray("frames")?.optJSONObject(0)
-        val res = frame?.optString("res", "") ?: ""
-        if (res.isNotEmpty()) out[id] = res
-    }
-    return out
 }
 
 /**
@@ -536,6 +515,105 @@ class ImageModeManager(
 
     /** 当前模式是否属于待机动作清单（standbyPool / staticPool）。供投喂等判断是否可切"坐姿投食"。 */
     fun isStandbyMode(name: String = currentName): Boolean = currentPool().contains(name)
+
+    /**
+     * 创建完整 Mode 的独立播放游标，供非角色对象复用已解析的动画定义与位图缓存。
+     * 与角色共享 Mode 解析/图片加载，但绝不调用角色的物理回调或待机池。
+     * 每个显示实例创建自己的游标；其帧序、延时与 nextMode 都来自素材包。
+     */
+    fun createClip(modeId: String): ModeClip? =
+        if (modes.containsKey(modeId)) ModeClip(modeId) else null
+
+    fun modeFrameBitmaps(modeId: String): Map<String, Bitmap> {
+        val frames = linkedMapOf<String, Bitmap>()
+        val visited = mutableSetOf<String>()
+        var next: String? = modeId
+        while (next != null && visited.add(next)) {
+            val def = modes[next] ?: break
+            for (frame in def.frames) {
+                if (frame.resName !in frames) {
+                    (loadBitmap(frame.resName) ?: loadBitmap(def.fallback))?.let { frames[frame.resName] = it }
+                }
+            }
+            next = def.nextModeName
+        }
+        return frames
+    }
+
+    inner class ModeClip internal constructor(startMode: String) {
+        private var def = requireNotNull(modes[startMode])
+        private var frameIndex = 0
+        private var elapsed = 0L
+        private var frameDelay = def.frames[0].delay().coerceAtLeast(1L)
+        private var timeElapsed = 0L
+        private var timeTarget = nextTimeTarget()
+        private var ended = false
+
+        val currentResName: String get() = def.frames[frameIndex].resName
+        val currentModeId: String get() = def.name
+        val currentDx: Int get() = def.frames[frameIndex].dx
+        val currentDy: Int get() = def.frames[frameIndex].dy
+        val currentWalkSpeed: Float get() = def.walkSpeed
+
+        private fun nextTimeTarget(): Long =
+            if (def.timeNextEnabled) rnd(def.changeIntervalMin, def.changeIntervalMax)()
+            else Long.MAX_VALUE
+
+        private fun switchTo(id: String): Boolean {
+            val next = modes[id] ?: return false
+            def = next
+            frameIndex = 0
+            elapsed = 0L
+            timeElapsed = 0L
+            frameDelay = def.frames[0].delay().coerceAtLeast(1L)
+            timeTarget = nextTimeTarget()
+            ended = false
+            return true
+        }
+
+        /** 返回当前显示帧是否变化；无后续 Mode 时停留末帧，不进入角色待机池。 */
+        fun advance(dtMs: Long): Boolean {
+            if (ended || dtMs <= 0) return false
+            var remaining = dtMs
+            var changed = false
+            var guard = 0
+            while (remaining > 0 && !ended && guard++ < 256) {
+                val span = minOf(remaining, (frameDelay - elapsed).coerceAtLeast(1L))
+                remaining -= span
+                elapsed += span
+                timeElapsed += span
+                if (elapsed >= frameDelay) {
+                    val next = def.frames[frameIndex].nextIndex
+                    when {
+                        next != null && next in def.frames.indices -> {
+                            frameIndex = next
+                            elapsed = 0L
+                            frameDelay = def.frames[frameIndex].delay().coerceAtLeast(1L)
+                            changed = true
+                        }
+                        def.loop -> {
+                            frameIndex = 0
+                            elapsed = 0L
+                            frameDelay = def.frames[0].delay().coerceAtLeast(1L)
+                            changed = true
+                        }
+                        def.nextModeName != null && switchTo(def.nextModeName!!) -> changed = true
+                        else -> ended = true
+                    }
+                }
+                if (!ended && def.timeNextEnabled && timeElapsed >= timeTarget) {
+                    timeElapsed = 0L
+                    timeTarget = nextTimeTarget()
+                    if (Random.nextFloat() < def.changeProb) {
+                        val next = def.nextModeName
+                        if (next != null && switchTo(next)) changed = true
+                        // 无显式 nextMode 时交由当前对象的引擎处理，不跳入宠物待机池。
+                    }
+                }
+            }
+            return changed
+        }
+    }
 
     /** 当前帧的水平位移偏移(px)，对齐 PC 帧 offset.x；扒鱼等一次性位移模式据此累加位移 */
     fun curDx(): Int =
