@@ -344,11 +344,12 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun frameMenu(key: String, index: Int) {
         AlertDialog.Builder(this).setTitle("第 ${index + 1} 帧")
-            .setItems(arrayOf("编辑参数", "替换图片", "删除帧")) { _, selection ->
+            .setItems(arrayOf("编辑参数", "导入图片替换", "选择素材库图片", "删除帧")) { _, selection ->
                 when (selection) {
                     0 -> editFrame(key, index)
                     1 -> { fileIndex = index; pngPicker.launch(arrayOf("image/*")) }
-                    2 -> attempt {
+                    2 -> selectExistingImage(key, index)
+                    3 -> attempt {
                         val old = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
                         require(old.length() > 1) { "至少保留一帧" }
                         val newer = remapFrames(old, (0 until old.length()).filter { it != index })
@@ -357,6 +358,23 @@ class RolePackEditorActivity : AppCompatActivity() {
                     }
                 }
             }.show()
+    }
+    private fun selectExistingImage(key: String, index: Int) {
+        val files = draft.walkTopDown().filter {
+            it.isFile && it.extension.lowercase() in setOf("png", "webp", "jpg", "jpeg")
+        }.map { it.relativeTo(draft).invariantSeparatorsPath }.toList().sorted()
+        if (files.isEmpty()) {
+            Toast.makeText(this, "素材库没有图片", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("选择已有图片")
+            .setItems(files.toTypedArray()) { _, selected -> attempt {
+                change {
+                    it.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+                        .getJSONObject(index).put("res", files[selected])
+                }
+                showMode(key)
+            }}.show()
     }
     private fun editFrame(key: String, index: Int) {
         val f = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
