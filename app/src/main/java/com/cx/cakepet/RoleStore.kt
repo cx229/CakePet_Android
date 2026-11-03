@@ -79,6 +79,8 @@ object RoleStore {
             seed
         } else {
             val arr = JSONArray(raw)
+            // 预装角色精简后，旧版本已经写入首页的退役模板不再展示；
+            // 已导入的用户模板以及白酥的实例不受影响。
             (0 until arr.length()).map {
                 val o = arr.getJSONObject(it)
                 HomeRoleInstance(
@@ -87,6 +89,8 @@ object RoleStore {
                     displayName = o.optString("displayName", ""),
                     shortName = o.optString("shortName", "")
                 )
+            }.filter { RoleRegistry.byId(it.templateId) != null }.ifEmpty {
+                RoleRegistry.PRESETS.map { HomeRoleInstance(it.id, it.id) }
             }
         }
     }
