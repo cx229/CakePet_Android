@@ -1189,8 +1189,7 @@ class PetService : Service() {
         applyImeHide(keyboardUp)
     }
 
-    /** 根据资源包 id 选择资源包：1=芝麻酥、2=芝麻球促销、3=白酥（assets 扫描仅一次并缓存）；0/未知回退到芝麻酥。 */
-    /** 根据资源包 id 选择资源包；未知键回退默认（1=芝麻酥）。结果按 id 缓存，避免重复构建。 */
+    /** 按资源包 id 取得角色素材包；未知旧版预装 id 回退白酥。 */
     private fun spritePackFor(packId: Int): SpritePack {
         spritePackCache[packId]?.let { return it }
         val pack = buildSpritePack(this, packId)
@@ -1251,8 +1250,8 @@ class PetService : Service() {
     }
 
     // 加载并裁剪投喂食物位图：按【角色自身】资源包取图（预装走 assets / 上传包走 filesDir）。
-    // 食物资源的【键】由素材包 functions 的 [feed, food] 叶子给出（v1.01 契约），
-    // 代码不再写死 "food"——鱼的键名完全由各包自定（如蜂蜜猫为 fish）。
+    // 食物仍以单图方式显示：通过 functions.feed.food 指向的 Mode 读取 frames[0].res。
+    // 不新增任何食物运动、动画播放或投喂流程。
     // 逐角色缓存，避免多角色并存时食物串图；已缓存则直接复用。
     private fun ensureFishBitmap(roleId: String) {
         val existing = fishCropBitmaps[roleId]
@@ -1260,9 +1259,9 @@ class PetService : Service() {
         try {
             val d = descriptorForRole(roleId)
             val foodPath = (if (d != null && d.source == RoleSource.FILES) {
-                buildSpritePackForRole(this, d).foodRes
+                buildSpritePackForRole(this, d).foodFramePath
             } else {
-                buildSpritePack(this, d?.packId ?: ConfigDefaults.DEFAULT_SPRITE_PACK).foodRes
+                buildSpritePack(this, d?.packId ?: ConfigDefaults.DEFAULT_SPRITE_PACK).foodFramePath
             }).takeIf { it.isNotEmpty() } ?: run {
                 fishCropBitmaps[roleId] = null
                 return
@@ -1550,7 +1549,7 @@ class PetService : Service() {
         return y.coerceIn(minY, maxY)
     }
 
-    // 刷出一条投喂食物（按本角色 id 取各自包的 resources["food"]，避免多角色串图；随机位置 / 当前倍率 / 透明度 / 边框 / 自动过期），并归属 roleId。
+    // 刷出一条投喂食物（按本角色函数映射的 Mode 首帧取图；保留原有单图、拖动和过期逻辑）。
     private fun spawnFish(c: PetConfigData, roleId: String) {
         val crop = getFishCropBitmap(roleId) ?: return
         val (wpx, hpx) = fishDisplaySize(crop, c)
@@ -1793,7 +1792,7 @@ class PetService : Service() {
         singleTrayMsg = c.singleTrayMsg
         // 碎碎念：独立浮窗，可见性跟随宠物（visible && enabled），按实例错开高度
         applySharedConfig(rt)
-        // 资源包：根据当前选择初始化（1=芝麻酥 / 2=芝麻球促销）。pets 已在 initPetView 创建完毕。
+        // 资源包：根据角色选择初始化（预装只保留白酥）。pets 已在 initPetView 创建完毕。
         rt.spritePackId = c.spritePack
         val pack = resolveCurrentSpritePack(rt)
         pets.filter { it.roleId == roleId }.forEach { it.view.applySpritePack(pack) }
