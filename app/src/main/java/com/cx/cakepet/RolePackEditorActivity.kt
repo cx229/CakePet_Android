@@ -273,21 +273,15 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun animate(view: ImageView, key: String) {
         stopAnimation()
-        val frames = root.getJSONObject("modes").getJSONObject(key).optJSONArray("frames") ?: return
-        if (frames.length() == 0) return
-        var current = 0
+        // Reuse the same ModeClip as the floating pet and food, not a second frame player.
+        val manager = ImageModeManager(this, loadPackMeta(this, id, RoleSource.FILES))
+        val clip = manager.createClip(key) ?: return
         val tick = object : Runnable {
             override fun run() {
                 if (screen != "mode" || modeId != key) return
-                val frame = frames.getJSONObject(current)
-                view.setImageBitmap(BitmapFactory.decodeFile(File(draft, frame.getString("res")).absolutePath))
-                val delay = when (val v = frame.opt("delay")) {
-                    is Number -> v.toLong()
-                    is JSONArray -> v.optLong(0, 120)
-                    else -> 120L
-                }
-                current = frame.optInt("next", (current + 1) % frames.length()).coerceIn(0, frames.length() - 1)
-                handler.postDelayed(this, delay.coerceIn(20, 5000))
+                view.setImageBitmap(clip.currentBitmap())
+                val step = clip.advance(50, allowModeSwitch = true)
+                if (!step.ended) handler.postDelayed(this, 50)
             }
         }
         animation = tick
