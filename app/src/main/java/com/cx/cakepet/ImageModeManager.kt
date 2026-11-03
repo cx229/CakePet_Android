@@ -284,6 +284,8 @@ class ImageModeManager(
     private fun fixed(v: Long): () -> Long = { v }
 
     private val modes = mutableMapOf<String, ImageModeDef>()
+    /** 资源文件的垂直填充方式，取自其所属 Mode，而非文件命名。 */
+    private val verticalAlignOfResource = mutableMapOf<String, String>()
     private lateinit var currentName: String
     private var currentDef: ImageModeDef? = null
     private var frameIndex = 0
@@ -309,7 +311,7 @@ class ImageModeManager(
 
     /**
      * 待机自动轮换池：物理空闲时，按时间随机切换到池中（排除当前）的某个模式。
-     * 内容由【素材包】的 standbyPool 提供（v1.01 必备），代码不写死任何模式名；
+     * 内容由【素材包】的 functions.standby.pool 提供（v1.02 必备），代码不写死任何模式名；
      * 载入配置后再按该包实际定义的动作裁剪，避免引用包里不存在的模式（旧版曾因此切到
      * 空模式而卡住）。包未提供时为空表 → 不做待机轮换（优于切到不存在的动作）。
      */
@@ -318,7 +320,7 @@ class ImageModeManager(
     /**
      * 静止池：待机池去除位移/物理驱动类模式（蠕动、walk、扒鱼）。
      * 当“重力·抛掷”关闭（gravityEnabled=false）时使用，宠物保持在原地的小动作/静坐。
-     * 同样由素材包的 staticPool 提供，不再硬编码。
+     * 同样由素材包的 functions.static.pool 提供，不再硬编码。
      */
     private var staticPool: List<String> = emptyList()
 
@@ -363,6 +365,13 @@ class ImageModeManager(
      * 各角色序列互不干扰。素材包未提供该功能时返回 null。
      */
     fun modeOf(vararg path: String): String? = leavesOf(*path).let { if (it.isEmpty()) null else it.random(rng) }
+
+    /** 功能候选集判断，不调用随机选择器。 */
+    fun isFunctionMode(name: String, vararg path: String): Boolean = name in leavesOf(*path)
+
+    fun isDragMode(name: String = getMode()): Boolean =
+        listOf("slow", "left_medium", "left_fast", "right_medium", "right_fast")
+            .any { isFunctionMode(name, "touch", "lift_up", it) }
 
     /**
      * 按功能路径取【资源路径】（叶子是 resources 的键，而非模式名）。
@@ -448,6 +457,7 @@ class ImageModeManager(
         )
         // 清空旧模式，按 JSON 重建
         modes.clear()
+        verticalAlignOfResource.clear()
         val modesObj = root.getJSONObject("modes")
         val kit = modesObj.keys()
         while (kit.hasNext()) {
@@ -463,11 +473,13 @@ class ImageModeManager(
             val nextModeName = if (m.has("nextMode") && !m.isNull("nextMode")) m.getString("nextMode") else null
             val walkSpeed = m.optDouble("walkSpeed", 0.0).toFloat()
             val label = if (m.has("label")) m.getString("label") else name
+            val verticalAlign = m.optString("verticalAlign", "top")
             val framesArr = m.getJSONArray("frames")
             val frames = mutableListOf<Frame>()
             for (i in 0 until framesArr.length()) {
                 val f = framesArr.getJSONObject(i)
                 val res = f.getString("res")
+                verticalAlignOfResource[res] = verticalAlign
                 val nextIndex = if (f.has("next") && !f.isNull("next")) f.getInt("next") else null
                 val delay = parseDelay(f.get("delay"))
                 val anchorX = if (f.has("anchorX")) f.getInt("anchorX") else -1
@@ -486,14 +498,9 @@ class ImageModeManager(
             val kit = modesObj.keys()
             while (kit.hasNext()) add(kit.next())
         }
-        if (root.has("standbyPool")) {
-            val sp = root.getJSONArray("standbyPool")
-            standbyPool = List(sp.length()) { sp.getString(it) }.filter { it in defined }
-        }
-        if (root.has("staticPool")) {
-            val arr = root.getJSONArray("staticPool")
-            staticPool = List(arr.length()) { arr.getString(it) }.filter { it in defined }
-        }
+        // v1.02: 长期轮播范围在 Functions 声明，调度仍沿用 timeNext / nextMode。
+        standbyPool = leavesOf("standby", "pool").filter { it in defined }
+        staticPool = leavesOf("static", "pool").filter { it in defined }
     }
 
     /** delay 字段：[min,max]=随机区间；数字=固定值(ms)。 */
@@ -543,33 +550,6 @@ class ImageModeManager(
 
     /** 当前模式是否属于待机动作清单（standbyPool / staticPool）。供投喂等判断是否可切"坐姿投食"。 */
     fun isStandbyMode(name: String = currentName): Boolean = currentPool().contains(name)
-
-    /**
-     * 提起(LIFT_UP)模式下，按拖动速度/方向跳到对应系列起点帧（对齐 PC DragFollowMode.drag_func）：
-     *  - 慢速：轻晃链起点（lift_up-1，index 0），由帧链自然循环 0→1→0（S1↔S2）；
-     *  - 中速向左：index 3（lift_up-4 = S4）；快速向左：index 5（lift_up-6 = S6）；
-     *  - 中速向右：index 2（lift_up-3 = S3）；快速向右：index 4（lift_up-5 = S5）。
-     * PC 设起点后按 nextIndex 链继续播放（S3→S4→S5→S6→S1…），安卓 nextFrame 同此链式推进，
-     * 故“跳到起点”即可自动沿用链。仅当当前确为 LIFT_UP 才生效，避免误改其他模式帧序。
-     * series<0 表示“不主动跳”（由调用方守护，慢速时保持轻晃链），此函数忽略。
-     */
-    /**
-     * 提起(LIFT_UP)模式下按拖动速度/方向定到对应帧（对齐 PC DragFollowMode.drag_func）：
-     *  - 慢速：不调用（由帧链 0↔1 自然轻晃）。
-     *  - 中/快：由 PetView 每帧调用，定住对应甩动帧（S3/S4/S5/S6 之一，不播链），
-     *    返回 true 表示帧下标确实发生变化（调用方据此【当帧立即】刷新位图，
-     *    绕过 33ms 节流，避免切帧视觉延迟）；frameIndex/acc 已强制设好。
-     */
-    fun setLiftSeries(series: Int): Boolean {
-        if (forcedSeq != null) return false
-        // 抱起动作名由素材包 functions 提供，代码不写死
-        if (currentName != modeOf("touch", "lift_up")) return false
-        if (series < 0 || series >= (currentDef?.frames?.size ?: 0)) return false
-        if (frameIndex == series && acc == 0L) return false
-        frameIndex = series
-        acc = 0L
-        return true
-    }
 
     /** 当前帧的水平位移偏移(px)，对齐 PC 帧 offset.x；扒鱼等一次性位移模式据此累加位移 */
     fun curDx(): Int =
@@ -902,32 +882,11 @@ class ImageModeManager(
         globalH = h
     }
 
-    /**
-     * 单图资源相对统一画布的填充偏移 (padX, padY)：【唯一】填充规则来源。
-     * 同时供 loadBitmap（像素落点）与 padOf/currentAnchor（锚点补偿）使用，
-     * 保证“填充方式”与“锚点计算”永远是同一套规则，不会因改填充而锚点错位。
-     *
-     * 规则（以图片资源名为单位，粒度 = resName.startsWith("roll") 为唯一例外）：
-     *  - 水平：始终居中，padX = (globalW - bw) / 2。
-     *  - 垂直：ROLL 类（球状对称）【居中】填充（padY = (globalH - bh)/2）；
-     *          其余图片【顶部】填充（padY = 0，图片置顶，透明空白补在图片【下方】至画布底），
-     *          即“除 roll 外，其他图片为底部填充透明”——用下方透明把图撑到目标尺寸 globalH。
-     *
-     * 锚点传导（关键）：currentAnchor 经 padOf 复用本规则，fay = (rawH - 距底) + padY；
-     * 非 roll 的 padY=0 ⇒ fay = rawH - 距底，即脚在画布内的【距顶】距离，画布底到脚之间是透明。
-     * 浮窗定位只认 fay（脚），透明区不参与，故各帧脚在世界坐标仍按锚点对齐；
-     * 但“矩形框底 = 统一地面基线”不再成立（画布底在脚下方、是透明）。
-     *
-     * 必须用【原始】PNG 尺寸（bw/bh）算 pad，不能读 bitmapCache——
-     * 缓存里存的是已 padding 到统一画布(globalW×globalH)的位图，若用其尺寸则 padY=globalH-globalH=0，
-     * 但此处非 roll 本就 padY=0，读缓存反而掩盖了真实原始高度，故仍禁止。
-     */
+    /** 图片的垂直填充由 Mode.verticalAlign 显式指定，默认 top。 */
     private fun fillOffset(resName: String, bw: Int, bh: Int, canvasW: Int = globalW, canvasH: Int = globalH): Pair<Int, Int> {
         if (bw <= 0 || bh <= 0) return 0 to 0
         val padX = ((canvasW - bw).coerceAtLeast(0)) / 2
-        // roll：垂直居中；其余置顶（padY=0，透明填充在图片【下方】）。
-        val isRoll = resName.startsWith("roll", ignoreCase = true)
-        val padY = if (isRoll) (canvasH - bh) / 2 else 0
+        val padY = if (verticalAlignOfResource[resName] == "center") (canvasH - bh) / 2 else 0
         return padX to padY
     }
 
