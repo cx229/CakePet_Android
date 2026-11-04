@@ -862,7 +862,8 @@ class RolePackEditorActivity : AppCompatActivity() {
             val name = entry(box, "动作名称", key)
             var nextModeId = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
             box.addView(text("播放结束后的动作", 13f))
-            val nextChoice = button(if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId) {
+            lateinit var nextChoice: com.google.android.material.button.MaterialButton
+            nextChoice = button(if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId) {
                 chooseModes(single = true, initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
                     nextModeId = chosen.firstOrNull().orEmpty()
                     nextChoice.text = if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId
@@ -1536,28 +1537,107 @@ class RolePackEditorActivity : AppCompatActivity() {
         section("功能映射", "functions")
         functionTree(panel, root.getJSONObject("functions"), emptyList())
     }
-    private fun chooseFunctions(path: List<String>, chosen: List<String>) {
-        editor(functionPathName(path)) { box ->
-            val selected = chosen.toMutableSet()
-            ids().forEach { key ->
-                box.addView(CheckBox(this).apply {
-                    text = key
-                    isChecked = key in selected
-                    setOnCheckedChangeListener { _, checked ->
-                        if (checked) selected.add(key) else selected.remove(key)
-                    }
-                })
+    /** Shared grouped Mode selector for nextMode (single) and Functions leaves (multiple). */
+    private fun chooseModes(single: Boolean, initial: List<String>,
+                            onConfirm: (List<String>) -> Unit) {
+        val selected = linkedSetOf<String>().apply { addAll(initial.filter { it in ids() }) }
+        val groups = knownGroups() + "未分组"
+        val expanded = mutableSetOf<String>()
+        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        val frame = FrameLayout(this).apply { setPadding(px(22), 0, px(22), 0) }
+        val card = com.google.android.material.card.MaterialCardView(this).apply {
+            radius = px(26).toFloat()
+            setCardBackgroundColor(getColor(R.color.cp_card_bg))
+        }
+        frame.addView(card, FrameLayout.LayoutParams(-1, -2))
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(16), px(14), px(16), px(14))
+        }
+        card.addView(body)
+        body.addView(text(if (single) "选择后续动作" else "选择功能动作", 18f).apply {
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        val selectionInfo = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
+        body.addView(selectionInfo)
+        val listing = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(ScrollView(this).apply { addView(listing) },
+            LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * .55f).toInt()))
+        lateinit var redraw: () -> Unit
+        redraw = {
+            listing.removeAllViews()
+            selectionInfo.text = "已选 ${selected.size} 个动作"
+            if (single) {
+                listing.addView(text("○  无（由控制器决定）", 15f).apply {
+                    setBackgroundResource(R.drawable.card_bg)
+                    isClickable = true
+                    setOnClickListener { selected.clear(); redraw() }
+                    setTextColor(getColor(if (selected.isEmpty()) R.color.cp_title else R.color.cp_note))
+                }, LinearLayout.LayoutParams(-1, px(46)))
             }
-            val save: () -> Unit = {
-                require(selected.isNotEmpty()) { "至少选择一个动作" }
+            for (group in groups.distinct()) {
+                val candidates = ids().filter { modeId ->
+                    val memberships = modeGroups(modeId)
+                    if (group == "未分组") memberships.isEmpty() else group in memberships
+                }
+                if (candidates.isEmpty()) continue
+                listing.addView(text((if (group in expanded) "▾ 📂 " else "▸ 📁 ") +
+                    "$group（${candidates.size}）", 15f).apply {
+                    setBackgroundResource(R.drawable.card_bg)
+                    isClickable = true
+                    setOnClickListener { if (!expanded.add(group)) expanded.remove(group); redraw() }
+                })
+                if (group in expanded) {
+                    for (name in candidates) {
+                        val row = LinearLayout(this).apply {
+                            orientation = LinearLayout.HORIZONTAL
+                            gravity = Gravity.CENTER_VERTICAL
+                            setPadding(px(14), 0, px(5), 0)
+                        }
+                        row.addView(CheckBox(this).apply {
+                            text = name
+                            isChecked = name in selected
+                            setOnCheckedChangeListener { _, checked ->
+                                if (single) selected.clear()
+                                if (checked) selected.add(name) else selected.remove(name)
+                                redraw()
+                            }
+                        }, LinearLayout.LayoutParams(-1, px(46)))
+                        listing.addView(row)
+                    }
+                }
+            }
+        }
+        redraw()
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        actions.addView(button("取消") { dialog.dismiss() },
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+        actions.addView(button("确认") {
+            if (!single && selected.isEmpty()) {
+                Toast.makeText(this, "至少选择一个动作", Toast.LENGTH_SHORT).show()
+            } else {
+                onConfirm(selected.toList())
+                dialog.dismiss()
+            }
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        body.addView(actions)
+        dialog.setContentView(frame)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+        dialog.window?.setLayout(-1, -2)
+    }
+
+    private fun chooseFunctions(path: List<String>, chosen: List<String>) {
+        chooseModes(single = false, initial = chosen) { selected ->
+            attempt {
                 change { json ->
                     var node = json.getJSONObject("functions")
                     path.dropLast(1).forEach { node = node.getJSONObject(it) }
-                    node.put(path.last(), JSONArray(selected.toList()))
+                    node.put(path.last(), JSONArray(selected))
                 }
                 functions()
             }
-            save
         }
     }
     private fun imageUses(): Map<String, List<Pair<String, Int>>> {
