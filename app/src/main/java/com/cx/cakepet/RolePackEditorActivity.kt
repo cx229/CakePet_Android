@@ -123,9 +123,6 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private val gifPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri == null && uploadAction == "chooser") {
-            pendingPick?.let { showImageChooser(it, uploadedSelection) }
-        }
         if (uri != null) attempt {
             val mode = uploadMode
             var paths = emptyList<String>()
@@ -149,9 +146,6 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             when (uploadAction) {
-                "chooser" -> pendingPick?.let {
-                    showImageChooser(it, (uploadedSelection + paths).distinct())
-                }
                 "append", "overwrite" -> showMode(mode)
                 else -> images()
             }
@@ -1023,6 +1017,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         val expanded = mutableSetOf<String>()
+        // Preserve selection and reopen the folder that received a newly imported image.
         val thumbnails = mutableMapOf<String, android.graphics.Bitmap?>()
         initial.forEach { path ->
             var parent = File(path).parent?.replace('\\', '/')
@@ -1050,11 +1045,6 @@ class RolePackEditorActivity : AppCompatActivity() {
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(info)
         val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        if (!single) tools.addView(button("导入GIF为文件夹") {
-            dialog.dismiss()
-            startUpload(true, folder = "", action = "chooser",
-                mode = request.mode, request = request, previous = selected.toList())
-        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
         tools.addView(button("新建文件夹") {
             dialog.dismiss()
             newResourceFolder {
@@ -1085,9 +1075,16 @@ class RolePackEditorActivity : AppCompatActivity() {
                         if (file.isDirectory) {
                             val descendants = file.walkTopDown().filter(::isImage)
                                 .map { it.relativeTo(draft).invariantSeparatorsPath }.toList()
+                            val count = descendants.count { it in selected }
                             if (!single) {
                                 row.addView(CheckBox(this).apply {
-                                    isChecked = descendants.isNotEmpty() && descendants.all { it in selected }
+                                    isChecked = descendants.isNotEmpty() && count == descendants.size
+                                    // A partial folder selection is visibly distinct from unchecked.
+                                    buttonTintList = android.content.res.ColorStateList.valueOf(
+                                        getColor(R.color.cp_note))
+                                    if (count in 1 until descendants.size) {
+                                        text = "−"
+                                    }
                                     setOnCheckedChangeListener { _, checked ->
                                         if (checked) selected.addAll(descendants)
                                         else selected.removeAll(descendants.toSet())
@@ -1095,7 +1092,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                                     }
                                 }, LinearLayout.LayoutParams(px(40), px(46)))
                             }
-                            row.addView(text((if (path in expanded) "▾ 📂  " else "▸ 📁  ") + file.name, 14f).apply {
+                            row.addView(text((if (path in expanded) "▾ 📂  " else "▸ 📁  ") + file.name +
+                                " ($count/${descendants.size})", 14f).apply {
                                 isClickable = true
                                 setOnClickListener {
                                     if (!expanded.add(path)) expanded.remove(path)
