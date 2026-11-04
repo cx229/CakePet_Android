@@ -1012,6 +1012,13 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         val expanded = mutableSetOf<String>()
+        initial.forEach { path ->
+            var parent = File(path).parent?.replace('\\', '/')
+            while (!parent.isNullOrEmpty()) {
+                expanded.add(parent)
+                parent = File(parent).parent?.replace('\\', '/')
+            }
+        }
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
         val outer = FrameLayout(this).apply { setPadding(px(20), 0, px(20), 0) }
         val card = com.google.android.material.card.MaterialCardView(this).apply {
@@ -1030,6 +1037,22 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(info)
+        body.addView(text("＋ 上传新素材", 14f).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            setOnClickListener { anchor ->
+                val popup = PopupMenu(this@RolePackEditorActivity, anchor)
+                popup.menu.add("上传图片")
+                if (!single) popup.menu.add("上传 GIF")
+                popup.setOnMenuItemClickListener { option ->
+                    dialog.dismiss()
+                    startUpload(option.title.toString() == "上传 GIF", "images",
+                        "chooser", request.mode, request, selected.toList())
+                    true
+                }
+                popup.show()
+            }
+        })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val scrollList = ScrollView(this).apply { addView(list) }
         body.addView(scrollList, LinearLayout.LayoutParams(-1,
@@ -1750,6 +1773,22 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
                 main.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
                 row.addView(main, LinearLayout.LayoutParams(0, -2, 1f))
+                if (file.isDirectory) {
+                    row.addView(text("+", 22f).apply {
+                        gravity = Gravity.CENTER
+                        isClickable = true
+                        setOnClickListener { anchor ->
+                            val popup = PopupMenu(this@RolePackEditorActivity, anchor)
+                            popup.menu.add("上传图片")
+                            popup.menu.add("上传 GIF")
+                            popup.setOnMenuItemClickListener { selected ->
+                                startUpload(selected.title.toString() == "上传 GIF", path)
+                                true
+                            }
+                            popup.show()
+                        }
+                    }, LinearLayout.LayoutParams(px(36), px(48)))
+                }
                 row.addView(text("⋮", 23f).apply {
                     gravity = Gravity.CENTER
                     isClickable = true
@@ -1770,8 +1809,17 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun images() {
         section("图片资源", "images")
-        action("＋ 导入图片到素材库") { resourcePicker.launch(arrayOf("image/*")) }
-        panel.addView(text("点击文件夹展开；点击图片查看大图与引用；右侧 ⋮ 可重命名、替换或安全删除。", 12f))
+        action("＋ 导入图片到素材库") {
+            val popup = PopupMenu(this, panel.getChildAt(panel.childCount - 1))
+            popup.menu.add("上传图片")
+            popup.menu.add("上传 GIF")
+            popup.setOnMenuItemClickListener { item ->
+                startUpload(item.title.toString() == "上传 GIF")
+                true
+            }
+            popup.show()
+        }
+        panel.addView(text("点击文件夹展开；点击图片查看大图与引用；文件夹右侧 + 可上传图片/GIF。", 12f))
         resourceBranch(draft, 0, imageUses())
     }
 }
