@@ -491,6 +491,15 @@ class PetService : Service() {
     // 不得共享全局变量：原全局镜像会导致多角色并存时一个角色改值污染另一个角色的窗口状态。
     // 改为按 roleId 直接读该角色自己的 PetConfig（engines[roleId].config），调用点均按 roleId 过滤。
     private fun roleCfg(roleId: String): PetConfigData? = engines[roleId]?.config?.getBlocking()
+    /** Only this decides whether the pet exists visually and can receive touches.
+     *  Main-page hide is persistent; keyboard hide is temporary and per-role.
+     *  Do not confuse either with hideStage (a display-layer diagnostic switch).
+     */
+    private fun rolePetVisible(roleId: String): Boolean =
+        roleCfg(roleId)?.let { c ->
+            c.visible && c.enabled && !(keyboardUp && c.keyboardMode() == "hide")
+        } ?: true
+
     /** 该角色控制窗是否应隐藏：隐藏控制层 或 点击穿透，二者任一即隐藏。 */
     private fun roleControlHidden(roleId: String): Boolean =
         roleCfg(roleId)?.let {
@@ -1094,7 +1103,7 @@ class PetService : Service() {
         view.petAlpha = petAlpha
         // 诊断开关 hideStage：开启时不挂显示窗（仅透明控制窗，即 9.27 几何），用于二分点击拦截来源。
         var dispAdded = false
-        if (!roleHideStage(roleId)) {
+        if (!roleHideStage(roleId) && rolePetVisible(roleId)) {
             windowManager.addView(disp, dispLp)
             dispAdded = true
         }
@@ -1102,7 +1111,7 @@ class PetService : Service() {
         // 控制窗是否挂载：调试“隐藏控制层”或用户“点击穿透”任一为真即不挂（二者语义等价，
         // 显示窗本就 NOT_TOUCHABLE，屏蔽控制窗后点击穿透到下层 app 且宠物仍可见）。
         var controlAdded = false
-        if (!roleControlHidden(roleId)) {
+        if (!roleControlHidden(roleId) && rolePetVisible(roleId)) {
             windowManager.addView(view, lp)
             controlAdded = true
         }
@@ -1197,7 +1206,9 @@ class PetService : Service() {
             petAlpha = c.alpha.coerceIn(0f, 1f)
             // 透明度折进位图绘制（render 的 paint.alpha），窗口保持不透明，避免移动卡顿。
             v.petAlpha = petAlpha
-            v.visibility = if (c.visible && c.enabled) android.view.View.VISIBLE else android.view.View.GONE
+            v.visibility = if (rolePetVisible(rt.roleId)) android.view.View.VISIBLE else android.view.View.GONE
+            // The sprite is painted by a separate display window, not by PetView.
+            inst.displayView?.visibility = v.visibility
             v.invalidate()
             // 碎碎念：每个实例独立浮窗，可见性/样式跟随共享配置，但位置按序号错开。
             // 仅单个碎碎念（默认开）：开启时仅主实例(index 0)显示，其余实例隐藏；关闭则每个实例各自显示。
@@ -1210,7 +1221,7 @@ class PetService : Service() {
                 c.thinkingFlashIn, c.thinkingFlashOut
             )
             inst.petMsg.applyBackground(c.thinkingBgEnabled, c.thinkingBgColor, c.thinkingBgAlpha)
-            inst.petMsg.setVisible(showForThis && c.visible && c.enabled)
+            inst.petMsg.setVisible(showForThis && rolePetVisible(rt.roleId))
         }
         // 按角色独立应用窗口开关：控制层增删 / 显示层增删 / 显示窗 NOT_TOUCHABLE（强制无透明）。
         // 均按 rt.roleId 过滤，且各 sync 幂等（先比对当前窗口状态再决定是否 removeView/addView），
@@ -2288,10 +2299,10 @@ class PetService : Service() {
         for (inst in pets.filter { it.roleId == roleId }) {
             val disp = inst.displayView ?: continue
             val dlp = inst.displayLp ?: continue
-            if (roleHideStage(roleId) && inst.displayAdded) {
+            if ((roleHideStage(roleId) || !rolePetVisible(roleId)) && inst.displayAdded) {
                 try { windowManager.removeView(disp) } catch (_: Exception) {}
                 inst.displayAdded = false
-            } else if (!roleHideStage(roleId) && !inst.displayAdded) {
+            } else if (!roleHideStage(roleId) && rolePetVisible(roleId) && !inst.displayAdded) {
                 // 重挂时窗内位图已带当前透明度（petAlpha 在 view 上），窗口 alpha 保持 1，无需设 disp.alpha
                 try { windowManager.addView(disp, dlp) } catch (_: Exception) {}
                 inst.displayAdded = true
@@ -2302,10 +2313,10 @@ class PetService : Service() {
     /** 按【该角色】controlHidden（hideControlLayer || clickThrough）增删各宠物控制窗，按 roleId 独立，无需整组重建。 */
     private fun syncControlWindows(roleId: String) {
         for (inst in pets.filter { it.roleId == roleId }) {
-            if (roleControlHidden(roleId) && inst.controlAdded) {
+            if ((roleControlHidden(roleId) || !rolePetVisible(roleId)) && inst.controlAdded) {
                 try { windowManager.removeView(inst.view) } catch (_: Exception) {}
                 inst.controlAdded = false
-            } else if (!roleControlHidden(roleId) && !inst.controlAdded) {
+            } else if (!roleControlHidden(roleId) && rolePetVisible(roleId) && !inst.controlAdded) {
                 try { windowManager.addView(inst.view, inst.layoutParams) } catch (_: Exception) {}
                 inst.controlAdded = true
             }
@@ -3336,27 +3347,29 @@ class PetService : Service() {
         // Rebuild touch windows only on a real keyboard show/hide transition.
         if (wasKeyboardUp != keyboardUp) {
             for (roleId in engines.keys) {
+                syncDisplayWindows(roleId)
                 syncControlWindows(roleId)
                 applyDisplayTouchFlags(roleId)
             }
         }
     }
 
-    // 键盘时隐藏：imeHide 开启且键盘弹出时，将所有宠物实例整体隐藏（GONE 即不可见且不可点击），
-    // 不改写任何 config（visible/clickThrough 保持原样），键盘收起（keyboardUp=false）即按 effectiveVisible 恢复。
+    /** Update all visible surfaces together. Keyboard hide never overwrites the
+     *  persistent visible switch, and restoring the keyboard restores only pets
+     *  that are still enabled and visible in their own role configuration.
+     *  Window attach/detach is handled by syncDisplayWindows/syncControlWindows.
+     */
     private fun applyImeHide(kbUp: Boolean) {
-        if (pets.isEmpty()) return
-        for (inst in pets) {
-            // 多角色隔离：键盘时隐藏 与 恢复可见性 均按【本实例角色】配置，不再用服务级全局别名
-            // （imeHideEnabled/effectiveVisible 为单例 scratch，多角色下被最后加载角色覆盖）。
-            val rc = engines[inst.roleId]?.config?.getBlocking()
-            val hide = (rc?.keyboardMode() == "hide" ||
-                (rc == null && imeHideEnabled)) && kbUp
-            val eff = rc?.let { it.visible && it.enabled } ?: effectiveVisible
-            inst.view.visibility =
-                if (hide) android.view.View.GONE
-                else if (eff) android.view.View.VISIBLE
-                else android.view.View.GONE
+        for ((roleId, rt) in engines) {
+            val c = rt.config.getBlocking()
+            val shown = c.visible && c.enabled && !(kbUp && c.keyboardMode() == "hide")
+            pets.filter { it.roleId == roleId }.forEachIndexed { index, inst ->
+                inst.view.visibility = if (shown) android.view.View.VISIBLE else android.view.View.GONE
+                inst.displayView?.visibility =
+                    if (shown) android.view.View.VISIBLE else android.view.View.GONE
+                val showMutter = c.thinkingEnabled && (index == 0 || !c.singleTrayMsg)
+                inst.petMsg.setVisible(shown && showMutter)
+            }
         }
     }
 
