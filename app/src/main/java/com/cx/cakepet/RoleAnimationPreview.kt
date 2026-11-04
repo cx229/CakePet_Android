@@ -73,7 +73,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
             canvas.drawLine(ax, ay - 15f, ax, ay + 15f, paint)
             paint.style = Paint.Style.FILL
             paint.textSize = 12f * resources.displayMetrics.scaledDensity
-            canvas.drawText("锚点 (${anchor.first}, ${anchor.second})  位移 (§dx, §dy)", left + 5f, top + side - 12f, paint)
+            canvas.drawText("锚点 (${anchor.first}, ${anchor.second})  位移 ($dx, $dy)", left + 5f, top + side - 12f, paint)
         }
     }
 }
