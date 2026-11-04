@@ -284,8 +284,8 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun home() {
         section("素材包编辑", "home")
         menuCard("基本信息", "Info") { info() }
-        menuCard("全部动作", "Modes") { modes() }
         menuCard("功能映射", "Functions") { functions() }
+        menuCard("全部动作", "Modes") { modes() }
         menuCard("图片资源", "Images") { images() }
     }
     private fun info() {
@@ -326,41 +326,149 @@ class RolePackEditorActivity : AppCompatActivity() {
             inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
         })
     }
+
+    private val expandedModeGroups = mutableSetOf<String>()
+    private fun modeGroups(key: String): List<String> {
+        val groups = root.getJSONObject("modes").getJSONObject(key).optJSONArray("groups") ?: return emptyList()
+        return (0 until groups.length()).map { groups.optString(it) }.filter { it.isNotBlank() }.distinct()
+    }
+    private fun knownGroups(): List<String> = ids().flatMap { modeGroups(it) }.distinct()
+
     private fun modes() {
         section("全部动作", "modes")
         action("＋ 新建动作") { newMode() }
-        val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
+        val grouped = linkedMapOf<String, MutableList<String>>()
+        knownGroups().forEach { grouped[it] = mutableListOf() }
         ids().forEach { key ->
-            val mode = root.getJSONObject("modes").getJSONObject(key)
-            val frames = mode.getJSONArray("frames")
-            val source = frames.optJSONObject(0)?.optString("res").orEmpty()
-            val card = LinearLayout(this).apply {
+            val groups = modeGroups(key)
+            if (groups.isEmpty()) grouped.getOrPut("未分组") { mutableListOf() }.add(key)
+            else groups.forEach { grouped.getOrPut(it) { mutableListOf() }.add(key) }
+        }
+        val thumbnails = mutableMapOf<String, android.graphics.Bitmap?>()
+        for ((group, names) in grouped) {
+            val opened = group in expandedModeGroups
+            val header = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setBackgroundResource(R.drawable.card_bg)
-                setPadding(px(12), px(8), px(12), px(8))
+                setPadding(px(12), px(6), px(12), px(6))
                 isClickable = true
-                setOnClickListener { showMode(key) }
+                setOnClickListener {
+                    if (!expandedModeGroups.add(group)) expandedModeGroups.remove(group)
+                    modes()
+                }
             }
-            val image = ImageView(this).apply {
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                setBackgroundResource(R.drawable.bg_thumb_border)
-                setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
-            }
-            card.addView(image, LinearLayout.LayoutParams(px(58), px(58)))
-            val labels = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(px(12), 0, px(6), 0)
-            }
-            labels.addView(text(key, 16f))
-            labels.addView(text("${frames.length()} 帧 · ${if (mode.optBoolean("loop")) "循环" else "播放一次"}", 12f).apply {
+            header.addView(text((if (opened) "▾ 📂  " else "▸ 📁  ") + group, 16f),
+                LinearLayout.LayoutParams(0, -2, 1f))
+            header.addView(text("${names.size} 个", 12f).apply {
                 setTextColor(getColor(R.color.cp_note))
             })
-            card.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-            card.addView(text("›", 22f))
-            panel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
+            panel.addView(header, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
+            if (!opened) continue
+            for (key in names) {
+                val mode = root.getJSONObject("modes").getJSONObject(key)
+                val frames = mode.getJSONArray("frames")
+                val source = frames.optJSONObject(0)?.optString("res").orEmpty()
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setBackgroundResource(R.drawable.card_bg)
+                    setPadding(px(8), px(5), px(4), px(5))
+                }
+                val content = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    isClickable = true
+                    setOnClickListener { showMode(key) }
+                }
+                content.addView(ImageView(this).apply {
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    setBackgroundResource(R.drawable.bg_thumb_border)
+                    setImageBitmap(thumbnails.getOrPut(source) { thumb(File(draft, source)) })
+                }, LinearLayout.LayoutParams(px(54), px(54)))
+                val label = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(px(8), 0, 0, 0)
+                }
+                label.addView(text(key, 16f).apply { setPadding(0, 0, 0, 0) })
+                label.addView(text("${frames.length()} 帧 · ${if (mode.optBoolean("loop")) "循环" else "播放一次"}", 12f).apply {
+                    setPadding(0, 0, 0, 0)
+                    setTextColor(getColor(R.color.cp_note))
+                })
+                content.addView(label, LinearLayout.LayoutParams(0, -2, 1f))
+                card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
+                card.addView(text("⋮", 24f).apply {
+                    gravity = Gravity.CENTER
+                    isClickable = true
+                    setOnClickListener { anchor -> showModeOptions(anchor, key) }
+                }, LinearLayout.LayoutParams(px(42), px(54)))
+                panel.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
+                    leftMargin = px(14)
+                    topMargin = px(4)
+                })
+            }
         }
     }
+
+    private fun showModeOptions(anchor: View, key: String) {
+        val menu = PopupMenu(this, anchor)
+        listOf("复制动作", "动作组", "删除动作").forEach { menu.menu.add(it) }
+        menu.setOnMenuItemClickListener {
+            when (it.title.toString()) {
+                "复制动作" -> copyMode(key)
+                "动作组" -> editModeGroups(key)
+                "删除动作" -> deleteMode(key)
+            }
+            true
+        }
+        menu.show()
+    }
+
+    private fun editModeGroups(key: String) {
+        editor("$key · 动作组") { box ->
+            val groups = knownGroups().toMutableList()
+            val selected = modeGroups(key).toMutableSet()
+            val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            fun redraw() {
+                choices.removeAllViews()
+                groups.forEach { group ->
+                    choices.addView(CheckBox(this).apply {
+                        text = group
+                        isChecked = group in selected
+                        setOnCheckedChangeListener { _, value ->
+                            if (value) selected.add(group) else selected.remove(group)
+                        }
+                    })
+                }
+            }
+            box.addView(choices)
+            redraw()
+            val input = entry(box, "创建新组", "")
+            box.addView(button("＋ 添加并选中") {
+                val name = input.text.toString().trim()
+                if (name.isBlank() || name.length > 40 || name == "未分组" ||
+                    name.any { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
+                    input.error = "动作组名称不合法"
+                } else {
+                    if (name !in groups) groups.add(name)
+                    selected.add(name)
+                    input.setText("")
+                    redraw()
+                }
+            }, LinearLayout.LayoutParams(-1, px(44)))
+            val save: () -> Unit = {
+                require(input.text.toString().isBlank()) { "请先点击添加新组" }
+                change { json ->
+                    val arr = JSONArray()
+                    groups.filter { it in selected }.forEach { arr.put(it) }
+                    json.getJSONObject("modes").getJSONObject(key).put("groups", arr)
+                }
+                modes()
+            }
+            save
+        }
+    }
+
     private fun newMode() {
         editor("新建动作") { box ->
             val key = entry(box, "动作名称", "新动作")
