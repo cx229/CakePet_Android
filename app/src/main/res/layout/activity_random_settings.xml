@@ -102,7 +102,7 @@
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="随机项" android:textSize="14dp" android:textColor="@color/cp_sub"
                 android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            <LinearLayout android:id="@+id/group_random_items" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
@@ -229,7 +229,7 @@
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="周期" android:textSize="14dp" android:textColor="@color/cp_sub"
                 android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            <LinearLayout android:id="@+id/group_random_period" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
