@@ -285,6 +285,49 @@ class RolePackEditorActivity : AppCompatActivity() {
         dialog.show()
         dialog.window?.setLayout(-1, -2)
     }
+    private fun optionsDialog(title: String, items: List<String>, choose: (Int) -> Unit) {
+        val frame = android.widget.FrameLayout(this).apply {
+            setPadding(px(24), 0, px(24), 0)
+        }
+        val card = com.google.android.material.card.MaterialCardView(this).apply {
+            radius = px(28).toFloat()
+            cardElevation = px(6).toFloat()
+            setCardBackgroundColor(getColor(R.color.cp_card_bg))
+        }
+        frame.addView(card, android.widget.FrameLayout.LayoutParams(-1, -2))
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(20), px(18), px(20), px(18))
+        }
+        card.addView(content)
+        content.addView(text(title, 18f).apply {
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        items.forEachIndexed { index, option ->
+            list.addView(text(option, 15f).apply {
+                setBackgroundResource(R.drawable.card_bg)
+                setPadding(px(14), px(12), px(14), px(12))
+                isClickable = true
+                setOnClickListener {
+                    dialog.dismiss()
+                    choose(index)
+                }
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(5) })
+        }
+        content.addView(ScrollView(this).apply { addView(list) },
+            LinearLayout.LayoutParams(-1,
+                minOf(px(56 * items.size + 10), resources.displayMetrics.heightPixels / 2)))
+        content.addView(button("关闭") { dialog.dismiss() },
+            LinearLayout.LayoutParams(-1, px(42)).apply { topMargin = px(10) })
+        dialog.setContentView(frame)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+        dialog.window?.setLayout(-1, -2)
+    }
+
     private fun entry(box: LinearLayout, title: String, initial: String): EditText {
         val item = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -708,13 +751,18 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private fun frameMenu(key: String, index: Int) {
-        AlertDialog.Builder(this).setTitle("第 $index 帧")
-            .setItems(arrayOf("编辑参数", "导入图片替换", "选择素材库图片", "删除帧")) { _, selection ->
-                when (selection) {
-                    0 -> editFrame(key, index)
-                    1 -> { fileIndex = index; pngPicker.launch(arrayOf("image/*")) }
-                    2 -> selectExistingImage(key, index)
-                    3 -> attempt {
+        optionsDialog("帧 $index", listOf("编辑参数", "导入图片替换", "选择素材库图片", "删除帧")) { selection ->
+            when (selection) {
+                0 -> editFrame(key, index)
+                1 -> { fileIndex = index; pngPicker.launch(arrayOf("image/*")) }
+                2 -> selectExistingImage(key, index)
+                3 -> showConfirmDialog(
+                    title = "删除帧",
+                    bodyHtml = "确认删除帧 $index？",
+                    positiveText = "删除",
+                    titleColorRes = R.color.cp_danger
+                ) {
+                    attempt {
                         val old = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
                         require(old.length() > 1) { "至少保留一帧" }
                         val newer = remapFrames(old, (0 until old.length()).filter { it != index })
@@ -722,7 +770,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                         showMode(key)
                     }
                 }
-            }.show()
+            }
+        }
     }
     private fun selectExistingImage(key: String, index: Int) {
         val files = draft.walkTopDown().filter {
@@ -732,14 +781,15 @@ class RolePackEditorActivity : AppCompatActivity() {
             Toast.makeText(this, "素材库没有图片", Toast.LENGTH_SHORT).show()
             return
         }
-        AlertDialog.Builder(this).setTitle("选择已有图片")
-            .setItems(files.toTypedArray()) { _, selected -> attempt {
+        optionsDialog("选择已有图片", files) { selected ->
+            attempt {
                 change {
                     it.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
                         .getJSONObject(index).put("res", files[selected])
                 }
                 showMode(key)
-            }}.show()
+            }
+        }
     }
     private fun editFrame(key: String, index: Int) {
         val f = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
@@ -930,20 +980,28 @@ class RolePackEditorActivity : AppCompatActivity() {
         functionTree(panel, root.getJSONObject("functions"), emptyList())
     }
     private fun chooseFunctions(path: List<String>, chosen: List<String>) {
-        val keys = ids()
-        val checked = BooleanArray(keys.size) { keys[it] in chosen }
-        AlertDialog.Builder(this).setTitle(functionPathName(path))
-            .setMultiChoiceItems(keys.toTypedArray(), checked) { _, index, selected -> checked[index] = selected }
-            .setNegativeButton("取消", null).setPositiveButton("完成") { _, _ -> attempt {
-                val selected = keys.filterIndexed { index, _ -> checked[index] }
+        editor(functionPathName(path)) { box ->
+            val selected = chosen.toMutableSet()
+            ids().forEach { key ->
+                box.addView(CheckBox(this).apply {
+                    text = key
+                    isChecked = key in selected
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) selected.add(key) else selected.remove(key)
+                    }
+                })
+            }
+            val save: () -> Unit = {
                 require(selected.isNotEmpty()) { "至少选择一个动作" }
                 change { json ->
-                    var at = json.getJSONObject("functions")
-                    path.dropLast(1).forEach { at = at.getJSONObject(it) }
-                    at.put(path.last(), JSONArray(selected))
+                    var node = json.getJSONObject("functions")
+                    path.dropLast(1).forEach { node = node.getJSONObject(it) }
+                    node.put(path.last(), JSONArray(selected.toList()))
                 }
                 functions()
-            }}.show()
+            }
+            save
+        }
     }
     private fun imageUses(): Map<String, List<Pair<String, Int>>> {
         val used = mutableMapOf<String, MutableList<Pair<String, Int>>>()
@@ -1063,25 +1121,28 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun imageOptions(relative: String) {
         val users = imageUses()[relative].orEmpty()
-        AlertDialog.Builder(this).setTitle(File(relative).name)
-            .setItems(arrayOf("大图及引用详情", "重命名", "替换图片", "删除")) { _, option ->
-                when (option) {
-                    0 -> imageDetails(relative)
-                    1 -> renameDialog(relative, false)
-                    2 -> {
-                        resourceReplacePath = relative
-                        resourcePicker.launch(arrayOf("image/*"))
-                    }
-                    3 -> if (users.isNotEmpty()) {
-                        AlertDialog.Builder(this).setMessage("被 ${users.size} 帧引用，请先更换引用。")
-                            .setPositiveButton("知道了", null).show()
-                    } else AlertDialog.Builder(this).setTitle("确认删除？")
-                        .setMessage(relative)
-                        .setNegativeButton("取消", null)
-                        .setPositiveButton("删除") { _, _ -> attempt { deleteImage(relative) } }
-                        .show()
+        optionsDialog(File(relative).name, listOf("大图及引用详情", "重命名", "替换图片", "删除")) { selected ->
+            when (selected) {
+                0 -> imageDetails(relative)
+                1 -> renameDialog(relative, false)
+                2 -> {
+                    resourceReplacePath = relative
+                    resourcePicker.launch(arrayOf("image/*"))
                 }
-            }.show()
+                3 -> if (users.isNotEmpty()) {
+                    showConfirmDialog(
+                        title = "图片正在使用",
+                        bodyHtml = "该图片被 ${users.size} 帧引用，不能直接删除。",
+                        positiveText = "知道了"
+                    ) { }
+                } else showConfirmDialog(
+                    title = "删除图片",
+                    bodyHtml = "确定删除「${File(relative).name}」？",
+                    positiveText = "删除",
+                    titleColorRes = R.color.cp_danger
+                ) { attempt { deleteImage(relative) } }
+            }
+        }
     }
 
     private fun resourceBranch(directory: File, level: Int,
