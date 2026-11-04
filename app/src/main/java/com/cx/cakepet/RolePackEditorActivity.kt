@@ -849,7 +849,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val card = rootRow.getChildAt(1) as LinearLayout
                 val image = card.getChildAt(0) as ImageView
                 val labels = card.getChildAt(1) as LinearLayout
-                (labels.getChildAt(0) as TextView).text = "帧 $position"
+                (labels.getChildAt(0) as TextView).text = "帧 $position" + if (frame.optBoolean("flipX", false)) " · 左右镜像" else ""
                 (labels.getChildAt(1) as TextView).text = "${frame.opt("delay")} ms"
                 (labels.getChildAt(2) as TextView).text = source
                 image.setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
