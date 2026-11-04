@@ -16,6 +16,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
     var useStaticPool = false
     var leapEnabled = false
     var forageActive = false
+    /** Set only when the normal action chooser starts the forage behavior. */
+    var forageSelected = false
     var leapProbability = 0.10f
     var inClimbing = false
     var inSnapped = false
@@ -44,7 +46,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun consumeFrameDisplacement(): Pair<Int, Int>? {
         if (!frameMotionPending) return null
         frameMotionPending = false
-        return if (isWalk()) null else curDx() to curDy()
+        return curDx() to curDy()
     }
     fun leavesOf(vararg path: String): List<String> = assets.leavesOf(*path)
     fun modeOf(vararg path: String): String? = assets.modeOf(*path)
@@ -57,8 +59,13 @@ class PetAnimationController(private val assets: ImageModeManager) {
         if (useStaticPool) leavesOf("static", "pool") else leavesOf("standby", "pool")
     fun isStandbyMode(name: String = getMode()): Boolean = currentPool().any { assets.isContinuationOf(name, it) }
     fun pickStandbyMode(exclude: String): String {
-        if (forageActive) modeOf("climb", "walk")?.let { return it }
-        if (leapEnabled && inClimbing && Random.nextFloat() < leapProbability)
+        // Only this natural completion boundary may initiate automatic behaviors.
+        forageSelected = false
+        if (forageActive) modeOf("climb", "walk")?.let {
+            forageSelected = true
+            return it
+        }
+        if (leapEnabled && Random.nextFloat() < leapProbability)
             modeOf("climb", "jump_up")?.let { return it }
         val pool = currentPool().filter { it != exclude }
         return if (pool.isNotEmpty()) pool.random() else getMode()
