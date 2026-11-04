@@ -52,6 +52,7 @@ class RandomSettingsActivity : AppCompatActivity() {
         suppressRandomSwitch = false
         swRandomMode.setOnCheckedChangeListener { _, b ->
             if (suppressRandomSwitch) return@setOnCheckedChangeListener
+            folding?.refresh(config.getBlocking().copy(randomEnabled = b))
             lifecycleScope.launch { config.update { it.copy(randomEnabled = b) } }
             if (b) PetService.instance?.triggerRandomNow()
         }
