@@ -811,7 +811,11 @@ class PetView @JvmOverloads constructor(
             // 3) 翻转处改 physics 会立刻污染上方 blockedX/Y（765-768 直接拿 physics.x/y 与 min/max 比）
             //    ⇒ 宠物未到角落即被误判撞墙 → 提前 setClimb 上墙 → 角落反复旋转上墙的严重回归。
             // 故仅换墙（setClimb，旋转 90°）才补偿；转身不补偿。
+            // Landing/throwing and other transient states may have changed flipX after
+            // onWalkStateChanged. Keep the rendered orientation aligned to the actual
+            // walk direction every tick, not only at mode entry or a wall rebound.
             if (physics.isClimbing) climbFlipX = dir > 0
+            else flipX = dir > 0
             onPositionChanged?.invoke(physics.x, physics.y)
         } else if (imageManager.curDx() != 0 || imageManager.curDy() != 0) {
             // 一次性帧偏移位移模式（扒鱼）：位移由帧 dx/dy 在帧切换时累加驱动（见上），
