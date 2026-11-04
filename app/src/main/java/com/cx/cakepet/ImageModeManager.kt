@@ -450,6 +450,16 @@ class ImageModeManager(
      *   rotateOffsetWith / onDraw 中对 ROLL 改绕锚点自身旋转来保证（球状对称，外观不变）。
      */
     /** 根据当前帧的图片和声明锚点计算画布锚点，不涉及任何对象物理状态。 */
+
+    /** Unpadded picture rectangle in the same logical canvas coordinates as frameAnchor(). */
+    fun previewContentBounds(resName: String): android.graphics.RectF {
+        val (w, h) = rawBitmapSize(resName)
+        val (left, top) = fillOffset(resName, w, h,
+            currentPack.anchorRes, currentPack.anchorRes)
+        return android.graphics.RectF(left.toFloat(), top.toFloat(),
+            (left + w).toFloat(), (top + h).toFloat())
+    }
+
     fun frameAnchor(resName: String, anchorX: Int, anchorY: Int?): Pair<Int, Int> {
         val (w, _) = currentBitmapSize()
         val (_, rawH) = rawBitmapSize(resName)

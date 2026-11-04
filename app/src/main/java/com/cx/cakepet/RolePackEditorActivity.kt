@@ -44,12 +44,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             finally { bitmap.recycle() }
             val frames = JSONArray(root.getJSONObject("modes").getJSONObject(modeId).getJSONArray("frames").toString())
             if (fileIndex in 0 until frames.length()) frames.getJSONObject(fileIndex).put("res", "images/${file.name}")
-            else {
-                val previousLast = frames.getJSONObject(frames.length() - 1)
-                val previousIndex = frames.length()
-                frames.put(JSONObject().put("res", "images/${file.name}").put("delay", 120).put("next", 0))
-                if (previousLast.optInt("next", -1) == 0) previousLast.put("next", previousIndex)
-            }
+            else frames.put(JSONObject().put("res", "images/${file.name}").put("delay", 120))
             change { it.getJSONObject("modes").getJSONObject(modeId).put("frames", frames) }
             showMode(modeId)
         }
@@ -249,8 +244,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                     json.getJSONObject("modes").put(name, JSONObject()
                         .put("loop", true)
                         .put("walkSpeed", 0).put("nextMode", JSONObject.NULL)
-                        .put("timeNext", JSONObject().put("enabled", false))
-                        .put("frames", JSONArray().put(JSONObject().put("res", source).put("delay", 120).put("next", 0))))
+                        .put("duration", JSONObject.NULL).put("finishCycle", true)
+                        .put("frames", JSONArray().put(JSONObject().put("res", source).put("delay", 120))))
                 }
                 showMode(name)
             }
@@ -262,11 +257,19 @@ class RolePackEditorActivity : AppCompatActivity() {
         section("动作 · $key", "mode")
         val m = root.getJSONObject("modes").getJSONObject(key)
 
-        val preview = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setBackgroundResource(R.drawable.bg_thumb_border)
+        val preview = RoleAnimationPreview(this)
+        panel.addView(preview, LinearLayout.LayoutParams(-1, -2))
+        val hints = text("画布：虚线  ·  图片：蓝框  ·  锚点：红十字  ·  位移：逐帧显示", 12f)
+        panel.addView(hints)
+        val showGuides = Switch(this).apply {
+            text = "显示辅助边界和锚点"
+            isChecked = true
+            setOnCheckedChangeListener { _, enabled ->
+                preview.showGuides = enabled
+                preview.invalidate()
+            }
         }
-        panel.addView(preview, LinearLayout.LayoutParams(-1, px(180)))
+        panel.addView(showGuides)
         animate(preview, key)
         action("编辑动作属性") { attributes(key) }
         action("复制动作") { copyMode(key) }
@@ -329,17 +332,18 @@ class RolePackEditorActivity : AppCompatActivity() {
             })
         }
     }
-    private fun animate(view: ImageView, key: String) {
+    private fun animate(view: RoleAnimationPreview, key: String) {
         stopAnimation()
-        // Reuse the same ModeClip as the floating pet and food, not a second frame player.
         val manager = ImageModeManager(this, loadPackMeta(this, id, RoleSource.FILES))
         val clip = manager.createClip(key) ?: return
         val tick = object : Runnable {
             override fun run() {
                 if (screen != "mode" || modeId != key) return
-                view.setImageBitmap(clip.currentBitmap())
+                view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName),
+                    clip.currentAnchor(), clip.currentDx, clip.currentDy, manager.currentPack.anchorRes,
+                    clip.currentModeId)
                 val step = clip.advance(50, allowModeSwitch = true)
-                if (!step.ended) handler.postDelayed(this, 50)
+                if (!step.ended && !step.timerRequested) handler.postDelayed(this, 50)
             }
         }
         animation = tick
@@ -352,31 +356,61 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun attributes(key: String) {
         val mode = root.getJSONObject("modes").getJSONObject(key)
         editor("动作属性") { box ->
-            val speed = entry(box, "walkSpeed", mode.opt("walkSpeed").toString())
-            val align = entry(box, "verticalAlign (top/center)", mode.optString("verticalAlign", "top"))
-            val loop = Switch(this).apply { text = "循环"; isChecked = mode.optBoolean("loop", true) }
+            val speed = entry(box, "移动速度 walkSpeed", mode.opt("walkSpeed").toString())
+            val align = entry(box, "垂直填充方式 verticalAlign（top 或 center）",
+                mode.optString("verticalAlign", "top"))
+            val loop = Switch(this).apply { text = "循环播放"; isChecked = mode.optBoolean("loop", true) }
             box.addView(loop)
-            val next = entry(box, "nextMode（无则留空）", mode.optString("nextMode").takeUnless { it == "null" }.orEmpty())
-            val timer = mode.optJSONObject("timeNext") ?: JSONObject()
-            val enabled = Switch(this).apply { text = "启用 timeNext"; isChecked = timer.optBoolean("enabled") }
-            box.addView(enabled)
-            val min = entry(box, "timeNext min", timer.optLong("min", 1000).toString())
-            val max = entry(box, "timeNext max", timer.optLong("max", 3000).toString())
-            val prob = entry(box, "timeNext prob", timer.optDouble("prob", 1.0).toString())
+            val next = entry(box, "播放结束后的动作（留空=由控制器决定）",
+                mode.optString("nextMode").takeUnless { it == "null" }.orEmpty())
+            val previous = mode.optJSONObject("duration")
+            val limited = Switch(this).apply {
+                text = "设置循环播放时长（关闭=无限循环）"
+                isChecked = mode.optBoolean("loop") && previous != null
+            }
+            box.addView(limited)
+            val min = entry(box, "随机目标时长：最短（毫秒）",
+                previous?.optLong("min", 3000)?.toString() ?: "3000")
+            val max = entry(box, "随机目标时长：最长（毫秒）",
+                previous?.optLong("max", 4000)?.toString() ?: "4000")
+            val finish = Switch(this).apply {
+                text = "到达目标时长后，完整播放当前轮"
+                isChecked = mode.optBoolean("finishCycle", true)
+            }
+            box.addView(finish)
+            fun refreshFields() {
+                limited.isEnabled = loop.isChecked
+                min.isEnabled = loop.isChecked && limited.isChecked
+                max.isEnabled = loop.isChecked && limited.isChecked
+                finish.isEnabled = loop.isChecked && limited.isChecked
+            }
+            loop.setOnCheckedChangeListener { _, _ -> refreshFields() }
+            limited.setOnCheckedChangeListener { _, _ -> refreshFields() }
+            refreshFields()
             val save: () -> Unit = {
                 val target = next.text.toString().trim()
-                require(target.isEmpty() || root.getJSONObject("modes").has(target))
-                val minMs = min.text.toString().toLong()
-                val maxMs = max.text.toString().toLong()
-                val probability = prob.text.toString().toDouble()
-                require(minMs > 0 && maxMs >= minMs && probability in 0.0..1.0)
+                require(target.isEmpty() || root.getJSONObject("modes").has(target)) { "后续动作不存在" }
+                val alignment = align.text.toString().trim()
+                require(alignment in listOf("top", "center")) { "填充方式必须是 top 或 center" }
+                val duration = if (loop.isChecked && limited.isChecked) {
+                    val lo = min.text.toString().toLong()
+                    val hi = max.text.toString().toLong()
+                    require(lo > 0 && hi >= lo) { "时长必须为正数，最长不得小于最短" }
+                    JSONObject().put("min", lo).put("max", hi)
+                } else null
                 change {
                     val m = it.getJSONObject("modes").getJSONObject(key)
                     m.put("walkSpeed", speed.text.toString().toDouble())
-                    m.put("verticalAlign", align.text.toString()).put("loop", loop.isChecked)
+                    m.put("verticalAlign", alignment)
+                    m.put("loop", loop.isChecked)
                     m.put("nextMode", if (target.isEmpty()) JSONObject.NULL else target)
-                    m.put("timeNext", JSONObject().put("enabled", enabled.isChecked)
-                        .put("min", minMs).put("max", maxMs).put("prob", probability))
+                    if (loop.isChecked) {
+                        m.put("duration", duration ?: JSONObject.NULL)
+                        m.put("finishCycle", finish.isChecked)
+                    } else {
+                        m.remove("duration")
+                        m.remove("finishCycle")
+                    }
                 }
                 showMode(key)
             }
@@ -424,7 +458,6 @@ class RolePackEditorActivity : AppCompatActivity() {
                 is JSONArray -> "${d.optLong(0)},${d.optLong(1)}"
                 else -> d.toString()
             })
-            val next = entry(box, "next（帧索引从 0 开始）", f.optInt("next", 0).toString())
             val anchorX = entry(box, "anchorX（空=默认）", optional(f, "anchorX"))
             val anchorY = entry(box, "anchorY（空=默认）", optional(f, "anchorY"))
             val dx = entry(box, "dx（空=默认）", optional(f, "dx"))
@@ -432,12 +465,9 @@ class RolePackEditorActivity : AppCompatActivity() {
             val save: () -> Unit = {
                 val delays = delay.text.toString().split(",").map { it.trim().toLong() }
                 require(delays.size in 1..2 && delays[0] > 0 && (delays.size == 1 || delays[1] >= delays[0]))
-                val nextIndex = next.text.toString().toInt()
-                require(nextIndex in 0 until root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").length())
                 change { json ->
                     val frame = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
                     frame.put("delay", if (delays.size == 1) delays[0] else JSONArray().put(delays[0]).put(delays[1]))
-                    frame.put("next", nextIndex)
                     listOf("anchorX" to anchorX, "anchorY" to anchorY, "dx" to dx, "dy" to dy).forEach { (name, input) ->
                         if (input.text.isBlank()) frame.remove(name)
                         else frame.put(name, input.text.toString().toDouble())
@@ -449,22 +479,11 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private fun optional(obj: JSONObject, key: String) = if (obj.isNull(key)) "" else obj.optString(key)
-    /** Preserve custom next links when rearranging or removing frames. */
     private fun remapFrames(old: JSONArray, orderedIndices: List<Int>): JSONArray {
         require(orderedIndices.isNotEmpty())
-        val result = JSONArray()
-        orderedIndices.forEach { index ->
-            val frame = JSONObject(old.getJSONObject(index).toString())
-            val originalNext = frame.opt("next")
-            if (originalNext is Number) {
-                val target = originalNext.toInt()
-                val surviving = if (target in orderedIndices) target
-                    else orderedIndices.firstOrNull { it > target } ?: orderedIndices.first()
-                frame.put("next", orderedIndices.indexOf(surviving))
-            }
-            result.put(frame)
+        return JSONArray().also { result ->
+            orderedIndices.forEach { result.put(JSONObject(old.getJSONObject(it).toString())) }
         }
-        return result
     }
     private fun move(key: String, index: Int, delta: Int) = attempt {
         val frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")

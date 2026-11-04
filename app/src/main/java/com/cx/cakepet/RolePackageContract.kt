@@ -164,11 +164,11 @@ object RolePackageContract {
             for (idx in 0 until frames.length()) {
                 val frame = frames.optJSONObject(idx)
                 if (frame == null) {
-                    errors.add("动画 $modeId 帧 $idx不是对象")
+                    errors.add("动画 $modeId 帧 $idx 不是对象")
                     continue
                 }
                 val res = frame.opt("res")
-                if (res !is String || res.isBlank()) errors.add("动画 $modeId 帧 $idx缺少图片路径")
+                if (res !is String || res.isBlank()) errors.add("动画 $modeId 帧 $idx 缺少图片路径")
                 if (frame.has("next")) errors.add("动画 $modeId 帧 $idx 不支持 next")
                 val delay = frame.opt("delay")
                 val validDelay = when (delay) {
@@ -178,7 +178,7 @@ object RolePackageContract {
                         delay.optLong(0) > 0 && delay.optLong(1) >= delay.optLong(0)
                     else -> false
                 }
-                if (!validDelay) errors.add("动画 $modeId 帧 $idx的 delay 无效")
+                if (!validDelay) errors.add("动画 $modeId 帧 $idx 的 delay 无效")
             }
             if (mode.has("nextMode") && !mode.isNull("nextMode")) {
                 val nextMode = mode.opt("nextMode")
