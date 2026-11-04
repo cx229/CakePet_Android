@@ -566,7 +566,8 @@ class PetView @JvmOverloads constructor(
         val (dx, dy) = imageManager.consumeFrameDisplacement() ?: return
         if (dx == 0 && dy == 0) return
         if (physics.isDragging || physics.isThrowing || flying || physics.isSnapped || useStaticPool) return
-        if (imageManager.forageSelected && forageActive && imageManager.isWalk()) return
+        if (imageManager.forageSelected && forageActive && imageManager.isWalk() &&
+            physics.isClimbing) return
         val locomotion = imageManager.isWalk()
         val dir = if (locomotion) imageManager.walkDir else if (stateFlip) -1 else 1
         val side = if (physics.isClimbing) physics.climbSide else gravityDir
@@ -651,7 +652,7 @@ class PetView @JvmOverloads constructor(
         // 关重力时攀岩仍沿墙走，不会退攀爬、不会翻脚方向、不会被强制静止。
         // 攀爬仅在 wallClimb 关 / 拖出 / 移动总开关关（useStaticPool）时退出，见 syncClimbState/restoreBaseGravity。
         if (imageManager.isWalk() && imageManager.forageSelected && forageActive &&
-            (physics.isClimbing || physics.gravityEnabled)) {
+            physics.isClimbing) {
             // 行走位移同步：物理引擎已在 stepPhysics 中推进位置并做了边界反弹。
             // 每帧强制维护速度 = 本地前进(walkSpeed*walkDir, 0) 经重力旋转矩阵映射后的屏幕速度，
             // 使左右重力下沿墙垂直走、下/上重力下水平走，与图片旋转朝向完全对齐。
