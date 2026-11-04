@@ -784,7 +784,16 @@ class RolePackEditorActivity : AppCompatActivity() {
             bottomMargin = px(8)
         })
         val frames = m.getJSONArray("frames")
-        panel.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f))
+        val frameHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        frameHeader.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        frameHeader.addView(text("支持长按拖动排序", 11f).apply {
+            setTextColor(getColor(R.color.cp_note))
+        })
+        panel.addView(frameHeader, LinearLayout.LayoutParams(-1, -2))
         val order = (0 until frames.length()).toMutableList()
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         val recycler = RecyclerView(this).apply {
@@ -815,8 +824,22 @@ class RolePackEditorActivity : AppCompatActivity() {
                     orientation = LinearLayout.VERTICAL
                     setPadding(px(8), 0, 0, 0)
                 }
-                labels.addView(text("", 15f))
-                labels.addView(text("", 12f))
+                val headline = LinearLayout(this@RolePackEditorActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                headline.addView(text("", 15f))
+                headline.addView(text("", 11f).apply {
+                    setTextColor(getColor(R.color.cp_note))
+                }, LinearLayout.LayoutParams(-2, -2).apply {
+                    leftMargin = px(8)
+                })
+                labels.addView(headline)
+                labels.addView(text("", 11f).apply {
+                    setTextColor(getColor(R.color.cp_note))
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                })
                 labels.addView(text("", 10f).apply {
                     maxLines = 1
                     ellipsize = TextUtils.TruncateAt.END
@@ -849,8 +872,37 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val card = rootRow.getChildAt(1) as LinearLayout
                 val image = card.getChildAt(0) as ImageView
                 val labels = card.getChildAt(1) as LinearLayout
-                (labels.getChildAt(0) as TextView).text = "帧 $position" + if (frame.optBoolean("flipX", false)) " · 左右镜像" else ""
-                (labels.getChildAt(1) as TextView).text = "${frame.opt("delay")} ms"
+                val headline = labels.getChildAt(0) as LinearLayout
+                (headline.getChildAt(0) as TextView).text = "帧 $position"
+                val rawDelay = frame.opt("delay")
+                val delayText = when (rawDelay) {
+                    is JSONArray -> "${rawDelay.optLong(0)}-${rawDelay.optLong(1)}ms"
+                    is Number -> "${rawDelay.toLong()}ms"
+                    else -> "${rawDelay}ms"
+                }
+                (headline.getChildAt(1) as TextView).text =
+                    delayText + if (frame.optBoolean("flipX", false)) " · 左右镜像" else ""
+
+                // Display only configured coordinates; an explicit zero is not a default.
+                fun coord(name: String): String = if (frame.has(name) && !frame.isNull(name)) {
+                    val value = frame.opt(name)
+                    if (value is Number) {
+                        val number = value.toDouble()
+                        if (number.isFinite() && number % 1.0 == 0.0) number.toLong().toString()
+                        else value.toString()
+                    } else value.toString()
+                } else "-"
+                val x = coord("anchorX")
+                val y = coord("anchorY")
+                val dx = coord("dx")
+                val dy = coord("dy")
+                val details = labels.getChildAt(1) as TextView
+                if (listOf(x, y, dx, dy).all { it == "-" }) {
+                    details.visibility = View.GONE
+                } else {
+                    details.visibility = View.VISIBLE
+                    details.text = "XY($x,$y)  dxy($dx,$dy)"
+                }
                 (labels.getChildAt(2) as TextView).text = source
                 image.setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
                 image.scaleX = if (frame.optBoolean("flipX", false)) -1f else 1f
