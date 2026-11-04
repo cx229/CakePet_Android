@@ -117,12 +117,10 @@ class MovementSettingsActivity : AppCompatActivity() {
         val folds = SettingsFoldController(this).apply {
             add(R.id.sw_move_enabled, listOf(R.id.maxspeed_bar))
             add(R.id.sw_gravity_enabled,
-                listOf(R.id.sw_tilt_gravity, R.id.gravity_bar,
-                    R.id.sw_top, R.id.sw_bottom, R.id.sw_left, R.id.sw_right),
+                listOf(R.id.sw_tilt_gravity, R.id.gravity_bar, R.id.group_gravity_directions),
                 dependency = { it.moveEnabled })
             add(R.id.sw_rebound_enabled,
-                listOf(R.id.sw_bounce_vibrate, R.id.rebound_bar,
-                    R.id.sw_rtop, R.id.sw_rbottom, R.id.sw_rleft, R.id.sw_rright),
+                listOf(R.id.sw_bounce_vibrate, R.id.rebound_bar, R.id.group_rebound_directions),
                 dependency = { it.moveEnabled })
             add(R.id.sw_throw, listOf(R.id.throwcoeff_bar),
                 dependency = { it.moveEnabled })
