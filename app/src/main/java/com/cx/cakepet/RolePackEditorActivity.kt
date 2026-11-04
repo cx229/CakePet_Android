@@ -528,11 +528,18 @@ class RolePackEditorActivity : AppCompatActivity() {
                     modes()
                 }
             }
-            header.addView(text((if (opened) "▾ 📂  " else "▸ 📁  ") + group, 16f),
-                LinearLayout.LayoutParams(0, -2, 1f))
-            header.addView(text("${names.size} 个", 12f).apply {
-                setTextColor(getColor(R.color.cp_note))
-            })
+            header.addView(text((if (opened) "▾ 📂  " else "▸ 📁  ") + group +
+                "  (${names.size})", 16f), LinearLayout.LayoutParams(0, -2, 1f))
+            header.addView(text("+", 23f).apply {
+                gravity = Gravity.CENTER
+                isClickable = true
+                setOnClickListener { newMode(group.takeUnless { it == "未分组" }) }
+            }, LinearLayout.LayoutParams(px(38), px(44)))
+            if (group != "未分组") header.addView(text("⋮", 23f).apply {
+                gravity = Gravity.CENTER
+                isClickable = true
+                setOnClickListener { anchor -> showModeGroupOptions(anchor, group) }
+            }, LinearLayout.LayoutParams(px(38), px(44)))
             panel.addView(header, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
             if (!opened) continue
             for (key in names) {
@@ -560,8 +567,25 @@ class RolePackEditorActivity : AppCompatActivity() {
                     orientation = LinearLayout.VERTICAL
                     setPadding(px(8), 0, 0, 0)
                 }
-                label.addView(text(key, 16f).apply { setPadding(0, 0, 0, 0) })
-                label.addView(text("${frames.length()} 帧 · ${if (mode.optBoolean("loop")) "循环" else "播放一次"}", 12f).apply {
+                val headline = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                headline.addView(text(key, 16f).apply { setPadding(0, 0, 0, 0) })
+                val nextMode = mode.optString("nextMode", "").takeUnless { it == "null" }.orEmpty()
+                headline.addView(text("  →" + nextMode.ifBlank { "无" }, 11f).apply {
+                    setTextColor(getColor(R.color.cp_note))
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                label.addView(headline)
+                val duration = mode.optJSONObject("duration")
+                val playback = when {
+                    !mode.optBoolean("loop") -> "播放一次"
+                    duration == null -> "无限循环"
+                    else -> "循环（${duration.optLong("min")} ms-${duration.optLong("max")} ms）"
+                }
+                label.addView(text("${frames.length()} 帧 · $playback", 12f).apply {
                     setPadding(0, 0, 0, 0)
                     setTextColor(getColor(R.color.cp_note))
                 })
@@ -655,7 +679,67 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
-    private fun newMode() {
+    private fun showModeGroupOptions(anchor: View, group: String) {
+        val menu = PopupMenu(this, anchor)
+        menu.menu.add("重命名")
+        menu.menu.add("解散")
+        menu.setOnMenuItemClickListener {
+            when (it.title.toString()) {
+                "重命名" -> editor("重命名动作组", compact = true) { box ->
+                    val name = entry(box, "动作组名称", group, compact = true)
+                    val save: () -> Unit = {
+                        val target = name.text.toString().trim()
+                        require(target.isNotEmpty() && target.length <= 40 && target != "未分组" &&
+                            target.none { ch -> ch == '/' || ch == '\\\\' || ch == '\\n' || ch == '\\r' }) {
+                            "动作组名称不合法"
+                        }
+                        require(target == group || target !in knownGroups()) { "动作组已存在" }
+                        if (target != group) {
+                            change { json ->
+                                val all = json.getJSONObject("modes")
+                                all.keys().forEach { id ->
+                                    val mode = all.getJSONObject(id)
+                                    val groups = mode.optJSONArray("groups") ?: return@forEach
+                                    for (i in 0 until groups.length()) {
+                                        if (groups.optString(i) == group) groups.put(i, target)
+                                    }
+                                }
+                            }
+                            if (expandedModeGroups.remove(group)) expandedModeGroups.add(target)
+                        }
+                        modes()
+                    }
+                    save
+                }
+                "解散" -> showConfirmDialog(
+                    title = "解散动作组",
+                    bodyHtml = "确认解散「$group」？组内动作不会删除，仍属于其他组的动作保持不变。",
+                    positiveText = "解散"
+                ) {
+                    attempt {
+                        change { json ->
+                            val all = json.getJSONObject("modes")
+                            all.keys().forEach { id ->
+                                val mode = all.getJSONObject(id)
+                                val old = mode.optJSONArray("groups") ?: return@forEach
+                                val kept = JSONArray()
+                                for (i in 0 until old.length()) {
+                                    if (old.optString(i) != group) kept.put(old.optString(i))
+                                }
+                                mode.put("groups", kept)
+                            }
+                        }
+                        expandedModeGroups.remove(group)
+                        modes()
+                    }
+                }
+            }
+            true
+        }
+        menu.show()
+    }
+
+    private fun newMode(group: String? = null) {
         editor("新建动作") { box ->
             val key = entry(box, "动作名称", "")
             val save: () -> Unit = {
@@ -668,6 +752,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                         .put("loop", true)
                         .put("nextMode", JSONObject.NULL)
                         .put("duration", JSONObject.NULL).put("finishCycle", true)
+                        .put("groups", JSONArray().apply { if (group != null) put(group) })
                         .put("frames", JSONArray().put(JSONObject().put("res", source).put("delay", 120))))
                 }
                 showMode(name)
