@@ -172,7 +172,7 @@ class RandomSettingsActivity : AppCompatActivity() {
             if (safeLo >= safeHi) safeHi = (safeLo + 1f).coerceAtMost(rsTo)
             periodRange.values = listOf(safeLo, safeHi)
             syncPeriodInputs(safeLo.toInt(), safeHi.toInt())
-            folding?.refresh()
+            folding?.refresh(c)
             } catch (e: Exception) { e.printStackTrace() }
         }
     }
