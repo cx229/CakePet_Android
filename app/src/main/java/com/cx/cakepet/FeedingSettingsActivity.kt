@@ -266,8 +266,19 @@ class FeedingSettingsActivity : AppCompatActivity() {
             lifecycleScope.launch { config.update { it.copy(feedGrowFactor = v) } }
         }
 
+        folding = SettingsFoldController(this).apply {
+            add(R.id.sw_feeding_enabled, listOf(R.id.fish_scale_bar, R.id.fish_alpha_bar,
+                R.id.sw_full_screen, R.id.sw_edge_refresh, R.id.sw_feed_grow,
+                R.id.fish_max_bar, R.id.period_min_value, R.id.sw_auto_expire))
+            add(R.id.sw_feed_grow, listOf(R.id.feed_grow_bar),
+                ancestors = listOf(R.id.sw_feeding_enabled), depth = 1, expandedInitially = false)
+            add(R.id.sw_auto_expire, listOf(R.id.fish_expire_bar),
+                ancestors = listOf(R.id.sw_feeding_enabled), depth = 1, expandedInitially = false)
+        }
         refreshUI()
     }
+
+    private var folding: SettingsFoldController? = null
 
     private fun applyConfigToUi(c: PetConfigData) {
         suppressSwitches = true
@@ -306,6 +317,7 @@ class FeedingSettingsActivity : AppCompatActivity() {
             EditSync.setText(periodMinVal, c.feedingPeriodMin.toString())
             EditSync.setText(periodMaxVal, c.feedingPeriodMax.toString())
         }
+        folding?.refresh()
     }
 
     private fun setExpireEnabled(enabled: Boolean) {
