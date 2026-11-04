@@ -1645,6 +1645,9 @@ class PetView @JvmOverloads constructor(
         if (!active) { forageChosenX = Float.NaN; forageChosenY = Float.NaN }
     }
 
+    /** Food proximity may initiate eating only after the normal action chooser selected forage. */
+    fun isForageTravelActive(): Boolean = forageActive && imageManager.forageSelected
+
     /** 是否正在播放强制一次性动作（投食/摸头等插曲）。供 PetService 在自动觅食会话期间判定，桥接 private imageManager。 */
     fun isPlayingForced(): Boolean = imageManager.isPlayingForced()
 
