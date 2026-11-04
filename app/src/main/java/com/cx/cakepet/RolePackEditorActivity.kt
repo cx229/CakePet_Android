@@ -1072,13 +1072,19 @@ class RolePackEditorActivity : AppCompatActivity() {
         dialog.window?.setLayout(-1, -2)
     }
 
-    private fun frameMenu(key: String, index: Int) {
-        optionsDialog("帧 $index", listOf("编辑参数", "导入图片替换", "选择素材库图片", "删除帧")) { selection ->
-            when (selection) {
-                0 -> editFrame(key, index)
-                1 -> { fileIndex = index; pngPicker.launch(arrayOf("image/*")) }
-                2 -> selectExistingImage(key, index)
-                3 -> showConfirmDialog(
+    private fun showFrameOptions(anchor: View, key: String, index: Int) {
+        val menu = PopupMenu(this, anchor)
+        listOf("替换", "在上方插入", "在下方插入").forEach { menu.menu.add(it) }
+        val danger = android.text.SpannableString("删除")
+        danger.setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.cp_danger)),
+            0, danger.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        menu.menu.add(danger)
+        menu.setOnMenuItemClickListener { item ->
+            when (item.title.toString()) {
+                "替换" -> showImageChooser(ImagePickRequest(key, "replace", index))
+                "在上方插入" -> showImageChooser(ImagePickRequest(key, "before", index))
+                "在下方插入" -> showImageChooser(ImagePickRequest(key, "after", index))
+                "删除" -> showConfirmDialog(
                     title = "删除帧",
                     bodyHtml = "确认删除帧 $index？",
                     positiveText = "删除",
@@ -1087,32 +1093,19 @@ class RolePackEditorActivity : AppCompatActivity() {
                     attempt {
                         val old = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
                         require(old.length() > 1) { "至少保留一帧" }
-                        val newer = remapFrames(old, (0 until old.length()).filter { it != index })
-                        change { it.getJSONObject("modes").getJSONObject(key).put("frames", newer) }
+                        change {
+                            it.getJSONObject("modes").getJSONObject(key).put("frames",
+                                remapFrames(old, (0 until old.length()).filter { n -> n != index }))
+                        }
                         showMode(key)
                     }
                 }
             }
+            true
         }
+        menu.show()
     }
-    private fun selectExistingImage(key: String, index: Int) {
-        val files = draft.walkTopDown().filter {
-            it.isFile && it.extension.lowercase() in setOf("png", "webp", "jpg", "jpeg")
-        }.map { it.relativeTo(draft).invariantSeparatorsPath }.toList().sorted()
-        if (files.isEmpty()) {
-            Toast.makeText(this, "素材库没有图片", Toast.LENGTH_SHORT).show()
-            return
-        }
-        optionsDialog("选择已有图片", files) { selected ->
-            attempt {
-                change {
-                    it.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
-                        .getJSONObject(index).put("res", files[selected])
-                }
-                showMode(key)
-            }
-        }
-    }
+
     private fun editFrame(key: String, index: Int) {
         val f = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
         editor("帧参数") { box ->
