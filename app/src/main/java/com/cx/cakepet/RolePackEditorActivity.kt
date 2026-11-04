@@ -877,15 +877,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             orderedIndices.forEach { result.put(JSONObject(old.getJSONObject(it).toString())) }
         }
     }
-    private fun moveFrameTo(key: String, from: Int, to: Int) = attempt {
-        val frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
-        if (from !in 0 until frames.length() || to !in 0 until frames.length()) return@attempt
-        val order = (0 until frames.length()).toMutableList()
-        order.add(to, order.removeAt(from))
-        val reordered = remapFrames(frames, order)
-        change { it.getJSONObject("modes").getJSONObject(key).put("frames", reordered) }
-        showMode(key)
-    }
     private fun copyMode(key: String) {
         editor("复制动作") { box ->
             val name = entry(box, "新动作名称", key + "副本")
