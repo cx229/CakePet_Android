@@ -1,4 +1,4 @@
-name: Verify frame flip Kotlin compilation
+name: Verify frame flip Kotlin compilation final
 on:
   push:
     branches: [feat/261105-frame-flip]
