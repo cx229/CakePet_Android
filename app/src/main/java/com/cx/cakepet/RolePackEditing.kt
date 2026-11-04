@@ -92,16 +92,33 @@ object RolePackEditing {
             if (relative.isEmpty()) it else "$relative/$it", zip) }
     }
     /** Movie composites GIF frames; graphic control blocks provide frame delays. */
-    fun gif(ctx: Context, uri: Uri, draft: File, mode: String): JSONArray {
+    /** Uniquely named folder / file, safe for imports from arbitrary filenames. */
+    fun uniqueName(parent: File, proposed: String, suffix: String = ""): String {
+        val base = proposed.trim().take(80).map { c ->
+            if (c == '/' || c == '\\' || c.code < 32 || c == ':') '_' else c
+        }.joinToString("").trim('.', ' ').ifBlank { "素材" }
+        var name = base + suffix
+        var number = 2
+        while (File(parent, name).exists()) name = "${base}_${number++}$suffix"
+        return name
+    }
+
+    /** Import GIF into its own named folder; retain original delays for later insertion. */
+    fun gif(ctx: Context, uri: Uri, draft: File, parentPath: String,
+            gifName: String): JSONArray {
         val data = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("无法读取 GIF")
         require(data.size >= 13 && String(data, 0, 3, Charsets.US_ASCII) == "GIF")
         val movie = Movie.decodeByteArray(data, 0, data.size) ?: error("GIF 解码失败")
         require(movie.width() > 0 && movie.height() > 0 && movie.width().toLong() * movie.height() <= 8_000_000)
         val delays = delays(data)
         require(delays.isNotEmpty() && delays.size <= 300)
-        val folder = File(draft, "gif_${mode.filter { it.isLetterOrDigit() || it == '_' }}_${System.nanoTime()}")
-        folder.mkdirs()
+        val parent = File(draft, parentPath).canonicalFile
+        require(parent.toPath().startsWith(draft.canonicalFile.toPath())) { "无效目录" }
+        parent.mkdirs()
+        val folder = File(parent, uniqueName(parent, gifName.replace(Regex("(?i)\\.gif$"), "")))
+        check(folder.mkdirs()) { "无法创建 GIF 文件夹" }
         val frames = JSONArray()
+        val manifest = JSONArray()
         var time = 0
         val duration = movie.duration().coerceAtLeast(delays.sum())
         delays.forEachIndexed { i, delay ->
@@ -111,13 +128,15 @@ object RolePackEditing {
                 canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
                 movie.setTime(time.coerceAtMost((duration - 1).coerceAtLeast(0)))
                 movie.draw(canvas, 0f, 0f)
-                val file = File(folder, "frame_${i.toString().padStart(4, '0')}.png")
+                val file = File(folder, "${(i + 1).toString().padStart(4, '0')}.png")
                 FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                frames.put(JSONObject().put("res", "${folder.name}/${file.name}")
-                    .put("delay", delay))
+                val relative = file.relativeTo(draft).invariantSeparatorsPath
+                frames.put(JSONObject().put("res", relative).put("delay", delay))
+                manifest.put(JSONObject().put("file", file.name).put("delay", delay))
             } finally { bmp.recycle() }
             time += delay
         }
+        File(folder, "frames.json").writeText(JSONObject().put("frames", manifest).toString(2))
         return frames
     }
     private fun delays(b: ByteArray): List<Int> {
