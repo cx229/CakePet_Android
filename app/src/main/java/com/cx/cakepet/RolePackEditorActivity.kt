@@ -526,8 +526,23 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             box.addView(choices)
             redraw()
-            val input = entry(box, "创建新组", "")
-            box.addView(button("＋ 添加并选中") {
+            box.addView(text("创建新组", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            })
+            val addRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val input = EditText(this).apply {
+                hint = "新组名称"
+                setSingleLine(true)
+                textSize = 14f
+                setTextColor(getColor(R.color.cp_title))
+                setBackgroundResource(R.drawable.bg_input)
+                setPadding(px(10), 0, px(10), 0)
+            }
+            addRow.addView(input, LinearLayout.LayoutParams(0, px(42), 1f))
+            addRow.addView(button("√") {
                 val name = input.text.toString().trim()
                 if (name.isBlank() || name.length > 40 || name == "未分组" ||
                     name.any { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
@@ -538,7 +553,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                     input.setText("")
                     redraw()
                 }
-            }, LinearLayout.LayoutParams(-1, px(44)))
+            }, LinearLayout.LayoutParams(px(48), px(42)).apply { leftMargin = px(8) })
+            box.addView(addRow)
             val save: () -> Unit = {
                 require(input.text.toString().isBlank()) { "请先点击添加新组" }
                 change { json ->
