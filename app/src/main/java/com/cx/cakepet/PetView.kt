@@ -470,15 +470,12 @@ class PetView @JvmOverloads constructor(
             // Preserve the direction actually rendered on landing. Randomizing a fresh
             // walkDir when JUMP_DOWN finishes can make the resumed pet seem to walk
             // backwards relative to its landing pose.
-            imageManager.preserveWalkDirectionAfterLanding(if (flipX) 1 else -1)
             modeOf("touch", "jump_down")?.let { playOnce(it) }
-            // 抛掷落地：统一收口到 decideLanding（主重力边保留滚动流程；非反弹边先判飞跃/否则攀岩）。
-            val wall = landingWall()
-            if (wall >= 0) decideLanding(wall)
+            // The Mode's own nextMode controls playback after this point.
             onLand?.invoke()   // 真正落地（脚着地）瞬间，外部可显示落地碎碎念
         }
         // 非反弹边停靠（非抛掷、非飞行）：落地即按 decideLanding 收口（攀岩/飞跃）。
-        physics.onNonReboundLand = { decideLanding(it) }
+
         // 边界反弹振动：仅当开关开启时触发，振幅随反弹速度强度变化（方位不支持，仅强度近似）。
         physics.onBounce = { _, speed ->
             if (bounceVibrateEnabled) vibrateBounce(speed)
@@ -496,25 +493,9 @@ class PetView @JvmOverloads constructor(
         //    把用户赋予的横向抛掷初速无条件清成 0（而 vy 不受影响）→ 表现为“横向永远不滚、只下落”。
         //    仅在宠物确实处于静止待机（既非拖拽也非抛掷）时才真正清零 vx，
         //    拖动/抛掷过程中的横向惯性交由物理引擎自行管理（落地后由 step 兜底清零）。
-        imageManager.onWalkStateChanged = { speed, dir ->
-            if (speed > 0f) {
-                // 本地前进向量 (speed*dir, 0) 经重力旋转矩阵映射到屏幕速度；
-                // 左右重力下前进落在屏幕 y 轴（沿墙垂直走），下/上重力落在 x 轴（水平游走），
-                // 与图片渲染绕中心旋转一致，彻底告别“写死水平位移撞墙”。
-                // 只写「前进轴」速度，另一轴【不】清零，留给物理重力每帧累加，
-                // 否则进入 walk 瞬间把另一轴的重力分量抹成 0（walk 免疫重力）。
-                val sv = mapLocalToScreen(speed * dir, 0f)
-                if (gravityDir == 1 || gravityDir == 2) {
-                    physics.vy = sv.second
-                } else {
-                    physics.vx = sv.first
-                }
-                // 图片资源朝右为基准，dir>0 时翻转显示朝右（镜像），与 onDraw 的 scale(-1) 一致。
-                flipX = dir > 0
-            } else if (!physics.isThrowing && !physics.isDragging) {
-                physics.vx = 0f
-                physics.vy = 0f
-            }
+        imageManager.onWalkStateChanged = { _, dir ->
+            // dx/dy advances with animation frames; no normal walk velocity injection.
+            if (physics.isClimbing) climbFlipX = dir < 0 else flipX = dir < 0
         }
     }
 
@@ -572,6 +553,7 @@ class PetView @JvmOverloads constructor(
      * 与屏幕刷新率解耦，保证位移平滑连续（不随显示帧率波动）。
      */
     fun stepPhysics(fixedDt: Float) {
+        physics.allowAutoRoll = !imageManager.isWalk()
         physics.step(fixedDt)
     }
 
@@ -579,43 +561,48 @@ class PetView @JvmOverloads constructor(
      * 动画推进：只管切图（Roll/Walk 等帧切换），绝不控制位置，使用真实经过时间保证时延精确。
      * 与物理步进完全解耦（对齐 PC：img_move_by_offset 由物理速度驱动，set_image 仅算左上角）。
      */
-    /** Run per-frame impulses exactly once, including the opening frame and loop wrap. */
+    /** Apply a frame's dx/dy exactly once; physics rebound belongs only to throws. */
     private fun applyFrameMotion() {
-        val displacement = imageManager.consumeFrameDisplacement() ?: return
-            val (dx, dy) = displacement
-            if (dx != 0 || dy != 0) {
-                // 镜像：攀岩态必须用专属镜像 climbFlipX（渲染/旋转亦然，见 effFlipX），
-                // 否则会出现“图片朝左扒却向右位移”的镜像错位。
-                val dir = if (if (physics.isClimbing) climbFlipX else flipX) -1 else 1
-                // 本地位移：资源朝右前进为 +x（镜像则取反），dy 为资源自身竖直分量。
-                // 旋转必须按【当前真实朝向】：攀岩态用所攀的墙 climbSide，否则沿用重力朝向。
-                // （旧实现只传两参 → 走默认重力旋转，攀岩挂墙时宠物已被 climRotation 旋转 90/180/270，
-                //   位移却按重力朝算 → 落在错误的屏幕轴上，这就是扒鱼在攀岩态“只有一个方向在动”的根因。）
-                val mvDir = if (physics.isClimbing) physics.climbSide else gravityDir
-                val (moveX, moveY) = mapLocalToScreen((dx * dir).toFloat(), dy.toFloat(), mvDir)
-                // 撞墙取消：四边重力下若某轴已贴【对应】重力边，则本次动画位移该轴直接跳过，
-                // 只保留重力（避免反复撞墙抖动死循环）；体感模式四边标志为 false，不触发。
-                val blockedX = (physics.gravityLeft && physics.x <= physics.minX + 0.5f)
-                    || (physics.gravityRight && physics.x >= physics.maxX - 0.5f)
-                val blockedY = (physics.gravityTop && physics.y <= physics.minY + 0.5f)
-                    || (physics.gravityBottom && physics.y >= physics.maxY - 0.5f)
-                if (moveX != 0f && !blockedX) {
-                    physics.x = (physics.x + moveX).coerceIn(physics.minX, physics.maxX)
-                }
-                if (moveY != 0f && !blockedY) {
-                    physics.y = (physics.y + moveY).coerceIn(physics.minY, physics.maxY)
-                }
-                // 记下本帧【实际施加】的位移：扒鱼等帧驱动模式 vx/vy 恒为 0，
-                // 攀岩触界上墙需以此为方向凭据（见下方独立一步）。
-                lastFrameMoveX = moveX
-                lastFrameMoveY = moveY
+        val (dx, dy) = imageManager.consumeFrameDisplacement() ?: return
+        if (dx == 0 && dy == 0) return
+        if (physics.isDragging || physics.isThrowing || flying || physics.isSnapped || useStaticPool) return
+        if (imageManager.forageSelected && forageActive && imageManager.isWalk()) return
+        val locomotion = imageManager.isWalk()
+        val dir = if (locomotion) imageManager.walkDir else if (stateFlip) -1 else 1
+        val side = if (physics.isClimbing) physics.climbSide else gravityDir
+        val (mx, my) = mapLocalToScreen((dx * dir).toFloat(), dy.toFloat(), side)
+        val oldX = physics.x
+        val oldY = physics.y
+        val nextX = oldX + mx
+        val nextY = oldY + my
+        val hitX = (mx < 0f && nextX < physics.minX) || (mx > 0f && nextX > physics.maxX)
+        val hitY = (my < 0f && nextY < physics.minY) || (my > 0f && nextY > physics.maxY)
+        physics.x = nextX.coerceIn(physics.minX, physics.maxX)
+        physics.y = nextY.coerceIn(physics.minY, physics.maxY)
+        lastFrameMoveX = physics.x - oldX
+        lastFrameMoveY = physics.y - oldY
+        if (locomotion && (hitX || hitY)) {
+            if (wallClimb && (!physics.isClimbing ||
+                climbReachedEnd(physics.climbSide, hitX, hitY))) {
+                setClimb(nextWallDir(side, mx to my))
+            } else if (!wallClimb) {
+                imageManager.walkDir = -dir
+                if (physics.isClimbing) climbFlipX = imageManager.walkDir < 0
+                else flipX = imageManager.walkDir < 0
             }
-            }
+        }
+        onPositionChanged?.invoke(physics.x, physics.y)
+    }
 
     fun tick(dt: Float) {
         // 同步攀爬态给动画层：决定捞新动作时是否按飞跃概率直接跳起。
         imageManager.inClimbing = physics.isClimbing
         imageManager.inSnapped = physics.isSnapped
+        if (imageManager.forageSelected && forageActive && !physics.isClimbing &&
+            !physics.isDragging && !physics.isThrowing && !flying) {
+            val wall = landingWall()
+            if (wall >= 0) setClimb(wall)
+        }
         // 同步飞跃飞行态：飞行中锁定 JUMP_UP 动画，禁止 nextFrame 切换动作。
         imageManager.isFlying = flying
         updateAnimByState()
@@ -650,26 +637,6 @@ class PetView @JvmOverloads constructor(
                 applyFrameMotion()
             }
         }
-        // ===== 主重力边落地后的【插队收口】 =====
-        // 挂起的决策在 JUMP_DOWN 播完（forced 结束）、即将回普通 WALK 的这一刻执行：
-        //   ① 自动觅食（需攀岩开）→ 就地进入攀岩态，既有链路立刻接管觅食；
-        //   ② 其次掷骰飞跃；
-        //   ③ 都不需要才落回普通 WALK —— WALK 是兜底，不是被删除。
-        if (pendingLandSide >= 0 && !imageManager.isPlayingForced()) {
-            val side = pendingLandSide
-            pendingLandSide = -1
-            if (climbWall < 0 && !flying) {
-                if (wallClimb && autoForage) {
-                    setClimb(side)
-                } else if (imageManager.leapEnabled && imageManager.leapProbability > 0f &&
-                    kotlin.random.Random.nextFloat() < imageManager.leapProbability
-                ) {
-                    startLeapFlight()
-                } else if (!imageManager.isWalk()) {
-                    modeOf("touch", "walk")?.let { imageManager.setMode(it) }
-                }
-            }
-        }
         // 行走位移同步：物理引擎已在 stepPhysics 中推进 physics.x 并做了左右边界反弹
         // （reboundLeft/Right 默认开启）。
         // 关键：walk 期间【每帧强制维护】水平速度 = walkDir * walkSpeed。
@@ -682,7 +649,8 @@ class PetView @JvmOverloads constructor(
         // 注意：攀爬态与重力无关（即使平地也是爬墙），绝不因重力开关变化退出攀爬——
         // 关重力时攀岩仍沿墙走，不会退攀爬、不会翻脚方向、不会被强制静止。
         // 攀爬仅在 wallClimb 关 / 拖出 / 移动总开关关（useStaticPool）时退出，见 syncClimbState/restoreBaseGravity。
-        if (imageManager.isWalk() && (physics.isClimbing || physics.gravityEnabled)) {
+        if (imageManager.isWalk() && imageManager.forageSelected && forageActive &&
+            (physics.isClimbing || physics.gravityEnabled)) {
             // 行走位移同步：物理引擎已在 stepPhysics 中推进位置并做了边界反弹。
             // 每帧强制维护速度 = 本地前进(walkSpeed*walkDir, 0) 经重力旋转矩阵映射后的屏幕速度，
             // 使左右重力下沿墙垂直走、下/上重力下水平走，与图片旋转朝向完全对齐。
@@ -818,20 +786,11 @@ class PetView @JvmOverloads constructor(
             // Landing/throwing and other transient states may have changed flipX after
             // onWalkStateChanged. Keep the rendered orientation aligned to the actual
             // walk direction every tick, not only at mode entry or a wall rebound.
-            if (physics.isClimbing) climbFlipX = dir > 0
-            else flipX = dir > 0
+            if (physics.isClimbing) climbFlipX = dir < 0
+            else flipX = dir < 0
             onPositionChanged?.invoke(physics.x, physics.y)
         } else if (imageManager.curDx() != 0 || imageManager.curDy() != 0) {
-            // 一次性帧偏移位移模式（扒鱼）：位移由帧 dx/dy 在帧切换时累加驱动（见上），
-            // 不走物理速度。此处确保无遗留 vx（避免非拖拽/抛掷时被其它分支清零前的横移），
-            // 刷新浮窗位置（对齐 PC 位移后窗口跟随）。图片固定朝右扒不镜像，
-            // 期间朝向保持不变（撞墙夹边也不反转）。
-            // 攀岩态速度必须由动作独占：即使体感重力下（tiltGravity 通常豁免清零），
-            // 攀岩也强制清零遗留速度，杜绝残余重力速度沿墙永续漂移。
-            if (!physics.isDragging && !physics.isThrowing && (!physics.tiltGravity || physics.isClimbing) && !flying && (physics.vx != 0f || physics.vy != 0f)) {
-                physics.vx = 0f
-                physics.vy = 0f
-            }
+            // The frame has already moved through applyFrameMotion. Keep gravity intact.
             onPositionChanged?.invoke(physics.x, physics.y)
         } else {
             // 非行走模式：若宠物不在拖拽/抛掷（这些有独立的横向速度语义），
@@ -1047,7 +1006,7 @@ class PetView @JvmOverloads constructor(
             }
         }
         // Snap controls its mapped idle playback policy, not a separate animation definition.
-        imageManager.setSnapIdlePlayback(physics.isSnapped)
+
         if (!physics.isDragging) activeDragFunction = null
         when {
             physics.isDragging && !useStaticPool -> {
@@ -1541,7 +1500,7 @@ class PetView @JvmOverloads constructor(
     var autoForage = false
     // 主重力边落地后的【待决】收口边（0底/1左/2右/3顶），-1=无。
     // 主重力边不硬停 ROLL（保留原落地手感），故决策推迟到 JUMP_DOWN 播完、即将回 WALK 的那一刻执行。
-    private var pendingLandSide = -1
+
     // 自动觅食候选：由 PetService 每帧写入（已过滤为「本宠物活动范围内」，跨角色、含拖动中鱼）。
     // 真正的「选谁」不再在 Service 侧做，交给 tick 与「转方向」同帧、同度量（沿墙最短弧长）完成。
     private var forageCandX = FloatArray(0)
@@ -1624,47 +1583,6 @@ class PetView @JvmOverloads constructor(
         }
     }
 
-    /**
-     * 落地决策统一收口（非反弹边停靠 / 抛掷落地共用）：
-     *  - 主重力边（有效主重力，考虑重力总开关与四边重力开关）：保留既有滚动落地流程
-     *    （ROLL→onThrowEnd→JUMP_DOWN），不抢、不硬停 ROLL；
-     *  - 非主重力非反弹边到达：先硬停 ROLL，再直接切换为 WALK 姿态（贴墙行走/站立，而非 sit / 一直 ROLL），然后——
-     *      · 攀岩关：WALK 姿态下由重力自然带离该边、按原生滚动流程落地；
-     *      · 攀岩开：先判飞跃概率判断是否起飞，否则在落地点直接攀岩（沿墙 WALK）。
-     * side 采用 0底/1左/2右/3顶（与 landingWall/setClimb 一致）。
-     */
-    private fun decideLanding(side: Int) {
-        if (climbWall >= 0 || flying) return   // 已在攀爬/飞跃：避免角落双贴边重复触发（如重复起飞）
-        // 主重力边：交给既有滚动落地流程（ROLL→onThrowEnd→JUMP_DOWN），不在此硬停/抢，保持原有落地手感。
-        val mainDir = effectiveMainGravityDir()
-        Log.d("CakePetDBG", "decideLanding side=$side mainDir=$mainDir wallClimb=$wallClimb " +
-            "isThrowing=${physics.isThrowing} leap=${imageManager.leapEnabled}/${imageManager.leapProbability} climbWall=$climbWall flying=$flying")
-        if (mainDir >= 0 && side == mainDir) {
-            // 主重力边：仍不硬停 ROLL（保留既有滚动落地手感），但【挂起】本次落地收口，
-            // 待 JUMP_DOWN 播完、即将回 WALK 的那一刻再走“自动觅食 > 飞跃 > WALK”插队（见 tick 消费处）。
-            pendingLandSide = side
-            return
-        }
-        // 非主重力、非反弹边到达：先硬停 ROLL，使攀岩/飞跃决策能接管，且不再一直卡在 ROLL 动作。
-        if (physics.isThrowing) physics.endTiltRoll()
-        // 直接切换为 WALK（贴墙行走/站立姿态），而不是 sit 或一直 ROLL。
-        if (!imageManager.isPlayingForced()) modeOf("climb", "walk")?.let { imageManager.setMode(it) }
-        if (!wallClimb) {
-            // 攀岩关：WALK 姿态下由重力自然带离该边、按原生滚动流程落地（其他动作而非 ROLL）。
-            return
-        }
-        // 攀岩开：沿用默认攀岩上墙逻辑（与自动觅食无关，自动觅食只复用此路径 + tick 拐角续攀）。
-        // 先判飞跃概率，否则落地点直接攀岩（沿墙 WALK）。
-        if (imageManager.leapEnabled && imageManager.leapProbability > 0f &&
-            kotlin.random.Random.nextFloat() < imageManager.leapProbability) {
-            Log.d("CakePetDBG", "decideLanding -> startLeapFlight side=$side")
-            startLeapFlight()
-        } else {
-            Log.d("CakePetDBG", "decideLanding -> setClimb side=$side")
-            setClimb(side)
-        }
-    }
-
     /** 进入/保持在某墙（对外接口，内部仅置状态位，不碰重力）。 */
     fun applyClimbGravity() {
         if (climbWall < 0) return
@@ -1686,15 +1604,8 @@ class PetView @JvmOverloads constructor(
      * 绝不碰全局重力，仅维护专用状态位。
      */
     fun syncClimbState(wallClimb: Boolean) {
-        if (wallClimb) {
-            // 攀爬独立于重力：即使重力关闭，只要落地可贴墙即可进入攀爬态（平地也算爬墙）。
-            if (climbWall < 0 && !physics.isSnapped && !physics.isDragging) {
-                val w = landingWall()
-                if (w >= 0) setClimb(w)
-            }
-        } else {
-            if (climbWall >= 0) restoreBaseGravity()
-        }
+        // Permission to climb is not permission to steal a physical landing.
+        if (!wallClimb && climbWall >= 0) restoreBaseGravity()
     }
 
     /** 飞跃飞行态：true 时朝 leapTarget 位移，到位后落地该墙并切下一动作 */
@@ -1716,11 +1627,8 @@ class PetView @JvmOverloads constructor(
         forageTargetX = tx
         forageTargetY = ty
         imageManager.forageActive = active
+        if (!active) imageManager.forageSelected = false
         if (!active) { forageChosenX = Float.NaN; forageChosenY = Float.NaN }
-        // 觅食中确保处于沿墙行走姿态，避免停在 sit/其他动作导致不走。
-        if (active && !imageManager.isPlayingForced() && !imageManager.isWalk()) {
-            modeOf("climb", "walk")?.let { imageManager.setMode(it) }
-        }
     }
 
     /**
@@ -1730,13 +1638,10 @@ class PetView @JvmOverloads constructor(
     fun setForageCandidates(active: Boolean, xs: FloatArray, ys: FloatArray) {
         forageActive = active
         imageManager.forageActive = active
+        if (!active) imageManager.forageSelected = false
         forageCandX = xs
         forageCandY = ys
         if (!active) { forageChosenX = Float.NaN; forageChosenY = Float.NaN }
-        // 觅食中确保处于沿墙行走姿态，避免停在 sit/其他动作导致不走。
-        if (active && !imageManager.isPlayingForced() && !imageManager.isWalk()) {
-            modeOf("climb", "walk")?.let { imageManager.setMode(it) }
-        }
     }
 
     /** 是否正在播放强制一次性动作（投食/摸头等插曲）。供 PetService 在自动觅食会话期间判定，桥接 private imageManager。 */
