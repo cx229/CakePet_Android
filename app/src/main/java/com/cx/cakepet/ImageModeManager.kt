@@ -72,7 +72,9 @@ class ImageModeManager(
         // 单循环：一次性动画播完即停，不反弹（对齐 PC PullFishMode 第6~9帧的 offset）。
         val dx: Int = 0,
         val dy: Int = 0,
-        val verticalAlign: String = "top"
+        val verticalAlign: String = "top",
+        // Source-frame orientation correction; independent of runtime movement direction.
+        val flipX: Boolean = false
     )
 
     /** 帧推进结果：changed=是否换帧。动画只管切图，绝不控制位置（位移由物理循环负责）。 */
@@ -176,7 +178,8 @@ class ImageModeManager(
                 val dx = if (f.has("dx")) f.getInt("dx") else 0
                 val dy = if (f.has("dy")) f.getInt("dy") else 0
                 val align = f.optString("verticalAlign", "top")
-                frames.add(Frame(res, delay, anchorX, anchorY, dx, dy, align))
+                frames.add(Frame(res, delay, anchorX, anchorY, dx, dy, align,
+                    f.optBoolean("flipX", false)))
             }
             registerMode(ImageModeDef(name, frames, loop, durationMin,
                 durationMax, finishCycle, nextModeName))
@@ -270,6 +273,7 @@ class ImageModeManager(
         val currentWalkSpeed: Float get() = kotlin.math.abs(currentDx) * 1000f / frameDelay.coerceAtLeast(1L)
         val isMotionLoop: Boolean get() = def.loop && def.frames.any { it.dx != 0 || it.dy != 0 }
         val currentVerticalAlign: String get() = def.frames[frameIndex].verticalAlign
+        val currentFlipX: Boolean get() = def.frames[frameIndex].flipX
         val currentAnchorX: Int get() = def.frames[frameIndex].anchorX
         val currentAnchorY: Int? get() = def.frames[frameIndex].anchorY
         fun currentBitmap(): Bitmap? = loadBitmap(currentResName, currentVerticalAlign)
