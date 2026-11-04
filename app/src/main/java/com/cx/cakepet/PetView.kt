@@ -1630,12 +1630,14 @@ class PetView @JvmOverloads constructor(
     }
 
     fun setForage(active: Boolean, tx: Float, ty: Float) {
-        val wasActive = forageActive
         forageActive = active
         forageTargetX = tx
         forageTargetY = ty
         imageManager.forageActive = active
-        if (!active) imageManager.forageSelected = false
+        if (!active) {
+            stopForageVelocity()
+            imageManager.forageSelected = false
+        }
         if (!active) { forageChosenX = Float.NaN; forageChosenY = Float.NaN }
     }
 
@@ -1646,7 +1648,10 @@ class PetView @JvmOverloads constructor(
     fun setForageCandidates(active: Boolean, xs: FloatArray, ys: FloatArray) {
         forageActive = active
         imageManager.forageActive = active
-        if (!active) imageManager.forageSelected = false
+        if (!active) {
+            stopForageVelocity()
+            imageManager.forageSelected = false
+        }
         forageCandX = xs
         forageCandY = ys
         if (!active) { forageChosenX = Float.NaN; forageChosenY = Float.NaN }
