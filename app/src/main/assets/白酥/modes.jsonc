@@ -223,7 +223,7 @@
       ]
     },
     "摇头": {
-      "loop": false,
+      "loop": true,
       "nextMode": "炸毛",
       "walkSpeed": 0,
       "frames": [
@@ -241,7 +241,12 @@
             180
           ]
         }
-      ]
+      ],
+      "duration": {
+        "min": 1000,
+        "max": 2000
+      },
+      "finishCycle": true
     },
     "落地": {
       "loop": false,
