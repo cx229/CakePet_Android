@@ -97,6 +97,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun forceReset() {
         forced = false
         forcedReturn = null
+        forcedStart = null
         modeOf("static", "sit")?.let { setMode(it) }
     }
 
@@ -105,6 +106,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         assets.setPack(pack)
         forced = false
         forcedReturn = null
+        forcedStart = null
         currentName = ""
         modeOf("static", "sit")?.let { setMode(it) }
     }
@@ -132,6 +134,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
             val endMode = if (forced) forcedReturn else null
             forced = false
             forcedReturn = null
+            forcedStart = null
             setMode(endMode ?: pickStandbyMode(getMode()))
             return ImageModeManager.FrameStep(true)
         }
