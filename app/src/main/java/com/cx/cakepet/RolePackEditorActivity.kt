@@ -676,30 +676,12 @@ class RolePackEditorActivity : AppCompatActivity() {
                 subText = "原有帧属性会被替换；GIF 时间延迟会被保留",
                 positiveText = "继续"
             ) { startUpload(true, action = "overwrite", mode = key) }
-        }, LinearLayout.LayoutParams(-1, px(44)))
+        }, LinearLayout.LayoutParams(-1, px(44)).apply {
+            topMargin = px(8)
+            bottomMargin = px(8)
+        })
         val frames = m.getJSONArray("frames")
-        val frameHeader = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        frameHeader.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f),
-            LinearLayout.LayoutParams(0, -2, 1f))
-        frameHeader.addView(text("+", 26f).apply {
-            gravity = Gravity.CENTER
-            isClickable = true
-            setOnClickListener { anchor ->
-                val menu = PopupMenu(this@RolePackEditorActivity, anchor)
-                menu.menu.add("上传图片")
-                menu.menu.add("上传 GIF")
-                menu.setOnMenuItemClickListener {
-                    startUpload(it.title.toString() == "上传 GIF",
-                        action = "append", mode = key)
-                    true
-                }
-                menu.show()
-            }
-        }, LinearLayout.LayoutParams(px(48), px(48)))
-        panel.addView(frameHeader)
+        panel.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f))
         val order = (0 until frames.length()).toMutableList()
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         val recycler = RecyclerView(this).apply {
@@ -1040,22 +1022,19 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(info)
-        body.addView(text("＋ 上传新素材", 14f).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            isClickable = true
-            setOnClickListener { anchor ->
-                val popup = PopupMenu(this@RolePackEditorActivity, anchor)
-                popup.menu.add("上传图片")
-                if (!single) popup.menu.add("上传 GIF")
-                popup.setOnMenuItemClickListener { option ->
-                    dialog.dismiss()
-                    startUpload(option.title.toString() == "上传 GIF", "images",
-                        "chooser", request.mode, request, selected.toList())
-                    true
-                }
-                popup.show()
+        val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        if (!single) tools.addView(button("导入GIF为文件夹") {
+            dialog.dismiss()
+            startUpload(true, folder = "", action = "chooser",
+                mode = request.mode, request = request, previous = selected.toList())
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+        tools.addView(button("新建文件夹") {
+            dialog.dismiss()
+            newResourceFolder {
+                showImageChooser(request, selected.toList())
             }
-        })
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        body.addView(tools, LinearLayout.LayoutParams(-1, px(44)).apply { bottomMargin = px(8) })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val scrollList = ScrollView(this).apply { addView(list) }
         body.addView(scrollList, LinearLayout.LayoutParams(-1,
@@ -1066,7 +1045,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             info.text = "已选择 ${selected.size} 张图片"
             fun visit(dir: File, depth: Int) {
                 dir.listFiles().orEmpty()
-                    .filter { isImage(it) || (it.isDirectory && it.walkTopDown().any(::isImage)) }
+                    .filter { isImage(it) || it.isDirectory && !it.name.startsWith(".") }
                     .sortedWith(compareBy<File>({ !it.isDirectory }, { naturalOrder(it.name) }))
                     .forEach { file ->
                         val path = file.relativeTo(draft).invariantSeparatorsPath
@@ -1100,16 +1079,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                                 gravity = Gravity.CENTER
                                 isClickable = true
                                 setOnClickListener { anchor ->
-                                    val popup = PopupMenu(this@RolePackEditorActivity, anchor)
-                                    popup.menu.add("上传图片")
-                                    if (!single) popup.menu.add("上传 GIF")
-                                    popup.setOnMenuItemClickListener { item ->
-                                        dialog.dismiss()
-                                        startUpload(item.title.toString() == "上传 GIF", path,
-                                            "chooser", request.mode, request, selected.toList())
-                                        true
-                                    }
-                                    popup.show()
+                                    dialog.dismiss()
+                                    startUpload(false, path, "chooser", request.mode, request, selected.toList())
                                 }
                             }, LinearLayout.LayoutParams(px(40), px(46)))
                             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
@@ -1832,7 +1803,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun resourceBranch(directory: File, level: Int,
                                uses: Map<String, List<Pair<String, Int>>>) {
         directory.listFiles().orEmpty()
-            .filter { isImage(it) || it.isDirectory && it.walkTopDown().any { item -> isImage(item) } }
+            .filter { isImage(it) || it.isDirectory && !it.name.startsWith(".") }
             .sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase() }))
             .forEach { file ->
                 val path = file.relativeTo(draft).invariantSeparatorsPath
@@ -1890,14 +1861,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                         gravity = Gravity.CENTER
                         isClickable = true
                         setOnClickListener { anchor ->
-                            val popup = PopupMenu(this@RolePackEditorActivity, anchor)
-                            popup.menu.add("上传图片")
-                            popup.menu.add("上传 GIF")
-                            popup.setOnMenuItemClickListener { selected ->
-                                startUpload(selected.title.toString() == "上传 GIF", path)
-                                true
-                            }
-                            popup.show()
+                            startUpload(false, path, "library")
                         }
                     }, LinearLayout.LayoutParams(px(36), px(48)))
                 }
@@ -1921,19 +1885,11 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun images() {
         section("图片资源", "images")
-        val addResources = button("＋ 导入图片到素材库") {}
-        addResources.setOnClickListener {
-            val popup = PopupMenu(this, addResources)
-            popup.menu.add("上传图片")
-            popup.menu.add("上传 GIF")
-            popup.setOnMenuItemClickListener { item ->
-                startUpload(item.title.toString() == "上传 GIF")
-                true
-            }
-            popup.show()
+        val add = button("导入GIF为文件夹") {
+            startUpload(true, folder = "", action = "library")
         }
-        panel.addView(addResources, LinearLayout.LayoutParams(-1, px(44)))
-        panel.addView(text("点击文件夹展开；点击图片查看大图与引用；文件夹右侧 + 可上传图片/GIF。", 12f))
+        panel.addView(add, LinearLayout.LayoutParams(-1, px(44)).apply { topMargin = px(8); bottomMargin = px(8) })
+        panel.addView(text("点击文件夹展开；文件夹右侧 + 可添加图片。", 12f))
         resourceBranch(draft, 0, imageUses())
     }
 }
