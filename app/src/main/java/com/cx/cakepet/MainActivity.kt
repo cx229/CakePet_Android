@@ -273,8 +273,20 @@ class MainActivity : AppCompatActivity() {
     /** 召唤/归位同一按钮：未召唤→召唤；已召唤→归位。单活跃角色（切换会先召回旧的）。 */
     private fun onSummon(instanceId: String) {
         if (!hasOverlayPermission()) {
-            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-            overlayLauncher.launch(intent)
+            showConfirmDialog(
+                title = "开启悬浮窗权限",
+                bodyHtml = "CakePet 需要悬浮窗权限，才能将桌宠显示在其他应用上方。",
+                subText = "点击「前往授权」后会跳转至系统设置页面。你可以自行决定是否授权。",
+                positiveText = "前往授权"
+            ) {
+                if (!hasOverlayPermission()) {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    overlayLauncher.launch(intent)
+                }
+            }
             return
         }
         clearExited()
