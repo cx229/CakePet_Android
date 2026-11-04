@@ -1251,6 +1251,7 @@ class PetService : Service() {
         for (layer in fishLayers) {
             if (layer.animation?.advance(dtMs)?.changed == true) {
                 fishFrame(layer)?.let { layer.iv.setImageBitmap(it) }
+                layer.iv.scaleX = if (layer.animation?.currentFlipX == true) -1f else 1f
             }
         }
     }
@@ -1287,6 +1288,7 @@ class PetService : Service() {
             layer.animation = manager.createClip(selected)
             layer.crop = visual.first
             layer.iv.setImageBitmap(fishFrame(layer))
+            layer.iv.scaleX = if (layer.animation?.currentFlipX == true) -1f else 1f
             val c = roleConfig(layer.roleId)
             val (w, h) = fishDisplaySize(visual.first, c)
             layer.lp.width = w
@@ -1539,6 +1541,7 @@ class PetService : Service() {
         val (wpx, hpx) = fishDisplaySize(crop, c)
         val iv = ImageView(this).apply {
             setImageBitmap(visual.frames[clip.currentResName])
+            scaleX = if (clip.currentFlipX) -1f else 1f
             scaleType = ImageView.ScaleType.FIT_XY
             imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
         }
