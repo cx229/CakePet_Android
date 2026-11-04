@@ -984,9 +984,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                 previous?.optLong("min", 3000)?.toString() ?: "3000", compact = true)
             val max = entry(rangeRow, "最长（ms）",
                 previous?.optLong("max", 4000)?.toString() ?: "4000", compact = true)
-            (min.parent?.parent as? View)?.layoutParams =
+            (min.parent as? View)?.layoutParams =
                 LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
-            (max.parent?.parent as? View)?.layoutParams =
+            (max.parent as? View)?.layoutParams =
                 LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
             timedFields.addView(rangeRow)
             val finish = Switch(this).apply {
@@ -1700,7 +1700,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }
                 if (candidates.isEmpty()) continue
                 listing.addView(text((if (group in expanded) "▾ 📂 " else "▸ 📁 ") +
-                    "$group（${candidates.size}）", 15f).apply {
+                    "$group（${candidates.count { it in selected }}/${candidates.size}）", 15f).apply {
                     setBackgroundResource(R.drawable.card_bg)
                     isClickable = true
                     setOnClickListener { if (!expanded.add(group)) expanded.remove(group); redraw() }
