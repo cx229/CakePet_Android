@@ -61,9 +61,11 @@ class RoleAnimationPreview(context: Context) : View(context) {
         if (showGuides) {
             paint.color = Color.rgb(110, 123, 140)
             paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 6f
             paint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(9f, 6f), 0f)
             canvas.drawRect(left, top, left + side, top + side, paint)
             paint.pathEffect = null
+            paint.strokeWidth = 2f
             paint.color = Color.rgb(39, 139, 203)
             val content = RectF(left + (bounds.left + dx) * ratio,
                 top + (bounds.top + dy) * ratio,
@@ -73,9 +75,10 @@ class RoleAnimationPreview(context: Context) : View(context) {
             val ax = left + (anchor.first + dx) * ratio
             val ay = top + (anchor.second + dy) * ratio
             paint.color = Color.rgb(222, 66, 54)
-            canvas.drawCircle(ax, ay, 5f, paint)
-            canvas.drawLine(ax - 15f, ay, ax + 15f, ay, paint)
-            canvas.drawLine(ax, ay - 15f, ax, ay + 15f, paint)
+            paint.strokeWidth = 3.5f
+            canvas.drawCircle(ax, ay, 7f, paint)
+            canvas.drawLine(ax - 24f, ay, ax + 24f, ay, paint)
+            canvas.drawLine(ax, ay - 24f, ax, ay + 24f, paint)
             paint.style = Paint.Style.FILL
         }
         // Non-layout HUD in the upper-left corner of the 2:1 preview.
