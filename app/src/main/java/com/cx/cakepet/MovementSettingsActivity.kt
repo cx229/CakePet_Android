@@ -118,13 +118,11 @@ class MovementSettingsActivity : AppCompatActivity() {
             "throw" to true, "climb" to true, "forage" to false, "leap" to false
         )
         fun optionRow(id: Int): View = (findViewById<View>(id).parent as View)
+        val originalIndents = java.util.IdentityHashMap<View, Int>()
         fun indent(view: View, level: Int) {
             val extra = (resources.displayMetrics.density * 12 * level).toInt()
-            if (view.getTag(android.R.id.custom) == null) {
-                view.setTag(android.R.id.custom, view.paddingLeft)
-            }
-            view.setPadding((view.getTag(android.R.id.custom) as Int) + extra,
-                view.paddingTop, view.paddingRight, view.paddingBottom)
+            val original = originalIndents.getOrPut(view) { view.paddingLeft }
+            view.setPadding(original + extra, view.paddingTop, view.paddingRight, view.paddingBottom)
         }
         val hierarchy = listOf(
             Triple("move", swMoveEnabled, listOf(R.id.maxspeed_bar)),
