@@ -71,7 +71,8 @@ class ImageModeManager(
         // 实现“拉鱼/扒鱼”这类【帧驱动】位移（区别于物理速度驱动的 walk/roll）。
         // 单循环：一次性动画播完即停，不反弹（对齐 PC PullFishMode 第6~9帧的 offset）。
         val dx: Int = 0,
-        val dy: Int = 0
+        val dy: Int = 0,
+        val verticalAlign: String = "top"
     )
 
     /** 帧推进结果：changed=是否换帧。动画只管切图，绝不控制位置（位移由物理循环负责）。 */
@@ -87,8 +88,7 @@ class ImageModeManager(
         val durationMin: Long? = null,
         val durationMax: Long? = null,
         val finishCycle: Boolean = true,
-        val nextModeName: String? = null,       // 指定下一模式（PC next_mode_name）
-        val walkSpeed: Float = 0f               // 行走位移速度(px/s)，>0 时由物理引擎驱动水平位移
+        val nextModeName: String? = null
     )
 
     private fun rnd(min: Long, max: Long): () -> Long = { Random.nextLong(min, max + 1) }
@@ -96,7 +96,6 @@ class ImageModeManager(
 
     private val modes = mutableMapOf<String, ImageModeDef>()
     /** 资源文件的垂直填充方式，取自其所属 Mode，而非文件命名。 */
-    private val verticalAlignOfResource = mutableMapOf<String, String>()
     /** 素材包元数据，无对象行为状态。 */
     var currentPack: SpritePack = initialPack
 
@@ -155,7 +154,6 @@ class ImageModeManager(
         )
         // 清空旧模式，按 JSON 重建
         modes.clear()
-        verticalAlignOfResource.clear()
         val modesObj = root.getJSONObject("modes")
         val kit = modesObj.keys()
         while (kit.hasNext()) {
@@ -167,23 +165,21 @@ class ImageModeManager(
             val durationMax = duration?.optLong("max")
             val finishCycle = m.optBoolean("finishCycle", true)
             val nextModeName = if (m.has("nextMode") && !m.isNull("nextMode")) m.getString("nextMode") else null
-            val walkSpeed = m.optDouble("walkSpeed", 0.0).toFloat()
-            val verticalAlign = m.optString("verticalAlign", "top")
             val framesArr = m.getJSONArray("frames")
             val frames = mutableListOf<Frame>()
             for (i in 0 until framesArr.length()) {
                 val f = framesArr.getJSONObject(i)
                 val res = f.getString("res")
-                verticalAlignOfResource[res] = verticalAlign
                 val delay = parseDelay(f.get("delay"))
                 val anchorX = if (f.has("anchorX")) f.getInt("anchorX") else -1
                 val anchorY = if (f.has("anchorY")) f.getInt("anchorY") else null
                 val dx = if (f.has("dx")) f.getInt("dx") else 0
                 val dy = if (f.has("dy")) f.getInt("dy") else 0
-                frames.add(Frame(res, delay, anchorX, anchorY, dx, dy))
+                val align = f.optString("verticalAlign", "top")
+                frames.add(Frame(res, delay, anchorX, anchorY, dx, dy, align))
             }
             registerMode(ImageModeDef(name, frames, loop, durationMin,
-                durationMax, finishCycle, nextModeName, walkSpeed))
+                durationMax, finishCycle, nextModeName))
         }
     }
 
@@ -220,7 +216,7 @@ class ImageModeManager(
             val def = modes[next] ?: break
             for (frame in def.frames) {
                 if (frame.resName !in frames) {
-                    loadBitmap(frame.resName)?.let { frames[frame.resName] = it }
+                    loadBitmap(frame.resName, frame.verticalAlign)?.let { frames[frame.resName] = it }
                 }
             }
             next = def.nextModeName
@@ -273,11 +269,13 @@ class ImageModeManager(
         val currentFrameIndex: Int get() = frameIndex
         val currentDx: Int get() = def.frames[frameIndex].dx
         val currentDy: Int get() = def.frames[frameIndex].dy
-        val currentWalkSpeed: Float get() = def.walkSpeed
+        val currentWalkSpeed: Float get() = kotlin.math.abs(currentDx) * 1000f / frameDelay.coerceAtLeast(1L)
+        val isMotionLoop: Boolean get() = def.loop && def.frames.any { it.dx != 0 }
+        val currentVerticalAlign: String get() = def.frames[frameIndex].verticalAlign
         val currentAnchorX: Int get() = def.frames[frameIndex].anchorX
         val currentAnchorY: Int? get() = def.frames[frameIndex].anchorY
-        fun currentBitmap(): Bitmap? = loadBitmap(currentResName)
-        fun currentAnchor(): Pair<Int, Int> = frameAnchor(currentResName, currentAnchorX, currentAnchorY)
+        fun currentBitmap(): Bitmap? = loadBitmap(currentResName, currentVerticalAlign)
+        fun currentAnchor(): Pair<Int, Int> = frameAnchor(currentResName, currentAnchorX, currentAnchorY, currentVerticalAlign)
 
         private fun sampleTimeTarget(): Long {
             val min = def.durationMin ?: return Long.MAX_VALUE
@@ -363,7 +361,6 @@ class ImageModeManager(
         rawSizeCache.clear()
         modeVisualCache.clear()
         modes.clear()
-        verticalAlignOfResource.clear()
         pack.configPath?.let { loadModesFromJson(it) }
         val (w, h) = globalMaxSize()
         globalW = w
@@ -471,24 +468,24 @@ class ImageModeManager(
     /** 根据当前帧的图片和声明锚点计算画布锚点，不涉及任何对象物理状态。 */
 
     /** Unpadded picture rectangle in the same logical canvas coordinates as frameAnchor(). */
-    fun previewContentBounds(resName: String): android.graphics.RectF {
+    fun previewContentBounds(resName: String, alignment: String = "top"): android.graphics.RectF {
         val (w, h) = rawBitmapSize(resName)
         val (left, top) = fillOffset(resName, w, h,
-            currentPack.anchorRes, currentPack.anchorRes)
+            currentPack.anchorRes, currentPack.anchorRes, alignment)
         return android.graphics.RectF(left.toFloat(), top.toFloat(),
             (left + w).toFloat(), (top + h).toFloat())
     }
 
-    fun frameAnchor(resName: String, anchorX: Int, anchorY: Int?): Pair<Int, Int> {
+    fun frameAnchor(resName: String, anchorX: Int, anchorY: Int?, alignment: String = "top"): Pair<Int, Int> {
         val (w, _) = currentBitmapSize()
         val (_, rawH) = rawBitmapSize(resName)
         val axRaw = if (anchorX >= 0) anchorX else w / 2
         val ayRaw = rawH - (anchorY ?: 0)
-        val (padX, padY) = padOf(resName)
+        val (padX, padY) = padOf(resName, alignment)
         return (axRaw + padX) to (ayRaw + padY)
     }
 
-    private val bitmapCache = mutableMapOf<String, Bitmap?>()
+    private val bitmapCache = mutableMapOf<Pair<String, String>, Bitmap?>()
 
     /**
      * 统一画布尺寸（全局最大帧）。所有帧加载后都被居中 padding 到此尺寸，
@@ -506,17 +503,17 @@ class ImageModeManager(
     }
 
     /** 图片的垂直填充由 Mode.verticalAlign 显式指定，默认 top。 */
-    private fun fillOffset(resName: String, bw: Int, bh: Int, canvasW: Int = globalW, canvasH: Int = globalH): Pair<Int, Int> {
+    private fun fillOffset(resName: String, bw: Int, bh: Int, canvasW: Int = globalW, canvasH: Int = globalH, alignment: String = "top"): Pair<Int, Int> {
         if (bw <= 0 || bh <= 0) return 0 to 0
         val padX = ((canvasW - bw).coerceAtLeast(0)) / 2
-        val padY = if (verticalAlignOfResource[resName] == "center") (canvasH - bh) / 2 else 0
+        val padY = if (alignment == "center") (canvasH - bh) / 2 else 0
         return padX to padY
     }
 
     /** 每帧相对统一画布的偏移（px），供锚点补偿使用。直接复用 fillOffset（单一规则来源）。 */
-    private fun padOf(resName: String): Pair<Int, Int> {
+    private fun padOf(resName: String, alignment: String): Pair<Int, Int> {
         val (bw, bh) = rawBitmapSize(resName)
-        return fillOffset(resName, bw, bh)
+        return fillOffset(resName, bw, bh, alignment = alignment)
     }
 
     /** 按当前资源包打开任意资源流；ASSETS 走 assets.open，FILES 走 filesDir/roles/<base>/...。 */
@@ -531,8 +528,9 @@ class ImageModeManager(
     // 居中绘制（水平居中，垂直置顶、底部补透明）。
     // 新包：按 decodeTarget=256 保比例下采样（最长边 → 256，如 1000×500 → 256×128）作 2x 超采样源，
     // pad 进 256×256 解码画布；逻辑/锚点空间仍是 anchorRes=128，渲染时再把 256 位图缩进 128 逻辑矩形（见 PetView）。
-    private fun loadBitmap(resName: String): Bitmap? {
-        bitmapCache[resName]?.let { return it }
+    private fun loadBitmap(resName: String, alignment: String = "top"): Bitmap? {
+        val cacheKey = resName to alignment
+        bitmapCache[cacheKey]?.let { return it }
         val path = currentPack.resolve(resName) ?: return null
         val src = try {
             if (currentPack.decodeTarget > 0) {
@@ -553,14 +551,14 @@ class ImageModeManager(
         val bmp = if (src.width == canvasRes && src.height == canvasRes) {
             src
         } else {
-            val (padX, padY) = fillOffset(resName, src.width, src.height, canvasRes, canvasRes)
+            val (padX, padY) = fillOffset(resName, src.width, src.height, canvasRes, canvasRes, alignment)
             val out = Bitmap.createBitmap(canvasRes, canvasRes, Bitmap.Config.ARGB_8888)
             val c = android.graphics.Canvas(out)
             c.drawBitmap(src, padX.toFloat(), padY.toFloat(), null)
             src.recycle()
             out
         }
-        bitmapCache[resName] = bmp
+        bitmapCache[cacheKey] = bmp
         return bmp
     }
 
