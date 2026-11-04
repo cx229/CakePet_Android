@@ -13,6 +13,9 @@ import android.text.TextUtils
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.activity.OnBackPressedCallback
 import org.json.JSONArray
 import org.json.JSONObject
@@ -237,7 +240,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show()
     }
     /** Match the role-settings rename dialog: a single rounded Material card, not a nested AlertDialog. */
-    private fun editor(title: String, create: (LinearLayout) -> (() -> Unit)) {
+    private fun editor(title: String, compact: Boolean = false, create: (LinearLayout) -> (() -> Unit)) {
         val frame = android.widget.FrameLayout(this).apply {
             setPadding(px(24), 0, px(24), 0)
         }
@@ -249,13 +252,14 @@ class RolePackEditorActivity : AppCompatActivity() {
         frame.addView(card, android.widget.FrameLayout.LayoutParams(-1, -2))
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(px(20), px(20), px(20), px(20))
+            setPadding(px(if (compact) 16 else 20), px(if (compact) 12 else 20),
+                px(if (compact) 16 else 20), px(if (compact) 12 else 20))
         }
         card.addView(content)
         content.addView(text(title, 18f).apply {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(0, 0, 0, px(12))
+            setPadding(0, 0, 0, px(if (compact) 7 else 12))
         })
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val save = create(form)
@@ -263,10 +267,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             isFillViewport = false
             addView(form)
         }
-        content.addView(viewport, LinearLayout.LayoutParams(-1, -2).apply {
-            // Tall forms remain scrollable instead of exceeding the visible display.
-            height = minOf(px(70 * form.childCount + 20), resources.displayMetrics.heightPixels * 2 / 3)
-        })
+        content.addView(viewport, LinearLayout.LayoutParams(-1, -2))
         val actions = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             orientation = LinearLayout.HORIZONTAL
@@ -284,6 +285,17 @@ class RolePackEditorActivity : AppCompatActivity() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
         dialog.window?.setLayout(-1, -2)
+        viewport.post {
+            val maxHeight = (resources.displayMetrics.heightPixels * 0.70f).toInt()
+            val contentWidth = (viewport.width - viewport.paddingLeft - viewport.paddingRight).coerceAtLeast(1)
+            form.measure(
+                View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            viewport.layoutParams = viewport.layoutParams.apply {
+                height = minOf(form.measuredHeight + viewport.paddingTop + viewport.paddingBottom, maxHeight)
+            }
+        }
     }
     private fun optionsDialog(title: String, items: List<String>, choose: (Int) -> Unit) {
         val frame = android.widget.FrameLayout(this).apply {
@@ -328,25 +340,26 @@ class RolePackEditorActivity : AppCompatActivity() {
         dialog.window?.setLayout(-1, -2)
     }
 
-    private fun entry(box: LinearLayout, title: String, initial: String): EditText {
+    private fun entry(box: LinearLayout, title: String, initial: String, compact: Boolean = false): EditText {
         val item = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.card_bg)
-            setPadding(px(12), px(7), px(12), px(7))
+            setPadding(px(if (compact) 9 else 12), px(if (compact) 3 else 7),
+                px(if (compact) 9 else 12), px(if (compact) 3 else 7))
         }
-        item.addView(text(title, 13f).apply {
+        item.addView(text(title, if (compact) 12f else 13f).apply {
             setPadding(0, 0, 0, 0)
             setTextColor(getColor(R.color.cp_note))
         })
         val field = EditText(this).apply {
             setText(initial)
             setSingleLine(true)
-            textSize = 15f
+            textSize = if (compact) 14f else 15f
             setTextColor(getColor(R.color.cp_title))
         }
-        item.addView(field, LinearLayout.LayoutParams(-1, px(44)))
+        item.addView(field, LinearLayout.LayoutParams(-1, px(if (compact) 38 else 44)))
         box.addView(item, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = px(8)
+            bottomMargin = px(if (compact) 5 else 8)
         })
         return field
     }
@@ -359,14 +372,14 @@ class RolePackEditorActivity : AppCompatActivity() {
         menuCard("图片资源", "Images") { images() }
     }
     private fun info() {
-        editor("基本信息") { box ->
-            val name = entry(box, "名称", root.optString("name"))
-            val short = entry(box, "简称", root.optString("shortName"))
-            val decode = entry(box, "图片解码尺寸 decodeTarget", root.optInt("decodeTarget").toString())
-            val anchor = entry(box, "逻辑尺寸 anchorRes", root.optInt("anchorRes", 128).toString())
+        editor("基本信息", compact = true) { box ->
+            val name = entry(box, "名称", root.optString("name"), compact = true)
+            val short = entry(box, "简称", root.optString("shortName"), compact = true)
+            val decode = entry(box, "图片解码尺寸 decodeTarget", root.optInt("decodeTarget").toString(), compact = true)
+            val anchor = entry(box, "逻辑尺寸 anchorRes", root.optInt("anchorRes", 128).toString(), compact = true)
             val list = root.getJSONArray("authors")
             val author = entry(box, "作者（用逗号分隔）",
-                (0 until list.length()).joinToString(",") { list.getString(it) })
+                (0 until list.length()).joinToString(",") { list.getString(it) }, compact = true)
             val save: () -> Unit = {
                 change { json ->
                     json.put("name", name.text.toString().trim())
@@ -660,7 +673,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                 if (screen != "mode" || modeId != key) return
                 view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName),
                     clip.currentAnchor(), clip.currentDx, clip.currentDy, manager.currentPack.anchorRes,
-                    clip.currentModeId, manager.currentPack.modeLoops[clip.currentModeId] == true)
+                    clip.currentModeId, manager.currentPack.modeLoops[clip.currentModeId] == true,
+                    clip.currentFrameIndex)
                 val step = clip.advance(50, allowModeSwitch = true)
                 if (!step.ended && !step.timerRequested) handler.postDelayed(this, 50)
             }
