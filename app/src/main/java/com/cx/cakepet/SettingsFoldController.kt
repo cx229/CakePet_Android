@@ -23,7 +23,8 @@ class SettingsFoldController(private val host: Activity) {
         val ancestors: List<Int>,
         val dependency: (PetConfigData) -> Boolean,
         var expanded: Boolean,
-        val arrow: TextView
+        val arrow: TextView,
+        val dependencyHint: TextView?
     )
 
     private val sections = mutableListOf<Section>()
@@ -49,7 +50,8 @@ class SettingsFoldController(private val host: Activity) {
         ancestors: List<Int> = emptyList(),
         depth: Int = 0,
         expandedInitially: Boolean = true,
-        dependency: (PetConfigData) -> Boolean = { true }
+        dependency: (PetConfigData) -> Boolean = { true },
+        unavailableText: String? = null
     ) {
         val sw = host.findViewById<View>(masterId) as? CompoundButton ?: return
         val header = row(masterId) as? ViewGroup ?: return
@@ -64,8 +66,17 @@ class SettingsFoldController(private val host: Activity) {
         }
         // Keep the toggle and the chevron as two independent touch targets.
         header.addView(arrow)
+        val captionGroup = header.getChildAt(0) as? ViewGroup
+        val hint = unavailableText?.let { message ->
+            TextView(host).apply {
+                text = message
+                textSize = 11f
+                setTextColor(0xFF888888.toInt())
+                visibility = View.GONE
+            }.also { captionGroup?.addView(it) }
+        }
         val section = Section(masterId, sw, children, ancestors,
-            dependency, expandedInitially, arrow)
+            dependency, expandedInitially, arrow, hint)
         sections.add(section)
         indent(header, depth)
         children.forEach { childId -> row(childId)?.let { indent(it, depth + 1) } }
@@ -86,8 +97,10 @@ class SettingsFoldController(private val host: Activity) {
                 val parent = groups[it]
                 parent != null && parent.switch.isChecked && parent.dependency(snapshot)
             }
-            val effective = section.switch.isChecked &&
-                section.dependency(snapshot) && ancestorsEffective
+            val available = section.dependency(snapshot) && ancestorsEffective
+            val effective = section.switch.isChecked && available
+            section.dependencyHint?.visibility =
+                if (available) View.GONE else View.VISIBLE
             section.arrow.text = if (section.expanded) "▾" else "▸"
             section.arrow.contentDescription =
                 if (section.expanded) "收起详细设置" else "展开详细设置"
