@@ -1090,23 +1090,32 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun imageDetails(relative: String) {
         val uses = imageUses()[relative].orEmpty()
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(16), px(10), px(16), px(10))
+        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        val frame = FrameLayout(this).apply { setPadding(px(24), 0, px(24), 0) }
+        val card = com.google.android.material.card.MaterialCardView(this).apply {
+            radius = px(28).toFloat()
+            cardElevation = px(6).toFloat()
+            setCardBackgroundColor(getColor(R.color.cp_card_bg))
         }
+        frame.addView(card, FrameLayout.LayoutParams(-1, -2))
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(16), px(16), px(16), px(16))
+        }
+        card.addView(body)
+        body.addView(text(File(relative).name, 18f).apply {
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundResource(R.drawable.bg_thumb_border)
             setImageBitmap(thumb(File(draft, relative), 400))
-        }, LinearLayout.LayoutParams(-1, px(210)))
+        }, LinearLayout.LayoutParams(-1, px(200)))
         content.addView(text(relative, 12f))
         content.addView(text(if (uses.isEmpty()) "未使用"
             else "被 ${uses.map { it.first }.distinct().size} 个动作 / ${uses.size} 帧引用", 13f))
-        val dialog = AlertDialog.Builder(this).setTitle(File(relative).name)
-            .setView(ScrollView(this).apply { addView(content) })
-            .setNegativeButton("关闭", null)
-            .setPositiveButton("重命名") { _, _ -> renameDialog(relative, false) }
-            .create()
         uses.forEach { (mode, index) ->
             content.addView(text("$mode / 帧 $index  ›", 14f).apply {
                 isClickable = true
@@ -1116,7 +1125,30 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }
             })
         }
+        body.addView(ScrollView(this).apply { addView(content) },
+            LinearLayout.LayoutParams(-1,
+                minOf(px(250 + uses.size * 36), resources.displayMetrics.heightPixels / 2)))
+        actionPairForDialog(body, "关闭", { dialog.dismiss() },
+            "重命名", { dialog.dismiss(); renameDialog(relative, false) })
+        dialog.setContentView(frame)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
+        dialog.window?.setLayout(-1, -2)
+    }
+
+    private fun actionPairForDialog(parent: LinearLayout, left: String,
+                                    onLeft: () -> Unit, right: String, onRight: () -> Unit) {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, px(10), 0, 0)
+        }
+        row.addView(button(left, onLeft), LinearLayout.LayoutParams(0, px(44), 1f).apply {
+            rightMargin = px(5)
+        })
+        row.addView(button(right, onRight), LinearLayout.LayoutParams(0, px(44), 1f).apply {
+            leftMargin = px(5)
+        })
+        parent.addView(row)
     }
 
     private fun imageOptions(relative: String) {
