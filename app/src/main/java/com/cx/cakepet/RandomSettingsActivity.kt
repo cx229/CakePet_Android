@@ -89,6 +89,9 @@ class RandomSettingsActivity : AppCompatActivity() {
         periodRange = findViewById(R.id.period_range)
         periodMinVal = findViewById(R.id.period_min_value)
         periodMaxVal = findViewById(R.id.period_max_value)
+        folding = SettingsFoldController(this).apply {
+            add(R.id.sw_random_mode, itemSwitches.map { it.first } + R.id.period_min_value)
+        }
         refreshUI()
 
         // 「恢复默认设置」已移入右上角“更多”浮窗，逻辑封装为 doResetDefault()
@@ -96,6 +99,8 @@ class RandomSettingsActivity : AppCompatActivity() {
 
     // 周期双滑块绑定 + 值回填。抽成方法，onCreate 与 onResume 复用，
     // 使从阈值页返回时滑块行程（最新上下界）即时热更新。
+    private var folding: SettingsFoldController? = null
+
     private fun refreshUI() {
         val bPeriod = PetBounds.forRole(this@RandomSettingsActivity, roleId).getBlocking(SettingsPage.RANDOM).duals
             .firstOrNull { it.key == "randomPeriod" } ?: return
@@ -167,6 +172,7 @@ class RandomSettingsActivity : AppCompatActivity() {
             if (safeLo >= safeHi) safeHi = (safeLo + 1f).coerceAtMost(rsTo)
             periodRange.values = listOf(safeLo, safeHi)
             syncPeriodInputs(safeLo.toInt(), safeHi.toInt())
+            folding?.refresh()
             } catch (e: Exception) { e.printStackTrace() }
         }
     }
