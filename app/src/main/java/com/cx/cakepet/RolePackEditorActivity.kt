@@ -1174,11 +1174,17 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun updateBulkBar(key: String) {
-        removeBulkBar()
-        if (bulkSelected.isEmpty()) return
-        // Overlay lives outside the scrolling content; bottom padding reserves full tap/scroll space.
+        bulkBar?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        bulkBar = null
+        if (bulkSelected.isEmpty()) {
+            removeBulkBar()
+            return
+        }
+        // Do not toggle scroll padding on each selection: the cards must not jump.
         scroll.clipToPadding = false
-        scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, px(120))
+        if (scroll.paddingBottom != px(120)) {
+            scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, px(120))
+        }
         val host = findViewById<FrameLayout>(android.R.id.content)
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
