@@ -129,7 +129,10 @@ object RolePackEditing {
                 movie.setTime(time.coerceAtMost((duration - 1).coerceAtLeast(0)))
                 movie.draw(canvas, 0f, 0f)
                 val file = File(folder, "${(i + 1).toString().padStart(4, '0')}.png")
-                FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                FileOutputStream(file).use { output ->
+                    check(bmp.compress(Bitmap.CompressFormat.PNG, 100, output)) { "GIF 帧 PNG 编码失败" }
+                }
+                check(file.isFile && file.length() > 0L) { "GIF 帧写入失败：${file.name}" }
                 val relative = file.relativeTo(draft).invariantSeparatorsPath
                 frames.put(JSONObject().put("res", relative).put("delay", delay))
                 manifest.put(JSONObject().put("file", file.name).put("delay", delay))
