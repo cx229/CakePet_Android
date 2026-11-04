@@ -35,6 +35,7 @@ class SnapSettingsActivity : AppCompatActivity() {
 
     // 视图/开关提升为字段，供 refreshUI / onResume 复用
     private lateinit var swSnapEnabled: Switch
+    private var folding: SettingsFoldController? = null
     private lateinit var swStop: Switch
     private lateinit var swSbottom: Switch
     private lateinit var swSleft: Switch
@@ -81,6 +82,10 @@ class SnapSettingsActivity : AppCompatActivity() {
         swSright = findViewById(R.id.sw_sright)
         thresholdBar = findViewById(R.id.snap_threshold_bar)
         thresholdVal = findViewById(R.id.snap_threshold_value)
+        folding = SettingsFoldController(this).apply {
+            add(R.id.sw_snap_enabled, listOf(R.id.sw_stop, R.id.sw_sbottom,
+                R.id.sw_sleft, R.id.sw_sright, R.id.snap_threshold_bar))
+        }
 
         // 吸附边缘总开关：直接控制 snapEnabled，不影响子选项值
         swSnapEnabled.setOnCheckedChangeListener { _, b ->
@@ -150,6 +155,7 @@ class SnapSettingsActivity : AppCompatActivity() {
             pendingThreshold = null
             EditSync.setText(thresholdVal, c.snapThreshold.toInt().toString())
         }
+        folding?.refresh()
     }
 
     // 吸附距离滑块：绑定 + 初始回填。抽成方法，onCreate 与 onResume 复用，
