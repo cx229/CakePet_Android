@@ -151,6 +151,9 @@ class ThinkingSettingsActivity : AppCompatActivity() {
             setCardsEnabled(b)
         }
 
+        folding = SettingsFoldController(this).apply {
+            add(R.id.sw_thinking_enabled, listOf(R.id.card_display, R.id.card_flash, R.id.card_bg))
+        }
         // ===== 滑块：业务范围来自 PetBounds（阈值页可改上下界），滑块内部 0..100 归一化 =====
         refreshUI()
 
@@ -164,6 +167,8 @@ class ThinkingSettingsActivity : AppCompatActivity() {
     }
 
     /** 把当前配置刷新到本页所有滑块/数值/开关/颜色。供 configFlow.collect 持续调用，取代冷读 configFlow.first()。 */
+    private var folding: SettingsFoldController? = null
+
     private suspend fun applyConfigToUi(c: PetConfigData) {
         val b = PetBounds.forRole(this@ThinkingSettingsActivity, roleId).getBlocking(SettingsPage.THINKING)
         val bs2 = b.sliders.first { it.key == "thinkingTextSize" }
@@ -219,6 +224,7 @@ class ThinkingSettingsActivity : AppCompatActivity() {
 
         currentColor = c.thinkingColor
         refreshColorDot()
+        folding?.refresh()
     }
 
     /** 启用/禁用「显示」「闪回」两个模块卡片（碎碎念总开关关闭时禁用）。 */
