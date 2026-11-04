@@ -581,14 +581,15 @@ class PetView @JvmOverloads constructor(
         physics.y = nextY.coerceIn(physics.minY, physics.maxY)
         lastFrameMoveX = physics.x - oldX
         lastFrameMoveY = physics.y - oldY
-        if (locomotion && (hitX || hitY)) {
+        if (hitX || hitY) {
             if (wallClimb && (!physics.isClimbing ||
                 climbReachedEnd(physics.climbSide, hitX, hitY))) {
                 setClimb(nextWallDir(side, mx to my))
             } else if (!wallClimb) {
-                imageManager.walkDir = -dir
-                if (physics.isClimbing) climbFlipX = imageManager.walkDir < 0
-                else flipX = imageManager.walkDir < 0
+                // All frame-driven movements obey the same mirror-on-edge rule.
+                if (locomotion) imageManager.walkDir = -dir
+                if (physics.isClimbing) climbFlipX = !climbFlipX
+                else flipX = !flipX
             }
         }
         onPositionChanged?.invoke(physics.x, physics.y)
@@ -1959,6 +1960,7 @@ class PetView @JvmOverloads constructor(
                         if (climbWall >= 0) restoreBaseGravity()
                     }
                     dragging = true
+                    imageManager.forageSelected = false
                     longPressTriggered = false
                 }
                 // 速度采样（用于抛掷初速）。静止模式(移动关闭)时拖动即静止，不采样/不赋予抛掷速度。
