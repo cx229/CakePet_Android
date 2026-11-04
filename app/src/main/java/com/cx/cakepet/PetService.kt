@@ -493,7 +493,9 @@ class PetService : Service() {
     private fun roleCfg(roleId: String): PetConfigData? = engines[roleId]?.config?.getBlocking()
     /** 该角色控制窗是否应隐藏：隐藏控制层 或 点击穿透，二者任一即隐藏。 */
     private fun roleControlHidden(roleId: String): Boolean =
-        roleCfg(roleId)?.let { it.hideControlLayer || it.clickThrough } ?: false
+        roleCfg(roleId)?.let {
+            it.hideControlLayer || it.clickThrough || (keyboardUp && it.keyboardMode() == "pass")
+        } ?: false
     /** 该角色显示窗是否应带 FLAG_NOT_TOUCHABLE：控制层隐藏/穿透/隐藏画布 或 未强制无透明 → 带（穿透）；
      *  强制无透明且控制层可见 → 不带（100% 不透明，代价是显示层吃宠物区点击）。 */
     private fun roleDisplayNotTouchable(roleId: String): Boolean =
@@ -2469,11 +2471,25 @@ class PetService : Service() {
             // 键盘适应「画布整体顶起」：本角色当前 shiftY 与已施加值的差，同步到宠物位置与该角色食物位置，
             // 使【宠物/食物/活动范围】作为整体一起上移(键盘出现)/复原(键盘消失)。范围本身由 recalcBoundsFor 按 shiftY 平移。
             // 仅键盘状态真变化(di≠0)时才搬移位置，避免无谓移动；位置与范围同向同量，故相对布局不变。
-            val imeActive = c.imeAdapt && (viewImeInset > 0f || globalImeInset > 0f)
+            val imeMode = c.keyboardMode()
+            val imeActive = imeMode in listOf("global", "local") &&
+                (viewImeInset > 0f || globalImeInset > 0f)
             val imeKb = if (imeActive) maxOf(viewImeInset, globalImeInset) else 0f
             val imeL = if (imeActive) c.imeLiftOffset else 0f
-            val newShiftY = if (imeActive) -(imeKb + imeL) else 0f
             val prevShiftY = imeShiftY.getOrPut(rid) { 0f }
+            val newShiftY = when {
+                !imeActive -> 0f
+                imeMode == "global" -> -(imeKb + imeL)
+                else -> {
+                    // Local lift: only move a pet that would actually intersect the keyboard.
+                    // Reconstruct its unshifted bottom to avoid accumulating offset every tick.
+                    val keyboardTop = vis.bottom - imeKb - imeL
+                    pets.filter { it.roleId == rid }.minOfOrNull { inst ->
+                        minOf(0f, keyboardTop -
+                            (inst.view.physics.y - prevShiftY + inst.view.height))
+                    } ?: 0f
+                }
+            }
             // 位移量按【绝对目标取整】而非「增量取整」：Σ(round(目标)−round(上次)) 可连锁相消，
             // 最终位移恒等于 round(最终shiftY)，与浮点边界差 <0.5px，且不随键盘动画帧数累积漂移。
             val di = Math.round(newShiftY) - Math.round(prevShiftY)
@@ -2666,7 +2682,9 @@ class PetService : Service() {
         // 宠物/食物/范围线保持相对位置一起被键盘顶起，键盘消失 shiftY=0 整体复原。
         // 注意：宠物 physics.y 与该角色全部食物 lp.y 的同步位移由 recalcBounds 按 delta(新shiftY-旧shiftY)施加，
         // 使其与范围同向同量移动；本函数只负责按 shiftY 平移【范围本身】。
-        val imeActive = rc.imeAdapt && (viewImeInset > 0f || globalImeInset > 0f)
+        val keyboardMode = rc.keyboardMode()
+        val imeActive = keyboardMode in listOf("global", "local") &&
+            (viewImeInset > 0f || globalImeInset > 0f)
         val imeBottomInset = if (imeActive) maxOf(viewImeInset, globalImeInset) else 0f
         // 抬高偏移：仅在输入法防误触开启且键盘真实弹出时，才在键盘地面之上额外抬高，正=更高、负=更低。
         val lift = if (imeActive) rc.imeLiftOffset else 0f
@@ -2679,7 +2697,8 @@ class PetService : Service() {
         val minY0 = vis.top.toFloat() + (if (topIsAnchor) 0f else topInset) + topOff
         val maxY0 = (vis.bottom.toFloat() - (if (botIsAnchor) 0f else botInset) - botOff).coerceAtLeast(minY0)
         // 统一顶起位移 shiftY（自洽：与 recalcBounds 中按同一公式算出的 newShiftY 完全一致）。
-        val shiftY = if (imeActive) -(imeBottomInset + lift) else 0f
+        val shiftY = if (keyboardMode == "local") imeShiftY[roleId] ?: 0f
+            else if (imeActive) -(imeBottomInset + lift) else 0f
         // 顶部为锚点边 → minY 直接 = 屏幕顶+shiftY（脚贴顶，图顶可出界）；否则图顶不超屏幕顶+shiftY
         val minY = minY0 + shiftY
         // 底部为锚点边 → maxY 直接 = 屏幕底+shiftY（脚贴底，图底可出界下垂）；否则图底不超屏幕底+shiftY
@@ -3281,6 +3300,11 @@ class PetService : Service() {
         }
         keyboardUp = ime > 0
         applyImeHide(keyboardUp)
+        // Keyboard-only pass-through must restore each role's original touch flags on dismiss.
+        for (roleId in engines.keys) {
+            syncControlWindows(roleId)
+            applyDisplayTouchFlags(roleId)
+        }
     }
 
     // 键盘时隐藏：imeHide 开启且键盘弹出时，将所有宠物实例整体隐藏（GONE 即不可见且不可点击），
@@ -3291,7 +3315,8 @@ class PetService : Service() {
             // 多角色隔离：键盘时隐藏 与 恢复可见性 均按【本实例角色】配置，不再用服务级全局别名
             // （imeHideEnabled/effectiveVisible 为单例 scratch，多角色下被最后加载角色覆盖）。
             val rc = engines[inst.roleId]?.config?.getBlocking()
-            val hide = (rc?.imeHide ?: imeHideEnabled) && kbUp
+            val hide = (rc?.keyboardMode() == "hide" ||
+                (rc == null && imeHideEnabled)) && kbUp
             val eff = rc?.let { it.visible && it.enabled } ?: effectiveVisible
             inst.view.visibility =
                 if (hide) android.view.View.GONE
