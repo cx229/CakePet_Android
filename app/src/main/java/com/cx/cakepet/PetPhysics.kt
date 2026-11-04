@@ -317,30 +317,16 @@ class PetPhysics {
 
     /** 是否处于“已落地静止”状态：贴住某重力边且对应轴速度已极小，用于结束抛掷 */
     private fun isLandedStill(): Boolean {
-        val stillVx = abs(vx) < stillThreshold
-        val stillVy = abs(vy) < stillThreshold
-        // 体感模式下四边定向重力保留原值但【不生效】（step 走 tiltGravity 分支），
-        // 此处落地判定必须忽略四边，统一按“整体速度极小”处理，否则保留的四边勾选
-        // 会导致贴边即误判落地、体感翻滚提前结束。
-        if (tiltGravity) return stillVx && stillVy
-        // 多重力下，落地/静止判定必须以【主重力】为准（垂直方向优先于侧向，对齐 calcGravityDir），
-        // 次重力方向边单独贴住【不得】触发整体静止，否则“贴次重力侧墙但未到主重力边”时
-        // 会被误判落地、抛掷提前结束、主重力失效（表现为“被次重力边错误变静止”）。
-        val hasVertical = gravityBottom || gravityTop
-        val hasSide = gravityLeft || gravityRight
-        // 底边重力（主）：已贴底且竖直速度极小
-        if (gravityBottom && y >= maxY - 0.5f && stillVy) return true
-        // 顶边重力（主）：已贴顶且竖直速度极小
-        if (gravityTop && y <= minY + 0.5f && stillVy) return true
-        // 侧向重力仅在没有垂直重力时才作为落地判定（避免次重力边误判）；
-        // 有垂直重力时侧向贴边不算落地，主重力继续主导。
-        if (hasSide && !hasVertical) {
-            if (gravityLeft && x <= minX + 0.5f && stillVx) return true
-            if (gravityRight && x >= maxX - 0.5f && stillVx) return true
+        val main = primaryGravitySide()
+        // A low speed in midair or at a non-gravity wall is not a landing.
+        // No active gravity direction: avoid an endless roll when physics settles.
+        if (main < 0) return abs(vx) < stillThreshold && abs(vy) < stillThreshold
+        return when (main) {
+            0 -> y >= maxY - 0.5f && abs(vy) < stillThreshold
+            3 -> y <= minY + 0.5f && abs(vy) < stillThreshold
+            1 -> x <= minX + 0.5f && abs(vx) < stillThreshold
+            else -> x >= maxX - 0.5f && abs(vx) < stillThreshold
         }
-        // 无重力：整体速度极小
-        if (!hasVertical && !hasSide && stillVx && stillVy) return true
-        return false
     }
 
     /**
