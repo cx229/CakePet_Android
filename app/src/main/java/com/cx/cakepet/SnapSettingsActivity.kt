@@ -83,8 +83,7 @@ class SnapSettingsActivity : AppCompatActivity() {
         thresholdBar = findViewById(R.id.snap_threshold_bar)
         thresholdVal = findViewById(R.id.snap_threshold_value)
         folding = SettingsFoldController(this).apply {
-            add(R.id.sw_snap_enabled, listOf(R.id.sw_stop, R.id.sw_sbottom,
-                R.id.sw_sleft, R.id.sw_sright, R.id.snap_threshold_bar))
+            add(R.id.sw_snap_enabled, listOf(R.id.group_snap_directions, R.id.snap_threshold_bar))
         }
 
         // 吸附边缘总开关：直接控制 snapEnabled，不影响子选项值
