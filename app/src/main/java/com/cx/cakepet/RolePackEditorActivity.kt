@@ -2072,7 +2072,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         toolbar.addView(button("导入GIF") {
-            startUpload(true, folder = "images", action = "library")
+            startUpload(true, folder = "", action = "library")
         }, LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
         toolbar.addView(button("新建文件夹") {
             newResourceFolder { images() }
