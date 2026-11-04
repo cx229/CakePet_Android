@@ -63,16 +63,16 @@
     },
     "snap": {
       "snap_head": [
-        "吸附探头"
+        "探头中"
       ],
       "pat_head": {
         "pat_head": [
-          "吸附探头摸摸头"
+          "摸摸头-探头"
         ]
       },
       "feed": {
         "eat": [
-          "探头投食"
+          "投食-探头"
         ]
       }
     },
@@ -107,7 +107,7 @@
         "蠕动",
         "美白",
         "扒鱼",
-        "探头",
+        "探头中",
         "摸摸头",
         "落地",
         "滚动"
@@ -128,7 +128,7 @@
       "duration": null,
       "finishCycle": true,
       "groups": [
-        "进食"
+        "投喂与进食"
       ]
     },
     "静坐": {
@@ -171,7 +171,7 @@
       },
       "finishCycle": true,
       "groups": [
-        "待机"
+        "待机与日常"
       ]
     },
     "炸毛": {
@@ -214,12 +214,17 @@
       },
       "finishCycle": true,
       "groups": [
-        "待机"
+        "待机与日常"
       ]
     },
     "摸摸头": {
-      "loop": false,
-      "nextMode": "摸摸头持续",
+      "loop": true,
+      "duration": {
+        "min": 3000,
+        "max": 4000
+      },
+      "finishCycle": true,
+      "nextMode": "摇头",
       "walkSpeed": 0,
       "frames": [
         {
@@ -228,10 +233,52 @@
             105,
             110
           ]
+        },
+        {
+          "res": "摸摸头/pat_head-2.png",
+          "delay": [
+            100,
+            110
+          ]
+        },
+        {
+          "res": "摸摸头/pat_head-3.png",
+          "delay": [
+            100,
+            110
+          ]
+        },
+        {
+          "res": "摸摸头/pat_head-4.png",
+          "delay": [
+            105,
+            110
+          ]
+        },
+        {
+          "res": "摸摸头/pat_head-5.png",
+          "delay": [
+            105,
+            110
+          ]
+        },
+        {
+          "res": "摸摸头/pat_head-4.png",
+          "delay": [
+            105,
+            110
+          ]
+        },
+        {
+          "res": "摸摸头/pat_head-3.png",
+          "delay": [
+            100,
+            110
+          ]
         }
       ],
       "groups": [
-        "交互"
+        "摸头交互"
       ]
     },
     "摇头": {
@@ -260,7 +307,7 @@
       },
       "finishCycle": true,
       "groups": [
-        "待机"
+        "待机与日常"
       ]
     },
     "落地": {
@@ -293,7 +340,7 @@
         }
       ],
       "groups": [
-        "移动"
+        "拖动与抛掷"
       ]
     },
     "轻晃提起": {
@@ -321,7 +368,7 @@
       "duration": null,
       "finishCycle": true,
       "groups": [
-        "移动"
+        "拖动与抛掷"
       ]
     },
     "中速向左提起": {
@@ -338,7 +385,7 @@
       "duration": null,
       "finishCycle": true,
       "groups": [
-        "移动"
+        "拖动与抛掷"
       ]
     },
     "快速向左提起": {
@@ -355,7 +402,7 @@
       "duration": null,
       "finishCycle": true,
       "groups": [
-        "移动"
+        "拖动与抛掷"
       ]
     },
     "中速向右提起": {
@@ -372,7 +419,7 @@
       "duration": null,
       "finishCycle": true,
       "groups": [
-        "移动"
+        "拖动与抛掷"
       ]
     },
     "快速向右提起": {
@@ -389,7 +436,7 @@
       "duration": null,
       "finishCycle": true,
       "groups": [
-        "移动"
+        "拖动与抛掷"
       ]
     },
     "滚动": {
@@ -450,7 +497,7 @@
       "duration": null,
       "finishCycle": true,
       "groups": [
-        "移动"
+        "拖动与抛掷"
       ]
     },
     "走路": {
@@ -477,7 +524,8 @@
       },
       "finishCycle": true,
       "groups": [
-        "移动"
+        "待机与日常",
+        "行走与攀爬"
       ]
     },
     "跳起": {
@@ -495,7 +543,7 @@
       "duration": null,
       "finishCycle": true,
       "groups": [
-        "移动"
+        "行走与攀爬"
       ]
     },
     "美白": {
@@ -540,7 +588,7 @@
         }
       ],
       "groups": [
-        "待机"
+        "待机与日常"
       ]
     },
     "蠕动": {
@@ -569,12 +617,13 @@
       },
       "finishCycle": true,
       "groups": [
-        "移动"
+        "待机与日常",
+        "行走与攀爬"
       ]
     },
-    "探头": {
+    "探头中": {
       "loop": false,
-      "nextMode": "探头持续",
+      "nextMode": "探头中",
       "walkSpeed": 0,
       "frames": [
         {
@@ -595,38 +644,17 @@
         }
       ],
       "groups": [
-        "交互"
+        "探头与贴边"
       ]
     },
-    "吸附探头": {
-      "loop": false,
-      "nextMode": "吸附探头持续",
-      "walkSpeed": 0,
-      "frames": [
-        {
-          "res": "探头/probe_head-4.png",
-          "delay": [
-            70,
-            80
-          ],
-          "anchorY": 11
-        },
-        {
-          "res": "探头/probe_head-2.png",
-          "delay": [
-            70,
-            80
-          ],
-          "anchorY": 11
-        }
-      ],
-      "groups": [
-        "交互"
-      ]
-    },
-    "吸附探头摸摸头": {
-      "loop": false,
-      "nextMode": "吸附探头摸摸头持续",
+    "摸摸头-探头": {
+      "loop": true,
+      "duration": {
+        "min": 3000,
+        "max": 4000
+      },
+      "finishCycle": true,
+      "nextMode": "探头中",
       "walkSpeed": 0,
       "frames": [
         {
@@ -636,15 +664,64 @@
             110
           ],
           "anchorY": 11
+        },
+        {
+          "res": "探头摸摸头/probe_pat_head-2.png",
+          "delay": [
+            100,
+            110
+          ],
+          "anchorY": 11
+        },
+        {
+          "res": "探头摸摸头/probe_pat_head-3.png",
+          "delay": [
+            100,
+            110
+          ],
+          "anchorY": 11
+        },
+        {
+          "res": "探头摸摸头/probe_pat_head-4.png",
+          "delay": [
+            105,
+            110
+          ],
+          "anchorY": 11
+        },
+        {
+          "res": "探头摸摸头/probe_pat_head-5.png",
+          "delay": [
+            105,
+            110
+          ],
+          "anchorY": 11
+        },
+        {
+          "res": "探头摸摸头/probe_pat_head-4.png",
+          "delay": [
+            105,
+            110
+          ],
+          "anchorY": 11
+        },
+        {
+          "res": "探头摸摸头/probe_pat_head-3.png",
+          "delay": [
+            100,
+            110
+          ],
+          "anchorY": 11
         }
       ],
       "groups": [
-        "交互"
+        "摸头交互",
+        "探头与贴边"
       ]
     },
     "投食": {
       "loop": false,
-      "nextMode": "投食持续",
+      "nextMode": "高兴",
       "walkSpeed": 0,
       "frames": [
         {
@@ -697,12 +774,12 @@
         }
       ],
       "groups": [
-        "进食"
+        "投喂与进食"
       ]
     },
-    "探头投食": {
+    "投食-探头": {
       "loop": false,
-      "nextMode": "探头投食持续",
+      "nextMode": "高兴-探头",
       "walkSpeed": 0,
       "frames": [
         {
@@ -755,7 +832,8 @@
         }
       ],
       "groups": [
-        "进食"
+        "探头与贴边",
+        "投喂与进食"
       ]
     },
     "趴着": {
@@ -772,7 +850,7 @@
         }
       ],
       "groups": [
-        "待机"
+        "待机与日常"
       ]
     },
     "传送门": {
@@ -784,9 +862,6 @@
           "res": "安静/sit_clam-1.png",
           "delay": 3000
         }
-      ],
-      "groups": [
-        "特殊"
       ]
     },
     "扒鱼": {
@@ -848,53 +923,11 @@
         }
       ],
       "groups": [
-        "进食"
+        "待机与日常",
+        "投喂与进食"
       ]
     },
-    "摸摸头持续": {
-      "loop": true,
-      "duration": {
-        "min": 3000,
-        "max": 4000
-      },
-      "finishCycle": true,
-      "nextMode": "摇头",
-      "walkSpeed": 0,
-      "frames": [
-        {
-          "res": "摸摸头/pat_head-2.png",
-          "delay": [
-            100,
-            110
-          ]
-        },
-        {
-          "res": "摸摸头/pat_head-3.png",
-          "delay": [
-            100,
-            110
-          ]
-        },
-        {
-          "res": "摸摸头/pat_head-4.png",
-          "delay": [
-            105,
-            110
-          ]
-        },
-        {
-          "res": "摸摸头/pat_head-5.png",
-          "delay": [
-            105,
-            110
-          ]
-        }
-      ],
-      "groups": [
-        "交互"
-      ]
-    },
-    "探头持续": {
+    "探头": {
       "loop": true,
       "duration": {
         "min": 5000,
@@ -922,85 +955,10 @@
         }
       ],
       "groups": [
-        "交互"
+        "探头与贴边"
       ]
     },
-    "吸附探头持续": {
-      "loop": true,
-      "duration": null,
-      "finishCycle": true,
-      "nextMode": null,
-      "walkSpeed": 0,
-      "frames": [
-        {
-          "res": "探头/probe_head-1.png",
-          "delay": [
-            1000,
-            5000
-          ],
-          "anchorY": 11
-        },
-        {
-          "res": "探头/probe_head-2.png",
-          "delay": [
-            150,
-            300
-          ],
-          "anchorY": 11
-        }
-      ],
-      "groups": [
-        "交互"
-      ]
-    },
-    "吸附探头摸摸头持续": {
-      "loop": true,
-      "duration": {
-        "min": 3000,
-        "max": 4000
-      },
-      "finishCycle": true,
-      "nextMode": "吸附探头",
-      "walkSpeed": 0,
-      "frames": [
-        {
-          "res": "探头摸摸头/probe_pat_head-2.png",
-          "delay": [
-            100,
-            110
-          ],
-          "anchorY": 11
-        },
-        {
-          "res": "探头摸摸头/probe_pat_head-3.png",
-          "delay": [
-            100,
-            110
-          ],
-          "anchorY": 11
-        },
-        {
-          "res": "探头摸摸头/probe_pat_head-4.png",
-          "delay": [
-            105,
-            110
-          ],
-          "anchorY": 11
-        },
-        {
-          "res": "探头摸摸头/probe_pat_head-5.png",
-          "delay": [
-            105,
-            110
-          ],
-          "anchorY": 11
-        }
-      ],
-      "groups": [
-        "交互"
-      ]
-    },
-    "投食持续": {
+    "高兴": {
       "loop": true,
       "duration": {
         "min": 2000,
@@ -1036,17 +994,17 @@
         }
       ],
       "groups": [
-        "进食"
+        "投喂与进食"
       ]
     },
-    "探头投食持续": {
+    "高兴-探头": {
       "loop": true,
       "duration": {
         "min": 2000,
         "max": 3000
       },
       "finishCycle": true,
-      "nextMode": "吸附探头",
+      "nextMode": "探头中",
       "walkSpeed": 0,
       "frames": [
         {
@@ -1075,7 +1033,8 @@
         }
       ],
       "groups": [
-        "进食"
+        "探头与贴边",
+        "投喂与进食"
       ]
     }
   }

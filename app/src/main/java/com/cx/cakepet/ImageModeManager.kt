@@ -122,8 +122,9 @@ class ImageModeManager(
         if (name == start) return true
         val entry = modes[start] ?: return false
         val continuation = modes[name] ?: return false
-        return !entry.loop && continuation.loop && entry.nextModeName == name &&
-            currentPack.functions.values.none { name in it }
+        // A shared continuation may also appear in a standalone function/menu pool.
+        // Its reuse must not break the entrance-to-loop relationship.
+        return !entry.loop && continuation.loop && entry.nextModeName == name
     }
 
     /** Consider an internal continuation part of the same user-facing function. */
