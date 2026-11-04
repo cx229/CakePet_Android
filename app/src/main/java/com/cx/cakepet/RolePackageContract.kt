@@ -195,6 +195,8 @@ object RolePackageContract {
                 if (!validDelay) errors.add("动画 $modeId 帧 $idx 的 delay 无效")
                 if (frame.optString("verticalAlign", "top") !in listOf("top", "center"))
                     errors.add("动画 $modeId 帧 $idx verticalAlign 必须为 top 或 center")
+                if (frame.has("flipX") && frame.opt("flipX") !is Boolean)
+                    errors.add("动画 $modeId 帧 $idx flipX 必须为布尔值（true/false）")
                 for (coord in listOf("dx", "dy"))
                     if (frame.has(coord) && frame.opt(coord) !is Number)
                         errors.add("动画 $modeId 帧 $idx $coord 必须为数字")
