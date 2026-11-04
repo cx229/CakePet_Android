@@ -1226,8 +1226,9 @@ class PetService : Service() {
         // 按角色独立应用窗口开关：控制层增删 / 显示层增删 / 显示窗 NOT_TOUCHABLE（强制无透明）。
         // 均按 rt.roleId 过滤，且各 sync 幂等（先比对当前窗口状态再决定是否 removeView/addView），
         // 多角色各自独立、互不污染（修复旧全局变量导致的跨角色串味）。
-        syncControlWindows(rt.roleId)
+        // Display must attach before control, or force-opaque display would cover touch.
         syncDisplayWindows(rt.roleId)
+        syncControlWindows(rt.roleId)
         applyDisplayTouchFlags(rt.roleId)
         applyImeHide(keyboardUp)
     }
