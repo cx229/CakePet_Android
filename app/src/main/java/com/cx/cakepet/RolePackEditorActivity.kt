@@ -79,6 +79,9 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private val pngPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null && uploadAction == "chooser") {
+            pendingPick?.let { showImageChooser(it, uploadedSelection) }
+        }
         if (uri != null) attempt {
             val path = importPng(uri, uploadFolder)
             when (uploadAction) {
@@ -121,6 +124,9 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private val gifPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null && uploadAction == "chooser") {
+            pendingPick?.let { showImageChooser(it, uploadedSelection) }
+        }
         if (uri != null) attempt {
             val mode = uploadMode
             var paths = emptyList<String>()
