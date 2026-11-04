@@ -137,6 +137,11 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         scroll.post { scroll.scrollTo(0, previous.scrollY) }
     }
+    private fun getStatusBarHeight(): Int {
+        val resId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (resId > 0) resources.getDimensionPixelSize(resId)
+        else (resources.displayMetrics.density * 24f).toInt()
+    }
     private fun px(dp: Int) = (dp * resources.displayMetrics.density).toInt()
     private fun button(label: String, click: () -> Unit) = Button(this).apply {
         text = label
