@@ -832,7 +832,10 @@ class RolePackEditorActivity : AppCompatActivity() {
                 headline.addView(text("", 15f))
                 headline.addView(text("", 11f).apply {
                     setTextColor(getColor(R.color.cp_note))
-                }, LinearLayout.LayoutParams(-2, -2).apply {
+                    setSingleLine(false)
+                    maxLines = Int.MAX_VALUE
+                    ellipsize = null
+                }, LinearLayout.LayoutParams(0, -2, 1f).apply {
                     leftMargin = px(8)
                 })
                 labels.addView(headline)
