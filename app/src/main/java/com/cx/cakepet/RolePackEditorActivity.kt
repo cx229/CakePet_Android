@@ -768,8 +768,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val index = holder.bindingAdapterPosition
                     if (index != RecyclerView.NO_POSITION) {
                         if (checked) bulkSelected.add(index) else bulkSelected.remove(index)
-                        adapter.notifyDataSetChanged()
-                        updateBulkBar(key, adapter)
+                        recycler.adapter?.notifyDataSetChanged()
+                        updateBulkBar(key)
                     }
                 }
                 val more = card.getChildAt(2) as TextView
@@ -785,8 +785,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                         if (bulkSelected.isEmpty()) editFrame(key, index)
                         else {
                             if (!bulkSelected.add(index)) bulkSelected.remove(index)
-                            adapter.notifyDataSetChanged()
-                            updateBulkBar(key, adapter)
+                            recycler.adapter?.notifyDataSetChanged()
+                            updateBulkBar(key)
                         }
                     }
                 }
