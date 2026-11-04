@@ -985,6 +985,26 @@ class RolePackEditorActivity : AppCompatActivity() {
         showMode(key)
     }
 
+    /** Make a visible, uniquely numbered directory before returning to the image picker. */
+    private fun newResourceFolder(afterCreated: () -> Unit) {
+        editor("新建文件夹", compact = true) { box ->
+            val field = entry(box, "文件夹名称", "", compact = true)
+            val save: () -> Unit = {
+                val name = field.text.toString().trim()
+                require(name.isNotEmpty() && name != "." && name != ".." &&
+                    name.length <= 80 && name.none {
+                        it == '/' || it == '\\' || it.code < 32 || it == ':'
+                    }) { "请输入有效的文件夹名称" }
+                resourceChange { working, _ ->
+                    val directory = File(working, RolePackEditing.uniqueName(working, name))
+                    check(directory.mkdirs()) { "无法创建文件夹" }
+                }
+                handler.post { afterCreated() }
+            }
+            save
+        }
+    }
+
     private fun showImageChooser(request: ImagePickRequest, initial: List<String> = emptyList()) {
         val single = request.action == "batch"
         val selected = linkedSetOf<String>().apply {
