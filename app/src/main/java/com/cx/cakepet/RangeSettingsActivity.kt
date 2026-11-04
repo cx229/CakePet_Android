@@ -45,6 +45,27 @@ class RangeSettingsActivity : AppCompatActivity() {
     private lateinit var swImeAdapt: Switch
     private lateinit var swImeResetBottom: Switch
     private lateinit var swImeHide: Switch
+    private lateinit var imeModeSelector: android.widget.Spinner
+    private val keyboardModes = listOf(
+        "关闭" to "off",
+        "整体画布抬高" to "global",
+        "局部抬高" to "local",
+        "键盘时隐藏" to "hide",
+        "键盘时点击穿透" to "pass"
+    )
+    private fun refreshKeyboardModeUi(c: PetConfigData) {
+        if (!::imeModeSelector.isInitialized) return
+        val mode = c.keyboardMode()
+        val position = keyboardModes.indexOfFirst { it.second == mode }.coerceAtLeast(0)
+        if (imeModeSelector.selectedItemPosition != position) imeModeSelector.setSelection(position)
+        val needsLift = mode == "global" || mode == "local"
+        (swImeAdapt.parent as View).visibility = View.GONE
+        (swImeHide.parent as View).visibility = View.GONE
+        (swImeResetBottom.parent as View).visibility =
+            if (needsLift) View.VISIBLE else View.GONE
+        (imeLiftBar.parent as View).visibility =
+            if (needsLift) View.VISIBLE else View.GONE
+    }
     private lateinit var imeLiftBar: Slider
     private lateinit var imeLiftVal: EditText
 
@@ -83,6 +104,44 @@ class RangeSettingsActivity : AppCompatActivity() {
         swImeHide = findViewById(R.id.sw_ime_hide)
         imeLiftBar = findViewById(R.id.ime_lift_bar)
         imeLiftVal = findViewById(R.id.ime_lift_value)
+        // Keep the legacy switches in the layout for defaults/threshold compatibility,
+        // but expose a single exclusive mode control to avoid conflicting combinations.
+        val keyboardGroup = (swImeAdapt.parent as View).parent as android.widget.LinearLayout
+        val modeRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((20 * resources.displayMetrics.density).toInt(),
+                (8 * resources.displayMetrics.density).toInt(),
+                (20 * resources.displayMetrics.density).toInt(),
+                (8 * resources.displayMetrics.density).toInt())
+        }
+        modeRow.addView(TextView(this).apply {
+            text = "键盘适应模式"
+            textSize = 15f
+            setTextColor(getColor(R.color.cp_title))
+        })
+        imeModeSelector = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(
+                this@RangeSettingsActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                keyboardModes.map { it.first }
+            )
+            minimumHeight = (48 * resources.displayMetrics.density).toInt()
+        }
+        modeRow.addView(imeModeSelector)
+        keyboardGroup.addView(modeRow, keyboardGroup.indexOfChild(swImeAdapt.parent as View))
+        imeModeSelector.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long
+            ) {
+                val selected = keyboardModes[position].second
+                val current = config.getBlocking()
+                if (current.keyboardMode() != selected) {
+                    runBlocking { config.update { it.copy(imeMode = selected) } }
+                }
+                refreshKeyboardModeUi(config.getBlocking())
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
 
         // 偏移滑块绑定 + 初始回填（抽成 refreshUI，onResume 复用实现热更新）
         refreshUI()
@@ -180,6 +239,7 @@ class RangeSettingsActivity : AppCompatActivity() {
         }
 
         val cfg = runBlocking { config.configFlow.first() }
+        refreshKeyboardModeUi(cfg)
 
         listOf(offTopBar, offBottomBar, offLeftBar, offRightBar, imeLiftBar).forEach {
             it.clearOnChangeListeners()
