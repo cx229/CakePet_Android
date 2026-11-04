@@ -562,6 +562,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     scaleType = ImageView.ScaleType.FIT_CENTER
                     setBackgroundResource(R.drawable.bg_thumb_border)
                     setImageBitmap(thumbnails.getOrPut(source) { thumb(File(draft, source)) })
+                    scaleX = if (frames.optJSONObject(0)?.optBoolean("flipX", false) == true) -1f else 1f
                 }, LinearLayout.LayoutParams(px(54), px(54)))
                 val label = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
@@ -852,6 +853,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 (labels.getChildAt(1) as TextView).text = "${frame.opt("delay")} ms"
                 (labels.getChildAt(2) as TextView).text = source
                 image.setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
+                image.scaleX = if (frame.optBoolean("flipX", false)) -1f else 1f
                 val at = holder.bindingAdapterPosition
                 select.setOnCheckedChangeListener(null)
                 select.isChecked = at in bulkSelected
@@ -928,7 +930,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName, clip.currentVerticalAlign),
                     clip.currentAnchor(), clip.currentDx, clip.currentDy, manager.currentPack.anchorRes,
                     clip.currentModeId, manager.currentPack.modeLoops[clip.currentModeId] == true,
-                    clip.currentFrameIndex)
+                    clip.currentFrameIndex, clip.currentFlipX)
                 val step = clip.advance(50, allowModeSwitch = true)
                 if (!step.ended && !step.timerRequested) handler.postDelayed(this, 50)
             }
@@ -1405,6 +1407,14 @@ class RolePackEditorActivity : AppCompatActivity() {
                     override fun afterTextChanged(s: android.text.Editable?) { changed.add(name) }
                 })
             }
+            // Explicit opt-in to bulk change; opening the dialog never resets mixed values.
+            val flipSelection = Switch(this).apply {
+                text = "左右镜像（仅勾选修改此项后批量覆盖）"
+                isChecked = frames.getJSONObject(indices.first()).optBoolean("flipX", false)
+            }
+            var flipTouched = false
+            flipSelection.setOnCheckedChangeListener { _, _ -> flipTouched = true }
+            box.addView(flipSelection)
             val save: () -> Unit = {
                 val edits = changed.associateWith { name ->
                     val raw = fields.getValue(name).text.toString().trim()
@@ -1418,13 +1428,17 @@ class RolePackEditorActivity : AppCompatActivity() {
                         raw
                     } else if (raw.isEmpty()) JSONObject.NULL else raw.toDouble()
                 }
-                if (edits.isNotEmpty()) {
+                if (edits.isNotEmpty() || flipTouched) {
                     change { json ->
                         val current = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
                         indices.forEach { index ->
                             val frame = current.getJSONObject(index)
                             edits.forEach { (name, value) ->
                                 if (value === JSONObject.NULL) frame.remove(name) else frame.put(name, value)
+                            }
+                            if (flipTouched) {
+                                if (flipSelection.isChecked) frame.put("flipX", true)
+                                else frame.remove("flipX")
                             }
                         }
                     }
@@ -1483,6 +1497,11 @@ class RolePackEditorActivity : AppCompatActivity() {
             val dy = entry(box, "dy（空=默认）", optional(f, "dy"))
             val align = entry(box, "垂直填充 verticalAlign（top/center）",
                 f.optString("verticalAlign", "top"))
+            val flip = Switch(this).apply {
+                text = "左右镜像（默认关闭）"
+                isChecked = f.optBoolean("flipX", false)
+            }
+            box.addView(flip)
             val save: () -> Unit = {
                 val delays = delay.text.toString().split(",").map { it.trim().toLong() }
                 require(delays.size in 1..2 && delays[0] > 0 && (delays.size == 1 || delays[1] >= delays[0]))
@@ -1492,6 +1511,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val alignment = align.text.toString().trim()
                     require(alignment in listOf("top", "center")) { "填充方式必须为 top 或 center" }
                     frame.put("verticalAlign", alignment)
+                    if (flip.isChecked) frame.put("flipX", true) else frame.remove("flipX")
                     listOf("anchorX" to anchorX, "anchorY" to anchorY, "dx" to dx, "dy" to dy).forEach { (name, input) ->
                         if (input.text.isBlank()) frame.remove(name)
                         else frame.put(name, input.text.toString().toDouble())
