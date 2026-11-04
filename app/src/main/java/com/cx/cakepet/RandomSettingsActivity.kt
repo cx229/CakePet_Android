@@ -90,7 +90,7 @@ class RandomSettingsActivity : AppCompatActivity() {
         periodMinVal = findViewById(R.id.period_min_value)
         periodMaxVal = findViewById(R.id.period_max_value)
         folding = SettingsFoldController(this).apply {
-            add(R.id.sw_random_mode, itemSwitches.map { it.first } + R.id.period_range)
+            add(R.id.sw_random_mode, listOf(R.id.group_random_items, R.id.group_random_period))
         }
         refreshUI()
 
