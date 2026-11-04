@@ -317,7 +317,7 @@ class FeedingSettingsActivity : AppCompatActivity() {
             EditSync.setText(periodMinVal, c.feedingPeriodMin.toString())
             EditSync.setText(periodMaxVal, c.feedingPeriodMax.toString())
         }
-        folding?.refresh()
+        folding?.refresh(c)
     }
 
     private fun setExpireEnabled(enabled: Boolean) {
