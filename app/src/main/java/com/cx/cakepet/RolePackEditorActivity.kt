@@ -1595,6 +1595,21 @@ class RolePackEditorActivity : AppCompatActivity() {
             val to = File(from.parentFile, newName)
             require(!to.exists()) { "名称已经存在" }
             check(from.renameTo(to)) { "重命名失败" }
+            // GIF frame timing metadata is keyed by filename; keep it in sync on image rename.
+            if (!directory) {
+                val manifest = File(to.parentFile, "frames.json")
+                if (manifest.isFile) {
+                    val json = JSONObject(manifest.readText())
+                    val items = json.optJSONArray("frames")
+                    if (items != null) {
+                        for (i in 0 until items.length()) {
+                            val frame = items.getJSONObject(i)
+                            if (frame.optString("file") == from.name) frame.put("file", to.name)
+                        }
+                        manifest.writeText(json.toString(2))
+                    }
+                }
+            }
             val updated = to.relativeTo(working).invariantSeparatorsPath
             val prefix = "$relative/"
             val modes = candidate.getJSONObject("modes")
