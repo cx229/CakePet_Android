@@ -112,8 +112,9 @@ object RolePackEditing {
         require(movie.width() > 0 && movie.height() > 0 && movie.width().toLong() * movie.height() <= 8_000_000)
         val delays = delays(data)
         require(delays.isNotEmpty() && delays.size <= 300)
-        val parent = File(draft, parentPath).canonicalFile
-        require(parent.toPath().startsWith(draft.canonicalFile.toPath())) { "无效目录" }
+        val root = draft.canonicalFile
+        val parent = File(root, parentPath).canonicalFile
+        require(parent.toPath().startsWith(root.toPath())) { "无效目录" }
         parent.mkdirs()
         val folder = File(parent, uniqueName(parent, gifName.replace(Regex("(?i)\\.gif$"), "")))
         check(folder.mkdirs()) { "无法创建 GIF 文件夹" }
@@ -133,7 +134,10 @@ object RolePackEditing {
                     check(bmp.compress(Bitmap.CompressFormat.PNG, 100, output)) { "GIF 帧 PNG 编码失败" }
                 }
                 check(file.isFile && file.length() > 0L) { "GIF 帧写入失败：${file.name}" }
-                val relative = file.relativeTo(draft).invariantSeparatorsPath
+                // Calculate paths against the same canonical root used to create the files.
+                // On Android /data/user/0 and /data/data can resolve to one directory;
+                // mixing canonical children with a noncanonical base creates bad res paths.
+                val relative = file.canonicalFile.relativeTo(root).invariantSeparatorsPath
                 frames.put(JSONObject().put("res", relative).put("delay", delay))
                 manifest.put(JSONObject().put("file", file.name).put("delay", delay))
             } finally { bmp.recycle() }
@@ -152,7 +156,7 @@ object RolePackEditing {
             val image = File(folder, frameName)
             val relative = frames.getJSONObject(index).getString("res")
             check(image.isFile && image.length() > 0 && image.canonicalFile ==
-                File(draft, relative).canonicalFile) {
+                File(root, relative).canonicalFile) {
                 "GIF 文件夹中的帧未正确关联：$relative"
             }
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
