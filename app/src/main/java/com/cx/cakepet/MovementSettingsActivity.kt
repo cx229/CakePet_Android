@@ -112,77 +112,28 @@ class MovementSettingsActivity : AppCompatActivity() {
         swLeap = findViewById(R.id.sw_leap)
         swAutoForage = findViewById(R.id.sw_auto_forage)
 
-        // A view-only dependency tree. Collapsing never writes or clears any PetConfig value.
-        // Each item's real parent switch still controls its runtime behavior as before.
-        val sectionExpanded = mutableMapOf(
-            "move" to true, "gravity" to true, "rebound" to true,
-            "throw" to true, "climb" to true, "forage" to false, "leap" to false
-        )
-        fun optionRow(id: Int): View = (findViewById<View>(id).parent as View)
-        val originalIndents = java.util.IdentityHashMap<View, Int>()
-        fun indent(view: View, level: Int) {
-            val extra = (resources.displayMetrics.density * 12 * level).toInt()
-            val original = originalIndents.getOrPut(view) { view.paddingLeft }
-            view.setPadding(original + extra, view.paddingTop, view.paddingRight, view.paddingBottom)
-        }
-        val hierarchy = listOf(
-            Triple("move", swMoveEnabled, listOf(R.id.maxspeed_bar)),
-            Triple("gravity", swGravityEnabled, listOf(R.id.sw_tilt_gravity, R.id.gravity_bar,
-                R.id.sw_top)),
-            Triple("rebound", swReboundEnabled, listOf(R.id.sw_bounce_vibrate,
-                R.id.rebound_bar, R.id.sw_rtop)),
-            Triple("throw", swThrow, listOf(R.id.throwcoeff_bar)),
-            Triple("climb", swWallClimb, listOf(R.id.sw_auto_forage,
-                R.id.sw_leap)),
-            Triple("forage", swAutoForage, listOf(R.id.foragespeed_bar)),
-            Triple("leap", swLeap, listOf(R.id.leap_prob_bar))
-        )
-        // Gravity directions and rebound directions live in a shared 4-toggle row.
-        val extraRows = mapOf(
-            "gravity" to listOf(R.id.sw_bottom, R.id.sw_left, R.id.sw_right),
-            "rebound" to listOf(R.id.sw_rbottom, R.id.sw_rleft, R.id.sw_rright)
-        )
-        fun refreshHierarchy() {
-            val enabled = hierarchy.associate { (key, sw, _) -> key to sw.isChecked }
-            for ((key, sw, children) in hierarchy) {
-                val parentAvailable = when (key) {
-                    "move" -> true
-                    "forage", "leap" -> enabled["move"] == true && enabled["climb"] == true &&
-                        sectionExpanded["move"] == true && sectionExpanded["climb"] == true
-                    else -> enabled["move"] == true && sectionExpanded["move"] == true
-                }
-                val showChildren = parentAvailable && sw.isChecked && sectionExpanded[key] == true
-                // Keep the top-level switches visible so they can be reopened after a collapse.
-                if (key == "forage" || key == "leap") {
-                    optionRow(sw.id).visibility = if (parentAvailable) View.VISIBLE else View.GONE
-                }
-                for (id in children + extraRows[key].orEmpty()) {
-                    val child = findViewById<View>(id) ?: continue
-                    val row = if (child is Switch) optionRow(id) else child.parent as View
-                    row.visibility = if (showChildren) View.VISIBLE else View.GONE
-                }
-            }
-        }
-        for ((key, sw, _) in hierarchy) {
-            val row = optionRow(sw.id)
-            val label = ((row as? android.view.ViewGroup)?.getChildAt(0) as? android.view.ViewGroup)
-                ?.getChildAt(0) as? android.widget.TextView
-            val base = label?.text?.toString().orEmpty()
-            row.setOnClickListener {
-                sectionExpanded[key] = sectionExpanded[key] != true
-                label?.text = (if (sectionExpanded[key] == true) "▾ " else "▸ ") + base
-                refreshHierarchy()
-            }
-            label?.text = (if (sectionExpanded[key] == true) "▾ " else "▸ ") + base
-            indent(row, if (key == "forage" || key == "leap") 2 else if (key == "move") 0 else 1)
-        }
-        // Visually distinguish nested parameters without replacing existing cards/controls.
-        for ((_, _, children) in hierarchy) for (id in children) {
-            val child = findViewById<View>(id) ?: continue
-            val row = if (child is Switch) optionRow(id) else child.parent as View
-            if (row !== optionRow(R.id.sw_auto_forage) && row !== optionRow(R.id.sw_leap)) {
-                indent(row, 1)
-            }
+        // Movement is a cross-module runtime gate, NOT a UI container that hides
+        // gravity, rebound, throwing, or climbing controls.
+        val folds = SettingsFoldController(this).apply {
+            add(R.id.sw_move_enabled, listOf(R.id.maxspeed_bar))
+            add(R.id.sw_gravity_enabled,
+                listOf(R.id.sw_tilt_gravity, R.id.gravity_bar,
+                    R.id.sw_top, R.id.sw_bottom, R.id.sw_left, R.id.sw_right),
+                dependency = { it.moveEnabled })
+            add(R.id.sw_rebound_enabled,
+                listOf(R.id.sw_bounce_vibrate, R.id.rebound_bar,
+                    R.id.sw_rtop, R.id.sw_rbottom, R.id.sw_rleft, R.id.sw_rright),
+                dependency = { it.moveEnabled })
+            add(R.id.sw_throw, listOf(R.id.throwcoeff_bar),
+                dependency = { it.moveEnabled })
+            add(R.id.sw_wallclimb, listOf(R.id.sw_auto_forage, R.id.sw_leap),
+                dependency = { it.moveEnabled })
+            add(R.id.sw_auto_forage, listOf(R.id.foragespeed_bar),
+                ancestors = listOf(R.id.sw_wallclimb), depth = 1,
+                dependency = { it.moveEnabled && it.wallClimb }, expandedInitially = true)
+            add(R.id.sw_leap, listOf(R.id.leap_prob_bar),
+                ancestors = listOf(R.id.sw_wallclimb), depth = 1,
+                dependency = { it.moveEnabled && it.wallClimb }, expandedInitially = true)
         }
 
         fun applyConfig(c: PetConfigData) {
@@ -231,7 +182,7 @@ class MovementSettingsActivity : AppCompatActivity() {
             swLeap.isChecked = c.leapEnabled
             swAutoForage.isChecked = c.autoForage
             suppressSwitch = false
-            refreshHierarchy()
+            folds.refresh(c)
         }
         // 【顺序至关重要】：configFlow 的首帧会同步立即发射，applyConfig 会立刻读取
         // maxSpeedBar / bs / 各 EditText。因此收集必须放在【所有 findViewById 之后】，
