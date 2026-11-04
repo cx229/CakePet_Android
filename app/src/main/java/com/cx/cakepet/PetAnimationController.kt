@@ -22,14 +22,6 @@ class PetAnimationController(private val assets: ImageModeManager) {
     var isFlying = false
 
     var walkDir = 1
-    // A throw/roll landing must not generate a new random heading when WALK resumes.
-    // The next motion loop retains the direction visible at the landing transition.
-    private var landingWalkDirection: Int? = null
-
-    fun preserveWalkDirectionAfterLanding(dir: Int) {
-        landingWalkDirection = if (dir >= 0) 1 else -1
-    }
-
     var walkSpeed = 0f
         private set
     var onWalkStateChanged: ((speed: Float, dir: Int) -> Unit)? = null
@@ -46,12 +38,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun curDy(): Int = clip?.currentDy ?: 0
     fun getMode(): String = clip?.currentModeId ?: ""
     fun isPlayingForced(): Boolean = forced
-    /** Physical snap affects idle playback duration, never the animation identity. */
-    fun setSnapIdlePlayback(active: Boolean) {
-        clip?.holdTimedExit = active && !forced &&
-            isFunctionMode(getMode(), "snap", "snap_head")
-    }
-    fun isWalk(): Boolean = clip?.isMotionLoop == true && !forced
+    /** A motion clip remains a motion clip even when reached through a forced entrance. */
+    fun isWalk(): Boolean = clip?.isMotionLoop == true
     /** Frame impulse is consumed once for initial frame, every advance and loop wrap. */
     fun consumeFrameDisplacement(): Pair<Int, Int>? {
         if (!frameMotionPending) return null
@@ -78,12 +66,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
 
     private fun updateWalkState(speed: Float, resetDirection: Boolean = true) {
         if (speed > 0f) {
-            if (landingWalkDirection != null) {
-                walkDir = landingWalkDirection!!
-                landingWalkDirection = null
-            } else if (resetDirection) {
-                walkDir = if (Random.nextBoolean()) 1 else -1
-            }
+            if (resetDirection) walkDir = if (Random.nextBoolean()) 1 else -1
             walkSpeed = speed
         } else {
             // Do not erase heading through ROLL/JUMP_DOWN: rendering and physics use
@@ -146,12 +129,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
     /** 每帧只调用通用动画游标，待机池、飞跃等行为仍由宠物控制器决定。 */
     fun nextFrame(dtMs: Long): ImageModeManager.FrameStep {
         val current = clip ?: return ImageModeManager.FrameStep(false)
-        // Keep the mapped snap-idle Mode running while physics is attached.
-        // No animation name is treated as inherently snapped.
-        val holdSnapIdle = inSnapped && assets.isFunctionMode(
-            current.currentModeId, "snap", "snap_head")
-        val step = current.advance(dtMs, allowModeSwitch = !isFlying,
-            suppressTimedTransition = holdSnapIdle)
+        val step = current.advance(dtMs, allowModeSwitch = !isFlying)
         if (step.modeChanged) {
             val continuation = forced && forcedStart?.let {
                 assets.isContinuationOf(current.currentModeId, it)
