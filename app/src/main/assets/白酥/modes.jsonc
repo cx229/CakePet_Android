@@ -126,7 +126,10 @@
         }
       ],
       "duration": null,
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "进食"
+      ]
     },
     "静坐": {
       "loop": true,
@@ -166,7 +169,10 @@
         "min": 3000,
         "max": 25000
       },
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "待机"
+      ]
     },
     "炸毛": {
       "loop": true,
@@ -206,7 +212,10 @@
         "min": 3000,
         "max": 25000
       },
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "待机"
+      ]
     },
     "摸摸头": {
       "loop": false,
@@ -220,6 +229,9 @@
             110
           ]
         }
+      ],
+      "groups": [
+        "交互"
       ]
     },
     "摇头": {
@@ -246,7 +258,10 @@
         "min": 1000,
         "max": 2000
       },
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "待机"
+      ]
     },
     "落地": {
       "loop": false,
@@ -276,6 +291,9 @@
             40
           ]
         }
+      ],
+      "groups": [
+        "移动"
       ]
     },
     "轻晃提起": {
@@ -301,7 +319,10 @@
         }
       ],
       "duration": null,
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "移动"
+      ]
     },
     "中速向左提起": {
       "loop": true,
@@ -315,7 +336,10 @@
         }
       ],
       "duration": null,
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "移动"
+      ]
     },
     "快速向左提起": {
       "loop": true,
@@ -329,7 +353,10 @@
         }
       ],
       "duration": null,
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "移动"
+      ]
     },
     "中速向右提起": {
       "loop": true,
@@ -343,7 +370,10 @@
         }
       ],
       "duration": null,
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "移动"
+      ]
     },
     "快速向右提起": {
       "loop": true,
@@ -357,7 +387,10 @@
         }
       ],
       "duration": null,
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "移动"
+      ]
     },
     "滚动": {
       "verticalAlign": "center",
@@ -415,7 +448,10 @@
         }
       ],
       "duration": null,
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "移动"
+      ]
     },
     "走路": {
       "loop": true,
@@ -439,7 +475,10 @@
         "min": 1000,
         "max": 10000
       },
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "移动"
+      ]
     },
     "跳起": {
       "loop": true,
@@ -454,7 +493,10 @@
         }
       ],
       "duration": null,
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "移动"
+      ]
     },
     "美白": {
       "loop": false,
@@ -496,6 +538,9 @@
             10000
           ]
         }
+      ],
+      "groups": [
+        "待机"
       ]
     },
     "蠕动": {
@@ -522,7 +567,10 @@
         "min": 3000,
         "max": 4000
       },
-      "finishCycle": true
+      "finishCycle": true,
+      "groups": [
+        "移动"
+      ]
     },
     "探头": {
       "loop": false,
@@ -545,6 +593,9 @@
           ],
           "anchorY": 11
         }
+      ],
+      "groups": [
+        "交互"
       ]
     },
     "吸附探头": {
@@ -568,6 +619,9 @@
           ],
           "anchorY": 11
         }
+      ],
+      "groups": [
+        "交互"
       ]
     },
     "吸附探头摸摸头": {
@@ -583,6 +637,9 @@
           ],
           "anchorY": 11
         }
+      ],
+      "groups": [
+        "交互"
       ]
     },
     "投食": {
@@ -638,6 +695,9 @@
           ],
           "anchorY": 1
         }
+      ],
+      "groups": [
+        "进食"
       ]
     },
     "探头投食": {
@@ -693,6 +753,9 @@
           ],
           "anchorY": 11
         }
+      ],
+      "groups": [
+        "进食"
       ]
     },
     "趴着": {
@@ -707,6 +770,9 @@
             7000
           ]
         }
+      ],
+      "groups": [
+        "待机"
       ]
     },
     "传送门": {
@@ -718,6 +784,9 @@
           "res": "安静/sit_clam-1.png",
           "delay": 3000
         }
+      ],
+      "groups": [
+        "特殊"
       ]
     },
     "扒鱼": {
@@ -777,6 +846,9 @@
           "delay": 500,
           "dx": 120
         }
+      ],
+      "groups": [
+        "进食"
       ]
     },
     "摸摸头持续": {
@@ -817,6 +889,9 @@
             110
           ]
         }
+      ],
+      "groups": [
+        "交互"
       ]
     },
     "探头持续": {
@@ -845,6 +920,9 @@
           ],
           "anchorY": 11
         }
+      ],
+      "groups": [
+        "交互"
       ]
     },
     "吸附探头持续": {
@@ -870,6 +948,9 @@
           ],
           "anchorY": 11
         }
+      ],
+      "groups": [
+        "交互"
       ]
     },
     "吸附探头摸摸头持续": {
@@ -914,6 +995,9 @@
           ],
           "anchorY": 11
         }
+      ],
+      "groups": [
+        "交互"
       ]
     },
     "投食持续": {
@@ -950,6 +1034,9 @@
           ],
           "anchorY": 1
         }
+      ],
+      "groups": [
+        "进食"
       ]
     },
     "探头投食持续": {
@@ -986,6 +1073,9 @@
           ],
           "anchorY": 11
         }
+      ],
+      "groups": [
+        "进食"
       ]
     }
   }

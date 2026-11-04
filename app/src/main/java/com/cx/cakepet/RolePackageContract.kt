@@ -130,6 +130,22 @@ object RolePackageContract {
                     continue
                 }
                 if (m.has("label")) errors.add("动作 $name 不再支持 label：动作名称就是 Key")
+                if (m.has("groups")) {
+                    val groups = m.optJSONArray("groups")
+                    if (groups == null) errors.add("动作 $name 的 groups 必须为字符串数组")
+                    else {
+                        val seen = mutableSetOf<String>()
+                        for (i in 0 until groups.length()) {
+                            val group = groups.opt(i)
+                            if (group !is String || group.isBlank() || group != group.trim() ||
+                                group.length > 40 || group == "未分组" ||
+                                group.any { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
+                                errors.add("动作 $name 的动作组 $i 名称无效")
+                            } else if (!seen.add(group)) errors.add("动作 $name 重复设置了动作组 $group")
+                        }
+                    }
+                }
+
                 if (m.has("timeNext")) errors.add("动作 $name 不再支持 timeNext")
                 val loop = m.opt("loop")
                 if (loop !is Boolean) errors.add("动作 $name loop 必须是布尔值")
