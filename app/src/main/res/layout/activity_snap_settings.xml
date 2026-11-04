@@ -89,7 +89,7 @@
                 <!-- 吸附边缘总开关：直接控制 snapEnabled，不影响子选项值 -->
                 <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
                     android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
-                    <LinearLayout style="@style/SettingsSwitchTexts">
+                    <LinearLayout android:id="@+id/group_snap_directions" style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="吸附边缘" style="@style/SettingsOptionTitle"/>
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
