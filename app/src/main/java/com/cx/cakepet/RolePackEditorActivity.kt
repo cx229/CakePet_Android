@@ -236,27 +236,54 @@ class RolePackEditorActivity : AppCompatActivity() {
         draft = RolePackEditing.draft(this, id)
         Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show()
     }
+    /** Match the role-settings rename dialog: a single rounded Material card, not a nested AlertDialog. */
     private fun editor(title: String, create: (LinearLayout) -> (() -> Unit)) {
-        val form = LinearLayout(this).apply {
+        val frame = android.widget.FrameLayout(this).apply {
+            setPadding(px(24), 0, px(24), 0)
+        }
+        val card = com.google.android.material.card.MaterialCardView(this).apply {
+            radius = px(28).toFloat()
+            cardElevation = px(6).toFloat()
+            setCardBackgroundColor(getColor(R.color.cp_card_bg))
+        }
+        frame.addView(card, android.widget.FrameLayout.LayoutParams(-1, -2))
+        val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(px(16), px(12), px(16), px(12))
+            setPadding(px(20), px(20), px(20), px(20))
         }
+        card.addView(content)
+        content.addView(text(title, 18f).apply {
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, 0, 0, px(12))
+        })
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val save = create(form)
-        val dialog = AlertDialog.Builder(this).setTitle(title)
-            .setView(ScrollView(this).apply {
-                setPadding(px(8), 0, px(8), 0)
-                addView(form)
-            })
-            .setNegativeButton("取消", null)
-            .setPositiveButton("保存", null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                runCatching(save).onSuccess { dialog.dismiss() }
-                    .onFailure { Toast.makeText(this, it.message ?: "输入错误", Toast.LENGTH_LONG).show() }
-            }
+        val viewport = ScrollView(this).apply {
+            isFillViewport = false
+            addView(form)
         }
+        content.addView(viewport, LinearLayout.LayoutParams(-1, -2).apply {
+            // Tall forms remain scrollable instead of exceeding the visible display.
+            height = minOf(px(460), resources.displayMetrics.heightPixels * 2 / 3)
+        })
+        val actions = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, px(12), 0, 0)
+        }
+        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        actions.addView(button("取消") { dialog.dismiss() },
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+        actions.addView(button("保存") {
+            runCatching(save).onSuccess { dialog.dismiss() }
+                .onFailure { Toast.makeText(this, it.message ?: "输入错误", Toast.LENGTH_LONG).show() }
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        content.addView(actions)
+        dialog.setContentView(frame)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
+        dialog.window?.setLayout(-1, -2)
     }
     private fun entry(box: LinearLayout, title: String, initial: String): EditText {
         val item = LinearLayout(this).apply {
@@ -501,10 +528,12 @@ class RolePackEditorActivity : AppCompatActivity() {
         action("编辑动作属性") { attributes(key) }
         actionPair("＋ 添加 PNG 帧", { fileIndex = -1; pngPicker.launch(arrayOf("image/*")) },
             "导入 GIF", {
-            AlertDialog.Builder(this).setTitle("GIF 转帧").setMessage("GIF 将转换为 PNG 帧，替换此动作的帧序列。")
-                .setNegativeButton("取消", null).setPositiveButton("继续") { _, _ ->
-                    gifPicker.launch(arrayOf("image/gif"))
-                }.show()
+            showConfirmDialog(
+                title = "GIF 转帧",
+                bodyHtml = "导入 GIF 并替换当前动作的全部帧？",
+                subText = "原有帧配置将被替换",
+                positiveText = "继续"
+            ) { gifPicker.launch(arrayOf("image/gif")) }
         })
         val frames = m.getJSONArray("frames")
         panel.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f))
@@ -781,13 +810,19 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private fun deleteMode(key: String) {
-        AlertDialog.Builder(this).setTitle("删除动作 $key")
-            .setMessage("仍被 Functions 或其他 Mode 引用的动作无法删除。")
-            .setNegativeButton("取消", null).setPositiveButton("删除") { _, _ -> attempt {
-                require(ids().size > 1)
+        showConfirmDialog(
+            title = "删除动作",
+            bodyHtml = "确定删除「$key」？",
+            subText = "仍被功能或其他动作引用时无法删除",
+            positiveText = "删除",
+            titleColorRes = R.color.cp_danger
+        ) {
+            attempt {
+                require(ids().size > 1) { "至少保留一个动作" }
                 change { it.getJSONObject("modes").remove(key) }
                 modes()
-            }}.show()
+            }
+        }
     }
     /** Only the UI is translated. Engine function path keys remain the canonical English API. */
     private fun functionSegment(path: List<String>): String {
