@@ -12,6 +12,7 @@ import kotlin.math.min
 /** Full-width 2:1 editor view with a centered, unwarped 1:1 logical canvas. */
 class RoleAnimationPreview(context: Context) : View(context) {
     var showGuides = true
+    private var loops = false
     private var image: Bitmap? = null
     private var bounds = RectF()
     private var anchor = 0 to 0
@@ -22,7 +23,8 @@ class RoleAnimationPreview(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 2f }
 
     fun update(bitmap: Bitmap?, contentBounds: RectF, at: Pair<Int, Int>,
-               offsetX: Int, offsetY: Int, resolution: Int, name: String) {
+               offsetX: Int, offsetY: Int, resolution: Int, name: String,
+               isLooping: Boolean) {
         image = bitmap
         bounds = RectF(contentBounds)
         anchor = at
@@ -30,6 +32,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
         dy = offsetY
         canvasRes = resolution.coerceAtLeast(1)
         mode = name
+        loops = isLooping
         invalidate()
     }
 
@@ -72,8 +75,27 @@ class RoleAnimationPreview(context: Context) : View(context) {
             canvas.drawLine(ax - 15f, ay, ax + 15f, ay, paint)
             canvas.drawLine(ax, ay - 15f, ax, ay + 15f, paint)
             paint.style = Paint.Style.FILL
-            paint.textSize = 12f * resources.displayMetrics.scaledDensity
-            canvas.drawText("锚点 (${anchor.first}, ${anchor.second})  位移 ($dx, $dy)", left + 5f, top + side - 12f, paint)
         }
+        // Non-layout HUD in the upper-left corner of the 2:1 preview.
+        val scale = resources.displayMetrics.scaledDensity
+        val hud = listOf(
+            "画布：灰色虚线",
+            "图片：蓝色矩形",
+            "锚点：红十字 (${anchor.first}, ${anchor.second})",
+            "位移：($dx, $dy)",
+            "当前动作：$mode",
+            "循环播放：${if (loops) "开" else "关"}"
+        )
+        paint.style = Paint.Style.FILL
+        paint.textSize = 10f * scale
+        val lineHeight = 14f * scale
+        val hudWidth = hud.maxOf { paint.measureText(it) } + 14f * scale
+        paint.color = Color.argb(213, 255, 255, 255)
+        canvas.drawRoundRect(4f, 4f, hudWidth + 4f, lineHeight * hud.size + 9f, 6f, 6f, paint)
+        paint.color = Color.rgb(44, 55, 67)
+        hud.forEachIndexed { i, line ->
+            canvas.drawText(line, 11f, lineHeight * (i + 1), paint)
+        }
+
     }
 }

@@ -496,22 +496,9 @@ class RolePackEditorActivity : AppCompatActivity() {
 
         val preview = RoleAnimationPreview(this)
         panel.addView(preview, LinearLayout.LayoutParams(-1, -2))
-        val hints = text("画布：虚线  ·  图片：蓝框  ·  锚点：红十字  ·  位移：逐帧显示", 12f)
-        panel.addView(hints)
-        val showGuides = Switch(this).apply {
-            text = "显示辅助边界和锚点"
-            isChecked = true
-            setOnCheckedChangeListener { _, enabled ->
-                preview.showGuides = enabled
-                preview.invalidate()
-            }
-        }
-        panel.addView(showGuides)
         panel.addView(button("↺ 从头播放") { animate(preview, key) }, LinearLayout.LayoutParams(-1, px(44)))
         animate(preview, key)
         action("编辑动作属性") { attributes(key) }
-        actionPair("复制动作", { copyMode(key) }, "重命名动作", { renameMode(key) })
-        action("删除动作") { deleteMode(key) }
         actionPair("＋ 添加 PNG 帧", { fileIndex = -1; pngPicker.launch(arrayOf("image/*")) },
             "导入 GIF", {
             AlertDialog.Builder(this).setTitle("GIF 转帧").setMessage("GIF 将转换为 PNG 帧，替换此动作的帧序列。")
@@ -521,7 +508,6 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
         val frames = m.getJSONArray("frames")
         panel.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f))
-        panel.addView(text("点击帧卡片编辑；箭头调整排序，帧编号从 0 开始。"))
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         for (index in 0 until frames.length()) {
             val frame = frames.getJSONObject(index)
@@ -583,7 +569,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 if (screen != "mode" || modeId != key) return
                 view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName),
                     clip.currentAnchor(), clip.currentDx, clip.currentDy, manager.currentPack.anchorRes,
-                    clip.currentModeId)
+                    clip.currentModeId, manager.currentPack.modes[clip.currentModeId]?.loop == true)
                 val step = clip.advance(50, allowModeSwitch = true)
                 if (!step.ended && !step.timerRequested) handler.postDelayed(this, 50)
             }
@@ -598,6 +584,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun attributes(key: String) {
         val mode = root.getJSONObject("modes").getJSONObject(key)
         editor("动作属性") { box ->
+            val name = entry(box, "动作名称", key)
             val speed = entry(box, "移动速度 walkSpeed", mode.opt("walkSpeed").toString())
             val align = entry(box, "垂直填充方式 verticalAlign（top 或 center）",
                 mode.optString("verticalAlign", "top"))
@@ -630,8 +617,11 @@ class RolePackEditorActivity : AppCompatActivity() {
             limited.setOnCheckedChangeListener { _, _ -> refreshFields() }
             refreshFields()
             val save: () -> Unit = {
+                val renamed = name.text.toString().trim()
+                validId(renamed)
+                require(renamed == key || !root.getJSONObject("modes").has(renamed)) { "动作名称已存在" }
                 val target = next.text.toString().trim()
-                require(target.isEmpty() || root.getJSONObject("modes").has(target)) { "后续动作不存在" }
+                require(target.isEmpty() || target == key || root.getJSONObject("modes").has(target)) { "后续动作不存在" }
                 val alignment = align.text.toString().trim()
                 require(alignment in listOf("top", "center")) { "填充方式必须是 top 或 center" }
                 val duration = if (loop.isChecked && limited.isChecked) {
@@ -640,8 +630,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                     require(lo > 0 && hi >= lo) { "时长必须为正数，最长不得小于最短" }
                     JSONObject().put("min", lo).put("max", hi)
                 } else null
-                change {
-                    val m = it.getJSONObject("modes").getJSONObject(key)
+                change { json ->
+                    val modes = json.getJSONObject("modes")
+                    val m = modes.getJSONObject(key)
                     m.put("walkSpeed", speed.text.toString().toDouble())
                     m.put("verticalAlign", alignment)
                     m.put("loop", loop.isChecked)
@@ -653,8 +644,17 @@ class RolePackEditorActivity : AppCompatActivity() {
                         m.remove("duration")
                         m.remove("finishCycle")
                     }
+                    if (renamed != key) {
+                        modes.remove(key)
+                        modes.put(renamed, m)
+                        modes.keys().forEach { n ->
+                            val entry = modes.getJSONObject(n)
+                            if (entry.optString("nextMode") == key) entry.put("nextMode", renamed)
+                        }
+                        substitute(json.getJSONObject("functions"), key, renamed)
+                    }
                 }
-                showMode(key)
+                showMode(renamed)
             }
             save
         }
@@ -757,29 +757,6 @@ class RolePackEditorActivity : AppCompatActivity() {
         require(id.isNotBlank() && id.length <= 40 &&
             id.none { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
             "动作名称不能为空、不能超过 40 字，且不能包含斜杠或换行"
-        }
-    }
-    private fun renameMode(key: String) {
-        editor("重命名动作") { box ->
-            val name = entry(box, "新动作名称", key)
-            val save: () -> Unit = {
-                val target = name.text.toString().trim()
-                validId(target)
-                require(target == key || !root.getJSONObject("modes").has(target)) { "动作名称已存在，请更换名称" }
-                if (target != key) change { json ->
-                    val modes = json.getJSONObject("modes")
-                    val old = modes.getJSONObject(key)
-                    modes.remove(key)
-                    modes.put(target, old)
-                    modes.keys().forEach {
-                        val mode = modes.getJSONObject(it)
-                        if (mode.optString("nextMode") == key) mode.put("nextMode", target)
-                    }
-                    substitute(json.getJSONObject("functions"), key, target)
-                }
-                showMode(target)
-            }
-            save
         }
     }
     private fun substitute(obj: JSONObject, from: String, to: String) {
