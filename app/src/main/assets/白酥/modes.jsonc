@@ -137,6 +137,7 @@
       "frames": [
         {
           "res": "安静/sit_clam-1.png",
+          "flipX": true,
           "delay": [
             2400,
             10000
@@ -145,6 +146,7 @@
         },
         {
           "res": "安静/sit_clam-2.png",
+          "flipX": true,
           "delay": [
             120,
             160
@@ -153,6 +155,7 @@
         },
         {
           "res": "安静/sit_clam-3.png",
+          "flipX": true,
           "delay": [
             120,
             160
@@ -161,6 +164,7 @@
         },
         {
           "res": "安静/sit_clam-2.png",
+          "flipX": true,
           "delay": [
             120,
             160
@@ -183,6 +187,7 @@
       "frames": [
         {
           "res": "炸毛/sit_puffed-1.png",
+          "flipX": true,
           "delay": [
             2400,
             10000
@@ -191,6 +196,7 @@
         },
         {
           "res": "炸毛/sit_puffed-2.png",
+          "flipX": true,
           "delay": [
             120,
             160
@@ -199,6 +205,7 @@
         },
         {
           "res": "炸毛/sit_puffed-3.png",
+          "flipX": true,
           "delay": [
             120,
             160
@@ -207,6 +214,7 @@
         },
         {
           "res": "炸毛/sit_puffed-2.png",
+          "flipX": true,
           "delay": [
             120,
             160
@@ -234,6 +242,7 @@
       "frames": [
         {
           "res": "摸摸头/pat_head-1.png",
+          "flipX": true,
           "delay": [
             105,
             110
@@ -242,6 +251,7 @@
         },
         {
           "res": "摸摸头/pat_head-2.png",
+          "flipX": true,
           "delay": [
             100,
             110
@@ -250,6 +260,7 @@
         },
         {
           "res": "摸摸头/pat_head-3.png",
+          "flipX": true,
           "delay": [
             100,
             110
@@ -258,6 +269,7 @@
         },
         {
           "res": "摸摸头/pat_head-4.png",
+          "flipX": true,
           "delay": [
             105,
             110
@@ -266,6 +278,7 @@
         },
         {
           "res": "摸摸头/pat_head-5.png",
+          "flipX": true,
           "delay": [
             105,
             110
@@ -283,6 +296,7 @@
       "frames": [
         {
           "res": "摇头/shake_head-1.png",
+          "flipX": true,
           "delay": [
             140,
             180
@@ -291,6 +305,7 @@
         },
         {
           "res": "摇头/shake_head-2.png",
+          "flipX": true,
           "delay": [
             140,
             180
@@ -314,6 +329,7 @@
       "frames": [
         {
           "res": "落地/jump_down-1.png",
+          "flipX": true,
           "delay": [
             35,
             40
@@ -323,6 +339,7 @@
         },
         {
           "res": "落地/jump_down-2.png",
+          "flipX": true,
           "delay": [
             35,
             40
@@ -332,6 +349,7 @@
         },
         {
           "res": "落地/jump_down-3.png",
+          "flipX": true,
           "delay": [
             35,
             40
@@ -511,6 +529,7 @@
       "frames": [
         {
           "res": "走路/walk-1.png",
+          "flipX": true,
           "delay": 100,
           "verticalAlign": "top",
           "dx": 9,
@@ -518,6 +537,7 @@
         },
         {
           "res": "走路/walk-2.png",
+          "flipX": true,
           "delay": 100,
           "verticalAlign": "top",
           "dx": 9,
@@ -525,6 +545,7 @@
         },
         {
           "res": "走路/walk-3.png",
+          "flipX": true,
           "delay": 100,
           "verticalAlign": "top",
           "dx": 9,
@@ -546,6 +567,7 @@
       "frames": [
         {
           "res": "走路/walk-1.png",
+          "flipX": true,
           "delay": 100,
           "verticalAlign": "top",
           "dx": 9,
@@ -553,6 +575,7 @@
         },
         {
           "res": "走路/walk-2.png",
+          "flipX": true,
           "delay": 100,
           "verticalAlign": "top",
           "dx": 9,
@@ -560,6 +583,7 @@
         },
         {
           "res": "走路/walk-3.png",
+          "flipX": true,
           "delay": 100,
           "verticalAlign": "top",
           "dx": 9,
@@ -582,6 +606,7 @@
       "frames": [
         {
           "res": "跳起/jump-1.png",
+          "flipX": true,
           "delay": 400,
           "anchorX": -1,
           "anchorY": 0,
@@ -649,6 +674,7 @@
       "frames": [
         {
           "res": "蠕动/wriggle-1.png",
+          "flipX": true,
           "delay": [
             250,
             300
@@ -659,6 +685,7 @@
         },
         {
           "res": "蠕动/wriggle-2.png",
+          "flipX": true,
           "delay": [
             250,
             300
@@ -684,6 +711,7 @@
       "frames": [
         {
           "res": "探头/probe_head-4.png",
+          "flipX": true,
           "delay": [
             70,
             80
@@ -693,6 +721,7 @@
         },
         {
           "res": "探头/probe_head-2.png",
+          "flipX": true,
           "delay": [
             70,
             80
@@ -716,6 +745,7 @@
       "frames": [
         {
           "res": "探头摸摸头/probe_pat_head-1.png",
+          "flipX": true,
           "delay": [
             105,
             110
@@ -725,6 +755,7 @@
         },
         {
           "res": "探头摸摸头/probe_pat_head-2.png",
+          "flipX": true,
           "delay": [
             100,
             110
@@ -734,6 +765,7 @@
         },
         {
           "res": "探头摸摸头/probe_pat_head-3.png",
+          "flipX": true,
           "delay": [
             100,
             110
@@ -743,6 +775,7 @@
         },
         {
           "res": "探头摸摸头/probe_pat_head-4.png",
+          "flipX": true,
           "delay": [
             105,
             110
@@ -752,6 +785,7 @@
         },
         {
           "res": "探头摸摸头/probe_pat_head-5.png",
+          "flipX": true,
           "delay": [
             105,
             110
@@ -771,6 +805,7 @@
       "frames": [
         {
           "res": "投食/feed_fish-1.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -780,6 +815,7 @@
         },
         {
           "res": "投食/feed_fish-2.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -789,6 +825,7 @@
         },
         {
           "res": "投食/feed_fish-3.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -798,6 +835,7 @@
         },
         {
           "res": "投食/feed_fish-4.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -807,6 +845,7 @@
         },
         {
           "res": "投食/feed_fish-3.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -816,6 +855,7 @@
         },
         {
           "res": "投食/feed_fish-3.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -834,6 +874,7 @@
       "frames": [
         {
           "res": "探头投食/feed_fish-1.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -843,6 +884,7 @@
         },
         {
           "res": "探头投食/feed_fish-2.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -852,6 +894,7 @@
         },
         {
           "res": "探头投食/feed_fish-3.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -861,6 +904,7 @@
         },
         {
           "res": "探头投食/feed_fish-4.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -870,6 +914,7 @@
         },
         {
           "res": "探头投食/feed_fish-3.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -879,6 +924,7 @@
         },
         {
           "res": "探头投食/feed_fish-3.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -898,6 +944,7 @@
       "frames": [
         {
           "res": "蠕动/wriggle-1.png",
+          "flipX": true,
           "delay": [
             3000,
             7000
@@ -915,6 +962,7 @@
       "frames": [
         {
           "res": "安静/sit_clam-1.png",
+          "flipX": true,
           "delay": 3000,
           "verticalAlign": "top"
         }
@@ -926,6 +974,7 @@
       "frames": [
         {
           "res": "扒鱼/pull_fish-1.png",
+          "flipX": true,
           "delay": [
             300,
             500
@@ -934,6 +983,7 @@
         },
         {
           "res": "扒鱼/pull_fish-2.png",
+          "flipX": true,
           "delay": [
             130,
             160
@@ -942,6 +992,7 @@
         },
         {
           "res": "扒鱼/pull_fish-3.png",
+          "flipX": true,
           "delay": [
             160,
             200
@@ -950,6 +1001,7 @@
         },
         {
           "res": "扒鱼/pull_fish-4.png",
+          "flipX": true,
           "delay": [
             130,
             160
@@ -958,29 +1010,34 @@
         },
         {
           "res": "扒鱼/pull_fish-5.png",
+          "flipX": true,
           "delay": 70,
           "verticalAlign": "top"
         },
         {
           "res": "扒鱼/pull_fish-6.png",
+          "flipX": true,
           "delay": 70,
           "dx": 130,
           "verticalAlign": "top"
         },
         {
           "res": "扒鱼/pull_fish-6.png",
+          "flipX": true,
           "delay": 70,
           "dx": 125,
           "verticalAlign": "top"
         },
         {
           "res": "扒鱼/pull_fish-6.png",
+          "flipX": true,
           "delay": 70,
           "dx": 120,
           "verticalAlign": "top"
         },
         {
           "res": "蠕动/wriggle-1.png",
+          "flipX": true,
           "delay": 500,
           "dx": 120,
           "verticalAlign": "top"
@@ -998,6 +1055,7 @@
       "frames": [
         {
           "res": "探头/probe_head-1.png",
+          "flipX": true,
           "delay": [
             1000,
             5000
@@ -1007,6 +1065,7 @@
         },
         {
           "res": "探头/probe_head-2.png",
+          "flipX": true,
           "delay": [
             150,
             300
@@ -1030,6 +1089,7 @@
       "frames": [
         {
           "res": "投食/feed_fish-5.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -1039,6 +1099,7 @@
         },
         {
           "res": "投食/feed_fish-6.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -1048,6 +1109,7 @@
         },
         {
           "res": "投食/feed_fish-7.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -1071,6 +1133,7 @@
       "frames": [
         {
           "res": "探头投食/feed_fish-5.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -1080,6 +1143,7 @@
         },
         {
           "res": "探头投食/feed_fish-6.png",
+          "flipX": true,
           "delay": [
             90,
             100
@@ -1089,6 +1153,7 @@
         },
         {
           "res": "探头投食/feed_fish-7.png",
+          "flipX": true,
           "delay": [
             90,
             100
