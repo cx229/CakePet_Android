@@ -130,6 +130,22 @@ object RolePackageContract {
                     continue
                 }
                 if (m.has("label")) errors.add("动作 $name 不再支持 label：动作名称就是 Key")
+                if (m.has("timeNext")) errors.add("动作 $name 不再支持 timeNext")
+                val loop = m.opt("loop")
+                if (loop !is Boolean) errors.add("动作 $name loop 必须是布尔值")
+                if (loop == false && (m.has("duration") || m.has("finishCycle")))
+                    errors.add("动作 $name 非循环状态不能设置 duration 或 finishCycle")
+                if (loop == true) {
+                    val d = m.opt("duration")
+                    if (m.has("duration") && d != JSONObject.NULL) {
+                        val range = m.optJSONObject("duration")
+                        if (range == null || range.opt("min") !is Number || range.opt("max") !is Number ||
+                            range.optLong("min") <= 0 || range.optLong("max") < range.optLong("min"))
+                            errors.add("动作 $name duration 必须包含有效 min/max")
+                    }
+                    if (m.has("finishCycle") && m.opt("finishCycle") !is Boolean)
+                        errors.add("动作 $name finishCycle 必须是布尔值")
+                }
                 val fr = m.optJSONArray("frames")
                 if (fr == null) errors.add("动作 $name 缺少 frames")
                 else if (fr.length() == 0) errors.add("动作 $name 没有帧数据")
@@ -148,17 +164,12 @@ object RolePackageContract {
             for (idx in 0 until frames.length()) {
                 val frame = frames.optJSONObject(idx)
                 if (frame == null) {
-                    errors.add("动画 $modeId 第 ${idx + 1} 帧不是对象")
+                    errors.add("动画 $modeId 帧 $idx不是对象")
                     continue
                 }
                 val res = frame.opt("res")
-                if (res !is String || res.isBlank()) errors.add("动画 $modeId 第 ${idx + 1} 帧缺少图片路径")
-                if (frame.has("next") && !frame.isNull("next")) {
-                    val next = frame.opt("next")
-                    if (next !is Int || next !in 0 until frames.length()) {
-                        errors.add("动画 $modeId 第 ${idx + 1} 帧的 next 无效")
-                    }
-                }
+                if (res !is String || res.isBlank()) errors.add("动画 $modeId 帧 $idx缺少图片路径")
+                if (frame.has("next")) errors.add("动画 $modeId 帧 $idx 不支持 next")
                 val delay = frame.opt("delay")
                 val validDelay = when (delay) {
                     is Number -> delay.toLong() > 0
@@ -167,7 +178,7 @@ object RolePackageContract {
                         delay.optLong(0) > 0 && delay.optLong(1) >= delay.optLong(0)
                     else -> false
                 }
-                if (!validDelay) errors.add("动画 $modeId 第 ${idx + 1} 帧的 delay 无效")
+                if (!validDelay) errors.add("动画 $modeId 帧 $idx的 delay 无效")
             }
             if (mode.has("nextMode") && !mode.isNull("nextMode")) {
                 val nextMode = mode.opt("nextMode")

@@ -113,7 +113,7 @@ object RolePackEditing {
                 val file = File(folder, "frame_${i.toString().padStart(4, '0')}.png")
                 FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 frames.put(JSONObject().put("res", "${folder.name}/${file.name}")
-                    .put("delay", delay).put("next", (i + 1) % delays.size))
+                    .put("delay", delay))
             } finally { bmp.recycle() }
             time += delay
         }

@@ -61,7 +61,6 @@ class ImageModeManager(
     /** 单帧定义：资源名、下一帧索引（null=序列结束）、时延(ms)、锚点(图片像素坐标，对齐 PC image_meta) */
     private data class Frame(
         val resName: String,
-        val nextIndex: Int?,            // 下一帧在 frames 中的下标，null 表示序列结束
         val delay: () -> Long,          // 该帧停留时长(ms)
         val anchorX: Int = -1,          // 图片像素锚点 X（<0 表示用图宽/2 居中）
         // 图片像素锚点 Y（距【底】边，左下角原点，Y 向上）。
@@ -85,10 +84,9 @@ class ImageModeManager(
         val name: String,
         val frames: List<Frame>,
         val loop: Boolean,              // true: 到末尾后回到首帧（常驻循环）；false: 播完触发 onSequenceEnd
-        val timeNextEnabled: Boolean = false,   // 是否启用随机定时切换下一模式（PC time_next_enabled）
-        val changeIntervalMin: Long = 3000,
-        val changeIntervalMax: Long = 4000,
-        val changeProb: Float = 0.5f,
+        val durationMin: Long? = null,
+        val durationMax: Long? = null,
+        val finishCycle: Boolean = true,
         val nextModeName: String? = null,       // 指定下一模式（PC next_mode_name）
         val walkSpeed: Float = 0f               // 行走位移速度(px/s)，>0 时由物理引擎驱动水平位移
     )
@@ -149,11 +147,10 @@ class ImageModeManager(
             val name = kit.next()
             val m = modesObj.getJSONObject(name)
             val loop = m.optBoolean("loop", false)
-            val tn = if (m.has("timeNext")) m.getJSONObject("timeNext") else null
-            val timeNextEnabled = tn?.optBoolean("enabled", false) ?: false
-            val changeIntervalMin = tn?.optLong("min", 3000) ?: 3000
-            val changeIntervalMax = tn?.optLong("max", 4000) ?: 4000
-            val changeProb = (tn?.optDouble("prob", 0.5) ?: 0.5).toFloat()
+            val duration = m.optJSONObject("duration")
+            val durationMin = duration?.optLong("min")
+            val durationMax = duration?.optLong("max")
+            val finishCycle = m.optBoolean("finishCycle", true)
             val nextModeName = if (m.has("nextMode") && !m.isNull("nextMode")) m.getString("nextMode") else null
             val walkSpeed = m.optDouble("walkSpeed", 0.0).toFloat()
             val verticalAlign = m.optString("verticalAlign", "top")
@@ -163,16 +160,15 @@ class ImageModeManager(
                 val f = framesArr.getJSONObject(i)
                 val res = f.getString("res")
                 verticalAlignOfResource[res] = verticalAlign
-                val nextIndex = if (f.has("next") && !f.isNull("next")) f.getInt("next") else null
                 val delay = parseDelay(f.get("delay"))
                 val anchorX = if (f.has("anchorX")) f.getInt("anchorX") else -1
                 val anchorY = if (f.has("anchorY")) f.getInt("anchorY") else null
                 val dx = if (f.has("dx")) f.getInt("dx") else 0
                 val dy = if (f.has("dy")) f.getInt("dy") else 0
-                frames.add(Frame(res, nextIndex, delay, anchorX, anchorY, dx, dy))
+                frames.add(Frame(res, delay, anchorX, anchorY, dx, dy))
             }
-            registerMode(ImageModeDef(name, frames, loop, timeNextEnabled,
-                changeIntervalMin, changeIntervalMax, changeProb, nextModeName, walkSpeed))
+            registerMode(ImageModeDef(name, frames, loop, durationMin,
+                durationMax, finishCycle, nextModeName, walkSpeed))
         }
     }
 
@@ -251,6 +247,7 @@ class ImageModeManager(
         private var frameDelay = def.frames[0].delay().coerceAtLeast(1L)
         private var timeElapsed = 0L
         private var timeTarget = sampleTimeTarget()
+        private var pendingFinish = false
         var isEnded: Boolean = false
             private set
 
@@ -264,9 +261,11 @@ class ImageModeManager(
         fun currentBitmap(): Bitmap? = loadBitmap(currentResName)
         fun currentAnchor(): Pair<Int, Int> = frameAnchor(currentResName, currentAnchorX, currentAnchorY)
 
-        private fun sampleTimeTarget(): Long =
-            if (def.timeNextEnabled) Random.nextLong(def.changeIntervalMin.coerceAtLeast(1L), def.changeIntervalMax.coerceAtLeast(def.changeIntervalMin.coerceAtLeast(1L)) + 1L)
-            else Long.MAX_VALUE
+        private fun sampleTimeTarget(): Long {
+            val min = def.durationMin ?: return Long.MAX_VALUE
+            val max = (def.durationMax ?: min).coerceAtLeast(min)
+            return if (max == Long.MAX_VALUE) max else Random.nextLong(min.coerceAtLeast(1), max + 1)
+        }
 
         private fun switchTo(id: String): Boolean {
             val next = modes[id] ?: return false
@@ -276,11 +275,12 @@ class ImageModeManager(
             timeElapsed = 0L
             frameDelay = def.frames[0].delay().coerceAtLeast(1L)
             timeTarget = sampleTimeTarget()
+            pendingFinish = false
             isEnded = false
             return true
         }
 
-        /** 只推进动画自身的帧和 nextMode，返回完成事件供外部引擎决定下一动作。 */
+        /** Frames always play sequentially; only the Mode controls looping and transitions. */
         fun advance(dtMs: Long, allowModeSwitch: Boolean = true): ClipStep {
             if (isEnded || dtMs <= 0L) return ClipStep(false, isEnded)
             var remaining = dtMs
@@ -293,40 +293,42 @@ class ImageModeManager(
                 remaining -= span
                 elapsed += span
                 timeElapsed += span
-                if (elapsed >= frameDelay) {
-                    val next = def.frames[frameIndex].nextIndex
-                    when {
-                        next != null && next in def.frames.indices -> {
-                            frameIndex = next
-                            elapsed = 0L
-                            frameDelay = def.frames[frameIndex].delay().coerceAtLeast(1L)
-                            changed = true
-                        }
-                        def.loop -> {
-                            frameIndex = 0
-                            elapsed = 0L
-                            frameDelay = def.frames[0].delay().coerceAtLeast(1L)
-                            changed = true
-                        }
-                        def.nextModeName != null && allowModeSwitch && switchTo(def.nextModeName!!) -> {
-                            changed = true
-                            modeChanged = true
-                        }
-                        else -> isEnded = true
-                    }
-                }
-                if (!isEnded && allowModeSwitch && def.timeNextEnabled && timeElapsed >= timeTarget) {
-                    timeElapsed = 0L
-                    timeTarget = sampleTimeTarget()
-                    if (Random.nextFloat() < def.changeProb) {
+                if (def.loop && def.durationMin != null && allowModeSwitch &&
+                    timeElapsed >= timeTarget) {
+                    if (def.finishCycle) pendingFinish = true
+                    else {
                         val next = def.nextModeName
                         if (next != null && switchTo(next)) {
                             changed = true
                             modeChanged = true
                         } else {
+                            timeTarget = Long.MAX_VALUE
                             timerRequested = true
-                            break
                         }
+                        break
+                    }
+                }
+                if (elapsed >= frameDelay) {
+                    if (frameIndex < def.frames.lastIndex) {
+                        frameIndex++
+                        elapsed = 0L
+                        frameDelay = def.frames[frameIndex].delay().coerceAtLeast(1L)
+                        changed = true
+                    } else if (def.loop && !pendingFinish) {
+                        frameIndex = 0
+                        elapsed = 0L
+                        frameDelay = def.frames[0].delay().coerceAtLeast(1L)
+                        changed = true
+                    } else {
+                        val next = def.nextModeName
+                        if (next != null && allowModeSwitch && switchTo(next)) {
+                            changed = true
+                            modeChanged = true
+                        } else if (def.loop && def.durationMin != null && allowModeSwitch) {
+                            timeTarget = Long.MAX_VALUE
+                            timerRequested = true
+                        } else isEnded = true
+                        break
                     }
                 }
             }
