@@ -47,7 +47,6 @@ class RolePackEditorActivity : AppCompatActivity() {
     private var uploadMode = ""
     private val bulkSelected = mutableSetOf<Int>()
     private var bulkBar: View? = null
-    private var fileIndex = -1
     private var resourceReplacePath: String? = null
     private val handler = Handler(Looper.getMainLooper())
     private var animation: Runnable? = null
@@ -938,10 +937,6 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun naturalOrder(path: String): String =
         Regex("\\d+").replace(path.lowercase()) { it.value.padStart(12, '0') }
 
-    private fun imagePaths(): List<String> = draft.walkTopDown().filter { isImage(it) }
-        .map { it.relativeTo(draft).invariantSeparatorsPath }
-        .sortedWith(compareBy(::naturalOrder))
-
     private fun frameDelayFor(path: String): Int {
         val file = File(draft, path)
         val metadata = File(file.parentFile, "frames.json")
@@ -1018,6 +1013,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         val expanded = mutableSetOf<String>()
+        val thumbnails = mutableMapOf<String, android.graphics.Bitmap?>()
         initial.forEach { path ->
             var parent = File(path).parent?.replace('\\', '/')
             while (!parent.isNullOrEmpty()) {
@@ -1130,7 +1126,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                             row.addView(cb, LinearLayout.LayoutParams(px(40), px(48)))
                             row.addView(ImageView(this).apply {
                                 scaleType = ImageView.ScaleType.FIT_CENTER
-                                setImageBitmap(thumb(file, 72))
+                                setImageBitmap(thumbnails.getOrPut(path) { thumb(file, 72) })
                             }, LinearLayout.LayoutParams(px(44), px(44)))
                             row.addView(text(file.name, 13f).apply {
                                 maxLines = 1
