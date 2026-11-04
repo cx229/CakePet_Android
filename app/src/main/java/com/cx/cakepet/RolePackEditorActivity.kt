@@ -265,7 +265,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         content.addView(viewport, LinearLayout.LayoutParams(-1, -2).apply {
             // Tall forms remain scrollable instead of exceeding the visible display.
-            height = minOf(px(460), resources.displayMetrics.heightPixels * 2 / 3)
+            height = minOf(px(70 * form.childCount + 20), resources.displayMetrics.heightPixels * 2 / 3)
         })
         val actions = LinearLayout(this).apply {
             gravity = Gravity.CENTER
