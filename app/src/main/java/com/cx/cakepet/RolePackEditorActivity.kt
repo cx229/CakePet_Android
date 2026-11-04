@@ -198,7 +198,6 @@ class RolePackEditorActivity : AppCompatActivity() {
         section(root.optString("name") + " · 素材包编辑", "home")
         panel.addView(text("完成一次有效操作后自动保存；预览和文件修改只作用于这个素材包。"))
         action("基本信息") { info() }
-        action("菜单动作池 · menuPool") { menuPool() }
         action("全部动作 · Modes") { modes() }
         action("功能映射 · Functions") { functions() }
         action("图片资源") { images() }
@@ -228,18 +227,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             save
         }
-    }
-    private fun menuPool() {
-        val keys = ids()
-        val pool = root.optJSONArray("menuPool") ?: JSONArray()
-        val chosen = (0 until pool.length()).map { pool.optString(it) }.toSet()
-        val selected = BooleanArray(keys.size) { keys[it] in chosen }
-        AlertDialog.Builder(this).setTitle("菜单动作池")
-            .setMultiChoiceItems(keys.toTypedArray(), selected) { _, index, checked -> selected[index] = checked }
-            .setNegativeButton("取消", null).setPositiveButton("完成") { _, _ -> attempt {
-                change { it.put("menuPool", JSONArray(keys.filterIndexed { index, _ -> selected[index] })) }
-                home()
-            }}.show()
     }
     private fun modes() {
         section("全部动作 · Modes", "modes")
@@ -294,18 +281,52 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         val frames = m.getJSONArray("frames")
         panel.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f))
+        panel.addView(text("点击帧卡片编辑；箭头调整排序，帧编号从 0 开始。"))
         for (index in 0 until frames.length()) {
             val frame = frames.getJSONObject(index)
-            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            val thumbnail = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundResource(R.drawable.bg_btn_outline)
+                setPadding(px(12), px(8), px(12), px(8))
+            }
+            val content = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                isClickable = true
+                setOnClickListener { frameMenu(key, index) }
+            }
+            val thumbnail = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                isClickable = false
+            }
             val file = File(draft, frame.optString("res"))
             if (file.isFile) thumbnail.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
-            line.addView(thumbnail, LinearLayout.LayoutParams(px(52), px(52)))
-            line.addView(button("帧 ${index + 1} · ${frame.opt("delay")} ms") { frameMenu(key, index) },
-                LinearLayout.LayoutParams(0, px(52), 1f))
-            line.addView(button("↑") { move(key, index, -1) })
-            line.addView(button("↓") { move(key, index, 1) })
-            panel.addView(line)
+            content.addView(thumbnail, LinearLayout.LayoutParams(px(68), px(68)))
+            val details = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(px(12), 0, px(4), 0)
+            }
+            details.addView(text("帧 $index", 16f))
+            details.addView(text("时长：${frame.opt("delay")} ms", 13f))
+            details.addView(text(frame.optString("res"), 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            })
+            content.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+            content.addView(text("›", 22f))
+            card.addView(content, LinearLayout.LayoutParams(-1, -2))
+            val controls = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.END
+            }
+            controls.addView(button("上移 ↑") { move(key, index, -1) })
+            controls.addView(button("下移 ↓") { move(key, index, 1) })
+            card.addView(controls)
+            panel.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = px(5)
+                bottomMargin = px(5)
+            })
         }
     }
     private fun animate(view: ImageView, key: String) {
@@ -363,7 +384,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private fun frameMenu(key: String, index: Int) {
-        AlertDialog.Builder(this).setTitle("第 ${index + 1} 帧")
+        AlertDialog.Builder(this).setTitle("第 $index 帧")
             .setItems(arrayOf("编辑参数", "导入图片替换", "选择素材库图片", "删除帧")) { _, selection ->
                 when (selection) {
                     0 -> editFrame(key, index)
@@ -461,7 +482,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             val save: () -> Unit = {
                 val target = name.text.toString().trim()
                 validId(target)
-                require(!root.getJSONObject("modes").has(target))
+                require(!root.getJSONObject("modes").has(target)) { "动作名称已存在，请更换名称" }
                 change {
                     val m = it.getJSONObject("modes")
                     m.put(target, JSONObject(m.getJSONObject(key).toString()))
@@ -483,7 +504,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             val save: () -> Unit = {
                 val target = name.text.toString().trim()
                 validId(target)
-                require(target == key || !root.getJSONObject("modes").has(target))
+                require(target == key || !root.getJSONObject("modes").has(target)) { "动作名称已存在，请更换名称" }
                 if (target != key) change { json ->
                     val modes = json.getJSONObject("modes")
                     val old = modes.getJSONObject(key)
@@ -494,9 +515,6 @@ class RolePackEditorActivity : AppCompatActivity() {
                         if (mode.optString("nextMode") == key) mode.put("nextMode", target)
                     }
                     substitute(json.getJSONObject("functions"), key, target)
-                    val menu = json.optJSONArray("menuPool")
-                    if (menu != null) for (i in 0 until menu.length())
-                        if (menu.optString(i) == key) menu.put(i, target)
                 }
                 showMode(target)
             }
@@ -535,6 +553,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 "climb" -> "攀爬"
                 "pat_head" -> "摸头"
                 "feed" -> "投喂"
+                "menu" -> "菜单动作"
                 "pool" -> "动作池"
                 "sit" -> "静坐"
                 "roll" -> "滚动"
