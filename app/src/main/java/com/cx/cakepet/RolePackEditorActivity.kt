@@ -1809,8 +1809,9 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun images() {
         section("图片资源", "images")
-        action("＋ 导入图片到素材库") {
-            val popup = PopupMenu(this, panel.getChildAt(panel.childCount - 1))
+        val addResources = button("＋ 导入图片到素材库") {}
+        addResources.setOnClickListener {
+            val popup = PopupMenu(this, addResources)
             popup.menu.add("上传图片")
             popup.menu.add("上传 GIF")
             popup.setOnMenuItemClickListener { item ->
@@ -1819,6 +1820,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             popup.show()
         }
+        panel.addView(addResources, LinearLayout.LayoutParams(-1, px(44)))
         panel.addView(text("点击文件夹展开；点击图片查看大图与引用；文件夹右侧 + 可上传图片/GIF。", 12f))
         resourceBranch(draft, 0, imageUses())
     }
