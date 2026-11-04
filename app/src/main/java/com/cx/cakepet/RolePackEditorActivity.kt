@@ -85,7 +85,8 @@ class RolePackEditorActivity : AppCompatActivity() {
             val path = importPng(uri, uploadFolder)
             when (uploadAction) {
                 "chooser" -> pendingPick?.let {
-                    showImageChooser(it, (uploadedSelection + path).distinct())
+                    showImageChooser(it, if (it.action == "batch") listOf(path)
+                        else (uploadedSelection + path).distinct())
                 }
                 "append" -> appendFrames(uploadMode, listOf(path))
                 else -> images()
@@ -1079,12 +1080,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                             if (!single) {
                                 row.addView(CheckBox(this).apply {
                                     isChecked = descendants.isNotEmpty() && count == descendants.size
-                                    // A partial folder selection is visibly distinct from unchecked.
-                                    buttonTintList = android.content.res.ColorStateList.valueOf(
-                                        getColor(R.color.cp_note))
-                                    if (count in 1 until descendants.size) {
-                                        text = "−"
-                                    }
+                                    // Counts beside the folder name distinguish none/partial/all.
                                     setOnCheckedChangeListener { _, checked ->
                                         if (checked) selected.addAll(descendants)
                                         else selected.removeAll(descendants.toSet())
@@ -1911,7 +1907,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun images() {
         section("图片资源", "images")
         val add = button("导入GIF为文件夹") {
-            startUpload(true, folder = "", action = "library")
+            startUpload(true, folder = "images", action = "library")
         }
         panel.addView(add, LinearLayout.LayoutParams(-1, px(44)).apply { topMargin = px(8); bottomMargin = px(8) })
         panel.addView(text("点击文件夹展开；文件夹右侧 + 可添加图片。", 12f))
