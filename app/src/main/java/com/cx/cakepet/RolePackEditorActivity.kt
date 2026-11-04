@@ -184,6 +184,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         home()
     }
     override fun onDestroy() {
+        removeBulkBar()
         stopAnimation()
         if (::draft.isInitialized) draft.deleteRecursively()
         super.onDestroy()
@@ -697,6 +698,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         val order = (0 until frames.length()).toMutableList()
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         val recycler = RecyclerView(this).apply {
+            id = android.R.id.list
             layoutManager = LinearLayoutManager(this@RolePackEditorActivity)
             isNestedScrollingEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
