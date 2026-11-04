@@ -1623,6 +1623,12 @@ class PetView @JvmOverloads constructor(
      * 自动觅食每帧同步：active=已锁定有效食物且攀岩非吸附；tx/ty=食物中心屏幕坐标。
      * PetService 负责选食物/吃食物，这里只接收目标让 tick 沿墙走向它（不在此判断食物逻辑）。
      */
+    private fun stopForageVelocity() {
+        if (!imageManager.forageSelected || physics.isDragging || physics.isThrowing) return
+        val side = if (physics.isClimbing) physics.climbSide else gravityDir
+        if (side == 0 || side == 3) physics.vx = 0f else physics.vy = 0f
+    }
+
     fun setForage(active: Boolean, tx: Float, ty: Float) {
         val wasActive = forageActive
         forageActive = active
