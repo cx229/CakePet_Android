@@ -114,9 +114,9 @@ class ImageModeManager(
     fun modeOf(vararg path: String): String? = leavesOf(*path).let { if (it.isEmpty()) null else it.random(rng) }
 
     /**
-     * A one-shot entrance may lead into an internal looping continuation.
-     * This is still the same functional action; keep the continuation out of random
-     * Functions selection so entry frames are not accidentally skipped.
+     * A one-shot entrance may lead into a looping visual action.
+     * The continuation is shared across functional scenes (including menu and snap),
+     * and its identity must not depend on the list of Functions referencing it.
      */
     fun isContinuationOf(name: String, start: String): Boolean {
         if (name == start) return true
