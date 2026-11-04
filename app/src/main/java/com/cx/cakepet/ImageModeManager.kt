@@ -263,6 +263,8 @@ class ImageModeManager(
         private var timeElapsed = 0L
         private var timeTarget = sampleTimeTarget()
         private var pendingFinish = false
+        /** Keep the selected snap idle animation looping without cloning a separate Mode. */
+        var holdTimedExit = false
         var isEnded: Boolean = false
             private set
 
@@ -309,7 +311,7 @@ class ImageModeManager(
                 remaining -= span
                 elapsed += span
                 timeElapsed += span
-                if (def.loop && def.durationMin != null && allowModeSwitch &&
+                if (def.loop && def.durationMin != null && !holdTimedExit && allowModeSwitch &&
                     !suppressTimedTransition && timeElapsed >= timeTarget) {
                     if (def.finishCycle) pendingFinish = true
                     else {

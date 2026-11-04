@@ -623,7 +623,7 @@
     },
     "探头中": {
       "loop": false,
-      "nextMode": "探头中",
+      "nextMode": "探头",
       "walkSpeed": 0,
       "frames": [
         {
@@ -654,7 +654,7 @@
         "max": 4000
       },
       "finishCycle": true,
-      "nextMode": "探头中",
+      "nextMode": "探头",
       "walkSpeed": 0,
       "frames": [
         {
@@ -1004,7 +1004,7 @@
         "max": 3000
       },
       "finishCycle": true,
-      "nextMode": "探头中",
+      "nextMode": "探头",
       "walkSpeed": 0,
       "frames": [
         {

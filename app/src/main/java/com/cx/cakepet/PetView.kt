@@ -1032,6 +1032,8 @@ class PetView @JvmOverloads constructor(
                 imageManager.setMode(mSit)
             }
         }
+        // Snap controls its mapped idle playback policy, not a separate animation definition.
+        imageManager.setSnapIdlePlayback(physics.isSnapped)
         if (!physics.isDragging) activeDragFunction = null
         when {
             physics.isDragging && !useStaticPool -> {

@@ -37,6 +37,11 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun curDy(): Int = clip?.currentDy ?: 0
     fun getMode(): String = clip?.currentModeId ?: ""
     fun isPlayingForced(): Boolean = forced
+    /** Physical snap affects idle playback duration, never the animation identity. */
+    fun setSnapIdlePlayback(active: Boolean) {
+        clip?.holdTimedExit = active && !forced &&
+            isFunctionMode(getMode(), "snap", "snap_head")
+    }
     fun isWalk(): Boolean = walkSpeed > 0f && !forced
     fun leavesOf(vararg path: String): List<String> = assets.leavesOf(*path)
     fun modeOf(vararg path: String): String? = assets.modeOf(*path)
