@@ -471,7 +471,7 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun newMode() {
         editor("新建动作") { box ->
-            val key = entry(box, "动作名称", "新动作")
+            val key = entry(box, "动作名称", "")
             val save: () -> Unit = {
                 val name = key.text.toString().trim()
                 validId(name)
@@ -542,18 +542,32 @@ class RolePackEditorActivity : AppCompatActivity() {
             })
             contents.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
             card.addView(contents, LinearLayout.LayoutParams(0, -2, 1f))
-            val arrows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            fun arrow(label: String, offset: Int): TextView =
-                text(label, 18f).apply {
-                    gravity = Gravity.CENTER
-                    setPadding(0, 0, 0, 0)
-                    isClickable = true
-                    setBackgroundResource(android.R.drawable.list_selector_background)
-                    setOnClickListener { move(key, index, offset) }
+            card.addView(text("⠿", 22f).apply {
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, 0)
+                setOnLongClickListener {
+                    val data = android.content.ClipData.newPlainText("frame-index", index.toString())
+                    card.startDragAndDrop(data, android.view.View.DragShadowBuilder(card), null, 0)
+                    true
                 }
-            arrows.addView(arrow("▲", -1), LinearLayout.LayoutParams(px(40), px(32)))
-            arrows.addView(arrow("▼", 1), LinearLayout.LayoutParams(px(40), px(32)))
-            card.addView(arrows)
+            }, LinearLayout.LayoutParams(px(40), px(54)))
+            card.setOnLongClickListener {
+                val data = android.content.ClipData.newPlainText("frame-index", index.toString())
+                card.startDragAndDrop(data, android.view.View.DragShadowBuilder(card), null, 0)
+                true
+            }
+            card.setOnDragListener { _, event ->
+                when (event.action) {
+                    android.view.DragEvent.ACTION_DRAG_STARTED ->
+                        event.clipDescription?.hasMimeType("text/plain") == true
+                    android.view.DragEvent.ACTION_DROP -> {
+                        val from = event.clipData?.getItemAt(0)?.text?.toString()?.toIntOrNull()
+                        if (from != null && from != index) moveFrameTo(key, from, index)
+                        true
+                    }
+                    else -> true
+                }
+            }
             panel.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
                 topMargin = px(4)
                 bottomMargin = px(2)
@@ -569,7 +583,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 if (screen != "mode" || modeId != key) return
                 view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName),
                     clip.currentAnchor(), clip.currentDx, clip.currentDy, manager.currentPack.anchorRes,
-                    clip.currentModeId, manager.currentPack.modes[clip.currentModeId]?.loop == true)
+                    clip.currentModeId, manager.currentPack.modeLoops[clip.currentModeId] == true)
                 val step = clip.advance(50, allowModeSwitch = true)
                 if (!step.ended && !step.timerRequested) handler.postDelayed(this, 50)
             }
@@ -727,14 +741,13 @@ class RolePackEditorActivity : AppCompatActivity() {
             orderedIndices.forEach { result.put(JSONObject(old.getJSONObject(it).toString())) }
         }
     }
-    private fun move(key: String, index: Int, delta: Int) = attempt {
+    private fun moveFrameTo(key: String, from: Int, to: Int) = attempt {
         val frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
-        val to = index + delta
-        if (to !in 0 until frames.length()) return@attempt
+        if (from !in 0 until frames.length() || to !in 0 until frames.length()) return@attempt
         val order = (0 until frames.length()).toMutableList()
-        order.add(to, order.removeAt(index))
-        val changed = remapFrames(frames, order)
-        change { it.getJSONObject("modes").getJSONObject(key).put("frames", changed) }
+        order.add(to, order.removeAt(from))
+        val reordered = remapFrames(frames, order)
+        change { it.getJSONObject("modes").getJSONObject(key).put("frames", reordered) }
         showMode(key)
     }
     private fun copyMode(key: String) {
