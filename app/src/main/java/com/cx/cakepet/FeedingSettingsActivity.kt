@@ -113,7 +113,10 @@ class FeedingSettingsActivity : AppCompatActivity() {
 
         // 总开关
         swFeedingEnabled.setOnCheckedChangeListener { _, b ->
-            if (!suppressSwitches) lifecycleScope.launch { config.update { it.copy(feedingEnabled = b) } }
+            if (!suppressSwitches) {
+                folding?.refresh(config.getBlocking().copy(feedingEnabled = b))
+                lifecycleScope.launch { config.update { it.copy(feedingEnabled = b) } }
+            }
         }
         swFullScreen.setOnCheckedChangeListener { _, b ->
             if (!suppressSwitches) lifecycleScope.launch { config.update { it.copy(feedingFullScreen = b) } }
@@ -123,12 +126,16 @@ class FeedingSettingsActivity : AppCompatActivity() {
         }
         swAutoExpire.setOnCheckedChangeListener { _, b ->
             if (!suppressSwitches) {
+                folding?.refresh(config.getBlocking().copy(feedingAutoExpire = b))
                 setExpireEnabled(b)
                 lifecycleScope.launch { config.update { it.copy(feedingAutoExpire = b) } }
             }
         }
         swFeedGrow.setOnCheckedChangeListener { _, b ->
-            if (!suppressSwitches) lifecycleScope.launch { config.update { it.copy(feedGrowEnabled = b) } }
+            if (!suppressSwitches) {
+                folding?.refresh(config.getBlocking().copy(feedGrowEnabled = b))
+                lifecycleScope.launch { config.update { it.copy(feedGrowEnabled = b) } }
+            }
         }
 
         // 大小
