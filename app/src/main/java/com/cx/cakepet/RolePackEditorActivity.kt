@@ -609,76 +609,98 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
         val frames = m.getJSONArray("frames")
         panel.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f))
+        val order = (0 until frames.length()).toMutableList()
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
-        for (index in 0 until frames.length()) {
-            val frame = frames.getJSONObject(index)
-            val source = frame.optString("res")
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setBackgroundResource(R.drawable.card_bg)
-                setPadding(px(8), px(4), px(4), px(4))
-            }
-            val contents = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                isClickable = true
-                setOnClickListener { frameMenu(key, index) }
-                setOnLongClickListener {
-                    val data = android.content.ClipData.newPlainText("frame-index", index.toString())
-                    card.startDragAndDrop(data, android.view.View.DragShadowBuilder(card), null, 0)
-                    true
-                }
-            }
-            contents.addView(ImageView(this).apply {
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
-            }, LinearLayout.LayoutParams(px(52), px(52)))
-            val labels = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(px(8), 0, 0, 0)
-            }
-            labels.addView(text("帧 $index", 15f).apply { setPadding(0, 0, 0, 0) })
-            labels.addView(text("${frame.opt("delay")} ms", 12f).apply { setPadding(0, 0, 0, 0) })
-            labels.addView(text(source, 10f).apply {
-                setPadding(0, 0, 0, 0)
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-                setTextColor(getColor(R.color.cp_note))
-            })
-            contents.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-            card.addView(contents, LinearLayout.LayoutParams(0, -2, 1f))
-            card.addView(text("⠿", 22f).apply {
-                gravity = Gravity.CENTER
-                setPadding(0, 0, 0, 0)
-                setOnLongClickListener {
-                    val data = android.content.ClipData.newPlainText("frame-index", index.toString())
-                    card.startDragAndDrop(data, android.view.View.DragShadowBuilder(card), null, 0)
-                    true
-                }
-            }, LinearLayout.LayoutParams(px(40), px(54)))
-            card.setOnLongClickListener {
-                val data = android.content.ClipData.newPlainText("frame-index", index.toString())
-                card.startDragAndDrop(data, android.view.View.DragShadowBuilder(card), null, 0)
-                true
-            }
-            card.setOnDragListener { _, event ->
-                when (event.action) {
-                    android.view.DragEvent.ACTION_DRAG_STARTED ->
-                        event.clipDescription?.hasMimeType("text/plain") == true
-                    android.view.DragEvent.ACTION_DROP -> {
-                        val from = event.clipData?.getItemAt(0)?.text?.toString()?.toIntOrNull()
-                        if (from != null && from != index) moveFrameTo(key, from, index)
-                        true
-                    }
-                    else -> true
-                }
-            }
-            panel.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
-                topMargin = px(4)
-                bottomMargin = px(2)
-            })
+        val recycler = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@RolePackEditorActivity)
+            isNestedScrollingEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
         }
+        val adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun getItemCount(): Int = order.size
+
+            override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                val card = LinearLayout(this@RolePackEditorActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setBackgroundResource(R.drawable.card_bg)
+                    setPadding(px(8), px(5), px(8), px(5))
+                    layoutParams = RecyclerView.LayoutParams(-1, px(66)).apply {
+                        topMargin = px(3)
+                        bottomMargin = px(3)
+                    }
+                }
+                card.addView(ImageView(this@RolePackEditorActivity).apply {
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    setBackgroundResource(R.drawable.bg_thumb_border)
+                }, LinearLayout.LayoutParams(px(52), px(52)))
+                val labels = LinearLayout(this@RolePackEditorActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(px(8), 0, 0, 0)
+                }
+                labels.addView(text("", 15f))
+                labels.addView(text("", 12f))
+                labels.addView(text("", 10f).apply {
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                    setTextColor(getColor(R.color.cp_note))
+                })
+                card.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+                card.addView(text("⠿", 22f).apply { gravity = Gravity.CENTER },
+                    LinearLayout.LayoutParams(px(40), -1))
+                return object : RecyclerView.ViewHolder(card) {}
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val frame = frames.getJSONObject(order[position])
+                val source = frame.optString("res")
+                val card = holder.itemView as LinearLayout
+                val image = card.getChildAt(0) as ImageView
+                val labels = card.getChildAt(1) as LinearLayout
+                (labels.getChildAt(0) as TextView).text = "帧 $position"
+                (labels.getChildAt(1) as TextView).text = "${frame.opt("delay")} ms"
+                (labels.getChildAt(2) as TextView).text = source
+                image.setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
+                card.setOnClickListener {
+                    val index = holder.bindingAdapterPosition
+                    if (index != RecyclerView.NO_POSITION) frameMenu(key, index)
+                }
+            }
+        }
+        recycler.adapter = adapter
+        var changed = false
+        val touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+        ) {
+            override fun isLongPressDragEnabled(): Boolean = true
+            override fun onMove(rv: RecyclerView, from: RecyclerView.ViewHolder,
+                                target: RecyclerView.ViewHolder): Boolean {
+                val a = from.bindingAdapterPosition
+                val b = target.bindingAdapterPosition
+                if (a !in order.indices || b !in order.indices) return false
+                order.add(b, order.removeAt(a))
+                adapter.notifyItemMoved(a, b)
+                changed = true
+                return true
+            }
+            override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun clearView(rv: RecyclerView, holder: RecyclerView.ViewHolder) {
+                super.clearView(rv, holder)
+                if (changed) {
+                    changed = false
+                    attempt {
+                        change {
+                            it.getJSONObject("modes").getJSONObject(key)
+                                .put("frames", remapFrames(frames, order))
+                        }
+                        adapter.notifyDataSetChanged()
+                    }
+                }
+            }
+        })
+        touch.attachToRecyclerView(recycler)
+        panel.addView(recycler, LinearLayout.LayoutParams(-1, px(72 * frames.length())))
     }
     private fun animate(view: RoleAnimationPreview, key: String) {
         stopAnimation()
