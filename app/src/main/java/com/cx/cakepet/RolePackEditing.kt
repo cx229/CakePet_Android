@@ -139,7 +139,28 @@ object RolePackEditing {
             } finally { bmp.recycle() }
             time += delay
         }
-        File(folder, "frames.json").writeText(JSONObject().put("frames", manifest).toString(2))
+        // Keep the on-disk folder, manifest, and Mode frame references in lockstep.
+        // A missing frame is an import failure, never a silently accepted resource.
+        val manifestFile = File(folder, "frames.json")
+        manifestFile.writeText(JSONObject().put("frames", manifest).toString(2))
+        val savedManifest = JSONObject(manifestFile.readText()).getJSONArray("frames")
+        check(savedManifest.length() == frames.length() && frames.length() == delays.size) {
+            "GIF 帧索引数量与实际帧数量不一致"
+        }
+        for (index in 0 until frames.length()) {
+            val frameName = savedManifest.getJSONObject(index).getString("file")
+            val image = File(folder, frameName)
+            val relative = frames.getJSONObject(index).getString("res")
+            check(image.isFile && image.length() > 0 && image.canonicalFile ==
+                File(draft, relative).canonicalFile) {
+                "GIF 文件夹中的帧未正确关联：$relative"
+            }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(image.absolutePath, bounds)
+            check(bounds.outWidth > 0 && bounds.outHeight > 0) {
+                "GIF 已生成帧无法重新识别：$relative"
+            }
+        }
         return frames
     }
     private fun delays(b: ByteArray): List<Int> {
