@@ -155,7 +155,7 @@ class SnapSettingsActivity : AppCompatActivity() {
             pendingThreshold = null
             EditSync.setText(thresholdVal, c.snapThreshold.toInt().toString())
         }
-        folding?.refresh()
+        folding?.refresh(c)
     }
 
     // 吸附距离滑块：绑定 + 初始回填。抽成方法，onCreate 与 onResume 复用，
