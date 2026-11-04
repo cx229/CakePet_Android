@@ -683,7 +683,7 @@ class PetService : Service() {
                 // 生效条件：攀岩已开(上级移动+攀岩) 且 本开关开 且 当前攀岩态 且 非吸附态（吸附态不喜乱动）。
                 v.forageSpeed = rc.forageSpeed   // 自动觅食速度：按角色配置写入，PetView 沿墙奔向食物用
                 v.autoForage = rc.autoForage     // 自动觅食开关：供 PetView 落地决策判定是否插队进入攀岩态
-                val effForage = v.wallClimb && rc.autoForage && v.physics.isClimbing && !v.physics.isSnapped
+                val effForage = v.wallClimb && rc.autoForage && !v.physics.isSnapped
                 if (!effForage) {
                     forageFoodByView.remove(v)
                     v.setForage(false, 0f, 0f)
