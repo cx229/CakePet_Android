@@ -310,7 +310,7 @@
     },
     "落地": {
       "loop": false,
-      "nextMode": "走路",
+      "nextMode": "走动短距离",
       "frames": [
         {
           "res": "落地/jump_down-1.png",
@@ -503,6 +503,41 @@
       "finishCycle": true,
       "groups": [
         "拖动与抛掷"
+      ]
+    },
+    "走动短距离": {
+      "loop": true,
+      "nextMode": null,
+      "frames": [
+        {
+          "res": "走路/walk-1.png",
+          "delay": 100,
+          "verticalAlign": "top",
+          "dx": 9,
+          "dy": 0
+        },
+        {
+          "res": "走路/walk-2.png",
+          "delay": 100,
+          "verticalAlign": "top",
+          "dx": 9,
+          "dy": 0
+        },
+        {
+          "res": "走路/walk-3.png",
+          "delay": 100,
+          "verticalAlign": "top",
+          "dx": 9,
+          "dy": 0
+        }
+      ],
+      "duration": {
+        "min": 500,
+        "max": 1000
+      },
+      "finishCycle": true,
+      "groups": [
+        "移动"
       ]
     },
     "走路": {
@@ -957,12 +992,9 @@
     },
     "探头": {
       "loop": true,
-      "duration": {
-        "min": 5000,
-        "max": 10000
-      },
+      "duration": null,
       "finishCycle": true,
-      "nextMode": "静坐",
+      "nextMode": null,
       "frames": [
         {
           "res": "探头/probe_head-1.png",
