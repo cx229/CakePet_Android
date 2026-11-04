@@ -140,6 +140,7 @@ class PetPhysics {
     private var primaryImpact = false
 
     private fun primaryGravitySide(): Int {
+        if (!gravityEnabled) return -1
         if (tiltGravity) {
             if (kotlin.math.abs(tiltGx) < 0.01f && kotlin.math.abs(tiltGy) < 0.01f) return -1
             return if (kotlin.math.abs(tiltGy) >= kotlin.math.abs(tiltGx)) {
