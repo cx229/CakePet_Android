@@ -552,6 +552,11 @@ class RolePackEditorActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER_VERTICAL
                 isClickable = true
                 setOnClickListener { frameMenu(key, index) }
+                setOnLongClickListener {
+                    val data = android.content.ClipData.newPlainText("frame-index", index.toString())
+                    card.startDragAndDrop(data, android.view.View.DragShadowBuilder(card), null, 0)
+                    true
+                }
             }
             contents.addView(ImageView(this).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
