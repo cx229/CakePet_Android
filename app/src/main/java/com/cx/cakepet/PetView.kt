@@ -34,6 +34,8 @@ class PetView @JvmOverloads constructor(
         ImageModeManager(context, buildSpritePack(context, ConfigDefaults.DEFAULT_SPRITE_PACK))
     )
     private var currentBitmap: Bitmap? = null
+    // Snapshot frame-local source correction together with its bitmap and anchor.
+    private var currentFrameAssetFlipX = false
 
     // ===== v1.01 契约：对外只暴露【功能寻址】，不暴露具体模式名，也不暴露内部 manager =====
 
@@ -178,6 +180,13 @@ class PetView @JvmOverloads constructor(
             else -> flipX
         }
 
+    /** Visual flip = per-frame source correction XOR runtime facing direction.
+     *  Keep stateFlip separate: dx/dy and forage direction are movement semantics,
+     *  not a property of the original PNG orientation.
+     */
+    private val renderFlipX: Boolean
+        get() = stateFlip != currentFrameAssetFlipX
+
     // 记录正在生效的拖动条件，避免每帧重新选择动作和重置动画帧。
     private var activeDragFunction: String? = null
 
@@ -291,7 +300,7 @@ class PetView @JvmOverloads constructor(
         // 旧包 bmp=128、dw=128*s ⇒ s（与原行为一致）。isHitOnPet 用同一 scale 反算，命中与显示严格对齐。
         val drawScale = if (bmp.width > 0) dw / bmp.width else s
         val rotation = stateRotation
-        val flip = stateFlip
+        val flip = renderFlipX
         return RenderState(bmp, dw, dh, left, top, cx, cy, rotation, flip, drawScale)
     }
 
@@ -437,6 +446,7 @@ class PetView @JvmOverloads constructor(
 
     init {
         currentBitmap = imageManager.currentBitmap()
+        currentFrameAssetFlipX = imageManager.currentFrameFlipX()
         val (fw, fh) = imageManager.currentBitmapSize()
         val (fax, fay) = imageManager.currentAnchor()
         lastFrameW = fw
@@ -920,6 +930,7 @@ class PetView @JvmOverloads constructor(
         val (fw, fh) = imageManager.currentBitmapSize()
         val (fax, fay) = imageManager.currentAnchor()
         currentBitmap = imageManager.currentBitmap()
+        currentFrameAssetFlipX = imageManager.currentFrameFlipX()
         lastFrameW = fw
         lastFrameH = fh
         lastAnchorX = fax
@@ -1133,7 +1144,7 @@ class PetView @JvmOverloads constructor(
         // 镜像：吸附态用专属 snapFlipX（与 onDraw 渲染一致），非吸附态用全局 flipX。
         // 镜像时图片以窗口中心翻转，图片像素 x 映射到 dw - x，
         // 故锚点在窗口内的偏移需对称翻转：offX = (w+dw)/2 - fax*scale（扒鱼等左右朝向正确）。
-        val useFlip = stateFlip
+        val useFlip = renderFlipX
         val offX = if (useFlip) {
             (w + dw) / 2f - fax * scaleFactor
         } else {
@@ -1187,7 +1198,7 @@ class PetView @JvmOverloads constructor(
         // 镜像时图片以窗口中心翻转，锚点 X 对称：offX = w - (left + fax*scale)。
         // 与 onDraw 的 scale(-1,1,center) 完全一致，使吸附线 X 与宠物脚底/接触点对齐。
         // 吸附态用专属 snapFlipX（与 getAnchorScaled/onDraw 一致），否则吸附线会与脚位错开。
-        val useFlip = stateFlip
+        val useFlip = renderFlipX
         val offX = if (useFlip) {
             w - (left + fax * scaleFactor)
         } else {
@@ -1262,7 +1273,7 @@ class PetView @JvmOverloads constructor(
         // 镜像：吸附态用专属 snapFlipX（与 onDraw/getAnchorScaled 一致），非吸附态用全局 flipX。
         // 必须复用同一翻转分支，否则 snapFlipX=true 时“窗口定位锚点”与“渲染脚位”差 (dw-2·fax·s)，
         // 脚的真实屏幕位置与物理/bounds 假定位置错开（吸附态翻转复位后又跳变）。
-        val useFlip = stateFlip
+        val useFlip = renderFlipX
         val offX = if (useFlip) {
             (w + dw) / 2f - fax * scaleFactor
         } else {
@@ -1418,7 +1429,7 @@ class PetView @JvmOverloads constructor(
         val (fax, fay) = imageManager.currentAnchor()
         val dw = w
         // 镜像感知的脚锚点（与 getAnchorScaled 的翻转公式一致，但绕 getBaseBitmapSize 窗口中心）。
-        val useFlip = stateFlip
+        val useFlip = renderFlipX
         val offX = if (useFlip) {
             (w + dw) / 2f - fax * scaleFactor
         } else {
