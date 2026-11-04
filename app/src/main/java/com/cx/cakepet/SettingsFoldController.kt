@@ -120,6 +120,14 @@ class SettingsFoldController(private val host: Activity) {
                         if (before is TextView) {
                             before.visibility = child.visibility
                             before.alpha = child.alpha
+                            // Existing card sections use a zero-height spacer before
+                            // the heading. Fold it too to avoid empty 24dp gaps.
+                            if (index > 1) {
+                                val spacer = parent?.getChildAt(index - 2)
+                                if (spacer != null && spacer.layoutParams?.height == 0) {
+                                    spacer.visibility = child.visibility
+                                }
+                            }
                         }
                     }
                 }
