@@ -811,7 +811,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                     gravity = Gravity.CENTER_VERTICAL
                     setBackgroundResource(R.drawable.card_bg)
                     setPadding(px(8), px(5), px(8), px(5))
-                    layoutParams = RecyclerView.LayoutParams(-1, px(66)).apply {
+                    minimumHeight = px(64)
+                    layoutParams = RecyclerView.LayoutParams(-1, -2).apply {
                         topMargin = px(3)
                         bottomMargin = px(3)
                     }
@@ -836,14 +837,15 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
                 labels.addView(headline)
                 labels.addView(text("", 11f).apply {
-                    setTextColor(getColor(R.color.cp_note))
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
+                    // Content is set in the headline. Preserve this slot for
+                    // stable ViewHolder child indices without reserving space.
+                    visibility = View.GONE
                 })
-                labels.addView(text("", 10f).apply {
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
+                labels.addView(text("", 11f).apply {
                     setTextColor(getColor(R.color.cp_note))
+                    setSingleLine(false)
+                    maxLines = Int.MAX_VALUE
+                    ellipsize = null
                 })
                 card.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
                 card.addView(text("⋮", 24f).apply {
@@ -853,14 +855,15 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val rootRow = LinearLayout(this@RolePackEditorActivity).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    layoutParams = RecyclerView.LayoutParams(-1, px(66)).apply {
+                    minimumHeight = px(72)
+                    layoutParams = RecyclerView.LayoutParams(-1, -2).apply {
                         topMargin = px(3)
                         bottomMargin = px(3)
                     }
                 }
                 rootRow.addView(CheckBox(this@RolePackEditorActivity),
                     LinearLayout.LayoutParams(px(43), px(54)))
-                rootRow.addView(card, LinearLayout.LayoutParams(0, px(64), 1f))
+                rootRow.addView(card, LinearLayout.LayoutParams(0, -2, 1f))
                 return object : RecyclerView.ViewHolder(rootRow) {}
             }
 
@@ -880,8 +883,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     is Number -> "${rawDelay.toLong()}ms"
                     else -> "${rawDelay}ms"
                 }
-                (headline.getChildAt(1) as TextView).text =
-                    delayText + if (frame.optBoolean("flipX", false)) " · 左右镜像" else ""
+                val frameInfo = headline.getChildAt(1) as TextView
 
                 // Display only configured coordinates; an explicit zero is not a default.
                 fun coord(name: String): String = if (frame.has(name) && !frame.isNull(name)) {
@@ -896,14 +898,13 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val y = coord("anchorY")
                 val dx = coord("dx")
                 val dy = coord("dy")
-                val details = labels.getChildAt(1) as TextView
-                if (listOf(x, y, dx, dy).all { it == "-" }) {
-                    details.visibility = View.GONE
-                } else {
-                    details.visibility = View.VISIBLE
-                    details.text = "XY($x,$y)  dxy($dx,$dy)"
-                }
-                (labels.getChildAt(2) as TextView).text = source
+                val detailParts = mutableListOf(delayText)
+                if (x != "-" || y != "-") detailParts.add("XY($x,$y)")
+                if (dx != "-" || dy != "-") detailParts.add("dxy($dx,$dy)")
+                frameInfo.text = detailParts.joinToString("  ")
+                (labels.getChildAt(1) as TextView).visibility = View.GONE
+                (labels.getChildAt(2) as TextView).text =
+                    (if (frame.optBoolean("flipX", false)) "左右镜像 · " else "") + source
                 image.setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
                 image.scaleX = if (frame.optBoolean("flipX", false)) -1f else 1f
                 val at = holder.bindingAdapterPosition
@@ -970,7 +971,8 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
         })
         touch.attachToRecyclerView(recycler)
-        panel.addView(recycler, LinearLayout.LayoutParams(-1, px(72 * frames.length())))
+        // Long resource paths may wrap; fixed 72dp * frameCount clipped text.
+        panel.addView(recycler, LinearLayout.LayoutParams(-1, -2))
     }
     private fun animate(view: RoleAnimationPreview, key: String) {
         stopAnimation()
