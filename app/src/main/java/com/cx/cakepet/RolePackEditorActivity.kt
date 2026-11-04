@@ -649,7 +649,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 change { json ->
                     json.getJSONObject("modes").put(name, JSONObject()
                         .put("loop", true)
-                        .put("walkSpeed", 0).put("nextMode", JSONObject.NULL)
+                        .put("nextMode", JSONObject.NULL)
                         .put("duration", JSONObject.NULL).put("finishCycle", true)
                         .put("frames", JSONArray().put(JSONObject().put("res", source).put("delay", 120))))
                 }
@@ -841,7 +841,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         val tick = object : Runnable {
             override fun run() {
                 if (screen != "mode" || modeId != key) return
-                view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName),
+                view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName, clip.currentVerticalAlign),
                     clip.currentAnchor(), clip.currentDx, clip.currentDy, manager.currentPack.anchorRes,
                     clip.currentModeId, manager.currentPack.modeLoops[clip.currentModeId] == true,
                     clip.currentFrameIndex)
@@ -860,13 +860,17 @@ class RolePackEditorActivity : AppCompatActivity() {
         val mode = root.getJSONObject("modes").getJSONObject(key)
         editor("动作属性") { box ->
             val name = entry(box, "动作名称", key)
-            val speed = entry(box, "移动速度 walkSpeed", mode.opt("walkSpeed").toString())
-            val align = entry(box, "垂直填充方式 verticalAlign（top 或 center）",
-                mode.optString("verticalAlign", "top"))
+            var nextModeId = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+            box.addView(text("播放结束后的动作", 13f))
+            val nextChoice = button(if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId) {
+                chooseModes(single = true, initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
+                    nextModeId = chosen.firstOrNull().orEmpty()
+                    nextChoice.text = if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId
+                }
+            }
+            box.addView(nextChoice)
             val loop = Switch(this).apply { text = "循环播放"; isChecked = mode.optBoolean("loop", true) }
             box.addView(loop)
-            val next = entry(box, "播放结束后的动作（留空=由控制器决定）",
-                mode.optString("nextMode").takeUnless { it == "null" }.orEmpty())
             val previous = mode.optJSONObject("duration")
             val limited = Switch(this).apply {
                 text = "设置循环播放时长（关闭=无限循环）"
@@ -895,10 +899,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val renamed = name.text.toString().trim()
                 validId(renamed)
                 require(renamed == key || !root.getJSONObject("modes").has(renamed)) { "动作名称已存在" }
-                val target = next.text.toString().trim()
+                val target = nextModeId.trim()
                 require(target.isEmpty() || target == key || root.getJSONObject("modes").has(target)) { "后续动作不存在" }
-                val alignment = align.text.toString().trim()
-                require(alignment in listOf("top", "center")) { "填充方式必须是 top 或 center" }
                 val duration = if (loop.isChecked && limited.isChecked) {
                     val lo = min.text.toString().toLong()
                     val hi = max.text.toString().toLong()
@@ -908,8 +910,6 @@ class RolePackEditorActivity : AppCompatActivity() {
                 change { json ->
                     val modes = json.getJSONObject("modes")
                     val m = modes.getJSONObject(key)
-                    m.put("walkSpeed", speed.text.toString().toDouble())
-                    m.put("verticalAlign", alignment)
                     m.put("loop", loop.isChecked)
                     m.put("nextMode", if (target.isEmpty()) JSONObject.NULL else target)
                     if (loop.isChecked) {
@@ -1271,13 +1271,14 @@ class RolePackEditorActivity : AppCompatActivity() {
                             is JSONArray -> "${delay.optLong(0)},${delay.optLong(1)}"
                             else -> delay?.toString().orEmpty()
                         }
-                    } else optional(field, name)
+                    } else if (name == "verticalAlign") field.optString(name, "top")
+                    else optional(field, name)
                     if (raw.isNotBlank()) return raw
                 }
                 return ""
             }
             val fields = linkedMapOf<String, EditText>()
-            for (name in listOf("delay", "anchorX", "anchorY", "dx", "dy")) {
+            for (name in listOf("delay", "anchorX", "anchorY", "dx", "dy", "verticalAlign")) {
                 val field = entry(box, name, initial(name))
                 fields[name] = field
                 field.addTextChangedListener(object : android.text.TextWatcher {
@@ -1294,6 +1295,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                         require(nums.size in 1..2 && nums[0] > 0 &&
                             (nums.size == 1 || nums[1] >= nums[0])) { "delay 不合法" }
                         if (nums.size == 1) nums[0] else JSONArray().put(nums[0]).put(nums[1])
+                    } else if (name == "verticalAlign") {
+                        require(raw in listOf("top", "center")) { "填充方式必须为 top 或 center" }
+                        raw
                     } else if (raw.isEmpty()) JSONObject.NULL else raw.toDouble()
                 }
                 if (edits.isNotEmpty()) {
@@ -1359,12 +1363,17 @@ class RolePackEditorActivity : AppCompatActivity() {
             val anchorY = entry(box, "anchorY（空=默认）", optional(f, "anchorY"))
             val dx = entry(box, "dx（空=默认）", optional(f, "dx"))
             val dy = entry(box, "dy（空=默认）", optional(f, "dy"))
+            val align = entry(box, "垂直填充 verticalAlign（top/center）",
+                f.optString("verticalAlign", "top"))
             val save: () -> Unit = {
                 val delays = delay.text.toString().split(",").map { it.trim().toLong() }
                 require(delays.size in 1..2 && delays[0] > 0 && (delays.size == 1 || delays[1] >= delays[0]))
                 change { json ->
                     val frame = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
                     frame.put("delay", if (delays.size == 1) delays[0] else JSONArray().put(delays[0]).put(delays[1]))
+                    val alignment = align.text.toString().trim()
+                    require(alignment in listOf("top", "center")) { "填充方式必须为 top 或 center" }
+                    frame.put("verticalAlign", alignment)
                     listOf("anchorX" to anchorX, "anchorY" to anchorY, "dx" to dx, "dy" to dy).forEach { (name, input) ->
                         if (input.text.isBlank()) frame.remove(name)
                         else frame.put(name, input.text.toString().toDouble())
