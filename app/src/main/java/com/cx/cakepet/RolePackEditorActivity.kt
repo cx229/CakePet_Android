@@ -1134,6 +1134,153 @@ class RolePackEditorActivity : AppCompatActivity() {
         dialog.window?.setLayout(-1, -2)
     }
 
+    private fun removeBulkBar() {
+        bulkBar?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        bulkBar = null
+        if (::scroll.isInitialized) {
+            scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, 0)
+        }
+    }
+
+    private fun updateBulkBar(key: String) {
+        removeBulkBar()
+        if (bulkSelected.isEmpty()) return
+        // Overlay lives outside the scrolling content; bottom padding reserves full tap/scroll space.
+        scroll.clipToPadding = false
+        scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, px(120))
+        val host = findViewById<FrameLayout>(android.R.id.content)
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(12), px(8), px(12), px(8))
+            setBackgroundResource(R.drawable.card_bg)
+            elevation = px(8).toFloat()
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(text("已选择 ${bulkSelected.size} 帧", 14f),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(text("全选", 13f).apply {
+            isClickable = true
+            setOnClickListener {
+                val n = root.getJSONObject("modes").getJSONObject(key)
+                    .getJSONArray("frames").length()
+                bulkSelected.clear()
+                bulkSelected.addAll(0 until n)
+                (panel.findViewById<RecyclerView>(android.R.id.list))?.adapter?.notifyDataSetChanged()
+                updateBulkBar(key)
+            }
+        })
+        header.addView(text("清空", 13f).apply {
+            isClickable = true
+            setOnClickListener {
+                bulkSelected.clear()
+                (panel.findViewById<RecyclerView>(android.R.id.list))?.adapter?.notifyDataSetChanged()
+                updateBulkBar(key)
+            }
+        })
+        body.addView(header)
+        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        buttons.addView(button("编辑属性") { editBulkFrameProperties(key) },
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(4) })
+        buttons.addView(button("删除") { deleteBulkFrames(key) },
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(4) })
+        buttons.addView(button("替换") {
+            showImageChooser(ImagePickRequest(key, "batch", batch = bulkSelected.sorted()))
+        }, LinearLayout.LayoutParams(0, px(44), 1f))
+        body.addView(buttons)
+        bulkBar = body
+        host.addView(body, FrameLayout.LayoutParams(-1, px(102), Gravity.BOTTOM).apply {
+            leftMargin = px(12)
+            rightMargin = px(12)
+            bottomMargin = px(8)
+        })
+    }
+
+    private fun deleteBulkFrames(key: String) {
+        val frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+        val indices = bulkSelected.toSet()
+        if (indices.isEmpty()) return
+        if (indices.size >= frames.length()) {
+            Toast.makeText(this, "至少需要保留一帧", Toast.LENGTH_SHORT).show()
+            return
+        }
+        showConfirmDialog(
+            title = "批量删除",
+            bodyHtml = "确认删除选中的 ${indices.size} 帧？",
+            positiveText = "删除",
+            titleColorRes = R.color.cp_danger
+        ) {
+            attempt {
+                change { json ->
+                    val current = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+                    json.getJSONObject("modes").getJSONObject(key).put("frames",
+                        remapFrames(current, (0 until current.length()).filter { it !in indices }))
+                }
+                bulkSelected.clear()
+                showMode(key)
+            }
+        }
+    }
+
+    private fun editBulkFrameProperties(key: String) {
+        val frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+        val indices = bulkSelected.sorted()
+        if (indices.isEmpty()) return
+        editor("批量编辑帧属性") { box ->
+            val changed = mutableSetOf<String>()
+            fun initial(name: String): String {
+                for (index in indices) {
+                    val field = frames.getJSONObject(index)
+                    val raw = if (name == "delay") {
+                        when (val delay = field.opt("delay")) {
+                            is JSONArray -> "${delay.optLong(0)},${delay.optLong(1)}"
+                            else -> delay?.toString().orEmpty()
+                        }
+                    } else optional(field, name)
+                    if (raw.isNotBlank()) return raw
+                }
+                return ""
+            }
+            val fields = linkedMapOf<String, EditText>()
+            for (name in listOf("delay", "anchorX", "anchorY", "dx", "dy")) {
+                val field = entry(box, name, initial(name))
+                fields[name] = field
+                field.addTextChangedListener(object : android.text.TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                    override fun afterTextChanged(s: android.text.Editable?) { changed.add(name) }
+                })
+            }
+            val save: () -> Unit = {
+                val edits = changed.associateWith { name ->
+                    val raw = fields.getValue(name).text.toString().trim()
+                    if (name == "delay") {
+                        val nums = raw.split(",").map { it.trim().toLong() }
+                        require(nums.size in 1..2 && nums[0] > 0 &&
+                            (nums.size == 1 || nums[1] >= nums[0])) { "delay 不合法" }
+                        if (nums.size == 1) nums[0] else JSONArray().put(nums[0]).put(nums[1])
+                    } else if (raw.isEmpty()) JSONObject.NULL else raw.toDouble()
+                }
+                if (edits.isNotEmpty()) {
+                    change { json ->
+                        val current = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+                        indices.forEach { index ->
+                            val frame = current.getJSONObject(index)
+                            edits.forEach { (name, value) ->
+                                if (value === JSONObject.NULL) frame.remove(name) else frame.put(name, value)
+                            }
+                        }
+                    }
+                }
+                bulkSelected.clear()
+                showMode(key)
+            }
+            save
+        }
+    }
+
     private fun showFrameOptions(anchor: View, key: String, index: Int) {
         val menu = PopupMenu(this, anchor)
         listOf("替换", "在上方插入", "在下方插入").forEach { menu.menu.add(it) }
