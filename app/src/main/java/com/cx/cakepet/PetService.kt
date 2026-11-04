@@ -608,6 +608,7 @@ class PetService : Service() {
     private var viewImeInset = 0f
     private var globalImeInset = 0f
     private var lastImeCheck = 0L
+    private var lastLocalImeCheck = 0L
     // 输入法适应开关：关闭后不再因键盘弹出抬高宠物地面（imeAdapt=false 时不生效）。
     private var imeAdaptEnabled = true
     // 抬高偏移（px）：键盘抬高后的宠物地面再额外修正（正=更高）。仅 imeAdapt 生效时叠加。
@@ -653,6 +654,27 @@ class PetService : Service() {
                 for (inst in pets) inst.view.stepPhysics(PHYS_STEP_MS / 1000f)
                 physAccumulator -= PHYS_STEP_MS
             }
+            // Local keyboard lift must also respond when a moving pet enters/leaves
+            // the keyboard region after the IME was already shown. Throttle this
+            // geometry comparison; only recalculate when the rounded target changes.
+            if (keyboardUp && now - lastLocalImeCheck > 200L) {
+                lastLocalImeCheck = now
+                val keyboardHeight = maxOf(viewImeInset, globalImeInset)
+                val vis = getScreenBounds()
+                val needsLocalRecalc = engines.any { (roleId, runtime) ->
+                    val rc = runtime.config.getBlocking()
+                    if (rc.keyboardMode() != "local") false else {
+                        val prev = imeShiftY[roleId] ?: 0f
+                        val target = pets.filter { it.roleId == roleId }.minOfOrNull { inst ->
+                            minOf(0f, vis.bottom - keyboardHeight - rc.imeLiftOffset -
+                                (inst.view.physics.y - prev + inst.view.height))
+                        } ?: 0f
+                        Math.round(target) != Math.round(prev)
+                    }
+                }
+                if (needsLocalRecalc) recalcBounds()
+            }
+
             // 自动觅食驱动（攀岩走壁子开关）：在动画推进前计算每只宠物的觅食状态，
             // 选最近食物/沿墙走/吃到投喂。优先级高于飞跃但不拦截（无食物则回落飞跃/选池）。
             for (inst in pets) {
