@@ -690,7 +690,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val save: () -> Unit = {
                         val target = name.text.toString().trim()
                         require(target.isNotEmpty() && target.length <= 40 && target != "未分组" &&
-                            target.none { ch -> ch == '/' || ch == '\\\\' || ch == '\\n' || ch == '\\r' }) {
+                            target.none { ch -> ch == '/' || ch == '\\' || ch == '\n' || ch == '\r' }) {
                             "动作组名称不合法"
                         }
                         require(target == group || target !in knownGroups()) { "动作组已存在" }
@@ -944,6 +944,9 @@ class RolePackEditorActivity : AppCompatActivity() {
         val mode = root.getJSONObject("modes").getJSONObject(key)
         editor("动作属性") { box ->
             val name = entry(box, "动作名称", key)
+            (name.parent as? LinearLayout)?.let { field ->
+                (field.getChildAt(0) as? TextView)?.setTextColor(android.graphics.Color.BLACK)
+            }
             var nextModeId = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
             box.addView(text("播放结束后的动作", 13f))
             lateinit var nextChoice: com.google.android.material.button.MaterialButton
@@ -953,32 +956,54 @@ class RolePackEditorActivity : AppCompatActivity() {
                     nextChoice.text = if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId
                 }
             }
-            box.addView(nextChoice)
-            val loop = Switch(this).apply { text = "循环播放"; isChecked = mode.optBoolean("loop", true) }
-            box.addView(loop)
+            box.addView(nextChoice, LinearLayout.LayoutParams(-1, px(38)))
+            val playbackModes = listOf("关闭", "无限循环", "定时循环")
             val previous = mode.optJSONObject("duration")
-            val limited = Switch(this).apply {
-                text = "设置循环播放时长（关闭=无限循环）"
-                isChecked = mode.optBoolean("loop") && previous != null
+            val playback = Spinner(this).apply {
+                adapter = ArrayAdapter(this@RolePackEditorActivity,
+                    android.R.layout.simple_spinner_dropdown_item, playbackModes)
+                setSelection(when {
+                    !mode.optBoolean("loop") -> 0
+                    previous != null -> 2
+                    else -> 1
+                })
+                minimumHeight = px(44)
             }
-            box.addView(limited)
-            val min = entry(box, "随机目标时长：最短（毫秒）",
-                previous?.optLong("min", 3000)?.toString() ?: "3000")
-            val max = entry(box, "随机目标时长：最长（毫秒）",
-                previous?.optLong("max", 4000)?.toString() ?: "4000")
+            box.addView(text("循环播放", 13f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            })
+            box.addView(playback, LinearLayout.LayoutParams(-1, px(48)))
+            val timedFields = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+            val rangeRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val min = entry(rangeRow, "最短（ms）",
+                previous?.optLong("min", 3000)?.toString() ?: "3000", compact = true)
+            val max = entry(rangeRow, "最长（ms）",
+                previous?.optLong("max", 4000)?.toString() ?: "4000", compact = true)
+            (min.parent?.parent as? View)?.layoutParams =
+                LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
+            (max.parent?.parent as? View)?.layoutParams =
+                LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
+            timedFields.addView(rangeRow)
             val finish = Switch(this).apply {
-                text = "到达目标时长后，完整播放当前轮"
+                text = "到达时长后，播放完本轮再切换"
                 isChecked = mode.optBoolean("finishCycle", true)
             }
-            box.addView(finish)
+            timedFields.addView(finish)
+            box.addView(timedFields)
             fun refreshFields() {
-                limited.isEnabled = loop.isChecked
-                min.isEnabled = loop.isChecked && limited.isChecked
-                max.isEnabled = loop.isChecked && limited.isChecked
-                finish.isEnabled = loop.isChecked && limited.isChecked
+                timedFields.visibility = if (playback.selectedItemPosition == 2) View.VISIBLE else View.GONE
             }
-            loop.setOnCheckedChangeListener { _, _ -> refreshFields() }
-            limited.setOnCheckedChangeListener { _, _ -> refreshFields() }
+            playback.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: android.widget.AdapterView<*>?, view: View?, position: Int, itemId: Long
+                ) { refreshFields() }
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+            }
             refreshFields()
             val save: () -> Unit = {
                 val renamed = name.text.toString().trim()
@@ -986,7 +1011,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 require(renamed == key || !root.getJSONObject("modes").has(renamed)) { "动作名称已存在" }
                 val target = nextModeId.trim()
                 require(target.isEmpty() || target == key || root.getJSONObject("modes").has(target)) { "后续动作不存在" }
-                val duration = if (loop.isChecked && limited.isChecked) {
+                val duration = if (playback.selectedItemPosition == 2) {
                     val lo = min.text.toString().toLong()
                     val hi = max.text.toString().toLong()
                     require(lo > 0 && hi >= lo) { "时长必须为正数，最长不得小于最短" }
@@ -995,9 +1020,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                 change { json ->
                     val modes = json.getJSONObject("modes")
                     val m = modes.getJSONObject(key)
-                    m.put("loop", loop.isChecked)
+                    m.put("loop", playback.selectedItemPosition != 0)
                     m.put("nextMode", if (target.isEmpty()) JSONObject.NULL else target)
-                    if (loop.isChecked) {
+                    if (playback.selectedItemPosition != 0) {
                         m.put("duration", duration ?: JSONObject.NULL)
                         m.put("finishCycle", finish.isChecked)
                     } else {
