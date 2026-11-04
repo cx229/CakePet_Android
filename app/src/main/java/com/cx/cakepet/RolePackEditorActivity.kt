@@ -8,6 +8,8 @@ import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
+import android.text.TextUtils
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -23,8 +25,11 @@ class RolePackEditorActivity : AppCompatActivity() {
     private lateinit var draft: File
     private lateinit var root: JSONObject
     private lateinit var panel: LinearLayout
+    private lateinit var scroll: ScrollView
+    private lateinit var titleText: TextView
+    private val expandedResourceFolders = mutableSetOf<String>()
     private var screen = "home"
-    private data class EditorPage(val name: String, val mode: String)
+    private data class EditorPage(val name: String, val mode: String, val scrollY: Int)
     private val pageHistory = java.util.ArrayDeque<EditorPage>()
     private var restoringPage = false
     private val openedFunctionFolders = mutableSetOf<String>()
@@ -81,21 +86,18 @@ class RolePackEditorActivity : AppCompatActivity() {
             finish()
             return
         }
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(getColor(R.color.cp_bg))
+        setContentView(R.layout.activity_role_pack_editor)
+        findViewById<View>(R.id.status_bar_spacer).apply {
+            layoutParams.height = getStatusBarHeight()
+            requestLayout()
         }
+        findViewById<ImageView>(R.id.iv_back).setOnClickListener { navigateBack() }
+        titleText = findViewById(R.id.tv_title)
+        scroll = findViewById(R.id.editor_scroll)
+        panel = findViewById(R.id.editor_content)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = navigateBack()
         })
-        val scroll = ScrollView(this)
-        panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(16), px(8), px(16), px(24))
-        }
-        scroll.addView(panel)
-        layout.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(layout)
         home()
     }
     override fun onDestroy() {
@@ -118,6 +120,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         } finally {
             restoringPage = false
         }
+        scroll.post { scroll.scrollTo(0, previous.scrollY) }
     }
     private fun px(dp: Int) = (dp * resources.displayMetrics.density).toInt()
     private fun button(label: String, click: () -> Unit) = Button(this).apply {
@@ -133,17 +136,18 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun section(title: String, dest: String) {
         stopAnimation()
-        if (!restoringPage && screen != dest) pageHistory.addLast(EditorPage(screen, modeId))
+        val pageChanged = screen != dest
+        if (!restoringPage && pageChanged)
+            pageHistory.addLast(EditorPage(screen, modeId, scroll.scrollY))
         screen = dest
         panel.removeAllViews()
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        titleText.text = title
+        if (pageChanged && !restoringPage) {
+            scroll.clearFocus()
+            panel.requestFocus()
+            scroll.scrollTo(0, 0)
+            scroll.post { if (screen == dest) scroll.scrollTo(0, 0) }
         }
-        header.addView(button("‹") { navigateBack() },
-            LinearLayout.LayoutParams(px(56), px(48)))
-        header.addView(text(title, 20f), LinearLayout.LayoutParams(0, -2, 1f))
-        panel.addView(header)
     }
     private fun action(title: String, click: () -> Unit) {
         panel.addView(button(title, click), LinearLayout.LayoutParams(-1, px(52)))
@@ -223,13 +227,53 @@ class RolePackEditorActivity : AppCompatActivity() {
             save
         }
     }
+    /** Sampled thumbnails keep the action list small even for high-resolution artwork. */
+    private fun thumb(file: File, size: Int = 112): android.graphics.Bitmap? {
+        if (!file.isFile) return null
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, opts)
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) return null
+        var sample = 1
+        while (maxOf(opts.outWidth, opts.outHeight) / sample > size * 2) sample *= 2
+        return BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+        })
+    }
     private fun modes() {
-        section("全部动作 · Modes", "modes")
+        section("全部动作", "modes")
         action("＋ 新建动作") { newMode() }
-        panel.addView(text("未被功能引用的动作也可以自由保留和编辑。"))
+        panel.addView(text("点击动作卡片进入编辑；图片显示第 0 帧。", 12f))
+        val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         ids().forEach { key ->
-            val m = root.getJSONObject("modes").getJSONObject(key)
-            action("$key · ${m.getJSONArray("frames").length()} 帧") { showMode(key) }
+            val mode = root.getJSONObject("modes").getJSONObject(key)
+            val frames = mode.getJSONArray("frames")
+            val source = frames.optJSONObject(0)?.optString("res").orEmpty()
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundResource(R.drawable.card_bg)
+                setPadding(px(12), px(8), px(12), px(8))
+                isClickable = true
+                setOnClickListener { showMode(key) }
+            }
+            val image = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setBackgroundResource(R.drawable.bg_thumb_border)
+                setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
+            }
+            card.addView(image, LinearLayout.LayoutParams(px(58), px(58)))
+            val labels = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(px(12), 0, px(6), 0)
+            }
+            labels.addView(text(key, 16f))
+            labels.addView(text("${frames.length()} 帧 · ${if (mode.optBoolean("loop")) "循环" else "播放一次"}", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            })
+            card.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+            card.addView(text("›", 22f))
+            panel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
         }
     }
     private fun newMode() {
@@ -270,6 +314,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         panel.addView(showGuides)
+        panel.addView(button("↺ 从头播放") { animate(preview, key) }, LinearLayout.LayoutParams(-1, px(44)))
         animate(preview, key)
         action("编辑动作属性") { attributes(key) }
         action("复制动作") { copyMode(key) }
@@ -285,50 +330,55 @@ class RolePackEditorActivity : AppCompatActivity() {
         val frames = m.getJSONArray("frames")
         panel.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f))
         panel.addView(text("点击帧卡片编辑；箭头调整排序，帧编号从 0 开始。"))
+        val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         for (index in 0 until frames.length()) {
             val frame = frames.getJSONObject(index)
+            val source = frame.optString("res")
             val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setBackgroundResource(R.drawable.bg_btn_outline)
-                setPadding(px(12), px(8), px(12), px(8))
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundResource(R.drawable.card_bg)
+                setPadding(px(8), px(4), px(4), px(4))
             }
-            val content = LinearLayout(this).apply {
+            val contents = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 isClickable = true
                 setOnClickListener { frameMenu(key, index) }
             }
-            val thumbnail = ImageView(this).apply {
+            contents.addView(ImageView(this).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                isClickable = false
-            }
-            val file = File(draft, frame.optString("res"))
-            if (file.isFile) thumbnail.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
-            content.addView(thumbnail, LinearLayout.LayoutParams(px(68), px(68)))
-            val details = LinearLayout(this).apply {
+                setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
+            }, LinearLayout.LayoutParams(px(52), px(52)))
+            val labels = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(px(12), 0, px(4), 0)
+                setPadding(px(8), 0, 0, 0)
             }
-            details.addView(text("帧 $index", 16f))
-            details.addView(text("时长：${frame.opt("delay")} ms", 13f))
-            details.addView(text(frame.optString("res"), 12f).apply {
+            labels.addView(text("帧 $index", 15f).apply { setPadding(0, 0, 0, 0) })
+            labels.addView(text("${frame.opt("delay")} ms", 12f).apply { setPadding(0, 0, 0, 0) })
+            labels.addView(text(source, 10f).apply {
+                setPadding(0, 0, 0, 0)
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
                 setTextColor(getColor(R.color.cp_note))
-                maxLines = 2
-                ellipsize = android.text.TextUtils.TruncateAt.END
             })
-            content.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
-            content.addView(text("›", 22f))
-            card.addView(content, LinearLayout.LayoutParams(-1, -2))
-            val controls = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.END
-            }
-            controls.addView(button("上移 ↑") { move(key, index, -1) })
-            controls.addView(button("下移 ↓") { move(key, index, 1) })
-            card.addView(controls)
+            contents.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+            card.addView(contents, LinearLayout.LayoutParams(0, -2, 1f))
+            val arrows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            fun arrow(label: String, offset: Int): TextView =
+                text(label, 18f).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(0, 0, 0, 0)
+                    isClickable = true
+                    setBackgroundResource(android.R.drawable.list_selector_background)
+                    setOnClickListener { move(key, index, offset) }
+                }
+            arrows.addView(arrow("▲", -1), LinearLayout.LayoutParams(px(40), px(32)))
+            arrows.addView(arrow("▼", 1), LinearLayout.LayoutParams(px(40), px(32)))
+            card.addView(arrows)
             panel.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
-                topMargin = px(5)
-                bottomMargin = px(5)
+                topMargin = px(4)
+                bottomMargin = px(2)
             })
         }
     }
