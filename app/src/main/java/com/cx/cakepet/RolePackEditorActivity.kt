@@ -955,7 +955,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun images() {
         section("图片资源", "images")
         action("＋ 导入图片到素材库") { resourcePicker.launch(arrayOf("image/*")) }
-        panel.addView(text("文件夹可以展开、重命名；图片可查看引用、重命名或删除未使用资源。", 12f))
+        panel.addView(text("点击文件夹展开；点击图片查看大图与引用；右侧 ⋮ 可重命名、替换或安全删除。", 12f))
         resourceBranch(draft, 0, imageUses())
     }
 }
