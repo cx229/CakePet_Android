@@ -9,6 +9,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -69,15 +71,67 @@ class RoleManageActivity : AppCompatActivity() {
             .onFailure { Toast.makeText(this, it.message ?: "导出失败", Toast.LENGTH_LONG).show() }
     }
 
-    private fun newRole() = runCatching {
-        val id = RolePackEditing.duplicate(this, RoleRegistry.DEFAULT)
-        startActivity(android.content.Intent(this, RolePackEditorActivity::class.java).putExtra("role_id", id))
-    }.onFailure { Toast.makeText(this, it.message ?: "创建失败", Toast.LENGTH_LONG).show() }
+    private fun askMaterialName(title: String, initial: String, submit: (String) -> Unit) {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24 * resources.displayMetrics.density).toInt(),
+                (12 * resources.displayMetrics.density).toInt(),
+                (24 * resources.displayMetrics.density).toInt(),
+                (12 * resources.displayMetrics.density).toInt())
+        }
+        val label = TextView(this).apply {
+            text = "素材包名称"
+            setTextColor(getColor(R.color.cp_title))
+            textSize = 14f
+        }
+        val input = EditText(this).apply {
+            setSingleLine(true)
+            setText(initial)
+            hint = "请输入素材包名称"
+            setTextColor(getColor(R.color.cp_title))
+            setSelectAllOnFocus(initial.isNotEmpty())
+        }
+        container.addView(label)
+        container.addView(input, LinearLayout.LayoutParams(-1, -2))
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(container)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("确定", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val name = input.text.toString().trim()
+                if (name.isEmpty()) {
+                    input.error = "请填写素材包名称"
+                    return@setOnClickListener
+                }
+                if (name.length > 60) {
+                    input.error = "名称不能超过 60 个字符"
+                    return@setOnClickListener
+                }
+                runCatching { submit(name) }
+                    .onSuccess { dialog.dismiss() }
+                    .onFailure { input.error = it.message ?: "操作失败" }
+            }
+        }
+        dialog.show()
+    }
 
-    private fun copyRole(role: RoleDescriptor) = runCatching {
-        RolePackEditing.duplicate(this, role)
-        loadList()
-    }.onFailure { Toast.makeText(this, it.message ?: "复制失败", Toast.LENGTH_LONG).show() }
+    private fun newRole() {
+        askMaterialName("创建素材包", "") { name ->
+            val id = RolePackEditing.duplicate(this, RoleRegistry.DEFAULT, name)
+            startActivity(android.content.Intent(this, RolePackEditorActivity::class.java)
+                .putExtra("role_id", id))
+        }
+    }
+
+    private fun copyRole(role: RoleDescriptor) {
+        askMaterialName("复制素材包", role.displayName) { name ->
+            RolePackEditing.duplicate(this, role, name)
+            loadList()
+        }
+    }
 
     private fun editRole(role: RoleDescriptor) {
         if (role.source == RoleSource.ASSETS) {
@@ -92,10 +146,12 @@ class RoleManageActivity : AppCompatActivity() {
     private fun showRoleOperations(anchor: View, role: RoleDescriptor) {
         val popup = android.widget.PopupMenu(this, anchor)
         listOf("编辑", "复制", "导出 ZIP").forEach { popup.menu.add(it) }
+        if (role.source == RoleSource.FILES) popup.menu.add("删除")
         popup.setOnMenuItemClickListener {
             when (it.title.toString()) {
                 "编辑" -> editRole(role)
                 "复制" -> copyRole(role)
+                "删除" -> confirmDelete(role)
                 "导出 ZIP" -> {
                     exportRole = role
                     exportZip.launch(role.displayName + ".zip")
@@ -474,7 +530,6 @@ class RoleManageActivity : AppCompatActivity() {
             // 仅素材卡片布局含这些视图。
             val name = holder.name ?: return
             val thumb = holder.thumb ?: return
-            val delete = holder.delete ?: return
             val importBtn = holder.importBtn ?: return
             name.text = role.displayName
             // 已加入首页的实例数量：小号灰字紧跟标题后实时显示（如 "(2)"）。
@@ -500,10 +555,7 @@ class RoleManageActivity : AppCompatActivity() {
             thumb.setOnClickListener { player.triggerPat() }
             player.start()
 
-            // 删除（仅用户上传 FILES 可见；预装 GONE）、加入（导入为首页实例）。
-            val isFiles = role.source == RoleSource.FILES
-            delete.visibility = if (isFiles) View.VISIBLE else View.GONE
-            delete.setOnClickListener { confirmDelete(role) }
+            // 删除统一置于更多菜单，预装模板不显示删除选项。
             importBtn.setOnClickListener { importToHome(role) }
             holder.options?.setOnClickListener { showRoleOperations(it, role) }
         }
@@ -523,7 +575,6 @@ class RoleManageActivity : AppCompatActivity() {
             val name: TextView? = itemView.findViewById(R.id.role_name)
             val count: TextView? = itemView.findViewById(R.id.role_count)
             val authors: TextView? = itemView.findViewById(R.id.role_authors)
-            val delete: ImageView? = itemView.findViewById(R.id.iv_delete)
             val importBtn: Button? = itemView.findViewById(R.id.btn_import)
             val options: View? = itemView.findViewById(R.id.btn_role_options)
         }

@@ -17,7 +17,8 @@ object RolePackEditing {
         if (!live.exists() && backup.exists()) backup.renameTo(live)
         return live
     }
-    fun duplicate(ctx: Context, source: RoleDescriptor): String {
+    fun duplicate(ctx: Context, source: RoleDescriptor, displayName: String): String {
+        require(displayName.isNotBlank() && displayName.length <= 60) { "请填写有效的素材包名称" }
         val id = newId()
         val target = dir(ctx, id)
         try {
@@ -26,7 +27,7 @@ object RolePackEditing {
             val file = File(target, "modes.jsonc")
             val json = parseJsonc(file.readText())
             json.put("id", id)
-            json.put("name", json.optString("name") + " 副本")
+            json.put("name", displayName.trim())
             file.writeText(json.toString(2))
             verify(target, json)
             RoleStore.addUserRole(ctx, UserRoleTemplate(id, json.getString("name"), id, -1,
