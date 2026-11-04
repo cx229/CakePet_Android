@@ -3298,12 +3298,15 @@ class PetService : Service() {
             lastAppliedImeInset = ime
             recalcBounds()
         }
+        val wasKeyboardUp = keyboardUp
         keyboardUp = ime > 0
         applyImeHide(keyboardUp)
-        // Keyboard-only pass-through must restore each role's original touch flags on dismiss.
-        for (roleId in engines.keys) {
-            syncControlWindows(roleId)
-            applyDisplayTouchFlags(roleId)
+        // Rebuild touch windows only on a real keyboard show/hide transition.
+        if (wasKeyboardUp != keyboardUp) {
+            for (roleId in engines.keys) {
+                syncControlWindows(roleId)
+                applyDisplayTouchFlags(roleId)
+            }
         }
     }
 
