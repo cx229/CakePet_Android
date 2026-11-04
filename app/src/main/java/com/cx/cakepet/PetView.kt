@@ -467,6 +467,10 @@ class PetView @JvmOverloads constructor(
         }
         // 抛掷结束（触底静止）→ 播放落地蹲下动画，再回常驻静坐（对齐 PC ThrowFallStandFollowMode）
         physics.onThrowEnd = {
+            // Preserve the direction actually rendered on landing. Randomizing a fresh
+            // walkDir when JUMP_DOWN finishes can make the resumed pet seem to walk
+            // backwards relative to its landing pose.
+            imageManager.preserveWalkDirectionAfterLanding(if (flipX) 1 else -1)
             modeOf("touch", "jump_down")?.let { playOnce(it) }
             // 抛掷落地：统一收口到 decideLanding（主重力边保留滚动流程；非反弹边先判飞跃/否则攀岩）。
             val wall = landingWall()
