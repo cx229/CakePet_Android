@@ -35,6 +35,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private val openedFunctionFolders = mutableSetOf<String>()
     private var modeId = ""
     private var fileIndex = -1
+    private var resourceReplacePath: String? = null
     private val handler = Handler(Looper.getMainLooper())
     private var animation: Runnable? = null
 
@@ -55,16 +56,30 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private val resourcePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val replacing = resourceReplacePath
+        resourceReplacePath = null
         if (uri != null) attempt {
-            val folder = File(draft, "images").apply { mkdirs() }
-            val file = File(folder, UUID.randomUUID().toString() + ".png")
             val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
                 ?: error("无法解码图片")
-            require(bitmap.width.toLong() * bitmap.height <= 8_000_000)
-            try { file.outputStream().use {
-                check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) { "PNG 写入失败" }
-            }} finally { bitmap.recycle() }
-            change { }
+            try {
+                require(bitmap.width > 0 && bitmap.height > 0 &&
+                    bitmap.width.toLong() * bitmap.height <= 8_000_000) { "图片尺寸过大" }
+                resourceChange { work, _ ->
+                    val dest = if (replacing == null) {
+                        File(work, "images/${UUID.randomUUID()}.png")
+                    } else File(work, replacing)
+                    if (replacing != null) require(isImage(dest)) { "原图片不存在" }
+                    dest.parentFile?.mkdirs()
+                    val format = when (dest.extension.lowercase()) {
+                        "jpg", "jpeg" -> android.graphics.Bitmap.CompressFormat.JPEG
+                        "webp" -> android.graphics.Bitmap.CompressFormat.WEBP_LOSSLESS
+                        else -> android.graphics.Bitmap.CompressFormat.PNG
+                    }
+                    dest.outputStream().use {
+                        check(bitmap.compress(format, 100, it)) { "图片写入失败" }
+                    }
+                }
+            } finally { bitmap.recycle() }
             images()
         }
     }
@@ -843,11 +858,15 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun imageOptions(relative: String) {
         val users = imageUses()[relative].orEmpty()
         AlertDialog.Builder(this).setTitle(File(relative).name)
-            .setItems(arrayOf("大图及引用详情", "重命名", "删除")) { _, option ->
+            .setItems(arrayOf("大图及引用详情", "重命名", "替换图片", "删除")) { _, option ->
                 when (option) {
                     0 -> imageDetails(relative)
                     1 -> renameDialog(relative, false)
-                    2 -> if (users.isNotEmpty()) {
+                    2 -> {
+                        resourceReplacePath = relative
+                        resourcePicker.launch(arrayOf("image/*"))
+                    }
+                    3 -> if (users.isNotEmpty()) {
                         AlertDialog.Builder(this).setMessage("被 ${users.size} 帧引用，请先更换引用。")
                             .setPositiveButton("知道了", null).show()
                     } else AlertDialog.Builder(this).setTitle("确认删除？")
