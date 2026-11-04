@@ -57,6 +57,15 @@ class RolePackEditorActivity : AppCompatActivity() {
         return cursor?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "素材"
     }
 
+    /** Reveal imported resources even when their parent folders were previously collapsed. */
+    private fun expandResourceParents(relative: String) {
+        var parent = File(relative).parent?.replace('\\', '/')
+        while (!parent.isNullOrEmpty()) {
+            expandedResourceFolders.add(parent)
+            parent = File(parent).parent?.replace('\\', '/')
+        }
+    }
+
     private fun importPng(uri: Uri, folder: String): String {
         var path = ""
         val bmp = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
@@ -89,7 +98,10 @@ class RolePackEditorActivity : AppCompatActivity() {
                         else (uploadedSelection + path).distinct())
                 }
                 "append" -> appendFrames(uploadMode, listOf(path))
-                else -> images()
+                else -> {
+                    expandResourceParents(path)
+                    images()
+                }
             }
         }
     }
@@ -148,7 +160,10 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             when (uploadAction) {
                 "append", "overwrite" -> showMode(mode)
-                else -> images()
+                else -> {
+                    paths.forEach(::expandResourceParents)
+                    images()
+                }
             }
         }
     }
