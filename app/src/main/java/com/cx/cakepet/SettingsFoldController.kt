@@ -25,8 +25,10 @@ class SettingsFoldController(private val host: Activity) {
     private val initialPaddings = IdentityHashMap<View, Int>()
     private fun dp(value: Int) = (host.resources.displayMetrics.density * value).toInt()
 
-    private fun rowOf(id: Int): View? =
-        host.findViewById<View>(id)?.parent as? View
+    private fun rowOf(id: Int): View? {
+        val control = host.findViewById<View>(id) ?: return null
+        return if (control is ViewGroup) control else control.parent as? View
+    }
 
     private fun titleOf(root: View, master: CompoundButton): TextView? {
         if (root is TextView && root !== master && root !is CompoundButton) return root
