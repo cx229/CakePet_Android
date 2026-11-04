@@ -13,6 +13,7 @@ import kotlin.math.min
 class RoleAnimationPreview(context: Context) : View(context) {
     var showGuides = true
     private var loops = false
+    private var frameIndex = 0
     private var image: Bitmap? = null
     private var bounds = RectF()
     private var anchor = 0 to 0
@@ -24,7 +25,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
 
     fun update(bitmap: Bitmap?, contentBounds: RectF, at: Pair<Int, Int>,
                offsetX: Int, offsetY: Int, resolution: Int, name: String,
-               isLooping: Boolean) {
+               isLooping: Boolean, currentFrameIndex: Int) {
         image = bitmap
         bounds = RectF(contentBounds)
         anchor = at
@@ -33,6 +34,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
         canvasRes = resolution.coerceAtLeast(1)
         mode = name
         loops = isLooping
+        frameIndex = currentFrameIndex
         invalidate()
     }
 
@@ -84,7 +86,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
             "锚点：红十字 (${anchor.first}, ${anchor.second})",
             "位移：($dx, $dy)",
             "当前动作：$mode",
-            "循环播放：${if (loops) "开" else "关"}"
+            "（帧$frameIndex，循环${if (loops) "开" else "关"}）"
         )
         paint.style = Paint.Style.FILL
         paint.textSize = 10f * scale
