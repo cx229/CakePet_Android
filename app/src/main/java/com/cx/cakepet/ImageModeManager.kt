@@ -296,7 +296,8 @@ class ImageModeManager(
         }
 
         /** Frames always play sequentially; only the Mode controls looping and transitions. */
-        fun advance(dtMs: Long, allowModeSwitch: Boolean = true): ClipStep {
+        fun advance(dtMs: Long, allowModeSwitch: Boolean = true,
+                    suppressTimedTransition: Boolean = false): ClipStep {
             if (isEnded || dtMs <= 0L) return ClipStep(false, isEnded)
             var remaining = dtMs
             var changed = false
@@ -309,7 +310,7 @@ class ImageModeManager(
                 elapsed += span
                 timeElapsed += span
                 if (def.loop && def.durationMin != null && allowModeSwitch &&
-                    timeElapsed >= timeTarget) {
+                    !suppressTimedTransition && timeElapsed >= timeTarget) {
                     if (def.finishCycle) pendingFinish = true
                     else {
                         val next = def.nextModeName

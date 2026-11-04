@@ -578,6 +578,7 @@ class PetView @JvmOverloads constructor(
     fun tick(dt: Float) {
         // 同步攀爬态给动画层：决定捞新动作时是否按飞跃概率直接跳起。
         imageManager.inClimbing = physics.isClimbing
+        imageManager.inSnapped = physics.isSnapped
         // 同步飞跃飞行态：飞行中锁定 JUMP_UP 动画，禁止 nextFrame 切换动作。
         imageManager.isFlying = flying
         updateAnimByState()

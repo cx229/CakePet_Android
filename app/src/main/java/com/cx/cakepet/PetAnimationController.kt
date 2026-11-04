@@ -17,6 +17,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
     var forageActive = false
     var leapProbability = 0.10f
     var inClimbing = false
+    var inSnapped = false
     var isFlying = false
 
     var walkDir = 1
@@ -116,7 +117,12 @@ class PetAnimationController(private val assets: ImageModeManager) {
     /** 每帧只调用通用动画游标，待机池、飞跃等行为仍由宠物控制器决定。 */
     fun nextFrame(dtMs: Long): ImageModeManager.FrameStep {
         val current = clip ?: return ImageModeManager.FrameStep(false)
-        val step = current.advance(dtMs, allowModeSwitch = !isFlying)
+        // Keep the mapped snap-idle Mode running while physics is attached.
+        // No animation name is treated as inherently snapped.
+        val holdSnapIdle = inSnapped && assets.isFunctionMode(
+            current.currentModeId, "snap", "snap_head")
+        val step = current.advance(dtMs, allowModeSwitch = !isFlying,
+            suppressTimedTransition = holdSnapIdle)
         if (step.modeChanged) {
             val continuation = forced && forcedStart?.let {
                 assets.isContinuationOf(current.currentModeId, it)
