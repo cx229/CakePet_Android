@@ -11,6 +11,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
     private var forcedReturn: String? = null
     private var forcedStart: String? = null
     private var modeChanged = false
+    private var frameMotionPending = true
 
     var useStaticPool = false
     var leapEnabled = false
@@ -42,7 +43,13 @@ class PetAnimationController(private val assets: ImageModeManager) {
         clip?.holdTimedExit = active && !forced &&
             isFunctionMode(getMode(), "snap", "snap_head")
     }
-    fun isWalk(): Boolean = walkSpeed > 0f && !forced
+    fun isWalk(): Boolean = clip?.isMotionLoop == true && !forced
+    /** Frame impulse is consumed once for initial frame, every advance and loop wrap. */
+    fun consumeFrameDisplacement(): Pair<Int, Int>? {
+        if (!frameMotionPending) return null
+        frameMotionPending = false
+        return if (isWalk()) null else curDx() to curDy()
+    }
     fun leavesOf(vararg path: String): List<String> = assets.leavesOf(*path)
     fun modeOf(vararg path: String): String? = assets.modeOf(*path)
     fun isFunctionMode(name: String, vararg path: String): Boolean = assets.isFunctionMode(name, *path)
@@ -61,9 +68,9 @@ class PetAnimationController(private val assets: ImageModeManager) {
         return if (pool.isNotEmpty()) pool.random() else getMode()
     }
 
-    private fun updateWalkState(speed: Float) {
+    private fun updateWalkState(speed: Float, resetDirection: Boolean = true) {
         if (speed > 0f) {
-            walkDir = if (Random.nextBoolean()) 1 else -1
+            if (resetDirection) walkDir = if (Random.nextBoolean()) 1 else -1
             walkSpeed = speed
         } else {
             walkDir = 1
@@ -79,7 +86,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
         clip = next
         currentName = id
         if (different) modeChanged = true
-        updateWalkState(next.currentWalkSpeed)
+        frameMotionPending = true
+        updateWalkState(if (next.isMotionLoop) next.currentWalkSpeed else 0f)
     }
 
     fun playOnce(id: String, endMode: String? = null) {
@@ -89,6 +97,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         forcedReturn = endMode
         forcedStart = id
         modeChanged = true
+        frameMotionPending = true
     }
 
     fun cancelForced() {
@@ -98,6 +107,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         forcedStart = null
         clip = assets.createClip(currentName)
         modeChanged = true
+        frameMotionPending = true
     }
 
     fun forceReset() {
@@ -139,7 +149,15 @@ class PetAnimationController(private val assets: ImageModeManager) {
             }
             if (!continuation) currentName = current.currentModeId
             modeChanged = true
-            updateWalkState(current.currentWalkSpeed)
+            frameMotionPending = true
+            updateWalkState(if (current.isMotionLoop) current.currentWalkSpeed else 0f)
+        }
+        if (step.changed) {
+            frameMotionPending = true
+            if (!step.modeChanged && isWalk()) {
+                val newSpeed = current.currentWalkSpeed
+                if (newSpeed != walkSpeed) updateWalkState(newSpeed, resetDirection = false)
+            }
         }
         if (!isFlying && (step.ended || step.timerRequested)) {
             val endMode = if (forced) forcedReturn else null
