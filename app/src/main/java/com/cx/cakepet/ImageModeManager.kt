@@ -113,8 +113,22 @@ class ImageModeManager(
      */
     fun modeOf(vararg path: String): String? = leavesOf(*path).let { if (it.isEmpty()) null else it.random(rng) }
 
-    /** 功能候选集判断，不调用随机选择器。 */
-    fun isFunctionMode(name: String, vararg path: String): Boolean = name in leavesOf(*path)
+    /**
+     * A one-shot entrance may lead into an internal looping continuation.
+     * This is still the same functional action; keep the continuation out of random
+     * Functions selection so entry frames are not accidentally skipped.
+     */
+    fun isContinuationOf(name: String, start: String): Boolean {
+        if (name == start) return true
+        val entry = modes[start] ?: return false
+        val continuation = modes[name] ?: return false
+        return !entry.loop && continuation.loop && entry.nextModeName == name &&
+            currentPack.functions.values.none { name in it }
+    }
+
+    /** Consider an internal continuation part of the same user-facing function. */
+    fun isFunctionMode(name: String, vararg path: String): Boolean =
+        leavesOf(*path).any { isContinuationOf(name, it) }
 
     init {
         currentPack.configPath?.let { path ->

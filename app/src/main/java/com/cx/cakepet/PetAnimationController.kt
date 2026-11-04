@@ -9,6 +9,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
     private var clip: ImageModeManager.ModeClip? = assets.createClip(currentName)
     private var forced = false
     private var forcedReturn: String? = null
+    private var forcedStart: String? = null
     private var modeChanged = false
 
     var useStaticPool = false
@@ -45,7 +46,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
 
     private fun currentPool(): List<String> =
         if (useStaticPool) leavesOf("static", "pool") else leavesOf("standby", "pool")
-    fun isStandbyMode(name: String = getMode()): Boolean = name in currentPool()
+    fun isStandbyMode(name: String = getMode()): Boolean = currentPool().any { assets.isContinuationOf(name, it) }
     fun pickStandbyMode(exclude: String): String {
         if (forageActive) modeOf("climb", "walk")?.let { return it }
         if (leapEnabled && inClimbing && Random.nextFloat() < leapProbability)
@@ -80,6 +81,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         clip = next
         forced = true
         forcedReturn = endMode
+        forcedStart = id
         modeChanged = true
     }
 
@@ -87,6 +89,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         if (!forced) return
         forced = false
         forcedReturn = null
+        forcedStart = null
         clip = assets.createClip(currentName)
         modeChanged = true
     }
@@ -113,11 +116,15 @@ class PetAnimationController(private val assets: ImageModeManager) {
         val current = clip ?: return ImageModeManager.FrameStep(false)
         val step = current.advance(dtMs, allowModeSwitch = !isFlying)
         if (step.modeChanged) {
-            if (forced) {
+            val continuation = forced && forcedStart?.let {
+                assets.isContinuationOf(current.currentModeId, it)
+            } == true
+            if (forced && !continuation) {
                 forced = false
                 forcedReturn = null
+                forcedStart = null
             }
-            currentName = current.currentModeId
+            if (!continuation) currentName = current.currentModeId
             modeChanged = true
             updateWalkState(current.currentWalkSpeed)
         }

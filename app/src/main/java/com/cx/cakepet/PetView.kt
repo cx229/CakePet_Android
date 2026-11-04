@@ -1070,16 +1070,16 @@ class PetView @JvmOverloads constructor(
                 // 但允许「吸附探头摸头」与「吸附探头投食」一次性动作完整播放，
                 // 结束后分别由其 nextMode 切回吸附探头。
                 // 二者末段同名不同义（snap/pat_head/pat_head vs pat_head/pat_head），必须靠完整路径区分。
-                val snapForcedAllow =
-                    imageManager.leavesOf("snap", "pat_head", "pat_head").toSet() +
-                    imageManager.leavesOf("snap", "feed", "eat")
-                if (imageManager.isPlayingForced() && imageManager.getMode() !in snapForcedAllow) {
+                val snapActionAllowed =
+                    imageManager.isFunctionMode(imageManager.getMode(), "snap", "pat_head", "pat_head") ||
+                    imageManager.isFunctionMode(imageManager.getMode(), "snap", "feed", "eat")
+                if (imageManager.isPlayingForced() && !snapActionAllowed) {
                     imageManager.cancelForced()
                 }
                 // 仅本变体叠加“朝向贴附边”的旋转，不修改全局 gravityDir（不影响其他状态/方向）。
                 snapRotation = dirToRotation(physics.snapSide)
                 val curMode = imageManager.getMode()
-                if (curMode !in snapForcedAllow &&
+                if (!snapActionAllowed &&
                     !imageManager.isFunctionMode(curMode, "snap", "snap_head")) {
                     // 刚进入吸附的这一帧：振动一次提示（getMode 已为吸附探头后不再重复触发）。
                     modeOf("snap", "snap_head")?.let { imageManager.setMode(it) }
