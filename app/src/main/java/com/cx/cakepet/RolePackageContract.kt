@@ -165,10 +165,8 @@ object RolePackageContract {
                 val fr = m.optJSONArray("frames")
                 if (fr == null) errors.add("动作 $name 缺少 frames")
                 else if (fr.length() == 0) errors.add("动作 $name 没有帧数据")
-                val align = m.optString("verticalAlign", "top")
-                if (align != "top" && align != "center") {
-                    errors.add("动作 $name verticalAlign 必须为 top 或 center")
-                }
+                if (m.has("walkSpeed") || m.has("verticalAlign"))
+                    errors.add("动作 $name 的运动与填充属性必须写在 frames 内")
             }
         }
 
@@ -195,6 +193,11 @@ object RolePackageContract {
                     else -> false
                 }
                 if (!validDelay) errors.add("动画 $modeId 帧 $idx 的 delay 无效")
+                if (frame.optString("verticalAlign", "top") !in listOf("top", "center"))
+                    errors.add("动画 $modeId 帧 $idx verticalAlign 必须为 top 或 center")
+                for (coord in listOf("dx", "dy"))
+                    if (frame.has(coord) && frame.opt(coord) !is Number)
+                        errors.add("动画 $modeId 帧 $idx $coord 必须为数字")
             }
             if (mode.has("nextMode") && !mode.isNull("nextMode")) {
                 val nextMode = mode.opt("nextMode")
@@ -219,24 +222,6 @@ object RolePackageContract {
                 errors.add("功能 ${path.joinToString("/")} 必须提供非空动作池")
             }
         }
-        // 同一张 PNG 被多个 Mode 复用时，填充规则必须一致（位图缓存按图片资源键）。
-        val alignByResource = mutableMapOf<String, String>()
-        modes?.keys()?.forEach { modeName ->
-            val mode = modes.optJSONObject(modeName) ?: return@forEach
-            val align = mode.optString("verticalAlign", "top")
-            val frames = mode.optJSONArray("frames") ?: return@forEach
-            for (i in 0 until frames.length()) {
-                val res = frames.optJSONObject(i)?.optString("res", "") ?: continue
-                if (res.isEmpty()) continue
-                val prev = alignByResource[res]
-                if (prev == null) {
-                    alignByResource[res] = align
-                } else if (prev != align) {
-                    errors.add("图片 $res 被不同的 verticalAlign 规则引用")
-                }
-            }
-        }
-
         return ValidationResult(errors.isEmpty(), versionStr, errors)
     }
 
