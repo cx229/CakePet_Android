@@ -683,7 +683,8 @@ class PetService : Service() {
                 // 生效条件：攀岩已开(上级移动+攀岩) 且 本开关开 且 当前攀岩态 且 非吸附态（吸附态不喜乱动）。
                 v.forageSpeed = rc.forageSpeed   // 自动觅食速度：按角色配置写入，PetView 沿墙奔向食物用
                 v.autoForage = rc.autoForage     // 自动觅食开关：供 PetView 落地决策判定是否插队进入攀岩态
-                val effForage = v.wallClimb && rc.autoForage && !v.physics.isSnapped
+                val effForage = v.wallClimb && rc.autoForage && !v.physics.isSnapped &&
+                    !v.physics.isThrowing && !v.physics.isDragging
                 if (!effForage) {
                     forageFoodByView.remove(v)
                     v.setForage(false, 0f, 0f)
@@ -715,6 +716,12 @@ class PetService : Service() {
                 val xs = FloatArray(cand.size) { cand[it].lp.x + cand[it].lp.width / 2f }
                 val ys = FloatArray(cand.size) { cand[it].lp.y + cand[it].lp.height / 2f }
                 v.setForageCandidates(true, xs, ys)
+                // Discover candidates before selection, but do not chase or eat until
+                // the normal action pool has actually selected the forage behavior.
+                if (!v.isForageTravelActive()) {
+                    forageFoodByView.remove(v)
+                    continue
+                }
                 // 回读 tick 选中的目标（按坐标原样匹配，避免候选数组下标因增删而错位）
                 val cX = v.forageChosenX
                 val cY = v.forageChosenY
