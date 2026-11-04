@@ -259,8 +259,6 @@ class ImageModeManager(
         private var timeElapsed = 0L
         private var timeTarget = sampleTimeTarget()
         private var pendingFinish = false
-        /** Keep the selected snap idle animation looping without cloning a separate Mode. */
-        var holdTimedExit = false
         var isEnded: Boolean = false
             private set
 
@@ -297,8 +295,7 @@ class ImageModeManager(
         }
 
         /** Frames always play sequentially; only the Mode controls looping and transitions. */
-        fun advance(dtMs: Long, allowModeSwitch: Boolean = true,
-                    suppressTimedTransition: Boolean = false): ClipStep {
+        fun advance(dtMs: Long, allowModeSwitch: Boolean = true): ClipStep {
             if (isEnded || dtMs <= 0L) return ClipStep(false, isEnded)
             var remaining = dtMs
             var changed = false
@@ -310,8 +307,8 @@ class ImageModeManager(
                 remaining -= span
                 elapsed += span
                 timeElapsed += span
-                if (def.loop && def.durationMin != null && !holdTimedExit && allowModeSwitch &&
-                    !suppressTimedTransition && timeElapsed >= timeTarget) {
+                if (def.loop && def.durationMin != null && allowModeSwitch &&
+                    timeElapsed >= timeTarget) {
                     if (def.finishCycle) pendingFinish = true
                     else {
                         val next = def.nextModeName
