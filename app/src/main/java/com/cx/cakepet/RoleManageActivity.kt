@@ -81,10 +81,11 @@ class RoleManageActivity : AppCompatActivity() {
 
     private fun editRole(role: RoleDescriptor) {
         if (role.source == RoleSource.ASSETS) {
-            runCatching {
-                val id = RolePackEditing.duplicate(this, role)
-                startActivity(android.content.Intent(this, RolePackEditorActivity::class.java).putExtra("role_id", id))
-            }.onFailure { Toast.makeText(this, it.message ?: "创建编辑副本失败", Toast.LENGTH_LONG).show() }
+            AlertDialog.Builder(this)
+                .setTitle("模板不可编辑")
+                .setMessage("模板“白酥”不可编辑，请通过复制或者新建素材包创建可编辑副本。")
+                .setPositiveButton("知道了", null)
+                .show()
         } else startActivity(android.content.Intent(this, RolePackEditorActivity::class.java).putExtra("role_id", role.id))
     }
 

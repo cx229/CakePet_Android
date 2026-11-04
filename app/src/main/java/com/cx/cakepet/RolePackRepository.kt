@@ -57,25 +57,8 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
         shortName = if (root.has("shortName")) root.optString("shortName", "") else "",
         functions = parseFunctions(root),
         menuPool = parseStringArray(root, "menuPool"),
-        modeLabels = parseModeLabels(root),
         modeLoops = parseModeLoops(root)
     )
-}
-
-/**
- * 解析各模式的显示名（modes 里每项的 label）。
- * 菜单等 UI 用它取中文名，代码里不写死任何动作文案。
- */
-private fun parseModeLabels(root: JSONObject): Map<String, String> {
-    val modes = root.optJSONObject("modes") ?: return emptyMap()
-    val out = LinkedHashMap<String, String>()
-    val kit = modes.keys()
-    while (kit.hasNext()) {
-        val name = kit.next()
-        val label = modes.optJSONObject(name)?.optString("label", "") ?: ""
-        if (label.isNotEmpty()) out[name] = label
-    }
-    return out
 }
 
 /**

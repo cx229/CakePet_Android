@@ -183,7 +183,7 @@ class PetMenu(
     /**
      * 动作子页面：完全由【本角色】素材包的 menuPool 驱动（v1.01 契约）。
      * 项数与内容随角色而异（差异化：如芝麻酥动作齐全、蜂蜜猫较少）；
-     * 显示名取 modes 各自的 label，代码零硬编码模式名与文案。
+     * 动作 Key 即显示名称，不使用冗余 label 字段。
      * 每项点击直接播放该模式（常驻类走 setMode，一次性类走 playOnce，由 PetService 判定）。
      */
     private fun buildActions(ctx: Context): View {
@@ -194,7 +194,6 @@ class PetMenu(
         }
         val container = v.findViewById<LinearLayout>(R.id.act_container)
         val pack = service.spritePackForRole(roleId)
-        val labels = pack.modeLabels
         val items = pack.menuPool
         if (items.isEmpty()) return v
 
@@ -215,7 +214,7 @@ class PetMenu(
             val mode = items[i]
             val cell = LayoutInflater.from(ctx)
                 .inflate(R.layout.item_menu_action, row, false) as android.widget.TextView
-            cell.text = labels[mode] ?: mode
+            cell.text = mode
             cell.setOnClickListener {
                 service.performMenuMode(roleId, mode, petView)
                 dismiss()

@@ -38,8 +38,6 @@ data class SpritePack(
     val functions: Map<List<String>, List<String>> = emptyMap(),
     // 悬浮菜单可触发的模式（v1.01 必填，由 modes.jsonc 的 menuPool 提供）
     val menuPool: List<String> = emptyList(),
-    // 模式名 → 显示名（modes 里每项的 label），供菜单等 UI 取中文名，代码不写死文案
-    val modeLabels: Map<String, String> = emptyMap(),
     // 模式名 → 是否循环（modes 里每项的 loop）。循环类（走/蠕动等）须用 setMode 常驻，
     // 一次性类用 playOnce；由素材包声明，代码不写死哪些动作该常驻。
     val modeLoops: Map<String, Boolean> = emptyMap()
@@ -94,8 +92,7 @@ class ImageModeManager(
         val changeIntervalMax: Long = 4000,
         val changeProb: Float = 0.5f,
         val nextModeName: String? = null,       // 指定下一模式（PC next_mode_name）
-        val walkSpeed: Float = 0f,              // 行走位移速度(px/s)，>0 时由物理引擎驱动水平位移（对齐 PC 帧偏移 QPoint）
-        val label: String = ""                  // 中文名：仅供阅读 modes.jsonc 用，不参与任何代码逻辑
+        val walkSpeed: Float = 0f               // 行走位移速度(px/s)，>0 时由物理引擎驱动水平位移
     )
 
     private fun rnd(min: Long, max: Long): () -> Long = { Random.nextLong(min, max + 1) }
@@ -161,7 +158,6 @@ class ImageModeManager(
             val changeProb = (tn?.optDouble("prob", 0.5) ?: 0.5).toFloat()
             val nextModeName = if (m.has("nextMode") && !m.isNull("nextMode")) m.getString("nextMode") else null
             val walkSpeed = m.optDouble("walkSpeed", 0.0).toFloat()
-            val label = if (m.has("label")) m.getString("label") else name
             val verticalAlign = m.optString("verticalAlign", "top")
             val framesArr = m.getJSONArray("frames")
             val frames = mutableListOf<Frame>()
@@ -178,7 +174,7 @@ class ImageModeManager(
                 frames.add(Frame(res, nextIndex, delay, anchorX, anchorY, dx, dy))
             }
             registerMode(ImageModeDef(name, frames, loop, timeNextEnabled,
-                changeIntervalMin, changeIntervalMax, changeProb, nextModeName, walkSpeed, label))
+                changeIntervalMin, changeIntervalMax, changeProb, nextModeName, walkSpeed))
         }
     }
 

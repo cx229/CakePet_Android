@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.OnBackPressedCallback
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -23,6 +24,10 @@ class RolePackEditorActivity : AppCompatActivity() {
     private lateinit var root: JSONObject
     private lateinit var panel: LinearLayout
     private var screen = "home"
+    private data class EditorPage(val name: String, val mode: String)
+    private val pageHistory = java.util.ArrayDeque<EditorPage>()
+    private var restoringPage = false
+    private val openedFunctionFolders = mutableSetOf<String>()
     private var modeId = ""
     private var fileIndex = -1
     private val handler = Handler(Looper.getMainLooper())
@@ -85,8 +90,9 @@ class RolePackEditorActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(getColor(R.color.cp_bg))
         }
-        val back = button("‹ 返回") { navigateBack() }
-        layout.addView(back)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = navigateBack()
+        })
         val scroll = ScrollView(this)
         panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -102,13 +108,20 @@ class RolePackEditorActivity : AppCompatActivity() {
         if (::draft.isInitialized) draft.deleteRecursively()
         super.onDestroy()
     }
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() = navigateBack()
     private fun navigateBack() {
-        when (screen) {
-            "mode" -> modes()
-            "modes", "functions", "images" -> home()
-            else -> finish()
+        val previous = pageHistory.pollLast() ?: run { finish(); return }
+        restoringPage = true
+        try {
+            modeId = previous.mode
+            when (previous.name) {
+                "mode" -> showMode(previous.mode)
+                "modes" -> modes()
+                "functions" -> functions()
+                "images" -> images()
+                else -> home()
+            }
+        } finally {
+            restoringPage = false
         }
     }
     private fun px(dp: Int) = (dp * resources.displayMetrics.density).toInt()
@@ -125,9 +138,17 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun section(title: String, dest: String) {
         stopAnimation()
+        if (!restoringPage && screen != dest) pageHistory.addLast(EditorPage(screen, modeId))
         screen = dest
         panel.removeAllViews()
-        panel.addView(text(title, 21f))
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(button("‹") { navigateBack() },
+            LinearLayout.LayoutParams(px(56), px(48)))
+        header.addView(text(title, 20f), LinearLayout.LayoutParams(0, -2, 1f))
+        panel.addView(header)
     }
     private fun action(title: String, click: () -> Unit) {
         panel.addView(button(title, click), LinearLayout.LayoutParams(-1, px(52)))
@@ -226,20 +247,20 @@ class RolePackEditorActivity : AppCompatActivity() {
         panel.addView(text("未被功能引用的动作也可以自由保留和编辑。"))
         ids().forEach { key ->
             val m = root.getJSONObject("modes").getJSONObject(key)
-            action("${m.optString("label", key)} · $key · ${m.getJSONArray("frames").length()} 帧") { showMode(key) }
+            action("$key · ${m.getJSONArray("frames").length()} 帧") { showMode(key) }
         }
     }
     private fun newMode() {
         editor("新建动作") { box ->
-            val key = entry(box, "动作 ID（英文数字下划线）", "new_mode")
-            val label = entry(box, "动作名称", "新动作")
+            val key = entry(box, "动作名称", "新动作")
             val save: () -> Unit = {
                 val name = key.text.toString().trim()
-                require(Regex("[A-Za-z][A-Za-z0-9_]*").matches(name) && !root.getJSONObject("modes").has(name))
+                validId(name)
+                require(!root.getJSONObject("modes").has(name)) { "动作名称已存在" }
                 val source = root.getJSONObject("modes").getJSONObject(ids().first()).getJSONArray("frames").getJSONObject(0).getString("res")
                 change { json ->
                     json.getJSONObject("modes").put(name, JSONObject()
-                        .put("label", label.text.toString()).put("loop", true)
+                        .put("loop", true)
                         .put("walkSpeed", 0).put("nextMode", JSONObject.NULL)
                         .put("timeNext", JSONObject().put("enabled", false))
                         .put("frames", JSONArray().put(JSONObject().put("res", source).put("delay", 120).put("next", 0))))
@@ -253,7 +274,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         modeId = key
         section("动作 · $key", "mode")
         val m = root.getJSONObject("modes").getJSONObject(key)
-        panel.addView(text(m.optString("label", key), 18f))
+
         val preview = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundResource(R.drawable.bg_thumb_border)
@@ -262,7 +283,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         animate(preview, key)
         action("编辑动作属性") { attributes(key) }
         action("复制动作") { copyMode(key) }
-        action("重命名动作 ID") { renameMode(key) }
+        action("重命名动作") { renameMode(key) }
         action("删除动作") { deleteMode(key) }
         action("＋ 添加 PNG 帧") { fileIndex = -1; pngPicker.launch(arrayOf("image/*")) }
         action("导入 GIF，替换当前帧序列") {
@@ -310,7 +331,6 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun attributes(key: String) {
         val mode = root.getJSONObject("modes").getJSONObject(key)
         editor("动作属性") { box ->
-            val label = entry(box, "名称", mode.optString("label"))
             val speed = entry(box, "walkSpeed", mode.opt("walkSpeed").toString())
             val align = entry(box, "verticalAlign (top/center)", mode.optString("verticalAlign", "top"))
             val loop = Switch(this).apply { text = "循环"; isChecked = mode.optBoolean("loop", true) }
@@ -331,7 +351,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 require(minMs > 0 && maxMs >= minMs && probability in 0.0..1.0)
                 change {
                     val m = it.getJSONObject("modes").getJSONObject(key)
-                    m.put("label", label.text.toString()).put("walkSpeed", speed.text.toString().toDouble())
+                    m.put("walkSpeed", speed.text.toString().toDouble())
                     m.put("verticalAlign", align.text.toString()).put("loop", loop.isChecked)
                     m.put("nextMode", if (target.isEmpty()) JSONObject.NULL else target)
                     m.put("timeNext", JSONObject().put("enabled", enabled.isChecked)
@@ -437,7 +457,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun copyMode(key: String) {
         editor("复制动作") { box ->
-            val name = entry(box, "新动作 ID", key + "_copy")
+            val name = entry(box, "新动作名称", key + "副本")
             val save: () -> Unit = {
                 val target = name.text.toString().trim()
                 validId(target)
@@ -452,11 +472,14 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private fun validId(id: String) {
-        require(Regex("[A-Za-z][A-Za-z0-9_]*").matches(id)) { "动作 ID 仅支持英文字母、数字、下划线" }
+        require(id.isNotBlank() && id.length <= 40 &&
+            id.none { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
+            "动作名称不能为空、不能超过 40 字，且不能包含斜杠或换行"
+        }
     }
     private fun renameMode(key: String) {
         editor("重命名动作") { box ->
-            val name = entry(box, "新 ID", key)
+            val name = entry(box, "新动作名称", key)
             val save: () -> Unit = {
                 val target = name.text.toString().trim()
                 validId(target)
@@ -497,20 +520,110 @@ class RolePackEditorActivity : AppCompatActivity() {
                 modes()
             }}.show()
     }
-    private fun functions() {
-        section("功能映射 · Functions", "functions")
-        panel.addView(text("只编辑功能入口到起始动作的映射。"))
-        val entries = parseFunctions(root)
-        (RolePackageContract.REQUIRED_FUNCTION_PATHS + entries.keys).distinct().forEach { path ->
-            action("${path.joinToString(" / ")} → ${entries[path].orEmpty().joinToString(", ")}") {
-                chooseFunctions(path, entries[path].orEmpty())
+    /** Only the UI is translated. Engine function path keys remain the canonical English API. */
+    private fun functionSegment(path: List<String>): String {
+        return when (path.joinToString("/")) {
+            "snap/pat_head/pat_head", "pat_head/pat_head" -> "摸头动作"
+            "snap/feed/eat" -> "吸附进食"
+            "feed/eat" -> "吃鱼动作"
+            "feed/food" -> "食物动画"
+            else -> when (path.last()) {
+                "static" -> "静止"
+                "standby" -> "待机"
+                "touch" -> "触摸"
+                "snap" -> "吸附"
+                "climb" -> "攀爬"
+                "pat_head" -> "摸头"
+                "feed" -> "投喂"
+                "pool" -> "动作池"
+                "sit" -> "静坐"
+                "roll" -> "滚动"
+                "lift_up" -> "提起"
+                "slow" -> "慢速"
+                "left_medium" -> "向左中速"
+                "left_fast" -> "向左快速"
+                "right_medium" -> "向右中速"
+                "right_fast" -> "向右快速"
+                "jump_down" -> "落地"
+                "jump_up" -> "跳起"
+                "walk" -> "行走"
+                "snap_head" -> "探头"
+                "eat" -> "进食"
+                "food" -> "食物动画"
+                else -> path.last()
             }
         }
+    }
+
+    private fun functionPathName(path: List<String>): String =
+        path.indices.joinToString("/") { functionSegment(path.take(it + 1)) }
+
+    private fun functionItem(node: LinearLayout, title: String, subtitle: String,
+                             level: Int, click: () -> Unit) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.bg_btn_outline)
+            setPadding(px(12), px(9), px(12), px(9))
+            isClickable = true
+            setOnClickListener { click() }
+        }
+        val titleText = text(title, 16f).apply {
+            setPadding(px(2), px(2), px(2), px(2))
+        }
+        card.addView(titleText, LinearLayout.LayoutParams(-1, -2))
+        if (subtitle.isNotBlank()) {
+            val description = text(subtitle, 13f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            }
+            card.addView(description, LinearLayout.LayoutParams(-1, -2))
+        }
+        val indent = px((level * 12).coerceAtMost(48))
+        val params = LinearLayout.LayoutParams(-1, -2).apply {
+            leftMargin = indent
+            topMargin = px(4)
+            bottomMargin = px(4)
+        }
+        node.addView(card, params)
+    }
+
+    private fun functionTree(parent: LinearLayout, values: JSONObject, path: List<String>) {
+        val keys = values.keys().asSequence().toList()
+        for (key in keys) {
+            val currentPath = path + key
+            val fullKey = currentPath.joinToString("/")
+            val displayName = functionSegment(currentPath)
+            when (val child = values.opt(key)) {
+                is JSONObject -> {
+                    val opened = fullKey in openedFunctionFolders
+                    functionItem(parent, (if (opened) "▾  " else "▸  ") + displayName,
+                        if (opened) "" else "点击展开", path.size) {
+                        if (opened) openedFunctionFolders.remove(fullKey)
+                        else openedFunctionFolders.add(fullKey)
+                        functions()
+                    }
+                    if (opened) functionTree(parent, child, currentPath)
+                }
+                is JSONArray -> {
+                    val selected = (0 until child.length()).map { child.optString(it) }
+                        .filter { it.isNotBlank() }
+                    functionItem(parent, "▣  " + displayName + "   ›",
+                        "动作：" + selected.joinToString("、"), path.size) {
+                        chooseFunctions(currentPath, selected)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun functions() {
+        section("功能映射", "functions")
+        panel.addView(text("按目录展开功能，选择末级条目的起始动作。功能路径示例：静止/静坐。"))
+        functionTree(panel, root.getJSONObject("functions"), emptyList())
     }
     private fun chooseFunctions(path: List<String>, chosen: List<String>) {
         val keys = ids()
         val checked = BooleanArray(keys.size) { keys[it] in chosen }
-        AlertDialog.Builder(this).setTitle(path.joinToString(" / "))
+        AlertDialog.Builder(this).setTitle(functionPathName(path))
             .setMultiChoiceItems(keys.toTypedArray(), checked) { _, index, selected -> checked[index] = selected }
             .setNegativeButton("取消", null).setPositiveButton("完成") { _, _ -> attempt {
                 val selected = keys.filterIndexed { index, _ -> checked[index] }

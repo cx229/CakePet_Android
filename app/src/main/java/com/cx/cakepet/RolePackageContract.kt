@@ -127,6 +127,7 @@ object RolePackageContract {
                     errors.add("动作 $name 不是整数（应为对象）")
                     continue
                 }
+                if (m.has("label")) errors.add("动作 $name 不再支持 label：动作名称就是 Key")
                 val fr = m.optJSONArray("frames")
                 if (fr == null) errors.add("动作 $name 缺少 frames")
                 else if (fr.length() == 0) errors.add("动作 $name 没有帧数据")
