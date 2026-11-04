@@ -52,20 +52,42 @@ class RolePackEditorActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var animation: Runnable? = null
 
+    private fun pickedFileName(uri: Uri): String {
+        val cursor = contentResolver.query(uri,
+            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+        return cursor?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "素材"
+    }
+
+    private fun importPng(uri: Uri, folder: String): String {
+        var path = ""
+        val bmp = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+            ?: error("无法解码图片")
+        try {
+            require(bmp.width > 0 && bmp.height > 0 &&
+                bmp.width.toLong() * bmp.height <= 8_000_000) { "图片尺寸过大" }
+            resourceChange { work, _ ->
+                val parent = File(work, folder).canonicalFile
+                require(parent.toPath().startsWith(work.canonicalFile.toPath())) { "非法文件夹" }
+                parent.mkdirs()
+                val file = File(parent, RolePackEditing.uniqueName(parent,
+                    pickedFileName(uri).substringBeforeLast('.'), ".png"))
+                file.outputStream().use { check(bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+                path = file.relativeTo(work).invariantSeparatorsPath
+            }
+        } finally { bmp.recycle() }
+        return path
+    }
+
     private val pngPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) attempt {
-            val target = File(draft, "images").apply { mkdirs() }
-            val file = File(target, UUID.randomUUID().toString() + ".png")
-            val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-                ?: error("无法解码图片")
-            require(bitmap.width > 0 && bitmap.height > 0 && bitmap.width.toLong() * bitmap.height <= 8_000_000)
-            try { file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } }
-            finally { bitmap.recycle() }
-            val frames = JSONArray(root.getJSONObject("modes").getJSONObject(modeId).getJSONArray("frames").toString())
-            if (fileIndex in 0 until frames.length()) frames.getJSONObject(fileIndex).put("res", "images/${file.name}")
-            else frames.put(JSONObject().put("res", "images/${file.name}").put("delay", 120))
-            change { it.getJSONObject("modes").getJSONObject(modeId).put("frames", frames) }
-            showMode(modeId)
+            val path = importPng(uri, uploadFolder)
+            when (uploadAction) {
+                "chooser" -> pendingPick?.let {
+                    showImageChooser(it, (uploadedSelection + path).distinct())
+                }
+                "append" -> appendFrames(uploadMode, listOf(path))
+                else -> images()
+            }
         }
     }
     private val resourcePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -79,7 +101,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                     bitmap.width.toLong() * bitmap.height <= 8_000_000) { "图片尺寸过大" }
                 resourceChange { work, _ ->
                     val dest = if (replacing == null) {
-                        File(work, "images/${UUID.randomUUID()}.png")
+                        val parent = File(work, "images").apply { mkdirs() }
+                        File(parent, RolePackEditing.uniqueName(parent,
+                            pickedFileName(uri).substringBeforeLast('.'), ".png"))
                     } else File(work, replacing)
                     if (replacing != null) require(isImage(dest)) { "原图片不存在" }
                     dest.parentFile?.mkdirs()
@@ -98,10 +122,40 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private val gifPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) attempt {
-            val frames = RolePackEditing.gif(this, uri, draft, modeId)
-            change { it.getJSONObject("modes").getJSONObject(modeId).put("frames", frames) }
-            showMode(modeId)
+            val mode = uploadMode
+            var paths = emptyList<String>()
+            resourceChange { work, json ->
+                val imported = RolePackEditing.gif(this, uri, work, uploadFolder, pickedFileName(uri))
+                paths = (0 until imported.length()).map { imported.getJSONObject(it).getString("res") }
+                if (uploadAction == "overwrite" || uploadAction == "append") {
+                    val current = json.getJSONObject("modes").getJSONObject(mode).getJSONArray("frames")
+                    val updated = JSONArray()
+                    if (uploadAction == "append")
+                        for (i in 0 until current.length()) updated.put(current.getJSONObject(i))
+                    for (i in 0 until imported.length()) updated.put(imported.getJSONObject(i))
+                    json.getJSONObject("modes").getJSONObject(mode).put("frames", updated)
+                }
+            }
+            when (uploadAction) {
+                "chooser" -> pendingPick?.let {
+                    showImageChooser(it, (uploadedSelection + paths).distinct())
+                }
+                "append", "overwrite" -> showMode(mode)
+                else -> images()
+            }
         }
+    }
+
+    private fun startUpload(gif: Boolean, folder: String = "images", action: String = "library",
+                            mode: String = "", request: ImagePickRequest? = null,
+                            previous: List<String> = emptyList()) {
+        uploadFolder = folder
+        uploadAction = action
+        uploadMode = mode
+        pendingPick = request
+        uploadedSelection = previous.toMutableList()
+        if (gif) gifPicker.launch(arrayOf("image/gif"))
+        else pngPicker.launch(arrayOf("image/*"))
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
