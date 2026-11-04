@@ -131,7 +131,14 @@ class RolePackEditorActivity : AppCompatActivity() {
             var paths = emptyList<String>()
             resourceChange { work, json ->
                 val imported = RolePackEditing.gif(this, uri, work, uploadFolder, pickedFileName(uri))
+                require(imported.length() > 0) { "GIF 没有可用帧" }
                 paths = (0 until imported.length()).map { imported.getJSONObject(it).getString("res") }
+                // Diagnose missing images before updating any Mode references or committing the pack.
+                paths.forEach { relative ->
+                    val file = File(work, relative).canonicalFile
+                    require(file.toPath().startsWith(work.canonicalFile.toPath()) &&
+                        file.isFile && file.length() > 0L) { "GIF 帧输出缺失：$relative" }
+                }
                 if (uploadAction == "overwrite" || uploadAction == "append") {
                     val current = json.getJSONObject("modes").getJSONObject(mode).getJSONArray("frames")
                     val updated = JSONArray()
