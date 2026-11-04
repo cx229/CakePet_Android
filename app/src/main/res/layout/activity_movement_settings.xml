@@ -191,7 +191,7 @@
                         android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
                 </LinearLayout>
 
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
+                <LinearLayout android:id="@+id/group_gravity_directions" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
                     android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <!-- 四边重力：一行四个，各单元方向文字与开关水平绑定 -->
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -247,7 +247,7 @@
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="弹弹弹" android:textSize="14dp" android:textColor="@color/cp_sub"
                 android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            <LinearLayout android:id="@+id/group_rebound_directions" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
