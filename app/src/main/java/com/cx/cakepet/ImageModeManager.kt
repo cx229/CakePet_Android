@@ -268,7 +268,7 @@ class ImageModeManager(
         val currentDx: Int get() = def.frames[frameIndex].dx
         val currentDy: Int get() = def.frames[frameIndex].dy
         val currentWalkSpeed: Float get() = kotlin.math.abs(currentDx) * 1000f / frameDelay.coerceAtLeast(1L)
-        val isMotionLoop: Boolean get() = def.loop && def.frames.any { it.dx != 0 }
+        val isMotionLoop: Boolean get() = def.loop && def.frames.any { it.dx != 0 || it.dy != 0 }
         val currentVerticalAlign: String get() = def.frames[frameIndex].verticalAlign
         val currentAnchorX: Int get() = def.frames[frameIndex].anchorX
         val currentAnchorY: Int? get() = def.frames[frameIndex].anchorY
