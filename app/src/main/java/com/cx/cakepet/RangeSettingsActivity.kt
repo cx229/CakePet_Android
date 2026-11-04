@@ -107,28 +107,47 @@ class RangeSettingsActivity : AppCompatActivity() {
         // Keep the legacy switches in the layout for defaults/threshold compatibility,
         // but expose a single exclusive mode control to avoid conflicting combinations.
         val keyboardGroup = (swImeAdapt.parent as View).parent as android.widget.LinearLayout
+        val density = resources.displayMetrics.density
         val modeRow = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding((20 * resources.displayMetrics.density).toInt(),
-                (8 * resources.displayMetrics.density).toInt(),
-                (20 * resources.displayMetrics.density).toInt(),
-                (8 * resources.displayMetrics.density).toInt())
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding((20 * density).toInt(), (8 * density).toInt(),
+                (20 * density).toInt(), (8 * density).toInt())
         }
-        modeRow.addView(TextView(this).apply {
-            text = "键盘适应模式"
+        val labels = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        labels.addView(TextView(this).apply {
+            text = "键盘适应"
             textSize = 15f
             setTextColor(getColor(R.color.cp_title))
         })
+        labels.addView(TextView(this).apply {
+            text = "键盘弹出时的桌宠行为"
+            textSize = 12f
+            setTextColor(getColor(R.color.cp_note))
+        })
+        modeRow.addView(labels, android.widget.LinearLayout.LayoutParams(
+            0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        ))
         imeModeSelector = android.widget.Spinner(this).apply {
             adapter = android.widget.ArrayAdapter(
                 this@RangeSettingsActivity,
                 android.R.layout.simple_spinner_dropdown_item,
                 keyboardModes.map { it.first }
             )
-            minimumHeight = (48 * resources.displayMetrics.density).toInt()
+            minimumHeight = (44 * density).toInt()
         }
-        modeRow.addView(imeModeSelector)
+        modeRow.addView(imeModeSelector, android.widget.LinearLayout.LayoutParams(
+            (172 * density).toInt(), (48 * density).toInt()
+        ))
         keyboardGroup.addView(modeRow, keyboardGroup.indexOfChild(swImeAdapt.parent as View))
+        // Spinner fires an initial selection event; initialize from persisted mode
+        // before registering the listener to avoid overwriting user preferences.
+        val initialMode = config.getBlocking().keyboardMode()
+        imeModeSelector.setSelection(
+            keyboardModes.indexOfFirst { it.second == initialMode }.coerceAtLeast(0)
+        )
         imeModeSelector.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
                 parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long
