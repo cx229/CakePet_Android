@@ -131,11 +131,19 @@ class RangeSettingsActivity : AppCompatActivity() {
             0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         ))
         imeModeSelector = android.widget.Spinner(this).apply {
-            adapter = android.widget.ArrayAdapter(
+            adapter = object : android.widget.ArrayAdapter<String>(
                 this@RangeSettingsActivity,
-                android.R.layout.simple_spinner_dropdown_item,
+                android.R.layout.simple_spinner_item,
                 keyboardModes.map { it.first }
-            )
+            ) {
+                private fun small(view: View): View = view.apply {
+                    (this as? TextView)?.textSize = 13f
+                }
+                override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
+                    small(super.getView(position, convertView, parent))
+                override fun getDropDownView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
+                    small(super.getDropDownView(position, convertView, parent))
+            }.apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
             minimumHeight = (44 * density).toInt()
         }
         modeRow.addView(imeModeSelector, android.widget.LinearLayout.LayoutParams(
