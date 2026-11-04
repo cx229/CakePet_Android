@@ -38,6 +38,15 @@ class RolePackEditorActivity : AppCompatActivity() {
     private var restoringPage = false
     private val openedFunctionFolders = mutableSetOf<String>()
     private var modeId = ""
+    private data class ImagePickRequest(val mode: String, val action: String,
+                                        val index: Int = -1, val batch: List<Int> = emptyList())
+    private var pendingPick: ImagePickRequest? = null
+    private var uploadedSelection = mutableListOf<String>()
+    private var uploadFolder = "images"
+    private var uploadAction = "library"
+    private var uploadMode = ""
+    private val bulkSelected = mutableSetOf<Int>()
+    private var bulkBar: View? = null
     private var fileIndex = -1
     private var resourceReplacePath: String? = null
     private val handler = Handler(Looper.getMainLooper())
