@@ -9,7 +9,7 @@ import android.graphics.RectF
 import android.view.View
 import kotlin.math.min
 
-/** Full-width 1:1 editor preview; labels and geometry share ModeClip coordinates. */
+/** Full-width 2:1 editor view with a centered, unwarped 1:1 logical canvas. */
 class RoleAnimationPreview(context: Context) : View(context) {
     var showGuides = true
     private var image: Bitmap? = null
@@ -35,7 +35,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
-        setMeasuredDimension(width, width)
+        setMeasuredDimension(width, (width / 2).coerceAtLeast(1))
     }
 
     override fun onDraw(canvas: Canvas) {

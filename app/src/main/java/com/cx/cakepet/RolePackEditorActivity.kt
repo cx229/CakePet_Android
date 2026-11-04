@@ -27,6 +27,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private lateinit var panel: LinearLayout
     private lateinit var scroll: ScrollView
     private lateinit var titleText: TextView
+    private lateinit var subtitleText: TextView
     private val expandedResourceFolders = mutableSetOf<String>()
     private var screen = "home"
     private data class EditorPage(val name: String, val mode: String, val scrollY: Int)
@@ -108,6 +109,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         findViewById<ImageView>(R.id.iv_back).setOnClickListener { navigateBack() }
         titleText = findViewById(R.id.tv_title)
+        subtitleText = findViewById(R.id.tv_title_sub)
         scroll = findViewById(R.id.editor_scroll)
         panel = findViewById(R.id.editor_content)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -143,10 +145,58 @@ class RolePackEditorActivity : AppCompatActivity() {
         else (resources.displayMetrics.density * 24f).toInt()
     }
     private fun px(dp: Int) = (dp * resources.displayMetrics.density).toInt()
-    private fun button(label: String, click: () -> Unit) = Button(this).apply {
-        text = label
-        isAllCaps = false
-        setOnClickListener { click() }
+    private fun button(label: String, click: () -> Unit) =
+        com.google.android.material.button.MaterialButton(this).apply {
+            text = label
+            isAllCaps = false
+            textSize = 14f
+            minHeight = px(42)
+            minimumHeight = 0
+            insetTop = 0
+            insetBottom = 0
+            cornerRadius = px(14)
+            strokeWidth = px(1)
+            strokeColor = android.content.res.ColorStateList.valueOf(
+                getColor(R.color.cp_btn_outline_stroke))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(
+                getColor(R.color.cp_btn_dark_bg))
+            setTextColor(getColor(R.color.cp_btn_outline_text))
+            setOnClickListener { click() }
+        }
+
+    private fun actionPair(first: String, firstClick: () -> Unit,
+                           second: String, secondClick: () -> Unit) {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(button(first, firstClick),
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+        row.addView(button(second, secondClick),
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        panel.addView(row, LinearLayout.LayoutParams(-1, px(44)).apply {
+            topMargin = px(4)
+        })
+    }
+
+    private fun menuCard(title: String, english: String, click: () -> Unit) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundResource(R.drawable.card_bg)
+            setPadding(px(16), px(10), px(12), px(10))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { click() }
+        }
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        labels.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
+        labels.addView(text(english, 12f).apply {
+            setPadding(0, px(2), 0, 0)
+            setTextColor(getColor(R.color.cp_note))
+        })
+        card.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+        card.addView(text("›", 24f))
+        panel.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = px(8)
+        })
     }
     private fun text(value: String, size: Float = 14f): TextView = TextView(this).apply {
         text = value
@@ -162,6 +212,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         screen = dest
         panel.removeAllViews()
         titleText.text = title
+        subtitleText.text = root.optString("name")
         if (pageChanged && !restoringPage) {
             scroll.clearFocus()
             panel.requestFocus()
@@ -170,7 +221,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private fun action(title: String, click: () -> Unit) {
-        panel.addView(button(title, click), LinearLayout.LayoutParams(-1, px(52)))
+        panel.addView(button(title, click), LinearLayout.LayoutParams(-1, px(46)).apply { topMargin = px(6) })
     }
     private fun attempt(block: () -> Unit) {
         runCatching(block).onFailure {
@@ -192,8 +243,13 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         val save = create(form)
         val dialog = AlertDialog.Builder(this).setTitle(title)
-            .setView(ScrollView(this).apply { addView(form) })
-            .setNegativeButton("取消", null).setPositiveButton("完成", null).create()
+            .setView(ScrollView(this).apply {
+                setPadding(px(8), 0, px(8), 0)
+                addView(form)
+            })
+            .setNegativeButton("取消", null)
+            .setPositiveButton("保存", null)
+            .create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 runCatching(save).onSuccess { dialog.dismiss() }
@@ -203,26 +259,37 @@ class RolePackEditorActivity : AppCompatActivity() {
         dialog.show()
     }
     private fun entry(box: LinearLayout, title: String, initial: String): EditText {
-        box.addView(text(title))
-        val v = EditText(this).apply {
+        val item = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.card_bg)
+            setPadding(px(12), px(7), px(12), px(7))
+        }
+        item.addView(text(title, 13f).apply {
+            setPadding(0, 0, 0, 0)
+            setTextColor(getColor(R.color.cp_note))
+        })
+        val field = EditText(this).apply {
             setText(initial)
             setSingleLine(true)
+            textSize = 15f
             setTextColor(getColor(R.color.cp_title))
         }
-        box.addView(v)
-        return v
+        item.addView(field, LinearLayout.LayoutParams(-1, px(44)))
+        box.addView(item, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = px(8)
+        })
+        return field
     }
     private fun ids(): List<String> = root.getJSONObject("modes").keys().asSequence().toList().sorted()
     private fun home() {
-        section(root.optString("name") + " · 素材包编辑", "home")
-        panel.addView(text("完成一次有效操作后自动保存；预览和文件修改只作用于这个素材包。"))
-        action("基本信息") { info() }
-        action("全部动作 · Modes") { modes() }
-        action("功能映射 · Functions") { functions() }
-        action("图片资源") { images() }
+        section("素材包编辑", "home")
+        menuCard("基本信息", "Info") { info() }
+        menuCard("全部动作", "Modes") { modes() }
+        menuCard("功能映射", "Functions") { functions() }
+        menuCard("图片资源", "Images") { images() }
     }
     private fun info() {
-        editor("角色信息") { box ->
+        editor("基本信息") { box ->
             val name = entry(box, "名称", root.optString("name"))
             val short = entry(box, "简称", root.optString("shortName"))
             val decode = entry(box, "图片解码尺寸 decodeTarget", root.optInt("decodeTarget").toString())
@@ -230,7 +297,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             val list = root.getJSONArray("authors")
             val author = entry(box, "作者（用逗号分隔）",
                 (0 until list.length()).joinToString(",") { list.getString(it) })
-            box.addView(text("内部 ID：$id（不可修改）"))
             val save: () -> Unit = {
                 change { json ->
                     json.put("name", name.text.toString().trim())
@@ -263,7 +329,6 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun modes() {
         section("全部动作", "modes")
         action("＋ 新建动作") { newMode() }
-        panel.addView(text("点击动作卡片进入编辑；图片显示第 0 帧。", 12f))
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         ids().forEach { key ->
             val mode = root.getJSONObject("modes").getJSONObject(key)
@@ -318,7 +383,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun showMode(key: String) {
         modeId = key
-        section("动作 · $key", "mode")
+        section("动作：$key", "mode")
         val m = root.getJSONObject("modes").getJSONObject(key)
 
         val preview = RoleAnimationPreview(this)
@@ -337,16 +402,15 @@ class RolePackEditorActivity : AppCompatActivity() {
         panel.addView(button("↺ 从头播放") { animate(preview, key) }, LinearLayout.LayoutParams(-1, px(44)))
         animate(preview, key)
         action("编辑动作属性") { attributes(key) }
-        action("复制动作") { copyMode(key) }
-        action("重命名动作") { renameMode(key) }
+        actionPair("复制动作", { copyMode(key) }, "重命名动作", { renameMode(key) })
         action("删除动作") { deleteMode(key) }
-        action("＋ 添加 PNG 帧") { fileIndex = -1; pngPicker.launch(arrayOf("image/*")) }
-        action("导入 GIF，替换当前帧序列") {
+        actionPair("＋ 添加 PNG 帧", { fileIndex = -1; pngPicker.launch(arrayOf("image/*")) },
+            "导入 GIF", {
             AlertDialog.Builder(this).setTitle("GIF 转帧").setMessage("GIF 将转换为 PNG 帧，替换此动作的帧序列。")
                 .setNegativeButton("取消", null).setPositiveButton("继续") { _, _ ->
                     gifPicker.launch(arrayOf("image/gif"))
                 }.show()
-        }
+        })
         val frames = m.getJSONArray("frames")
         panel.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f))
         panel.addView(text("点击帧卡片编辑；箭头调整排序，帧编号从 0 开始。"))
@@ -670,8 +734,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                              level: Int, click: () -> Unit) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundResource(R.drawable.bg_btn_outline)
-            setPadding(px(12), px(9), px(12), px(9))
+            setBackgroundResource(R.drawable.card_bg)
+            setPadding(px(12), px(7), px(12), px(7))
             isClickable = true
             setOnClickListener { click() }
         }
@@ -703,8 +767,8 @@ class RolePackEditorActivity : AppCompatActivity() {
             when (val child = values.opt(key)) {
                 is JSONObject -> {
                     val opened = fullKey in openedFunctionFolders
-                    functionItem(parent, (if (opened) "▾  " else "▸  ") + displayName,
-                        if (opened) "" else "点击展开", path.size) {
+                    functionItem(parent, (if (opened) "▾ 📂  " else "▸ 📁  ") + displayName,
+                        "", path.size) {
                         if (opened) openedFunctionFolders.remove(fullKey)
                         else openedFunctionFolders.add(fullKey)
                         functions()
@@ -725,7 +789,6 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun functions() {
         section("功能映射", "functions")
-        panel.addView(text("按目录展开功能，选择末级条目的起始动作。功能路径示例：静止/静坐。"))
         functionTree(panel, root.getJSONObject("functions"), emptyList())
     }
     private fun chooseFunctions(path: List<String>, chosen: List<String>) {
