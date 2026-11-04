@@ -29,6 +29,7 @@ class SettingsFoldController(private val host: Activity) {
 
     private val sections = mutableListOf<Section>()
     private val paddings = java.util.IdentityHashMap<View, Int>()
+    private val margins = java.util.IdentityHashMap<View, Int>()
     private var config: PetConfigData? = null
 
     private fun dp(value: Int) = (host.resources.displayMetrics.density * value).toInt()
@@ -39,9 +40,18 @@ class SettingsFoldController(private val host: Activity) {
     }
 
     private fun indent(view: View, depth: Int) {
-        val original = paddings.getOrPut(view) { view.paddingLeft }
-        view.setPadding(original + dp(depth * 10),
-            view.paddingTop, view.paddingRight, view.paddingBottom)
+        // An identified whole section is indented by its card border, not by
+        // pushing content inside a full-width card. Ordinary rows use padding.
+        val params = view.layoutParams as? ViewGroup.MarginLayoutParams
+        if (view.id != View.NO_ID && view is ViewGroup && params != null) {
+            val original = margins.getOrPut(view) { params.marginStart }
+            params.marginStart = original + dp(depth * 10)
+            view.layoutParams = params
+        } else {
+            val original = paddings.getOrPut(view) { view.paddingLeft }
+            view.setPadding(original + dp(depth * 10),
+                view.paddingTop, view.paddingRight, view.paddingBottom)
+        }
     }
 
     fun add(
