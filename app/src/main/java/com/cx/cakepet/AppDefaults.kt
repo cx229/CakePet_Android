@@ -153,7 +153,7 @@ object AppBounds {
     )
 
     // ---------------- SNAP 页 ----------------
-    // 吸附边缘：宠物靠近屏幕四边/四角时停住并切换「吸附探头」状态；showSnapLine 控制是否显示吸附辅助线。
+    // 吸附边缘：宠物靠近屏幕四边/四角时停住并进入吸附状态并按功能映射选择动画；showSnapLine 控制是否显示吸附辅助线。
     val SNAP_SLIDERS = listOf(
         SliderBound(
             key = "snapThreshold", label = "吸附距离", group = "吸附边缘",
@@ -452,7 +452,7 @@ object ConfigDefaults {
     val REBOUND_RIGHT = true              // 撞到屏幕右边是否反弹
     val REBOUND_ENABLED = true            // 四边反弹总开关
     // 吸附
-    val SNAP_ENABLED = true               // 吸附边缘总开关：靠近边/角时停住并切“吸附探头”状态
+    val SNAP_ENABLED = true               // 吸附边缘总开关：靠近边/角时停住并进入吸附状态并按功能映射选择动画
     val SNAP_TOP = true                   // 是否吸附屏幕顶边
     val SNAP_BOTTOM = true                // 是否吸附屏幕底边
     val SNAP_LEFT = true                  // 是否吸附屏幕左边
