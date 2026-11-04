@@ -1,47 +1,46 @@
 package com.cx.cakepet
 
 import android.app.Activity
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CompoundButton
+import android.widget.LinearLayout
 import android.widget.TextView
-import java.util.IdentityHashMap
 
 /**
- * Presentation-only settings hierarchy. Neither folding nor ancestor visibility writes
- * configuration: all child switch/slider values survive closing and reopening a section.
+ * A UI-only fold mechanism, deliberately separate from effective feature switches.
+ * A switch changes saved config; its adjacent chevron changes only expansion.
+ *
+ * Every row is addressed by its actual container, not by walking blindly to the
+ * nearest parent after editing a child. Callers list whole setting rows or cards.
  */
 class SettingsFoldController(private val host: Activity) {
     private data class Section(
-        val master: CompoundButton,
+        val id: Int,
+        val switch: CompoundButton,
         val children: List<Int>,
         val ancestors: List<Int>,
+        val dependency: (PetConfigData) -> Boolean,
         var expanded: Boolean,
-        val title: TextView?,
-        val originalTitle: String
+        val arrow: TextView
     )
 
     private val sections = mutableListOf<Section>()
-    private val initialPaddings = IdentityHashMap<View, Int>()
+    private val paddings = java.util.IdentityHashMap<View, Int>()
+    private var config: PetConfigData? = null
+
     private fun dp(value: Int) = (host.resources.displayMetrics.density * value).toInt()
 
-    private fun rowOf(id: Int): View? {
-        val control = host.findViewById<View>(id) ?: return null
-        return if (control is ViewGroup) control else control.parent as? View
+    private fun row(id: Int): View? {
+        val child = host.findViewById<View>(id) ?: return null
+        return if (child is ViewGroup) child else child.parent as? View
     }
 
-    private fun titleOf(root: View, master: CompoundButton): TextView? {
-        if (root is TextView && root !== master && root !is CompoundButton) return root
-        if (root is ViewGroup) for (i in 0 until root.childCount) {
-            titleOf(root.getChildAt(i), master)?.let { return it }
-        }
-        return null
-    }
-
-    private fun indent(row: View, level: Int) {
-        val base = initialPaddings.getOrPut(row) { row.paddingLeft }
-        row.setPadding(base + dp(12 * level), row.paddingTop,
-            row.paddingRight, row.paddingBottom)
+    private fun indent(view: View, depth: Int) {
+        val original = paddings.getOrPut(view) { view.paddingLeft }
+        view.setPadding(original + dp(depth * 10),
+            view.paddingTop, view.paddingRight, view.paddingBottom)
     }
 
     fun add(
@@ -49,49 +48,66 @@ class SettingsFoldController(private val host: Activity) {
         children: List<Int>,
         ancestors: List<Int> = emptyList(),
         depth: Int = 0,
-        expandedInitially: Boolean = true
+        expandedInitially: Boolean = true,
+        dependency: (PetConfigData) -> Boolean = { true }
     ) {
-        val switch = host.findViewById<View>(masterId) as? CompoundButton ?: return
-        val row = rowOf(masterId) ?: return
-        val title = titleOf(row, switch)
-        val section = Section(switch, children, ancestors, expandedInitially,
-            title, title?.text?.toString().orEmpty())
-        sections.add(section)
-        indent(row, depth)
-        for (childId in children) rowOf(childId)?.let { indent(it, depth + 1) }
-        fun updateArrow() {
-            title?.text = (if (section.expanded) "▾  " else "▸  ") + section.originalTitle
+        val sw = host.findViewById<View>(masterId) as? CompoundButton ?: return
+        val header = row(masterId) as? ViewGroup ?: return
+        val arrow = TextView(host).apply {
+            textSize = 20f
+            gravity = Gravity.CENTER
+            contentDescription = "展开或收起详细设置"
+            isClickable = true
+            isFocusable = true
+            setPadding(dp(5), 0, dp(5), 0)
+            layoutParams = LinearLayout.LayoutParams(dp(36), dp(44))
         }
-        updateArrow()
-        row.isClickable = true
-        row.setOnClickListener {
+        // Keep the toggle and the chevron as two independent touch targets.
+        header.addView(arrow)
+        val section = Section(masterId, sw, children, ancestors,
+            dependency, expandedInitially, arrow)
+        sections.add(section)
+        indent(header, depth)
+        children.forEach { childId -> row(childId)?.let { indent(it, depth + 1) } }
+        arrow.setOnClickListener {
             section.expanded = !section.expanded
-            updateArrow()
             refresh()
         }
+        refresh()
     }
 
-    fun refresh() {
+    fun refresh(c: PetConfigData? = null) {
+        if (c != null) config = c
+        val snapshot = config ?: return
+        val groups = sections.associateBy { it.id }
         for (section in sections) {
-            val ancestorsVisible = section.ancestors.all { id ->
-                val ancestor = sections.firstOrNull { it.master.id == id }
-                val masterOn = (host.findViewById<View>(id) as? CompoundButton)?.isChecked == true
-                masterOn && (ancestor?.expanded ?: true)
+            val ancestorsExpanded = section.ancestors.all { groups[it]?.expanded != false }
+            val ancestorsEffective = section.ancestors.all {
+                val parent = groups[it]
+                parent != null && parent.switch.isChecked && parent.dependency(snapshot)
             }
-            val show = ancestorsVisible && section.master.isChecked && section.expanded
-            rowOf(section.master.id)?.alpha = if (ancestorsVisible) 1f else 0.45f
+            val effective = section.switch.isChecked &&
+                section.dependency(snapshot) && ancestorsEffective
+            section.arrow.text = if (section.expanded) "▾" else "▸"
+            section.arrow.contentDescription =
+                if (section.expanded) "收起详细设置" else "展开详细设置"
+            // Gray out ineffective parameters but keep the original saved selections readable.
             for (childId in section.children) {
-                val row = rowOf(childId) ?: continue
-                row.visibility = if (show) View.VISIBLE else View.GONE
-                // Card sections in the existing XML are preceded by a small title.
-                // Hide/show that title with the card, rather than leaving empty headings.
-                if (row.id == childId && row is ViewGroup) {
-                    val parent = row.parent as? ViewGroup
-                    val index = parent?.indexOfChild(row) ?: -1
+                val child = row(childId) ?: continue
+                val visible = section.expanded && ancestorsExpanded
+                child.visibility = if (visible) View.VISIBLE else View.GONE
+                child.alpha = if (effective) 1f else 0.48f
+                // Existing card headings must follow their card, without matching a
+                // title through a blind generic parent walk.
+                if (child.id == childId && child is ViewGroup) {
+                    val parent = child.parent as? ViewGroup
+                    val index = parent?.indexOfChild(child) ?: -1
                     if (index > 0) {
-                        val preceding = parent?.getChildAt(index - 1)
-                        if (preceding is TextView) preceding.visibility =
-                            if (show) View.VISIBLE else View.GONE
+                        val before = parent?.getChildAt(index - 1)
+                        if (before is TextView) {
+                            before.visibility = child.visibility
+                            before.alpha = child.alpha
+                        }
                     }
                 }
             }
