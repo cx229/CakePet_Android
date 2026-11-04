@@ -1847,6 +1847,43 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
+    private fun deleteResourceFolder(relative: String) {
+        val folder = File(draft, relative).canonicalFile
+        require(folder.isDirectory && folder.toPath().startsWith(draft.canonicalFile.toPath()) &&
+            folder != draft.canonicalFile) { "无效文件夹" }
+        val used = imageUses().keys
+        require(folder.walkTopDown().filter(::isImage).none {
+            it.relativeTo(draft).invariantSeparatorsPath in used
+        }) { "文件夹中有正在使用的图片，无法删除" }
+        resourceChange { working, _ ->
+            val target = File(working, relative).canonicalFile
+            require(target.isDirectory && target.toPath().startsWith(working.canonicalFile.toPath())) {
+                "无效文件夹"
+            }
+            check(target.deleteRecursively()) { "删除文件夹失败" }
+        }
+        expandedResourceFolders.remove(relative)
+        images()
+    }
+
+    private fun showResourceFolderOptions(anchor: View, relative: String) {
+        val menu = PopupMenu(this, anchor)
+        menu.menu.add("重命名")
+        menu.menu.add("删除")
+        menu.setOnMenuItemClickListener {
+            when (it.title.toString()) {
+                "重命名" -> renameDialog(relative, true)
+                "删除" -> showConfirmDialog(
+                    title = "删除文件夹",
+                    bodyHtml = "确认删除「${File(relative).name}」及其中未使用的资源？",
+                    positiveText = "删除"
+                ) { attempt { deleteResourceFolder(relative) } }
+            }
+            true
+        }
+        menu.show()
+    }
+
     private fun deleteImage(relative: String) {
         require(imageUses()[relative].orEmpty().isEmpty()) { "仍有动作引用，不能删除" }
         resourceChange { working, _ ->
@@ -2014,10 +2051,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                 row.addView(text("⋮", 23f).apply {
                     gravity = Gravity.CENTER
                     isClickable = true
-                    setOnClickListener {
-                        if (file.isDirectory) {
-                            renameDialog(path, true)
-                        } else imageOptions(path)
+                    setOnClickListener { anchor ->
+                        if (file.isDirectory) showResourceFolderOptions(anchor, path)
+                        else imageOptions(path)
                     }
                 }, LinearLayout.LayoutParams(px(40), px(48)))
                 panel.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
@@ -2031,10 +2067,20 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun images() {
         section("图片资源", "images")
-        val add = button("导入GIF为文件夹") {
-            startUpload(true, folder = "images", action = "library")
+        val toolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        panel.addView(add, LinearLayout.LayoutParams(-1, px(44)).apply { topMargin = px(8); bottomMargin = px(8) })
+        toolbar.addView(button("导入GIF") {
+            startUpload(true, folder = "images", action = "library")
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+        toolbar.addView(button("新建文件夹") {
+            newResourceFolder { images() }
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        panel.addView(toolbar, LinearLayout.LayoutParams(-1, px(44)).apply {
+            topMargin = px(8)
+            bottomMargin = px(8)
+        })
         panel.addView(text("点击文件夹展开；文件夹右侧 + 可添加图片。", 12f))
         resourceBranch(draft, 0, imageUses())
     }
