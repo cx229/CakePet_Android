@@ -22,6 +22,14 @@ class PetAnimationController(private val assets: ImageModeManager) {
     var isFlying = false
 
     var walkDir = 1
+    // A throw/roll landing must not generate a new random heading when WALK resumes.
+    // The next motion loop retains the direction visible at the landing transition.
+    private var landingWalkDirection: Int? = null
+
+    fun preserveWalkDirectionAfterLanding(dir: Int) {
+        landingWalkDirection = if (dir >= 0) 1 else -1
+    }
+
     var walkSpeed = 0f
         private set
     var onWalkStateChanged: ((speed: Float, dir: Int) -> Unit)? = null
@@ -70,10 +78,16 @@ class PetAnimationController(private val assets: ImageModeManager) {
 
     private fun updateWalkState(speed: Float, resetDirection: Boolean = true) {
         if (speed > 0f) {
-            if (resetDirection) walkDir = if (Random.nextBoolean()) 1 else -1
+            if (landingWalkDirection != null) {
+                walkDir = landingWalkDirection!!
+                landingWalkDirection = null
+            } else if (resetDirection) {
+                walkDir = if (Random.nextBoolean()) 1 else -1
+            }
             walkSpeed = speed
         } else {
-            walkDir = 1
+            // Do not erase heading through ROLL/JUMP_DOWN: rendering and physics use
+            // the prior direction again once the forced animation finishes.
             walkSpeed = 0f
         }
         onWalkStateChanged?.invoke(walkSpeed, walkDir)
