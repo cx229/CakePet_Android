@@ -575,6 +575,39 @@ class PetView @JvmOverloads constructor(
      * 动画推进：只管切图（Roll/Walk 等帧切换），绝不控制位置，使用真实经过时间保证时延精确。
      * 与物理步进完全解耦（对齐 PC：img_move_by_offset 由物理速度驱动，set_image 仅算左上角）。
      */
+    /** Run per-frame impulses exactly once, including the opening frame and loop wrap. */
+    private fun applyFrameMotion() {
+        val displacement = imageManager.consumeFrameDisplacement() ?: return
+            val (dx, dy) = displacement
+            if (dx != 0 || dy != 0) {
+                // 镜像：攀岩态必须用专属镜像 climbFlipX（渲染/旋转亦然，见 effFlipX），
+                // 否则会出现“图片朝左扒却向右位移”的镜像错位。
+                val dir = if (if (physics.isClimbing) climbFlipX else flipX) -1 else 1
+                // 本地位移：资源朝右前进为 +x（镜像则取反），dy 为资源自身竖直分量。
+                // 旋转必须按【当前真实朝向】：攀岩态用所攀的墙 climbSide，否则沿用重力朝向。
+                // （旧实现只传两参 → 走默认重力旋转，攀岩挂墙时宠物已被 climRotation 旋转 90/180/270，
+                //   位移却按重力朝算 → 落在错误的屏幕轴上，这就是扒鱼在攀岩态“只有一个方向在动”的根因。）
+                val mvDir = if (physics.isClimbing) physics.climbSide else gravityDir
+                val (moveX, moveY) = mapLocalToScreen((dx * dir).toFloat(), dy.toFloat(), mvDir)
+                // 撞墙取消：四边重力下若某轴已贴【对应】重力边，则本次动画位移该轴直接跳过，
+                // 只保留重力（避免反复撞墙抖动死循环）；体感模式四边标志为 false，不触发。
+                val blockedX = (physics.gravityLeft && physics.x <= physics.minX + 0.5f)
+                    || (physics.gravityRight && physics.x >= physics.maxX - 0.5f)
+                val blockedY = (physics.gravityTop && physics.y <= physics.minY + 0.5f)
+                    || (physics.gravityBottom && physics.y >= physics.maxY - 0.5f)
+                if (moveX != 0f && !blockedX) {
+                    physics.x = (physics.x + moveX).coerceIn(physics.minX, physics.maxX)
+                }
+                if (moveY != 0f && !blockedY) {
+                    physics.y = (physics.y + moveY).coerceIn(physics.minY, physics.maxY)
+                }
+                // 记下本帧【实际施加】的位移：扒鱼等帧驱动模式 vx/vy 恒为 0，
+                // 攀岩触界上墙需以此为方向凭据（见下方独立一步）。
+                lastFrameMoveX = moveX
+                lastFrameMoveY = moveY
+            }
+            }
+
     fun tick(dt: Float) {
         // 同步攀爬态给动画层：决定捞新动作时是否按飞跃概率直接跳起。
         imageManager.inClimbing = physics.isClimbing
@@ -599,6 +632,7 @@ class PetView @JvmOverloads constructor(
             // （与位图同帧），故切模式导致的锚点变化会立即反映到窗口位置，无需此处再发。
             // 拖拽/抛掷中由 touch 事件负责位置，syncCurrentBitmap 内部已跳过，不会覆盖抓取偏移语义。
             syncCurrentBitmap()
+            applyFrameMotion()
         } else if (frameAccumulator >= FRAME_INTERVAL) {
             frameAccumulator = 0f
             val dtMs = (FRAME_INTERVAL * 1000f).toLong().coerceAtLeast(1)
@@ -609,35 +643,7 @@ class PetView @JvmOverloads constructor(
                 // 镜像支持：图片资源朝右，flipX=true 时显示朝左，位移方向也需反向
                 // （dir = if (flipX) -1 else 1），使"朝左扒却向右移"的错位消失、与镜像显示一致。
                 // 撞墙：累加后夹到物理边界（撞墙即停，不穿透、不反弹，对齐 PC adjust_offset_screen）。
-                val dx = imageManager.curDx()
-                val dy = imageManager.curDy()
-                if (dx != 0 || dy != 0) {
-                    // 镜像：攀岩态必须用专属镜像 climbFlipX（渲染/旋转亦然，见 effFlipX），
-                    // 否则会出现“图片朝左扒却向右位移”的镜像错位。
-                    val dir = if (if (physics.isClimbing) climbFlipX else flipX) -1 else 1
-                    // 本地位移：资源朝右前进为 +x（镜像则取反），dy 为资源自身竖直分量。
-                    // 旋转必须按【当前真实朝向】：攀岩态用所攀的墙 climbSide，否则沿用重力朝向。
-                    // （旧实现只传两参 → 走默认重力旋转，攀岩挂墙时宠物已被 climRotation 旋转 90/180/270，
-                    //   位移却按重力朝算 → 落在错误的屏幕轴上，这就是扒鱼在攀岩态“只有一个方向在动”的根因。）
-                    val mvDir = if (physics.isClimbing) physics.climbSide else gravityDir
-                    val (moveX, moveY) = mapLocalToScreen((dx * dir).toFloat(), dy.toFloat(), mvDir)
-                    // 撞墙取消：四边重力下若某轴已贴【对应】重力边，则本次动画位移该轴直接跳过，
-                    // 只保留重力（避免反复撞墙抖动死循环）；体感模式四边标志为 false，不触发。
-                    val blockedX = (physics.gravityLeft && physics.x <= physics.minX + 0.5f)
-                        || (physics.gravityRight && physics.x >= physics.maxX - 0.5f)
-                    val blockedY = (physics.gravityTop && physics.y <= physics.minY + 0.5f)
-                        || (physics.gravityBottom && physics.y >= physics.maxY - 0.5f)
-                    if (moveX != 0f && !blockedX) {
-                        physics.x = (physics.x + moveX).coerceIn(physics.minX, physics.maxX)
-                    }
-                    if (moveY != 0f && !blockedY) {
-                        physics.y = (physics.y + moveY).coerceIn(physics.minY, physics.maxY)
-                    }
-                    // 记下本帧【实际施加】的位移：扒鱼等帧驱动模式 vx/vy 恒为 0，
-                    // 攀岩触界上墙需以此为方向凭据（见下方独立一步）。
-                    lastFrameMoveX = moveX
-                    lastFrameMoveY = moveY
-                }
+                applyFrameMotion()
             }
         }
         // ===== 主重力边落地后的【插队收口】 =====
