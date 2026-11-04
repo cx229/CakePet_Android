@@ -865,6 +865,78 @@ class RolePackEditorActivity : AppCompatActivity() {
             save
         }
     }
+    private fun naturalOrder(path: String): String =
+        Regex("\\d+").replace(path.lowercase()) { it.value.padStart(12, '0') }
+
+    private fun imagePaths(): List<String> = draft.walkTopDown().filter { isImage(it) }
+        .map { it.relativeTo(draft).invariantSeparatorsPath }
+        .sortedWith(compareBy(::naturalOrder))
+
+    private fun frameDelayFor(path: String): Int {
+        val file = File(draft, path)
+        val metadata = File(file.parentFile, "frames.json")
+        if (metadata.isFile) {
+            runCatching {
+                val frames = JSONObject(metadata.readText()).getJSONArray("frames")
+                for (i in 0 until frames.length()) {
+                    val item = frames.getJSONObject(i)
+                    if (item.optString("file") == file.name)
+                        return item.getInt("delay").coerceAtLeast(20)
+                }
+            }
+        }
+        return 120
+    }
+
+    private fun newFrameFor(path: String): JSONObject =
+        JSONObject().put("res", path).put("delay", frameDelayFor(path))
+
+    private fun appendFrames(key: String, paths: List<String>) {
+        require(paths.isNotEmpty())
+        change { json ->
+            val frames = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+            paths.forEach { frames.put(newFrameFor(it)) }
+        }
+        bulkSelected.clear()
+        showMode(key)
+    }
+
+    private fun applyImageSelection(request: ImagePickRequest, paths: List<String>) {
+        require(paths.isNotEmpty()) { "请至少选择一张图片" }
+        if (request.action == "batch") require(paths.size == 1) { "批量替换只能选择一张图片" }
+        val key = request.mode
+        change { json ->
+            val modes = json.getJSONObject("modes")
+            val current = modes.getJSONObject(key).getJSONArray("frames")
+            val list = (0 until current.length()).map {
+                JSONObject(current.getJSONObject(it).toString())
+            }.toMutableList()
+            when (request.action) {
+                "replace" -> {
+                    require(request.index in list.indices)
+                    val previous = list.removeAt(request.index)
+                    list.addAll(request.index, paths.map {
+                        JSONObject(previous.toString()).put("res", it)
+                    })
+                }
+                "before", "after" -> {
+                    require(request.index in list.indices)
+                    list.addAll(request.index + if (request.action == "after") 1 else 0,
+                        paths.map(::newFrameFor))
+                }
+                "batch" -> request.batch.forEach { index ->
+                    if (index in list.indices) list[index].put("res", paths.first())
+                }
+                else -> error("未知图片操作")
+            }
+            modes.getJSONObject(key).put("frames", JSONArray().also { arr ->
+                list.forEach { arr.put(it) }
+            })
+        }
+        bulkSelected.clear()
+        showMode(key)
+    }
+
     private fun frameMenu(key: String, index: Int) {
         optionsDialog("帧 $index", listOf("编辑参数", "导入图片替换", "选择素材库图片", "删除帧")) { selection ->
             when (selection) {
