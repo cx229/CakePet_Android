@@ -81,7 +81,19 @@ class SettingsFoldController(private val host: Activity) {
             val show = ancestorsVisible && section.master.isChecked && section.expanded
             rowOf(section.master.id)?.alpha = if (ancestorsVisible) 1f else 0.45f
             for (childId in section.children) {
-                rowOf(childId)?.visibility = if (show) View.VISIBLE else View.GONE
+                val row = rowOf(childId) ?: continue
+                row.visibility = if (show) View.VISIBLE else View.GONE
+                // Card sections in the existing XML are preceded by a small title.
+                // Hide/show that title with the card, rather than leaving empty headings.
+                if (row.id == childId && row is ViewGroup) {
+                    val parent = row.parent as? ViewGroup
+                    val index = parent?.indexOfChild(row) ?: -1
+                    if (index > 0) {
+                        val preceding = parent?.getChildAt(index - 1)
+                        if (preceding is TextView) preceding.visibility =
+                            if (show) View.VISIBLE else View.GONE
+                    }
+                }
             }
         }
     }
