@@ -36,8 +36,6 @@ data class SpritePack(
     // 键为【功能路径】（如 [climb, walk]、[snap, pat_head, pat_head]），层数不限；
     // 值为候选列表（当前多为单元素，为将来"同一功能多个动作"预留）。
     val functions: Map<List<String>, List<String>> = emptyMap(),
-    // 悬浮菜单可触发的模式（v1.01 必填，由 modes.jsonc 的 menuPool 提供）
-    val menuPool: List<String> = emptyList(),
     // 模式名 → 是否循环（modes 里每项的 loop）。循环类（走/蠕动等）须用 setMode 常驻，
     // 一次性类用 playOnce；由素材包声明，代码不写死哪些动作该常驻。
     val modeLoops: Map<String, Boolean> = emptyMap()

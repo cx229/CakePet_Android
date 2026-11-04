@@ -42,13 +42,14 @@ object RolePackageContract {
         listOf("climb", "jump_up"),              // 攀岩：跳起
         listOf("pat_head", "pat_head"),          // 摸头：摸头
         listOf("feed", "eat"),                   // 投食：吃鱼动作（模式）
-        listOf("feed", "food")                   // 投食：食物动画（指向 modes）
+        listOf("feed", "food"),                  // 投食：食物动画（指向 modes）
+        listOf("menu", "pool")                   // 菜单动作池
     )
 
     /** 必备顶层字段（v1.0）：模板默认提供，缺失即视为错误 */
     val REQUIRED_TOP_FIELDS = setOf(
         "version", "id", "name", "shortName",
-        "decodeTarget", "anchorRes", "menuPool",
+        "decodeTarget", "anchorRes",
         "functions", "modes",
         "authors"
     )
@@ -63,6 +64,7 @@ object RolePackageContract {
     fun validate(json: JSONObject): ValidationResult {
         val errors = mutableListOf<String>()
         // v1.02 只接受通用 Modes/Functions；旧 resources 字典和替代图片字段不再有效。
+        if (json.has("menuPool")) errors.add("菜单动作池已移入 functions.menu.pool")
         if (json.has("resources")) errors.add("v1.02 不再支持 resources 字典")
         json.optJSONObject("modes")?.keys()?.forEach { id ->
             if (json.optJSONObject("modes")?.optJSONObject(id)?.has("fallback") == true) {
@@ -184,9 +186,8 @@ object RolePackageContract {
             }
         }
 
-        // 7) 菜单池仍是素材包定义；长期状态轮播池改用 Functions 候选列表。
-        checkPool(json, "menuPool", definedModes, errors)
-        for (path in listOf(listOf("standby", "pool"), listOf("static", "pool"))) {
+        // 7) 菜单动作池已并入 Functions。
+        for (path in listOf(listOf("standby", "pool"), listOf("static", "pool"), listOf("menu", "pool"))) {
             if (functions[path].isNullOrEmpty()) {
                 errors.add("功能 ${path.joinToString("/")} 必须提供非空动作池")
             }

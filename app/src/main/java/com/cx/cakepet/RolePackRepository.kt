@@ -56,7 +56,6 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
         name = if (root.has("name")) root.optString("name", "") else "",
         shortName = if (root.has("shortName")) root.optString("shortName", "") else "",
         functions = parseFunctions(root),
-        menuPool = parseStringArray(root, "menuPool"),
         modeLoops = parseModeLoops(root)
     )
 }

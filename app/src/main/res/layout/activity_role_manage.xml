@@ -41,31 +41,42 @@
             android:textColor="@color/cp_title"/>
     </LinearLayout>
 
-    <Button android:id="@+id/btn_new_role"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="44dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
-        android:layout_marginTop="12dp"
-        android:text="＋ 新建素材包（白酥模板）"
-        android:textColor="@color/cp_btn_outline_text"
-        android:backgroundTint="@color/cp_btn_dark_bg" />
-
-    <!-- 页面级导入按钮：从存储选择 .zip 素材包 -->
-    <Button android:id="@+id/btn_import_zip"
-        android:layout_width="match_parent"
-        android:layout_height="44dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginTop="12dp"
-        android:insetTop="0dp"
-        android:insetBottom="0dp"
-        android:text="＋导入素材包(.ZIP)"
-        android:textColor="@color/cp_btn_outline_text"
-        app:backgroundTint="@color/cp_btn_dark_bg"
-        app:strokeColor="@color/cp_btn_outline_stroke"
-        app:strokeWidth="1.5dp"
-        app:cornerRadius="14dp" />
+        android:layout_marginTop="12dp">
+        <Button android:id="@+id/btn_new_role"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="+ 创建(模版)"
+            android:textSize="13sp"
+            android:textColor="@color/cp_btn_outline_text"
+            app:backgroundTint="@color/cp_btn_dark_bg"
+            app:strokeColor="@color/cp_btn_outline_stroke"
+            app:strokeWidth="1.5dp"
+            app:cornerRadius="14dp" />
+        <Button android:id="@+id/btn_import_zip"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="= 导入(.ZIP)"
+            android:textSize="13sp"
+            android:textColor="@color/cp_btn_outline_text"
+            app:backgroundTint="@color/cp_btn_dark_bg"
+            app:strokeColor="@color/cp_btn_outline_stroke"
+            app:strokeWidth="1.5dp"
+            app:cornerRadius="14dp" />
+    </LinearLayout>
 
     <!-- 素材模板清单 -->
     <androidx.recyclerview.widget.RecyclerView

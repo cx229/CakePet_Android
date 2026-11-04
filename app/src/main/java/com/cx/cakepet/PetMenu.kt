@@ -181,7 +181,7 @@ class PetMenu(
     }
 
     /**
-     * 动作子页面：完全由【本角色】素材包的 menuPool 驱动（v1.01 契约）。
+     * 动作子页面：由本角色 functions.menu.pool 驱动。
      * 项数与内容随角色而异（差异化：如芝麻酥动作齐全、蜂蜜猫较少）；
      * 动作 Key 即显示名称，不使用冗余 label 字段。
      * 每项点击直接播放该模式（常驻类走 setMode，一次性类走 playOnce，由 PetService 判定）。
@@ -194,7 +194,7 @@ class PetMenu(
         }
         val container = v.findViewById<LinearLayout>(R.id.act_container)
         val pack = service.spritePackForRole(roleId)
-        val items = pack.menuPool
+        val items = pack.functions[listOf("menu", "pool")].orEmpty()
         if (items.isEmpty()) return v
 
         // 每行三列，逐行构建；末行不足三列时用等宽占位补齐，保证网格整齐
