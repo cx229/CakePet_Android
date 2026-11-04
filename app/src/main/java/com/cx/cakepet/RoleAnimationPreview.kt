@@ -96,7 +96,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
             "图片：蓝色矩形",
             "锚点：红十字 (${anchor.first}, ${anchor.second})",
             "位移：($dx, $dy)",
-            "帧镜像：${if (frameFlipX) \"开\" else \"关\"}",
+            "帧镜像：${if (frameFlipX) "开" else "关"}",
             "当前动作：$mode",
             "（帧$frameIndex，循环${if (loops) "开" else "关"}）"
         )
