@@ -168,7 +168,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
-    private fun startUpload(gif: Boolean, folder: String = "images", action: String = "library",
+    private fun startUpload(gif: Boolean, folder: String = "", action: String = "library",
                             mode: String = "", request: ImagePickRequest? = null,
                             previous: List<String> = emptyList()) {
         uploadFolder = folder
