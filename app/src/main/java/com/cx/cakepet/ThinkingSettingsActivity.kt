@@ -224,7 +224,7 @@ class ThinkingSettingsActivity : AppCompatActivity() {
 
         currentColor = c.thinkingColor
         refreshColorDot()
-        folding?.refresh()
+        folding?.refresh(c)
     }
 
     /** 启用/禁用「显示」「闪回」两个模块卡片（碎碎念总开关关闭时禁用）。 */
