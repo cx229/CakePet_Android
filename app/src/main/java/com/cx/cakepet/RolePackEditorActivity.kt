@@ -937,6 +937,141 @@ class RolePackEditorActivity : AppCompatActivity() {
         showMode(key)
     }
 
+    private fun showImageChooser(request: ImagePickRequest, initial: List<String> = emptyList()) {
+        val single = request.action == "batch"
+        val selected = linkedSetOf<String>().apply {
+            addAll(initial.filter { File(draft, it).let(::isImage) })
+            if (single && size > 1) {
+                val first = first()
+                clear()
+                add(first)
+            }
+        }
+        val expanded = mutableSetOf<String>()
+        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        val outer = FrameLayout(this).apply { setPadding(px(20), 0, px(20), 0) }
+        val card = com.google.android.material.card.MaterialCardView(this).apply {
+            radius = px(26).toFloat()
+            setCardBackgroundColor(getColor(R.color.cp_card_bg))
+        }
+        outer.addView(card, FrameLayout.LayoutParams(-1, -2))
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(14), px(14), px(14), px(14))
+        }
+        card.addView(body)
+        body.addView(text("选择素材", 18f).apply {
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
+        body.addView(info)
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val scrollList = ScrollView(this).apply { addView(list) }
+        body.addView(scrollList, LinearLayout.LayoutParams(-1,
+            (resources.displayMetrics.heightPixels * 0.54f).toInt()))
+        lateinit var redraw: () -> Unit
+        redraw = {
+            list.removeAllViews()
+            info.text = "已选择 ${selected.size} 张图片"
+            fun visit(dir: File, depth: Int) {
+                dir.listFiles().orEmpty()
+                    .filter { isImage(it) || (it.isDirectory && it.walkTopDown().any(::isImage)) }
+                    .sortedWith(compareBy<File>({ !it.isDirectory }, { naturalOrder(it.name) }))
+                    .forEach { file ->
+                        val path = file.relativeTo(draft).invariantSeparatorsPath
+                        val row = LinearLayout(this).apply {
+                            orientation = LinearLayout.HORIZONTAL
+                            gravity = Gravity.CENTER_VERTICAL
+                            setBackgroundResource(R.drawable.card_bg)
+                            setPadding(px(4 + depth * 10), px(3), px(3), px(3))
+                        }
+                        if (file.isDirectory) {
+                            val descendants = file.walkTopDown().filter(::isImage)
+                                .map { it.relativeTo(draft).invariantSeparatorsPath }.toList()
+                            if (!single) {
+                                row.addView(CheckBox(this).apply {
+                                    isChecked = descendants.isNotEmpty() && descendants.all { it in selected }
+                                    setOnCheckedChangeListener { _, checked ->
+                                        if (checked) selected.addAll(descendants)
+                                        else selected.removeAll(descendants.toSet())
+                                        redraw()
+                                    }
+                                }, LinearLayout.LayoutParams(px(40), px(46)))
+                            }
+                            row.addView(text((if (path in expanded) "▾ 📂  " else "▸ 📁  ") + file.name, 14f).apply {
+                                isClickable = true
+                                setOnClickListener {
+                                    if (!expanded.add(path)) expanded.remove(path)
+                                    redraw()
+                                }
+                            }, LinearLayout.LayoutParams(0, px(46), 1f))
+                            row.addView(text("+", 22f).apply {
+                                gravity = Gravity.CENTER
+                                isClickable = true
+                                setOnClickListener { anchor ->
+                                    val popup = PopupMenu(this@RolePackEditorActivity, anchor)
+                                    popup.menu.add("上传图片")
+                                    if (!single) popup.menu.add("上传 GIF")
+                                    popup.setOnMenuItemClickListener { item ->
+                                        dialog.dismiss()
+                                        startUpload(item.title.toString() == "上传 GIF", path,
+                                            "chooser", request.mode, request, selected.toList())
+                                        true
+                                    }
+                                    popup.show()
+                                }
+                            }, LinearLayout.LayoutParams(px(40), px(46)))
+                            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                                bottomMargin = px(4)
+                            })
+                            if (path in expanded) visit(file, depth + 1)
+                        } else {
+                            val cb = CheckBox(this).apply { isChecked = path in selected }
+                            fun toggle(yes: Boolean) {
+                                if (single) selected.clear()
+                                if (yes) selected.add(path) else selected.remove(path)
+                                redraw()
+                            }
+                            cb.setOnCheckedChangeListener { _, yes -> toggle(yes) }
+                            row.addView(cb, LinearLayout.LayoutParams(px(40), px(48)))
+                            row.addView(ImageView(this).apply {
+                                scaleType = ImageView.ScaleType.FIT_CENTER
+                                setImageBitmap(thumb(file, 72))
+                            }, LinearLayout.LayoutParams(px(44), px(44)))
+                            row.addView(text(file.name, 13f).apply {
+                                maxLines = 1
+                                ellipsize = TextUtils.TruncateAt.END
+                                isClickable = true
+                                setOnClickListener { toggle(path !in selected) }
+                            }, LinearLayout.LayoutParams(0, -2, 1f))
+                            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                                bottomMargin = px(4)
+                            })
+                        }
+                    }
+            }
+            visit(draft, 0)
+        }
+        redraw()
+        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        buttons.addView(button("取消") { dialog.dismiss() },
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(4) })
+        buttons.addView(button("确认") {
+            if (selected.isEmpty()) Toast.makeText(this, "请至少选择一张图片", Toast.LENGTH_SHORT).show()
+            else attempt {
+                val paths = selected.sortedWith(compareBy(::naturalOrder))
+                applyImageSelection(request, paths)
+                dialog.dismiss()
+            }
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(4) })
+        body.addView(buttons)
+        dialog.setContentView(outer)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+        dialog.window?.setLayout(-1, -2)
+    }
+
     private fun frameMenu(key: String, index: Int) {
         optionsDialog("帧 $index", listOf("编辑参数", "导入图片替换", "选择素材库图片", "删除帧")) { selection ->
             when (selection) {
