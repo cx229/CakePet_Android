@@ -80,7 +80,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
             // the prior direction again once the forced animation finishes.
             walkSpeed = 0f
         }
-        onWalkStateChanged?.invoke(walkSpeed, walkDir)
+        if (walkSpeed > 0f) onWalkStateChanged?.invoke(walkSpeed, walkDir)
     }
 
     fun setMode(id: String) {
