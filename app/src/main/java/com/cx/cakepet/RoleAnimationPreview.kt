@@ -19,18 +19,20 @@ class RoleAnimationPreview(context: Context) : View(context) {
     private var anchor = 0 to 0
     private var dx = 0
     private var dy = 0
+    private var frameFlipX = false
     private var canvasRes = 128
     private var mode = ""
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 2f }
 
     fun update(bitmap: Bitmap?, contentBounds: RectF, at: Pair<Int, Int>,
                offsetX: Int, offsetY: Int, resolution: Int, name: String,
-               isLooping: Boolean, currentFrameIndex: Int) {
+               isLooping: Boolean, currentFrameIndex: Int, flipX: Boolean = false) {
         image = bitmap
         bounds = RectF(contentBounds)
         anchor = at
         dx = offsetX
         dy = offsetY
+        frameFlipX = flipX
         canvasRes = resolution.coerceAtLeast(1)
         mode = name
         loops = isLooping
@@ -56,7 +58,10 @@ class RoleAnimationPreview(context: Context) : View(context) {
         image?.let { bitmap ->
             paint.style = Paint.Style.FILL
             paint.color = Color.WHITE
+            canvas.save()
+            if (frameFlipX) canvas.scale(-1f, 1f, imageRect.centerX(), imageRect.centerY())
             canvas.drawBitmap(bitmap, null, imageRect, paint)
+            canvas.restore()
         }
         if (showGuides) {
             paint.color = Color.rgb(110, 123, 140)
@@ -67,12 +72,15 @@ class RoleAnimationPreview(context: Context) : View(context) {
             paint.pathEffect = null
             paint.strokeWidth = 2f
             paint.color = Color.rgb(39, 139, 203)
-            val content = RectF(left + (bounds.left + dx) * ratio,
+            // Guide coordinates follow source flip while dx/dy stay unchanged.
+            val bx0 = if (frameFlipX) canvasRes - bounds.right else bounds.left
+            val bx1 = if (frameFlipX) canvasRes - bounds.left else bounds.right
+            val content = RectF(left + (bx0 + dx) * ratio,
                 top + (bounds.top + dy) * ratio,
-                left + (bounds.right + dx) * ratio,
+                left + (bx1 + dx) * ratio,
                 top + (bounds.bottom + dy) * ratio)
             canvas.drawRect(content, paint)
-            val ax = left + (anchor.first + dx) * ratio
+            val ax = left + ((if (frameFlipX) canvasRes - anchor.first else anchor.first) + dx) * ratio
             val ay = top + (anchor.second + dy) * ratio
             paint.color = Color.rgb(222, 66, 54)
             paint.strokeWidth = 3.5f
@@ -88,6 +96,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
             "图片：蓝色矩形",
             "锚点：红十字 (${anchor.first}, ${anchor.second})",
             "位移：($dx, $dy)",
+            "帧镜像：${if (frameFlipX) \"开\" else \"关\"}",
             "当前动作：$mode",
             "（帧$frameIndex，循环${if (loops) "开" else "关"}）"
         )
