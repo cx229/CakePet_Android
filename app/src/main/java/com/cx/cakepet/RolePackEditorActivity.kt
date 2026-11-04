@@ -80,7 +80,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val file = File(parent, RolePackEditing.uniqueName(parent,
                     pickedFileName(uri).substringBeforeLast('.'), ".png"))
                 file.outputStream().use { check(bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
-                path = file.relativeTo(work).invariantSeparatorsPath
+                path = file.canonicalFile.relativeTo(work.canonicalFile).invariantSeparatorsPath
             }
         } finally { bmp.recycle() }
         return path
