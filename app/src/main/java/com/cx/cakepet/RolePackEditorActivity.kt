@@ -271,6 +271,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         setPadding(px(4), px(8), px(4), px(8))
     }
     private fun section(title: String, dest: String) {
+        removeBulkBar()
         stopAnimation()
         val pageChanged = screen != dest
         if (!restoringPage && pageChanged)
@@ -653,6 +654,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun showMode(key: String) {
         modeId = key
+        bulkSelected.clear()
         section("动作：$key", "mode")
         val m = root.getJSONObject("modes").getJSONObject(key)
 
@@ -661,17 +663,37 @@ class RolePackEditorActivity : AppCompatActivity() {
         panel.addView(button("↺ 从头播放") { animate(preview, key) }, LinearLayout.LayoutParams(-1, px(44)))
         animate(preview, key)
         action("编辑动作属性") { attributes(key) }
-        actionPair("＋ 添加 PNG 帧", { fileIndex = -1; pngPicker.launch(arrayOf("image/*")) },
-            "导入 GIF", {
+        panel.addView(button("导入 GIF 并覆盖") {
             showConfirmDialog(
-                title = "GIF 转帧",
-                bodyHtml = "导入 GIF 并替换当前动作的全部帧？",
-                subText = "原有帧配置将被替换",
+                title = "GIF 覆盖动作",
+                bodyHtml = "使用 GIF 全部帧替换此动作现有帧？",
+                subText = "原有帧属性会被替换；GIF 时间延迟会被保留",
                 positiveText = "继续"
-            ) { gifPicker.launch(arrayOf("image/gif")) }
-        })
+            ) { startUpload(true, action = "overwrite", mode = key) }
+        }, LinearLayout.LayoutParams(-1, px(44)))
         val frames = m.getJSONArray("frames")
-        panel.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f))
+        val frameHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        frameHeader.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        frameHeader.addView(text("+", 26f).apply {
+            gravity = Gravity.CENTER
+            isClickable = true
+            setOnClickListener { anchor ->
+                val menu = PopupMenu(this@RolePackEditorActivity, anchor)
+                menu.menu.add("上传图片")
+                menu.menu.add("上传 GIF")
+                menu.setOnMenuItemClickListener {
+                    startUpload(it.title.toString() == "上传 GIF",
+                        action = "append", mode = key)
+                    true
+                }
+                menu.show()
+            }
+        }, LinearLayout.LayoutParams(px(48), px(48)))
+        panel.addView(frameHeader)
         val order = (0 until frames.length()).toMutableList()
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         val recycler = RecyclerView(this).apply {
@@ -709,24 +731,64 @@ class RolePackEditorActivity : AppCompatActivity() {
                     setTextColor(getColor(R.color.cp_note))
                 })
                 card.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-                card.addView(text("⠿", 22f).apply { gravity = Gravity.CENTER },
-                    LinearLayout.LayoutParams(px(40), -1))
-                return object : RecyclerView.ViewHolder(card) {}
+                card.addView(text("⋮", 24f).apply {
+                    gravity = Gravity.CENTER
+                    isClickable = true
+                }, LinearLayout.LayoutParams(px(40), -1))
+                val rootRow = LinearLayout(this@RolePackEditorActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    layoutParams = RecyclerView.LayoutParams(-1, px(66)).apply {
+                        topMargin = px(3)
+                        bottomMargin = px(3)
+                    }
+                }
+                rootRow.addView(CheckBox(this@RolePackEditorActivity),
+                    LinearLayout.LayoutParams(px(43), px(54)))
+                rootRow.addView(card, LinearLayout.LayoutParams(0, px(64), 1f))
+                return object : RecyclerView.ViewHolder(rootRow) {}
             }
 
             override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
                 val frame = frames.getJSONObject(order[position])
                 val source = frame.optString("res")
-                val card = holder.itemView as LinearLayout
+                val rootRow = holder.itemView as LinearLayout
+                val select = rootRow.getChildAt(0) as CheckBox
+                val card = rootRow.getChildAt(1) as LinearLayout
                 val image = card.getChildAt(0) as ImageView
                 val labels = card.getChildAt(1) as LinearLayout
                 (labels.getChildAt(0) as TextView).text = "帧 $position"
                 (labels.getChildAt(1) as TextView).text = "${frame.opt("delay")} ms"
                 (labels.getChildAt(2) as TextView).text = source
                 image.setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
+                val at = holder.bindingAdapterPosition
+                select.setOnCheckedChangeListener(null)
+                select.isChecked = at in bulkSelected
+                select.setOnCheckedChangeListener { _, checked ->
+                    val index = holder.bindingAdapterPosition
+                    if (index != RecyclerView.NO_POSITION) {
+                        if (checked) bulkSelected.add(index) else bulkSelected.remove(index)
+                        adapter.notifyDataSetChanged()
+                        updateBulkBar(key, adapter)
+                    }
+                }
+                val more = card.getChildAt(2) as TextView
+                more.visibility = if (bulkSelected.isEmpty()) View.VISIBLE else View.GONE
+                more.setOnClickListener {
+                    val index = holder.bindingAdapterPosition
+                    if (index != RecyclerView.NO_POSITION && bulkSelected.isEmpty())
+                        showFrameOptions(more, key, index)
+                }
                 card.setOnClickListener {
                     val index = holder.bindingAdapterPosition
-                    if (index != RecyclerView.NO_POSITION) frameMenu(key, index)
+                    if (index != RecyclerView.NO_POSITION) {
+                        if (bulkSelected.isEmpty()) editFrame(key, index)
+                        else {
+                            if (!bulkSelected.add(index)) bulkSelected.remove(index)
+                            adapter.notifyDataSetChanged()
+                            updateBulkBar(key, adapter)
+                        }
+                    }
                 }
             }
         }
@@ -735,7 +797,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         val touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
         ) {
-            override fun isLongPressDragEnabled(): Boolean = true
+            override fun isLongPressDragEnabled(): Boolean = bulkSelected.isEmpty()
             override fun onMove(rv: RecyclerView, from: RecyclerView.ViewHolder,
                                 target: RecyclerView.ViewHolder): Boolean {
                 val a = from.bindingAdapterPosition
