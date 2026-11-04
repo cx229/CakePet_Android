@@ -724,33 +724,219 @@ class RolePackEditorActivity : AppCompatActivity() {
                 functions()
             }}.show()
     }
+    private fun imageUses(): Map<String, List<Pair<String, Int>>> {
+        val used = mutableMapOf<String, MutableList<Pair<String, Int>>>()
+        val modes = root.getJSONObject("modes")
+        modes.keys().forEach { mode ->
+            val frames = modes.getJSONObject(mode).getJSONArray("frames")
+            for (i in 0 until frames.length()) {
+                val res = frames.getJSONObject(i).optString("res")
+                used.getOrPut(res) { mutableListOf() }.add(mode to i)
+            }
+        }
+        return used
+    }
+
+    private fun isImage(file: File): Boolean =
+        file.isFile && file.extension.lowercase() in setOf("png", "webp", "jpg", "jpeg")
+
+    /** File operations and JSON path references are committed atomically together. */
+    private fun resourceChange(operation: (File, JSONObject) -> Unit) {
+        val working = RolePackEditing.draft(this, id)
+        try {
+            val candidate = JSONObject(root.toString())
+            operation(working, candidate)
+            RolePackEditing.commit(this, id, working, candidate)
+            draft.deleteRecursively()
+            root = candidate
+            draft = RolePackEditing.draft(this, id)
+        } finally {
+            if (working.exists()) working.deleteRecursively()
+        }
+    }
+
+    private fun renameResource(relative: String, newBase: String, directory: Boolean) {
+        require(newBase.isNotBlank() && newBase != "." && newBase != ".." &&
+            newBase.length <= 100 &&
+            newBase.none { it == '/' || it == '\\' || it.code < 32 }) {
+            "名称不能为空，不能包含斜杠或控制字符"
+        }
+        resourceChange { working, candidate ->
+            val from = File(working, relative)
+            require(from.exists() && from.isDirectory == directory) { "原文件不存在" }
+            val newName = if (directory) newBase else newBase + "." + from.extension
+            val to = File(from.parentFile, newName)
+            require(!to.exists()) { "名称已经存在" }
+            check(from.renameTo(to)) { "重命名失败" }
+            val updated = to.relativeTo(working).invariantSeparatorsPath
+            val prefix = "$relative/"
+            val modes = candidate.getJSONObject("modes")
+            modes.keys().forEach { mode ->
+                val frames = modes.getJSONObject(mode).getJSONArray("frames")
+                for (i in 0 until frames.length()) {
+                    val frame = frames.getJSONObject(i)
+                    val before = frame.optString("res")
+                    val after = when {
+                        directory && before.startsWith(prefix) -> updated + "/" + before.removePrefix(prefix)
+                        !directory && before == relative -> updated
+                        else -> before
+                    }
+                    if (after != before) frame.put("res", after)
+                }
+            }
+        }
+        images()
+    }
+
+    private fun renameDialog(relative: String, directory: Boolean) {
+        val file = File(draft, relative)
+        editor(if (directory) "重命名文件夹" else "重命名图片") { box ->
+            val input = entry(box, "名称", if (directory) file.name else file.nameWithoutExtension)
+            val save: () -> Unit = {
+                renameResource(relative, input.text.toString().trim(), directory)
+            }
+            save
+        }
+    }
+
+    private fun deleteImage(relative: String) {
+        require(imageUses()[relative].orEmpty().isEmpty()) { "仍有动作引用，不能删除" }
+        resourceChange { working, _ ->
+            val file = File(working, relative)
+            require(isImage(file))
+            check(file.delete()) { "删除失败" }
+        }
+        images()
+    }
+
+    private fun imageDetails(relative: String) {
+        val uses = imageUses()[relative].orEmpty()
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(16), px(10), px(16), px(10))
+        }
+        content.addView(ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundResource(R.drawable.bg_thumb_border)
+            setImageBitmap(thumb(File(draft, relative), 400))
+        }, LinearLayout.LayoutParams(-1, px(210)))
+        content.addView(text(relative, 12f))
+        content.addView(text(if (uses.isEmpty()) "未使用"
+            else "被 ${uses.map { it.first }.distinct().size} 个动作 / ${uses.size} 帧引用", 13f))
+        val dialog = AlertDialog.Builder(this).setTitle(File(relative).name)
+            .setView(ScrollView(this).apply { addView(content) })
+            .setNegativeButton("关闭", null)
+            .setPositiveButton("重命名") { _, _ -> renameDialog(relative, false) }
+            .create()
+        uses.forEach { (mode, index) ->
+            content.addView(text("$mode / 帧 $index  ›", 14f).apply {
+                isClickable = true
+                setOnClickListener {
+                    dialog.dismiss()
+                    showMode(mode)
+                }
+            })
+        }
+        dialog.show()
+    }
+
+    private fun imageOptions(relative: String) {
+        val users = imageUses()[relative].orEmpty()
+        AlertDialog.Builder(this).setTitle(File(relative).name)
+            .setItems(arrayOf("大图及引用详情", "重命名", "删除")) { _, option ->
+                when (option) {
+                    0 -> imageDetails(relative)
+                    1 -> renameDialog(relative, false)
+                    2 -> if (users.isNotEmpty()) {
+                        AlertDialog.Builder(this).setMessage("被 ${users.size} 帧引用，请先更换引用。")
+                            .setPositiveButton("知道了", null).show()
+                    } else AlertDialog.Builder(this).setTitle("确认删除？")
+                        .setMessage(relative)
+                        .setNegativeButton("取消", null)
+                        .setPositiveButton("删除") { _, _ -> attempt { deleteImage(relative) } }
+                        .show()
+                }
+            }.show()
+    }
+
+    private fun resourceBranch(directory: File, level: Int,
+                               uses: Map<String, List<Pair<String, Int>>>) {
+        directory.listFiles().orEmpty()
+            .filter { isImage(it) || it.isDirectory && it.walkTopDown().any { item -> isImage(item) } }
+            .sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase() }))
+            .forEach { file ->
+                val path = file.relativeTo(draft).invariantSeparatorsPath
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setBackgroundResource(R.drawable.card_bg)
+                    setPadding(px(8), px(4), px(4), px(4))
+                }
+                val main = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    isClickable = true
+                    setOnClickListener {
+                        if (file.isDirectory) {
+                            if (!expandedResourceFolders.add(path)) expandedResourceFolders.remove(path)
+                            images()
+                        } else imageDetails(path)
+                    }
+                }
+                if (file.isDirectory) {
+                    main.addView(text(if (path in expandedResourceFolders) "▾ 📂" else "▸ 📁", 15f),
+                        LinearLayout.LayoutParams(px(54), -2))
+                } else {
+                    main.addView(ImageView(this).apply {
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        setImageBitmap(thumb(file, 96))
+                    }, LinearLayout.LayoutParams(px(52), px(52)))
+                }
+                val words = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(px(8), 0, 0, 0)
+                }
+                words.addView(text(file.name, 14f).apply {
+                    maxLines = 2
+                    ellipsize = TextUtils.TruncateAt.END
+                    setPadding(0, 0, 0, 0)
+                })
+                val subtitle = if (file.isDirectory) {
+                    "${file.walkTopDown().count { isImage(it) }} 张图片"
+                } else {
+                    val refs = uses[path].orEmpty()
+                    if (refs.isEmpty()) "未使用"
+                    else "${refs.map { it.first }.distinct().take(2).joinToString("、")} · ${refs.size} 帧引用"
+                }
+                words.addView(text(subtitle, 11f).apply {
+                    setTextColor(getColor(R.color.cp_note))
+                    setPadding(0, 0, 0, 0)
+                    maxLines = 2
+                })
+                main.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(main, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text("⋮", 23f).apply {
+                    gravity = Gravity.CENTER
+                    isClickable = true
+                    setOnClickListener {
+                        if (file.isDirectory) {
+                            renameDialog(path, true)
+                        } else imageOptions(path)
+                    }
+                }, LinearLayout.LayoutParams(px(40), px(48)))
+                panel.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                    leftMargin = px((level * 12).coerceAtMost(48))
+                    topMargin = px(4)
+                })
+                if (file.isDirectory && path in expandedResourceFolders)
+                    resourceBranch(file, level + 1, uses)
+            }
+    }
+
     private fun images() {
         section("图片资源", "images")
         action("＋ 导入图片到素材库") { resourcePicker.launch(arrayOf("image/*")) }
-        val used = mutableSetOf<String>()
-        val modes = root.getJSONObject("modes")
-        modes.keys().forEach { key ->
-            val frames = modes.getJSONObject(key).getJSONArray("frames")
-            for (i in 0 until frames.length()) used.add(frames.getJSONObject(i).getString("res"))
-        }
-        val files = draft.walkTopDown().filter {
-            it.isFile && it.extension.lowercase() in setOf("png", "webp", "jpg", "jpeg")
-        }.toList()
-        panel.addView(text("共 ${files.size} 张图片。使用中的图片不能直接删除。"))
-        files.forEach { file ->
-            val relative = file.relativeTo(draft).invariantSeparatorsPath
-            action("${if (relative in used) "●" else "○"} $relative") {
-                if (relative in used) AlertDialog.Builder(this).setMessage("图片正在被 Mode 引用，请先在帧编辑中替换。")
-                    .setPositiveButton("知道了", null).show()
-                else AlertDialog.Builder(this).setTitle("删除未使用图片？").setMessage(relative)
-                    .setNegativeButton("取消", null).setPositiveButton("删除") { _, _ ->
-                        attempt {
-                            check(file.delete()) { "无法删除图片" }
-                            change { }
-                            images()
-                        }
-                    }.show()
-            }
-        }
+        panel.addView(text("文件夹可以展开、重命名；图片可查看引用、重命名或删除未使用资源。", 12f))
+        resourceBranch(draft, 0, imageUses())
     }
 }
