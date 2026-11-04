@@ -191,17 +191,9 @@ class PetPhysics {
     internal fun beginTiltRoll() {
         isThrowing = true
         tiltRolling = true
-        // 记录翻滚起始时间，用于最短存活时间守卫（见 step 退出块）：松手抛投（尤其近静止松手）
-        // 速度极小，第一帧即 isLandedStill() 成立，原退出逻辑会立刻终止 ROLL 播 JUMP_DOWN，
-        // 导致“松手不进 ROLL”。最短存活时间内即便落地静止也不退出，让 ROLL 动画至少播一段。
-        tiltRollStart = System.currentTimeMillis()
     }
     // 内部：退出翻滚后的冷却剩余毫秒，>0 期间屏蔽重新进入。
     private var tiltRollCooldown = 0L
-    // 内部：翻滚最短存活毫秒——进入翻滚后至少持续这么久才允许因“落地静止”退出，
-    // 避免松手初速极小（近静止抛投）时 ROLL 被第一帧的 isLandedStill() 立刻掐掉。
-    private val tiltRollMinMs = 350L
-    private var tiltRollStart = 0L
 
     companion object {
         const val BOUNCE_LEFT = 0
