@@ -170,8 +170,10 @@ object SoftwareBackup {
     fun restore(ctx: Context, uri: Uri): String {
         val staged = extract(ctx, uri)
         val previousDir = File(ctx.cacheDir, "cakepet_previous_roles_" + System.nanoTime())
+        val previousMisc = File(ctx.cacheDir, "cakepet_previous_misc_" + System.nanoTime())
         val liveRoles = File(ctx.filesDir, "roles")
         var moved = false
+        var miscMoved = false
         try {
             val registry = JSONObject(File(staged, "registries.json").readText())
             val restoredConfigs = JSONObject(File(staged, "role-config.json").readText())
@@ -201,17 +203,37 @@ object SoftwareBackup {
                     }
                 }
                 UserHabits.save(ctx, habits)
-                // Restore extra files, including future app-owned persistent text
-                // data. Existing unrelated files are not treated as running state.
+                // Replace other persistent files as a group (excluding live
+                // DataStore files and the separately restored roles/habits).
+                previousMisc.mkdirs()
+                ctx.filesDir.listFiles().orEmpty().filter {
+                    it.name !in setOf("datastore", "roles", "user_habits.json")
+                }.forEach { old ->
+                    check(old.renameTo(File(previousMisc, old.name))) {
+                        "无法暂存现有持久化文件：${old.name}"
+                    }
+                    miscMoved = true
+                }
                 File(staged, "misc").takeIf { it.isDirectory }?.listFiles().orEmpty()
                     .forEach { copyTree(it, File(ctx.filesDir, it.name)) }
+                previousMisc.deleteRecursively()
                 previousDir.deleteRecursively()
                 return "软件备份已恢复。素材包和角色设置已替换；系统权限保持不变。"
             } catch (problem: Exception) {
                 runCatching {
-                    if (moved) {
-                        liveRoles.deleteRecursively()
-                        previousDir.renameTo(liveRoles)
+                    liveRoles.deleteRecursively()
+                    if (moved) check(previousDir.renameTo(liveRoles)) {
+                        "无法还原原素材目录"
+                    }
+                    if (miscMoved) {
+                        ctx.filesDir.listFiles().orEmpty().filter {
+                            it.name !in setOf("datastore", "roles", "user_habits.json")
+                        }.forEach { it.deleteRecursively() }
+                        previousMisc.listFiles().orEmpty().forEach { old ->
+                            check(old.renameTo(File(ctx.filesDir, old.name))) {
+                                "无法还原原有文件：${old.name}"
+                            }
+                        }
                     }
                     runBlocking {
                         RoleStore.importRegistries(ctx, originals, replace = true)
@@ -229,7 +251,7 @@ object SoftwareBackup {
             }
         } finally {
             staged.deleteRecursively()
-            previousDir.deleteRecursively()
+            // Keep any failed rollback's safety copy rather than deleting it.
         }
     }
 
