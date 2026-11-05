@@ -2499,7 +2499,8 @@ class PetService : Service() {
     private fun imePosition(
         currentY: Int, height: Int, applied: Int, mode: String,
         keyboardTop: Float, vis: Rect, active: Boolean, localClosing: Boolean,
-        previousTop: Float?
+        previousTop: Float?, stretchTop: Float, stretchSourceBottom: Float,
+        stretchTargetBottom: Float
     ): Pair<Int, Int> {
         val baseY = currentY - applied
         if (localClosing) {
@@ -2514,12 +2515,13 @@ class PetService : Service() {
         val targetY = when (mode) {
             "global" -> baseY + (keyboardTop - vis.bottom).toInt()
             "stretch" -> {
-                val sourceHeight = (vis.bottom - vis.top).coerceAtLeast(1)
-                val targetHeight = (keyboardTop - vis.top).coerceAtLeast(1f)
+                // Scale configured canvas geometry rather than the raw full screen.
+                val sourceHeight = (stretchSourceBottom - stretchTop).coerceAtLeast(1f)
+                val targetHeight = (stretchTargetBottom - stretchTop).coerceAtLeast(1f)
                 val center = baseY + height / 2f
-                val mappedCenter = vis.top + (center - vis.top) * targetHeight / sourceHeight
+                val mappedCenter = stretchTop + (center - stretchTop) * targetHeight / sourceHeight
                 (mappedCenter - height / 2f).toInt().coerceIn(
-                    vis.top, (keyboardTop.toInt() - height).coerceAtLeast(vis.top)
+                    stretchTop.toInt(), (stretchTargetBottom.toInt() - height).coerceAtLeast(stretchTop.toInt())
                 )
             }
             "local" -> minOf(baseY, keyboardTop.toInt() - height)
@@ -2561,6 +2563,13 @@ class PetService : Service() {
             ))[2]
             val keyboardTop = if (active && mode == "global" && c.imeResetBottomOffset)
                 rawKeyboardTop + rotatedBottomOffset else rawKeyboardTop
+            val rotatedTopOffset = rotatedBoundOffsets(floatArrayOf(
+                boundOffsetTop, boundOffsetBottom, boundOffsetLeft, boundOffsetRight
+            ))[0]
+            val stretchTop = vis.top + rotatedTopOffset
+            val stretchSourceBottom = vis.bottom - rotatedBottomOffset
+            val stretchTargetBottom = rawKeyboardTop -
+                (if (c.imeResetBottomOffset) 0f else rotatedBottomOffset)
             val wasLocal = imeLastMode[rid] == "local"
             val closingLocal = kb <= 0f && wasLocal
             val previousTop = imeLastTop[rid]
@@ -2583,7 +2592,8 @@ class PetService : Service() {
                 val imageHeight = inst.view.height.takeIf { it > 0 }
                     ?: inst.view.getBaseBitmapSize().second
                 val (newY, newOffset) = imePosition(oldY, imageHeight, applied,
-                    mode, keyboardTop, vis, active, closingLocal, previousTop)
+                    mode, keyboardTop, vis, active, closingLocal, previousTop,
+                    stretchTop, stretchSourceBottom, stretchTargetBottom)
                 if (newY != oldY) p.y += newY - oldY
                 if (newOffset == 0) imePetOffsets.remove(inst.view)
                 else imePetOffsets[inst.view] = newOffset
@@ -2591,14 +2601,16 @@ class PetService : Service() {
             fishLayers.filter { it.roleId == rid }.forEach { fl ->
                 val applied = imeFishOffsets[fl.iv] ?: 0
                 val (newY, newOffset) = imePosition(fl.lp.y, fl.lp.height, applied,
-                    mode, keyboardTop, vis, active, closingLocal, previousTop)
+                    mode, keyboardTop, vis, active, closingLocal, previousTop,
+                    stretchTop, stretchSourceBottom, stretchTargetBottom)
                 moveAuxiliary(fl.iv, fl.lp, newY - fl.lp.y, fl.borderView)
                 if (newOffset == 0) imeFishOffsets.remove(fl.iv) else imeFishOffsets[fl.iv] = newOffset
             }
             freezeLayers.filter { it.roleId == rid }.forEach { fl ->
                 val applied = imeFreezeOffsets[fl.iv] ?: 0
                 val (newY, newOffset) = imePosition(fl.lp.y, fl.lp.height, applied,
-                    mode, keyboardTop, vis, active, closingLocal, previousTop)
+                    mode, keyboardTop, vis, active, closingLocal, previousTop,
+                    stretchTop, stretchSourceBottom, stretchTargetBottom)
                 moveAuxiliary(fl.iv, fl.lp, newY - fl.lp.y, fl.borderView)
                 if (newOffset == 0) imeFreezeOffsets.remove(fl.iv) else imeFreezeOffsets[fl.iv] = newOffset
             }
