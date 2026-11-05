@@ -294,7 +294,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
     }
 
-    private fun menuCard(title: String, english: String, note: String, iconRes: Int, click: () -> Unit) {
+    private fun menuCard(title: String, note: String, iconRes: Int, click: () -> Unit) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -317,10 +317,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         heading.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
-        heading.addView(text(english, 11f).apply {
-            setPadding(px(8), 0, 0, 0)
-            setTextColor(getColor(R.color.cp_note))
-        })
         labels.addView(heading)
         labels.addView(text(note, 12f).apply {
             setPadding(0, px(4), 0, 0)
@@ -508,10 +504,10 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun home() {
         section("素材包编辑", "home")
         val roleName = root.optString("name").ifBlank { "角色" }
-        menuCard("基本信息", "Info", "定义了「$roleName」的身份与信息", android.R.drawable.ic_menu_info_details) { info() }
-        menuCard("功能映射", "Functions", "决定了「$roleName」在何时会触发什么动作动画", android.R.drawable.ic_menu_manage) { functions() }
-        menuCard("动作动画", "Modes", "制定了「$roleName」有什么动作动画", android.R.drawable.ic_media_play) { modes() }
-        menuCard("图片资源", "Images", "列举了「$roleName」所用的图片", android.R.drawable.ic_menu_gallery) { images() }
+        menuCard("基本信息", "定义了「$roleName」的身份与信息", android.R.drawable.ic_menu_info_details) { info() }
+        menuCard("功能映射", "决定了「$roleName」在何时会触发什么动作动画", android.R.drawable.ic_menu_manage) { functions() }
+        menuCard("动作动画", "制定了「$roleName」有什么动作动画", android.R.drawable.ic_media_play) { modes() }
+        menuCard("图片资源", "列举了「$roleName」所用的图片", android.R.drawable.ic_menu_gallery) { images() }
     }
     private fun info() {
         editor("基本信息", compact = true) { box ->
@@ -561,11 +557,11 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun modes() {
         section("动作动画", "modes")
-        panel.addView(text("管理角色的动作动画与播放规则。\n点击“+”创建动作，点击卡片编辑。", 12f).apply {
+        panel.addView(text("管理角色的动作动画与播放规则。\n点击“+”创建动画，点击卡片编辑。", 12f).apply {
             setPadding(px(4), 0, px(4), px(4))
             setTextColor(getColor(R.color.cp_note))
         })
-        action("＋ 新建动作") { newMode() }
+        action("＋ 新建动画") { newMode() }
         val grouped = linkedMapOf<String, MutableList<String>>()
         knownGroups().forEach { grouped[it] = mutableListOf() }
         ids().forEach { key ->
@@ -627,6 +623,14 @@ class RolePackEditorActivity : AppCompatActivity() {
                     gravity = Gravity.CENTER_VERTICAL
                 }
                 headline.addView(text(key, 16f).apply { setPadding(0, 0, 0, 0) })
+                if (playbackKind(mode) != "infinite") {
+                    val nextMode = mode.optString("nextMode", "").takeUnless { it == "null" }.orEmpty()
+                    headline.addView(text("  →" + nextMode.ifBlank { "无" }, 11f).apply {
+                        setTextColor(getColor(R.color.cp_note))
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                }
                 label.addView(headline)
                 val duration = mode.optJSONObject("duration")
                 val playback = when (playbackKind(mode)) {
@@ -670,18 +674,18 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun showModeOptions(anchor: View, key: String) {
-        UnifiedOptionMenu.show(anchor, listOf("复制动作", "动作组", "删除动作"),
-            setOf("删除动作")) { choice ->
+        UnifiedOptionMenu.show(anchor, listOf("复制动画", "动画组", "删除动画"),
+            setOf("删除动画")) { choice ->
             when (choice) {
-                "复制动作" -> copyMode(key)
-                "动作组" -> editModeGroups(key)
-                "删除动作" -> deleteMode(key)
+                "复制动画" -> copyMode(key)
+                "动画组" -> editModeGroups(key)
+                "删除动画" -> deleteMode(key)
             }
         }
     }
 
     private fun editModeGroups(key: String) {
-        editor("$key · 动作组") { box ->
+        editor("$key · 动画组") { box ->
             val groups = knownGroups().toMutableList()
             val selected = modeGroups(key).toMutableSet()
             val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -719,7 +723,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val name = input.text.toString().trim()
                 if (name.isBlank() || name.length > 40 || name == "未分组" ||
                     name.any { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
-                    input.error = "动作组名称不合法"
+                    input.error = "动画组名称不合法"
                 } else {
                     if (name !in groups) groups.add(name)
                     selected.add(name)
@@ -744,15 +748,15 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun showModeGroupOptions(anchor: View, group: String) {
         UnifiedOptionMenu.show(anchor, listOf("重命名", "解散"), setOf("解散")) { choice ->
             when (choice) {
-                "重命名" -> editor("重命名动作组", compact = true) { box ->
-                    val name = entry(box, "动作组名称", group, compact = true)
+                "重命名" -> editor("重命名动画组", compact = true) { box ->
+                    val name = entry(box, "动画组名称", group, compact = true)
                     val save: () -> Unit = {
                         val target = name.text.toString().trim()
                         require(target.isNotEmpty() && target.length <= 40 && target != "未分组" &&
                             target.none { ch -> ch == '/' || ch == '\\' || ch == '\n' || ch == '\r' }) {
-                            "动作组名称不合法"
+                            "动画组名称不合法"
                         }
-                        require(target == group || target !in knownGroups()) { "动作组已存在" }
+                        require(target == group || target !in knownGroups()) { "动画组已存在" }
                         if (target != group) {
                             change { json ->
                                 val all = json.getJSONObject("modes")
@@ -771,8 +775,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                     save
                 }
                 "解散" -> showConfirmDialog(
-                    title = "解散动作组",
-                    bodyHtml = "确认解散「$group」？组内动作不会删除，仍属于其他组的动作保持不变。",
+                    title = "解散动画组",
+                    bodyHtml = "确认解散「$group」？组内动画不会删除，仍属于其他组的动画保持不变。",
                     positiveText = "解散"
                 ) {
                     attempt {
@@ -797,12 +801,12 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun newMode(group: String? = null) {
-        editor("新建动作") { box ->
-            val key = entry(box, "动作名称", "")
+        editor("新建动画") { box ->
+            val key = entry(box, "动画名称", "")
             val save: () -> Unit = {
                 val name = key.text.toString().trim()
                 validId(name)
-                require(!root.getJSONObject("modes").has(name)) { "动作名称已存在" }
+                require(!root.getJSONObject("modes").has(name)) { "动画名称已存在" }
                 val source = ids().firstNotNullOfOrNull { mode ->
                     root.getJSONObject("modes").optJSONObject(mode)
                         ?.optJSONArray("frames")?.optJSONObject(0)?.optString("res")
@@ -825,7 +829,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun showMode(key: String) {
         modeId = key
         bulkSelected.clear()
-        section("动作：$key", "mode")
+        section("动画：$key", "mode")
         // Reserve the bottom inset throughout the entire editor page, not on
         // each selection toggle (which would shift the outer ScrollView).
         scroll.clipToPadding = false
@@ -857,12 +861,12 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         panel.addView(previewContainer, LinearLayout.LayoutParams(-1, -2))
         animate(preview, key)
-        action("编辑动作属性") { attributes(key) }
+        action("编辑动画属性") { attributes(key) }
         action("绑定到功能") { bindModeToFunctions(key) }
         panel.addView(button("导入 GIF 并覆盖") {
             showConfirmDialog(
-                title = "GIF 覆盖动作",
-                bodyHtml = "使用 GIF 全部帧替换此动作现有帧？",
+                title = "GIF 覆盖动画",
+                bodyHtml = "使用 GIF 全部帧替换此动画现有帧？",
                 subText = "原有帧属性会被替换；GIF 时间延迟会被保留",
                 positiveText = "继续"
             ) { startUpload(true, action = "overwrite", mode = key) }
@@ -885,7 +889,12 @@ class RolePackEditorActivity : AppCompatActivity() {
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         val recycler = RecyclerView(this).apply {
             id = android.R.id.list
-            layoutManager = LinearLayoutManager(this@RolePackEditorActivity)
+            // The outer ScrollView alone owns vertical scrolling. RecyclerView
+            // retains its adapter and ItemTouchHelper only for frame presentation
+            // and long-press reordering, and expands to the height of all rows.
+            layoutManager = object : LinearLayoutManager(this@RolePackEditorActivity) {
+                override fun canScrollVertically(): Boolean = false
+            }
             isNestedScrollingEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
         }
@@ -1058,6 +1067,32 @@ class RolePackEditorActivity : AppCompatActivity() {
                 return true
             }
             override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {}
+            // ItemTouchHelper's built-in edge scrolling targets RecyclerView,
+            // which does not scroll on this page. Drive the sole parent ScrollView
+            // when a dragged frame approaches the viewport edge instead.
+            override fun onChildDraw(
+                canvas: android.graphics.Canvas, rv: RecyclerView,
+                holder: RecyclerView.ViewHolder, dx: Float, dy: Float,
+                actionState: Int, isCurrentlyActive: Boolean
+            ) {
+                super.onChildDraw(canvas, rv, holder, dx, dy, actionState, isCurrentlyActive)
+                if (actionState != ItemTouchHelper.ACTION_STATE_DRAG || !isCurrentlyActive) return
+                val viewportLocation = IntArray(2)
+                val rowLocation = IntArray(2)
+                scroll.getLocationOnScreen(viewportLocation)
+                holder.itemView.getLocationOnScreen(rowLocation)
+                val edge = px(65)
+                val top = viewportLocation[1]
+                val bottom = top + scroll.height
+                val draggedCenter = rowLocation[1] + holder.itemView.height / 2
+                val step = when {
+                    draggedCenter < top + edge -> -px(12)
+                    draggedCenter > bottom - edge -> px(12)
+                    else -> 0
+                }
+                if (step != 0) scroll.scrollBy(0, step)
+            }
+
 
             override fun clearView(rv: RecyclerView, holder: RecyclerView.ViewHolder) {
                 super.clearView(rv, holder)
@@ -1112,8 +1147,8 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun attributes(key: String) {
         val mode = root.getJSONObject("modes").getJSONObject(key)
-        editor("动作属性") { box ->
-            val name = entry(box, "动作名称", key)
+        editor("动画属性") { box ->
+            val name = entry(box, "动画名称", key)
             (name.parent as? LinearLayout)?.let { field ->
                 (field.getChildAt(0) as? TextView)?.setTextColor(android.graphics.Color.BLACK)
             }
@@ -1164,7 +1199,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             // playback, but its stored value is never erased by changing the mode.
             var nextModeId = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
             val nextFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            nextFields.addView(text("播放结束后的动作", 13f))
+            nextFields.addView(text("播放结束后的动画", 13f))
             lateinit var nextChoice: com.google.android.material.button.MaterialButton
             nextChoice = button(if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId) {
                 chooseModes(single = true, initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
@@ -1189,9 +1224,9 @@ class RolePackEditorActivity : AppCompatActivity() {
             val save: () -> Unit = {
                 val renamed = name.text.toString().trim()
                 validId(renamed)
-                require(renamed == key || !root.getJSONObject("modes").has(renamed)) { "动作名称已存在" }
+                require(renamed == key || !root.getJSONObject("modes").has(renamed)) { "动画名称已存在" }
                 val target = nextModeId.trim()
-                require(target.isEmpty() || target == key || root.getJSONObject("modes").has(target)) { "后续动作不存在" }
+                require(target.isEmpty() || target == key || root.getJSONObject("modes").has(target)) { "后续动画不存在" }
                 val loopMode = when (playback.selectedItemPosition) {
                     1 -> "timed"
                     2 -> "infinite"
@@ -1728,12 +1763,12 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private fun copyMode(key: String) {
-        editor("复制动作") { box ->
-            val name = entry(box, "新动作名称", key + "副本")
+        editor("复制动画") { box ->
+            val name = entry(box, "新动画名称", key + "副本")
             val save: () -> Unit = {
                 val target = name.text.toString().trim()
                 validId(target)
-                require(!root.getJSONObject("modes").has(target)) { "动作名称已存在，请更换名称" }
+                require(!root.getJSONObject("modes").has(target)) { "动画名称已存在，请更换名称" }
                 change {
                     val m = it.getJSONObject("modes")
                     m.put(target, JSONObject(m.getJSONObject(key).toString()))
@@ -1746,7 +1781,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun validId(id: String) {
         require(id.isNotBlank() && id.length <= 40 &&
             id.none { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
-            "动作名称不能为空、不能超过 40 字，且不能包含斜杠或换行"
+            "动画名称不能为空、不能超过 40 字，且不能包含斜杠或换行"
         }
     }
     private fun substitute(obj: JSONObject, from: String, to: String) {
@@ -1759,14 +1794,14 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun deleteMode(key: String) {
         showConfirmDialog(
-            title = "删除动作",
+            title = "删除动画",
             bodyHtml = "确定删除「$key」？",
-            subText = "仍被功能或其他动作引用时无法删除",
+            subText = "仍被功能或其他动画引用时无法删除",
             positiveText = "删除",
             titleColorRes = R.color.cp_danger
         ) {
             attempt {
-                require(ids().size > 1) { "至少保留一个动作" }
+                require(ids().size > 1) { "至少保留一个动画" }
                 change { it.getJSONObject("modes").remove(key) }
                 modes()
             }
@@ -1775,9 +1810,9 @@ class RolePackEditorActivity : AppCompatActivity() {
     /** Only the UI is translated. Engine function path keys remain the canonical English API. */
     private fun functionSegment(path: List<String>): String {
         return when (path.joinToString("/")) {
-            "snap/pat_head/pat_head", "pat_head/pat_head" -> "摸头动作"
+            "snap/pat_head/pat_head", "pat_head/pat_head" -> "摸头动画"
             "snap/feed/eat" -> "吸附进食"
-            "feed/eat" -> "吃鱼动作"
+            "feed/eat" -> "吃鱼动画"
             "feed/food" -> "食物动画"
             else -> when (path.last()) {
                 "static" -> "静止"
@@ -1787,8 +1822,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                 "climb" -> "攀爬"
                 "pat_head" -> "摸头"
                 "feed" -> "投喂"
-                "menu" -> "菜单动作"
-                "pool" -> "动作池"
+                "menu" -> "菜单动画"
+                "pool" -> "动画池"
                 "sit" -> "静坐"
                 "roll" -> "滚动"
                 "lift_up" -> "提起"
@@ -1812,9 +1847,9 @@ class RolePackEditorActivity : AppCompatActivity() {
         path.indices.joinToString("/") { functionSegment(path.take(it + 1)) }
 
     private fun functionDescription(path: List<String>): String = when (path.joinToString("/")) {
-        "static/sit" -> "进入静止状态时播放的基础动作"
-        "static/pool" -> "静止状态下随机选取的候选动作"
-        "standby/pool" -> "角色待机时随机选取的候选动作"
+        "static/sit" -> "进入静止状态时播放的基础动画"
+        "static/pool" -> "静止状态下随机选取的候选动画"
+        "standby/pool" -> "角色待机时随机选取的候选动画"
         "touch/roll" -> "触摸角色触发滚动行为时播放"
         "touch/walk" -> "触摸交互触发行走行为时播放"
         "touch/jump_down" -> "触摸交互后角色落地时播放"
@@ -1832,7 +1867,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         "feed/eat" -> "角色接受投喂并进食时播放"
         "feed/food" -> "投喂时显示的食物动画"
         "menu/pool" -> "菜单中供手动选择的动画"
-        else -> "执行该功能时，从关联动作中选择播放"
+        else -> "执行该功能时，从关联动画中选择播放"
     }
 
     private fun functionFolderDescription(path: List<String>): String = when (path.joinToString("/")) {
@@ -1913,7 +1948,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val selected = (0 until child.length()).map { child.optString(it) }
                         .filter { it.isNotBlank() }
                     functionItem(parent, "▣  " + functionPathName(currentPath) + "   ›",
-                        "动作：" + selected.joinToString("、"), path.size,
+                        "动画：" + selected.joinToString("、"), path.size,
                         description = functionDescription(currentPath)) {
                         chooseFunctions(currentPath, selected)
                     }
@@ -1924,7 +1959,7 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun functions() {
         section("功能映射", "functions")
-        panel.addView(text("决定角色在不同情况下播放的动作。\n点击文件夹展开，点击功能卡片编辑。", 12f).apply {
+        panel.addView(text("决定角色在不同情况下播放的动画。\n点击文件夹展开，点击功能卡片编辑。", 12f).apply {
             setPadding(px(4), 0, px(4), px(6))
             setTextColor(getColor(R.color.cp_note))
         })
@@ -1974,7 +2009,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
-        body.addView(text("动作：$modeId\n勾选要绑定的功能；取消勾选将解除对应绑定。", 12f).apply {
+        body.addView(text("动画：$modeId\n勾选要绑定的功能；取消勾选将解除对应绑定。", 12f).apply {
             gravity = Gravity.CENTER
             setPadding(px(4), 0, px(4), px(10))
             setTextColor(getColor(R.color.cp_note))
@@ -1990,8 +2025,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         fun warnLastBinding(path: List<String>) {
             showConfirmDialog(
                 title = "无法解除绑定",
-                bodyHtml = "功能「${functionPathName(path)}」至少需要保留一个动作。",
-                subText = "当前只有「$modeId」绑定到这个功能。请先为该功能添加其他动作。",
+                bodyHtml = "功能「${functionPathName(path)}」至少需要保留一个动画。",
+                subText = "当前只有「$modeId」绑定到这个功能。请先为该功能添加其他动画。",
                 positiveText = "我知道了"
             ) { }
         }
@@ -2095,7 +2130,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                         val updated = oldModes.filter { it != modeId }.toMutableList()
                         if (key in selected && modeId !in updated) updated.add(modeId)
                         require(oldModes.isEmpty() || updated.isNotEmpty()) {
-                            "功能「${functionPathName(path)}」至少需要保留一个动作"
+                            "功能「${functionPathName(path)}」至少需要保留一个动画"
                         }
                         node.put(path.last(), JSONArray().apply { updated.distinct().forEach { put(it) } })
                     }
@@ -2129,7 +2164,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             setPadding(px(16), px(14), px(16), px(14))
         }
         card.addView(body)
-        body.addView(text(headerTitle ?: if (single) "选择后续动作" else "选择功能动作", 18f).apply {
+        body.addView(text(headerTitle ?: if (single) "选择后续动画" else "选择功能动画", 18f).apply {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
@@ -2146,7 +2181,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         lateinit var redraw: () -> Unit
         redraw = {
             listing.removeAllViews()
-            selectionInfo.text = "已选 ${selected.size} 个动作"
+            selectionInfo.text = "已选 ${selected.size} 个动画"
             if (single) {
                 listing.addView(text("○  无（由控制器决定）", 15f).apply {
                     setBackgroundResource(R.drawable.card_bg)
@@ -2198,7 +2233,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
         actions.addView(button("确认") {
             if (!single && selected.isEmpty()) {
-                Toast.makeText(this, "至少选择一个动作", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "至少选择一个动画", Toast.LENGTH_SHORT).show()
             } else {
                 onConfirm(selected.toList())
                 dialog.dismiss()
@@ -2215,7 +2250,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         chooseModes(single = false, initial = chosen,
             headerTitle = functionPathName(path),
             headerDescription = functionDescription(path),
-            footerNote = "执行到该功能时，将随机选中以上动作播放") { selected ->
+            footerNote = "执行到该功能时，将随机选中以上动画播放") { selected ->
             attempt {
                 change { json ->
                     var node = json.getJSONObject("functions")
@@ -2349,7 +2384,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun deleteImage(relative: String) {
-        require(imageUses()[relative].orEmpty().isEmpty()) { "仍有动作引用，不能删除" }
+        require(imageUses()[relative].orEmpty().isEmpty()) { "仍有动画引用，不能删除" }
         resourceChange { working, _ ->
             val file = File(working, relative)
             require(isImage(file))
@@ -2385,7 +2420,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(-1, px(200)))
         content.addView(text(relative, 12f))
         content.addView(text(if (uses.isEmpty()) "未使用"
-            else "被 ${uses.map { it.first }.distinct().size} 个动作 / ${uses.size} 帧引用", 13f))
+            else "被 ${uses.map { it.first }.distinct().size} 个动画 / ${uses.size} 帧引用", 13f))
         uses.forEach { (mode, index) ->
             content.addView(text("$mode / 帧 $index  ›", 14f).apply {
                 isClickable = true
