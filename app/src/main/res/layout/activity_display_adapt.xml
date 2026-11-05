@@ -112,7 +112,7 @@
                 </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 抬高偏移 -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
@@ -133,7 +133,7 @@
                             android:id="@+id/ime_lift_bar" android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:valueFrom="-800" android:valueTo="800" android:stepSize="1" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
 
             </LinearLayout>
