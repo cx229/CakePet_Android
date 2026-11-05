@@ -276,11 +276,12 @@ class FeedingSettingsActivity : AppCompatActivity() {
         folding = SettingsFoldController(this).apply {
             add(R.id.sw_feeding_enabled, listOf(R.id.fish_scale_bar, R.id.fish_alpha_bar,
                 R.id.group_feed_scope, R.id.group_feed_growth,
-                R.id.group_feed_period, R.id.group_feed_expiration))
+                R.id.group_feed_period, R.id.group_feed_expiration),
+                indentChildren = false)
             add(R.id.sw_feed_grow, listOf(R.id.feed_grow_bar),
-                ancestors = listOf(R.id.sw_feeding_enabled), depth = 1, expandedInitially = false)
+                ancestors = listOf(R.id.sw_feeding_enabled), expandedInitially = false)
             add(R.id.sw_auto_expire, listOf(R.id.fish_expire_bar),
-                ancestors = listOf(R.id.sw_feeding_enabled), depth = 1, expandedInitially = false)
+                ancestors = listOf(R.id.sw_feeding_enabled), expandedInitially = false)
         }
         refreshUI()
     }
