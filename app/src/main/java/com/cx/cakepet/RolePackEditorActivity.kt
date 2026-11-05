@@ -48,6 +48,8 @@ class RolePackEditorActivity : AppCompatActivity() {
     private val bulkSelected = mutableSetOf<Int>()
     private var bulkBar: View? = null
     private var bulkCountView: TextView? = null
+    private var activeFrameRecycler: RecyclerView? = null
+    private var modePageRecycler: RecyclerView? = null
     /** Guard programmatic checkbox updates from re-entering selection callbacks. */
     private var syncingBulkSelection = false
     private var resourceReplacePath: String? = null
@@ -215,6 +217,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         if (::draft.isInitialized) draft.deleteRecursively()
         super.onDestroy()
     }
+    private fun currentPageScrollY(): Int = modePageRecycler?.scrollY ?: scroll.scrollY
+
     private fun navigateBack() {
         val previous = pageHistory.pollLast() ?: run { finish(); return }
         restoringPage = true
@@ -230,7 +234,12 @@ class RolePackEditorActivity : AppCompatActivity() {
         } finally {
             restoringPage = false
         }
-        scroll.post { scroll.scrollTo(0, previous.scrollY) }
+        if (previous.name == "mode") {
+            modePageRecycler?.post {
+                (modePageRecycler?.layoutManager as? LinearLayoutManager)
+                    ?.scrollToPositionWithOffset(0, -previous.scrollY)
+            }
+        } else scroll.post { scroll.scrollTo(0, previous.scrollY) }
     }
     private fun getStatusBarHeight(): Int {
         val resId = resources.getIdentifier("status_bar_height", "dimen", "android")
@@ -366,11 +375,19 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun section(title: String, dest: String) {
         removeBulkBar()
+        // Only the active page owns a vertical scroller. Restore normal page
+        // ScrollView before creating ordinary editor pages.
+        modePageRecycler?.let {
+            (it.parent as? android.view.ViewGroup)?.removeView(it)
+            modePageRecycler = null
+        }
+        activeFrameRecycler = null
+        scroll.visibility = View.VISIBLE
         scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, 0)
         stopAnimation()
         val pageChanged = screen != dest
         if (!restoringPage && pageChanged)
-            pageHistory.addLast(EditorPage(screen, modeId, scroll.scrollY))
+            pageHistory.addLast(EditorPage(screen, modeId, currentPageScrollY()))
         screen = dest
         panel.removeAllViews()
         titleText.text = title
@@ -860,10 +877,6 @@ class RolePackEditorActivity : AppCompatActivity() {
         modeId = key
         bulkSelected.clear()
         section("动画：$key", "mode")
-        // Reserve the bottom inset throughout the entire editor page, not on
-        // each selection toggle (which would shift the outer ScrollView).
-        scroll.clipToPadding = false
-        scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, px(120))
         val m = root.getJSONObject("modes").getJSONObject(key)
 
         val preview = RoleAnimationPreview(this)
@@ -917,21 +930,33 @@ class RolePackEditorActivity : AppCompatActivity() {
         panel.addView(frameHeader, LinearLayout.LayoutParams(-1, -2))
         val order = (0 until frames.length()).toMutableList()
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
+        // The page's ONE RecyclerView scrolls both header controls and all
+        // frames. No nested scrolling or wrap-content RecyclerView measurement.
+        val pageHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(16), px(16), px(16), px(8))
+            layoutParams = RecyclerView.LayoutParams(-1, -2)
+        }
+        while (panel.childCount > 0) {
+            val child = panel.getChildAt(0)
+            panel.removeViewAt(0)
+            pageHeader.addView(child)
+        }
         val recycler = RecyclerView(this).apply {
             id = android.R.id.list
-            // The outer ScrollView alone owns vertical scrolling. RecyclerView
-            // retains its adapter and ItemTouchHelper only for frame presentation
-            // and long-press reordering, and expands to the height of all rows.
-            layoutManager = object : LinearLayoutManager(this@RolePackEditorActivity) {
-                override fun canScrollVertically(): Boolean = false
-            }
-            isNestedScrollingEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
+            layoutManager = LinearLayoutManager(this@RolePackEditorActivity)
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            clipToPadding = false
+            setPadding(px(16), 0, px(16), px(120))
         }
+        activeFrameRecycler = recycler
         val adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-            override fun getItemCount(): Int = order.size
+            override fun getItemCount(): Int = order.size + 1
+            override fun getItemViewType(position: Int): Int =
+                if (position == 0) 1 else 0
 
             override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                if (viewType == 1) return object : RecyclerView.ViewHolder(pageHeader) {}
                 val card = LinearLayout(this@RolePackEditorActivity).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
@@ -1008,7 +1033,9 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
 
             override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-                val frame = frames.getJSONObject(order[position])
+                if (position == 0) return
+                val frameIndex = position - 1
+                val frame = frames.getJSONObject(order[frameIndex])
                 val source = frame.optString("res")
                 val rootRow = holder.itemView as LinearLayout
                 val select = rootRow.getChildAt(0) as CheckBox
@@ -1016,7 +1043,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val image = card.getChildAt(0) as ImageView
                 val labels = card.getChildAt(1) as LinearLayout
                 val headline = labels.getChildAt(0) as LinearLayout
-                (headline.getChildAt(0) as TextView).text = "帧 $position"
+                (headline.getChildAt(0) as TextView).text = "帧 $frameIndex"
                 val rawDelay = frame.opt("delay")
                 val delayText = when (rawDelay) {
                     is JSONArray -> "${rawDelay.optLong(0)}-${rawDelay.optLong(1)}ms"
@@ -1049,12 +1076,12 @@ class RolePackEditorActivity : AppCompatActivity() {
                 (labels.getChildAt(2) as TextView).text = source
                 image.setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
                 image.scaleX = if (frame.optBoolean("flipX", false)) -1f else 1f
-                val at = holder.bindingAdapterPosition
+                val at = holder.bindingAdapterPosition - 1
                 select.setOnCheckedChangeListener(null)
                 select.isChecked = at in bulkSelected
                 select.setOnCheckedChangeListener { _, checked ->
                     if (syncingBulkSelection) return@setOnCheckedChangeListener
-                    val index = holder.bindingAdapterPosition
+                    val index = holder.bindingAdapterPosition - 1
                     if (index in order.indices) {
                         if (checked) bulkSelected.add(index) else bulkSelected.remove(index)
                         refreshVisibleFrameSelection(recycler)
@@ -1064,13 +1091,13 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val more = card.getChildAt(2) as TextView
                 more.visibility = if (bulkSelected.isEmpty()) View.VISIBLE else View.INVISIBLE
                 more.setOnClickListener {
-                    val index = holder.bindingAdapterPosition
-                    if (index != RecyclerView.NO_POSITION && bulkSelected.isEmpty())
+                    val index = holder.bindingAdapterPosition - 1
+                    if (index in order.indices && bulkSelected.isEmpty())
                         showFrameOptions(more, key, index)
                 }
                 rippleClick(card) {
-                    val index = holder.bindingAdapterPosition
-                    if (index != RecyclerView.NO_POSITION) {
+                    val index = holder.bindingAdapterPosition - 1
+                    if (index in order.indices) {
                         if (bulkSelected.isEmpty()) showFrameOptions(more, key, index)
                         else {
                             // Reuse checkbox handling, avoiding a full list rebind.
@@ -1086,44 +1113,20 @@ class RolePackEditorActivity : AppCompatActivity() {
             ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
         ) {
             override fun isLongPressDragEnabled(): Boolean = bulkSelected.isEmpty()
+            override fun getMovementFlags(rv: RecyclerView, holder: RecyclerView.ViewHolder): Int =
+                if (holder.bindingAdapterPosition <= 0 || bulkSelected.isNotEmpty()) 0
+                else makeMovementFlags(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0)
             override fun onMove(rv: RecyclerView, from: RecyclerView.ViewHolder,
                                 target: RecyclerView.ViewHolder): Boolean {
-                val a = from.bindingAdapterPosition
-                val b = target.bindingAdapterPosition
+                val a = from.bindingAdapterPosition - 1
+                val b = target.bindingAdapterPosition - 1
                 if (a !in order.indices || b !in order.indices) return false
                 order.add(b, order.removeAt(a))
-                adapter.notifyItemMoved(a, b)
+                adapter.notifyItemMoved(a + 1, b + 1)
                 changed = true
                 return true
             }
             override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {}
-            // ItemTouchHelper's built-in edge scrolling targets RecyclerView,
-            // which does not scroll on this page. Drive the sole parent ScrollView
-            // when a dragged frame approaches the viewport edge instead.
-            override fun onChildDraw(
-                canvas: android.graphics.Canvas, rv: RecyclerView,
-                holder: RecyclerView.ViewHolder, dx: Float, dy: Float,
-                actionState: Int, isCurrentlyActive: Boolean
-            ) {
-                super.onChildDraw(canvas, rv, holder, dx, dy, actionState, isCurrentlyActive)
-                if (actionState != ItemTouchHelper.ACTION_STATE_DRAG || !isCurrentlyActive) return
-                val viewportLocation = IntArray(2)
-                val rowLocation = IntArray(2)
-                scroll.getLocationOnScreen(viewportLocation)
-                holder.itemView.getLocationOnScreen(rowLocation)
-                val edge = px(65)
-                val top = viewportLocation[1]
-                val bottom = top + scroll.height
-                val draggedCenter = rowLocation[1] + holder.itemView.height / 2
-                val step = when {
-                    draggedCenter < top + edge -> -px(12)
-                    draggedCenter > bottom - edge -> px(12)
-                    else -> 0
-                }
-                if (step != 0) scroll.scrollBy(0, step)
-            }
-
-
             override fun clearView(rv: RecyclerView, holder: RecyclerView.ViewHolder) {
                 super.clearView(rv, holder)
                 if (changed) {
@@ -1139,8 +1142,14 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
         })
         touch.attachToRecyclerView(recycler)
-        // Long resource paths may wrap; fixed 72dp * frameCount clipped text.
-        panel.addView(recycler, LinearLayout.LayoutParams(-1, -2))
+        // The header lives inside the same RecyclerView as frames. Hiding the
+        // obsolete ScrollView prevents it from intercepting any frame gestures.
+        val rootLayout = scroll.parent as android.view.ViewGroup
+        val scrollPosition = rootLayout.indexOfChild(scroll)
+        rootLayout.addView(recycler, scrollPosition + 1,
+            LinearLayout.LayoutParams(-1, 0, 1f))
+        scroll.visibility = View.GONE
+        modePageRecycler = recycler
     }
     private fun animate(view: RoleAnimationPreview, key: String) {
         stopAnimation()
@@ -1549,8 +1558,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         try {
             for (i in 0 until recycler.childCount) {
                 val row = recycler.getChildAt(i) as? LinearLayout ?: continue
-                val position = recycler.getChildViewHolder(row).bindingAdapterPosition
-                if (position == RecyclerView.NO_POSITION) continue
+                val position = recycler.getChildViewHolder(row).bindingAdapterPosition - 1
+                if (position !in 0 until (recycler.adapter?.itemCount ?: 1) - 1) continue
                 (row.getChildAt(0) as CheckBox).isChecked = position in bulkSelected
                 val card = row.getChildAt(1) as LinearLayout
                 (card.getChildAt(2) as TextView).visibility =
@@ -1592,9 +1601,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     .getJSONArray("frames").length()
                 bulkSelected.clear()
                 bulkSelected.addAll(0 until n)
-                (panel.findViewById<RecyclerView>(android.R.id.list))?.let {
-                    refreshVisibleFrameSelection(it)
-                }
+                activeFrameRecycler?.let { refreshVisibleFrameSelection(it) }
                 updateBulkBar(key)
             }
         })
@@ -1602,9 +1609,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             isClickable = true
             setOnClickListener {
                 bulkSelected.clear()
-                (panel.findViewById<RecyclerView>(android.R.id.list))?.let {
-                    refreshVisibleFrameSelection(it)
-                }
+                activeFrameRecycler?.let { refreshVisibleFrameSelection(it) }
                 updateBulkBar(key)
             }
         })
