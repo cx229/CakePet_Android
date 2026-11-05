@@ -46,7 +46,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CakePet-t1.26.11.5.2-debug-apk
+          name: CakePet-t1.26.11.5.3-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
