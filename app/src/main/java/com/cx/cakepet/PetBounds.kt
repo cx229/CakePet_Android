@@ -338,7 +338,12 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
         sys.colors.forEach { c ->
             keys += "${page.tag}_${c.key}_default"
         }
-        if (sys.keyboardModeDefault != null) keys += "${page.tag}_imeMode_default"
+        if (sys.keyboardModeDefault != null) {
+            keys += "${page.tag}_imeMode_default"
+            // Remove retired defaults too, so a reset cannot resurrect an old hide/off mode.
+            keys += "${page.tag}_imeAdapt_default"
+            keys += "${page.tag}_imeHide_default"
+        }
         dataStore.edit { prefs ->
             keys.forEach { k ->
                 prefs.remove(floatPreferencesKey(k))
