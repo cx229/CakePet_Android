@@ -28,7 +28,7 @@ object UnifiedOptionMenu {
             isFillViewport = false
             isVerticalScrollBarEnabled = true
             setBackgroundResource(R.drawable.menu_bg_popup)
-            addView(layout, ScrollView.LayoutParams(width, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(layout, android.widget.FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         val attrs = ctx.obtainStyledAttributes(intArrayOf(android.R.attr.selectableItemBackground))
         val ripple = try { attrs.getResourceId(0, 0) } finally { attrs.recycle() }
