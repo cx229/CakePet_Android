@@ -528,7 +528,8 @@ class PetService : Service() {
         else try { windowManager.addView(view, lp); true } catch (_: Exception) { false }
 
     private fun removeDisplay(view: PetDisplayView, lp: WindowManager.LayoutParams) {
-        if (lp.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+        if (lp.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY &&
+            CakePetAccessibilityService.active != null)
             CakePetAccessibilityService.active?.detachPetDisplay(view)
         else try { windowManager.removeView(view) } catch (_: Exception) {}
     }
