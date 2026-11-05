@@ -126,39 +126,6 @@
                         android:layout_marginTop="0dp"/>
                 </LinearLayout>
 
-                <!-- 透明度（输入框在右，滑块满宽居下） -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <!-- 顶行：左标题(占满) / 右数值输入框 -->
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                            android:layout_weight="1" android:orientation="vertical">
-                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="透明度" style="@style/SettingsOptionTitle"/>
-                            <TextView android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="「酥」的可见程度"
-                                style="@style/SettingsOptionNote"/>
-                        </LinearLayout>
-                        <EditText android:id="@+id/alpha_value" android:layout_width="72dp"
-                            android:layout_height="wrap_content" android:text="70%"
-                            android:textSize="16dp" android:background="@drawable/edit_bg"
-                            android:inputType="number" android:imeOptions="actionDone"
-                            android:importantForAutofill="no" android:singleLine="true"
-                            android:gravity="center" android:layout_marginStart="8dp"/>
-                    </LinearLayout>
-
-                    <!-- 底行：满宽滑块（细、小、长） -->
-                    <com.google.android.material.slider.Slider
-                        android:id="@+id/alpha_bar" android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"
-                        app:trackHeight="2dp" app:thumbRadius="5dp"
-                        android:layout_marginTop="0dp"/>
-                </LinearLayout>
-
                 <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -182,7 +149,7 @@
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </LinearLayout>
 
-                <!-- 显示-其他：跳转二级页（边界偏移 / 键盘适应） -->
+                <!-- 显示相关设置分成交互与适应两页，原功能迁移，不重复保留入口。 -->
                 <LinearLayout android:id="@+id/row_range_settings"
                     style="@style/SettingsSwitchRow"
                     android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
@@ -192,9 +159,9 @@
                     android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:text="显示-其他" style="@style/SettingsOptionTitle"/>
+                            android:text="显示-交互" style="@style/SettingsOptionTitle"/>
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:text="显示范围、键盘适应"
+                            android:text="命中模式、透明度、活动范围"
                             style="@style/SettingsOptionNote"/>
                     </LinearLayout>
                     <ImageView android:layout_width="22dp" android:layout_height="22dp"
@@ -202,6 +169,24 @@
         app:tint="@color/icon_chevron"
                         android:layout_marginStart="12dp"
                         android:clickable="false" android:focusable="false"/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/row_adapt_settings"
+                    style="@style/SettingsSwitchRow"
+                    android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true"
+                    android:paddingStart="20dp" android:paddingEnd="20dp"
+                    android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <LinearLayout style="@style/SettingsSwitchTexts">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="显示-适应" style="@style/SettingsOptionTitle"/>
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="键盘适应、旋转适应" style="@style/SettingsOptionNote"/>
+                    </LinearLayout>
+                    <ImageView android:layout_width="22dp" android:layout_height="22dp"
+                        android:src="@drawable/ic_chevron_right"
+                        app:tint="@color/icon_chevron"
+                        android:layout_marginStart="12dp"/>
                 </LinearLayout>
 
                 </LinearLayout>
