@@ -18,11 +18,17 @@ object SettingsInterchange {
     fun importRole(ctx: Context, roleId: String, data: JSONObject): Int = runBlocking {
         require(data.optString("type") == "cakepet-settings") { "不是 CakePet 设置文件" }
         var applied = 0
-        data.optJSONObject("config")?.let {
-            applied += PetConfig.forRole(ctx, roleId).importSettings(it)
-        }
-        data.optJSONObject("bounds")?.let {
-            applied += PetBounds.forRole(ctx, roleId).importSettings(it)
+        for (section in listOf("config", "bounds")) {
+            val obj = data.optJSONObject(section) ?: continue
+            val selected = if (data.optString("source") == "habits") {
+                val keys = UserHabits.enabled(data, section)
+                JSONObject().apply {
+                    for (key in keys) obj.optJSONObject(key)?.let { put(key, it) }
+                }
+            } else obj
+            applied += if (section == "config")
+                PetConfig.forRole(ctx, roleId).importSettings(selected)
+            else PetBounds.forRole(ctx, roleId).importSettings(selected)
         }
         require(applied > 0) { "没有可恢复的设置项" }
         applied
