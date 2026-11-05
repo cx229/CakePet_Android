@@ -46,7 +46,10 @@
                 style="@style/SettingsSwitchRow"
                 android:background="@drawable/card_bg"
                 android:paddingStart="20dp"
-                android:paddingEnd="20dp">
+                android:paddingEnd="20dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
                 <LinearLayout style="@style/SettingsSwitchTexts">
                     <TextView android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -67,7 +70,9 @@
                 android:paddingStart="20dp"
                 android:paddingEnd="20dp"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:foreground="@drawable/settings_row_ripple"
+                android:longClickable="true">
                 <LinearLayout style="@style/SettingsSwitchTexts">
                     <TextView android:id="@+id/tv_next"
                         android:layout_width="match_parent"
