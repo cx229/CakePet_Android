@@ -68,26 +68,12 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <ImageView
-            android:id="@+id/btn_role_options"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:padding="8dp"
-            android:src="@android:drawable/ic_menu_more"
+        <TextView android:id="@+id/btn_role_options"
+            android:layout_width="40dp" android:layout_height="48dp"
+            android:gravity="center" android:clickable="true" android:focusable="true"
+            android:background="?attr/selectableItemBackground"
+            android:text="⋮" android:textSize="24sp" android:textColor="@color/cp_title"
             android:contentDescription="素材包操作" />
 
-        <Button
-            android:id="@+id/btn_import"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:text="加入"
-            android:textColor="@color/cp_btn_outline_text"
-            app:backgroundTint="@color/cp_btn_dark_bg"
-            app:strokeColor="@color/cp_btn_outline_stroke"
-            app:strokeWidth="1.5dp"
-            app:cornerRadius="14dp"
-            android:layout_marginStart="8dp" />
     </LinearLayout>
 </LinearLayout>
