@@ -122,11 +122,17 @@ class ImageModeManager(
      */
     fun isContinuationOf(name: String, start: String): Boolean {
         if (name == start) return true
-        val entry = modes[start] ?: return false
-        val continuation = modes[name] ?: return false
-        // A shared continuation may also appear in a standalone function/menu pool.
-        // Its reuse must not break the entrance-to-loop relationship.
-        return entry.nextModeName == name && name != start
+        val visited = mutableSetOf<String>()
+        var current = start
+        while (visited.add(current)) {
+            val def = modes[current] ?: return false
+            // In an infinite loop the saved nextMode is intentionally inactive.
+            if (def.loopMode == "infinite") return false
+            val next = def.nextModeName ?: return false
+            if (next == name) return true
+            current = next
+        }
+        return false
     }
 
     /** Consider an internal continuation part of the same user-facing function. */
