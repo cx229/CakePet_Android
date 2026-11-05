@@ -58,21 +58,15 @@ object AppBounds {
             baseMin = 0.5f, baseMax = 3f,
             from = 0.5f, to = 3f,
             step = 0.01f, default = 1.4f
-        ),
-        SliderBound(
-            key = "alpha", label = "透明度", group = "显示",
-            hardMin = 0f, hardMax = 100f,           // 百分比：0=全透明，100=不透明（UI 层；物理层 ALPHA 用 0-1 小数）
-            baseMin = 0f, baseMax = 100f,
-            from = 0f, to = 100f,
-            step = 1f, default = 100f              // 与系统默认 ConfigDefaults.ALPHA=1f(100%) 对齐
         )
+
     )
     val MAIN_SWITCHES = listOf(
         SwitchBound("visible", "显示 / 隐藏", "显示", true),
         SwitchBound("clickThrough", "点击穿透", "显示", false)
     )
     val MAIN_ORDER = listOf(
-        "scale", "alpha", "visible", "clickThrough"
+        "scale", "visible", "clickThrough"
     )
 
     // ---------------- MOVEMENT 页 ----------------
@@ -179,6 +173,9 @@ object AppBounds {
     // ---------------- RANGE 页 ----------------
     // 活动范围：上下左右偏移（向内/向外收紧可活动区域）+ 输入法弹起时自动上抬避免被键盘遮挡。
     val RANGE_SLIDERS = listOf(
+        SliderBound("alpha", "透明度", "交互", 0f, 100f, 0f, 100f, 0f, 100f, 1f, 100f),
+        SliderBound("coreHeight", "核心缩放-高", "交互", 0.1f, 10f, 0.5f, 2f, 0.5f, 2f, 0.05f, 1f),
+        SliderBound("coreWidth", "核心缩放-宽", "交互", 0.1f, 10f, 0.5f, 2f, 0.5f, 2f, 0.05f, 1f),
         SliderBound(
             key = "offsetTop", label = "顶部偏移", group = "活动范围",
             hardMin = -4000f, hardMax = 4000f,     // 正=向内收缩活动区（顶部留白更多），负=向外扩（宠物可更靠边/出血）
@@ -225,6 +222,7 @@ object AppBounds {
         SwitchBound("imeResetBottomOffset", "重置边界", "键盘适应", true)
     )
     val RANGE_ORDER = listOf(
+        "alpha", "coreHeight", "coreWidth",
         "offsetTop", "offsetBottom", "offsetLeft", "offsetRight",
         "imeMode", "imeResetBottomOffset", "imeLiftOffset"
     )
