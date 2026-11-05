@@ -95,6 +95,10 @@ data class PetConfigData(
     val forceOpaque: Boolean = ConfigDefaults.FORCE_OPAQUE,
     // 命中模式：像素/边界/核心(脚底盒)，见 ConfigDefaults.HIT_*
     val hitMode: Int = ConfigDefaults.HIT_MODE,
+    /** Unified user-facing display/input mode; legacy values are migrated on read. */
+    val interactionMode: String = "core-transparent",
+    val rangeFullScreen: Boolean = false,
+    val rotationAdaptMode: String = "stretch",
     // 核心(脚底盒)命中区尺寸：128 逻辑基数（1X=128），几何计算时 × scaleFactor（宠物大小）转屏幕像素
     val ctrlBoxWidth: Float = ConfigDefaults.CTRL_BOX_WIDTH,      // 宽：脚左右各半
     val ctrlBoxHeight: Float = ConfigDefaults.CTRL_BOX_HEIGHT,    // 高：脚以上
@@ -312,6 +316,9 @@ class PetConfig private constructor(
     private val KEY_SHOW_SNAP_OFFSET = booleanPreferencesKey("show_snap_offset")
     private val KEY_RECT_HIT_MODE = booleanPreferencesKey("rect_hit_mode") // 旧键，仅用于迁移
     private val KEY_HIT_MODE = androidx.datastore.preferences.core.intPreferencesKey("hit_mode")
+    private val KEY_INTERACTION_MODE = androidx.datastore.preferences.core.stringPreferencesKey("interaction_mode")
+    private val KEY_RANGE_FULLSCREEN = booleanPreferencesKey("range_fullscreen")
+    private val KEY_ROTATION_ADAPT_MODE = androidx.datastore.preferences.core.stringPreferencesKey("rotation_adapt_mode")
     private val KEY_CTRL_BOX_W = androidx.datastore.preferences.core.floatPreferencesKey("ctrl_box_w")
     private val KEY_CTRL_BOX_H = androidx.datastore.preferences.core.floatPreferencesKey("ctrl_box_h")
     private val KEY_CTRL_BOX_VO = androidx.datastore.preferences.core.floatPreferencesKey("ctrl_box_vo")
@@ -420,6 +427,9 @@ class PetConfig private constructor(
                     if (prefs[KEY_RECT_HIT_MODE] == true) ConfigDefaults.HIT_BOUNDARY else ConfigDefaults.HIT_PIXEL
                 } else ConfigDefaults.HIT_MODE
             },
+            interactionMode = prefs[KEY_INTERACTION_MODE] ?: if (prefs[KEY_FORCE_OPAQUE] == true) "display-opaque" else "core-transparent",
+            rangeFullScreen = prefs[KEY_RANGE_FULLSCREEN] ?: false,
+            rotationAdaptMode = prefs[KEY_ROTATION_ADAPT_MODE] ?: "stretch",
             ctrlBoxWidth = prefs[KEY_CTRL_BOX_W] ?: ConfigDefaults.CTRL_BOX_WIDTH,
             ctrlBoxHeight = prefs[KEY_CTRL_BOX_H] ?: ConfigDefaults.CTRL_BOX_HEIGHT,
             ctrlBoxVOffset = prefs[KEY_CTRL_BOX_VO] ?: ConfigDefaults.CTRL_BOX_VOFFSET,
@@ -576,6 +586,9 @@ class PetConfig private constructor(
             prefs[KEY_SHOW_BOUND_OFFSET] = updated.showBoundOffset
             prefs[KEY_SHOW_SNAP_OFFSET] = updated.showSnapOffset
             prefs[KEY_HIT_MODE] = updated.hitMode
+            prefs[KEY_INTERACTION_MODE] = updated.interactionMode
+            prefs[KEY_RANGE_FULLSCREEN] = updated.rangeFullScreen
+            prefs[KEY_ROTATION_ADAPT_MODE] = updated.rotationAdaptMode
             prefs[KEY_CTRL_BOX_W] = updated.ctrlBoxWidth
             prefs[KEY_CTRL_BOX_H] = updated.ctrlBoxHeight
             prefs[KEY_CTRL_BOX_VO] = updated.ctrlBoxVOffset
@@ -659,6 +672,8 @@ class PetConfig private constructor(
                 nc = when (s.key) {
                     "scale" -> nc.copy(scale = s.default)
                     "alpha" -> nc.copy(alpha = s.default / 100f)
+                    "coreWidth" -> nc.copy(ctrlBoxWidth = s.default * ConfigDefaults.CTRL_BOX_WIDTH)
+                    "coreHeight" -> nc.copy(ctrlBoxHeight = s.default * ConfigDefaults.CTRL_BOX_HEIGHT)
                     "gravity" -> nc.copy(gravity = s.default)
                     "maxSpeed" -> nc.copy(maxSpeed = s.default)
                     "rebound" -> nc.copy(reboundRatio = s.default)
@@ -734,7 +749,9 @@ class PetConfig private constructor(
             }
             // Restore the five-way user default exactly; legacy switches no longer decide this mode.
             if (page == SettingsPage.RANGE) {
-                nc = nc.copy(imeMode = b.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE)
+                nc = nc.copy(imeMode = b.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE,
+                    interactionMode = "core-transparent", hitMode = ConfigDefaults.HIT_CORE,
+                    forceOpaque = false, rangeFullScreen = false, rotationAdaptMode = "stretch")
             }
             b.colors.forEach { c ->
                 nc = when (c.key) {
