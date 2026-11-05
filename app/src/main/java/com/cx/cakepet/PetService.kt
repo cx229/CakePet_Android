@@ -2779,7 +2779,7 @@ class PetService : Service() {
         // 注意：宠物 physics.y 与该角色全部食物 lp.y 的同步位移由 recalcBounds 按 delta(新shiftY-旧shiftY)施加，
         // 使其与范围同向同量移动；本函数只负责按 shiftY 平移【范围本身】。
         val keyboardMode = rc.keyboardMode()
-        val imeActive = keyboardMode in listOf("global", "local") &&
+        val imeActive = keyboardMode in listOf("global", "stretch", "local") &&
             (viewImeInset > 0f || globalImeInset > 0f)
         val imeBottomInset = if (imeActive) maxOf(viewImeInset, globalImeInset) else 0f
         // 抬高偏移：仅在输入法防误触开启且键盘真实弹出时，才在键盘地面之上额外抬高，正=更高、负=更低。
