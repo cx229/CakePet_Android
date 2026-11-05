@@ -163,7 +163,8 @@ object RoleStore {
     }
 
     /** 往首页追加一个实例（同模板可重复，instanceId 唯一）。 */
-    fun addHomeRole(ctx: Context, inst: HomeRoleInstance) = runBlocking {
+    fun addHomeRole(ctx: Context, inst: HomeRoleInstance) {
+        runBlocking {
         ctx.homeRolesStore.edit { prefs ->
             val arr = JSONArray(prefs[KEY_HOME_ROLES] ?: "[]")
             arr.put(JSONObject().apply {
@@ -174,6 +175,8 @@ object RoleStore {
             })
             prefs[KEY_HOME_ROLES] = arr.toString()
         }
+        }
+        UserHabits.applyToNewRole(ctx, inst.instanceId)
     }
 
     /** 级联删除：移除某模板下的全部首页实例。 */
