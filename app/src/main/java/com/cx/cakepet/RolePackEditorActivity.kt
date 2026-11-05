@@ -304,16 +304,6 @@ class RolePackEditorActivity : AppCompatActivity() {
         return control
     }
 
-    private fun addDialogDivider(parent: LinearLayout, top: Int = 10, bottom: Int = 10) {
-        parent.addView(View(this).apply {
-            setBackgroundColor(getColor(R.color.cp_btn_outline_stroke))
-            alpha = 0.35f
-        }, LinearLayout.LayoutParams(-1, px(1)).apply {
-            topMargin = px(top)
-            bottomMargin = px(bottom)
-        })
-    }
-
     private fun actionPair(first: String, firstClick: () -> Unit,
                            second: String, secondClick: () -> Unit) {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -1519,9 +1509,9 @@ class RolePackEditorActivity : AppCompatActivity() {
             visit(draft, 0)
         }
         redraw()
-        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, px(12), 0, 0) }
         buttons.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
-            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(4) })
+            LinearLayout.LayoutParams(-2, -2).apply { rightMargin = px(4) })
         buttons.addView(dialogButton("确认", primary = true) {
             if (selected.isEmpty()) Toast.makeText(this, "请至少选择一张图片", Toast.LENGTH_SHORT).show()
             else attempt {
@@ -1529,7 +1519,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 applyImageSelection(request, paths)
                 dialog.dismiss()
             }
-        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(4) })
+        }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = px(4) })
         body.addView(buttons)
         dialog.setContentView(outer)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
@@ -2147,9 +2137,9 @@ class RolePackEditorActivity : AppCompatActivity() {
             viewport.post { viewport.scrollTo(0, scrollPosition) }
         }
         redraw()
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, px(12), 0, 0) }
         actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
-            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+            LinearLayout.LayoutParams(-2, -2).apply { rightMargin = px(5) })
         actions.addView(dialogButton("确认", primary = true) {
             attempt {
                 // Verify again at commit time; never clear an existing function pool.
@@ -2172,7 +2162,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }
                 dialog.dismiss()
             }
-        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = px(5) })
         body.addView(actions)
         dialog.setContentView(frame)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
@@ -2263,9 +2253,9 @@ class RolePackEditorActivity : AppCompatActivity() {
             setPadding(px(2), px(10), px(2), px(8))
             setTextColor(getColor(R.color.cp_note))
         })
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, px(12), 0, 0) }
         actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
-            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+            LinearLayout.LayoutParams(-2, -2).apply { rightMargin = px(5) })
         actions.addView(dialogButton("确认", primary = true) {
             if (!single && selected.isEmpty()) {
                 Toast.makeText(this, "至少选择一个动画", Toast.LENGTH_SHORT).show()
@@ -2273,7 +2263,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 onConfirm(selected.toList())
                 dialog.dismiss()
             }
-        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = px(5) })
         body.addView(actions)
         dialog.setContentView(frame)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
@@ -2480,12 +2470,13 @@ class RolePackEditorActivity : AppCompatActivity() {
                                     onLeft: () -> Unit, right: String, onRight: () -> Unit) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
             setPadding(0, px(10), 0, 0)
         }
-        row.addView(dialogButton(left, primary = false, click = onLeft), LinearLayout.LayoutParams(0, px(44), 1f).apply {
+        row.addView(dialogButton(left, primary = false, click = onLeft), LinearLayout.LayoutParams(-2, -2).apply {
             rightMargin = px(5)
         })
-        row.addView(dialogButton(right, primary = true, click = onRight), LinearLayout.LayoutParams(0, px(44), 1f).apply {
+        row.addView(dialogButton(right, primary = true, click = onRight), LinearLayout.LayoutParams(-2, -2).apply {
             leftMargin = px(5)
         })
         parent.addView(row)
