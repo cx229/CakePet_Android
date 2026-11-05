@@ -1,6 +1,11 @@
 package com.cx.cakepet
 
 import android.content.Intent
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import android.widget.Toast
 import android.os.Bundle
 import android.widget.EditText
 import android.widget.ImageView
@@ -46,6 +51,56 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var scaleBar: Slider
     private lateinit var scaleVal: EditText
 
+    private val exportRoleSettings = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val data = SettingsInterchange.exportRole(this@SettingsActivity, roleId)
+                    contentResolver.openOutputStream(uri)?.use {
+                        it.write(data.toString(2).toByteArray(Charsets.UTF_8))
+                    } ?: error("无法写入")
+                }
+            }
+            Toast.makeText(this@SettingsActivity,
+                result.fold({ "角色设置已导出" }, { "导出失败：${it.message}" }),
+                Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val importRoleSettings = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        lifecycleScope.launch {
+            val read = withContext(Dispatchers.IO) {
+                runCatching {
+                    contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
+                        JSONObject(it.readText())
+                    } ?: error("无法读取")
+                }
+            }
+            read.onSuccess { data ->
+                showConfirmDialog("导入角色设置",
+                    "将可识别的设置项覆盖到当前角色，其他角色不受影响。",
+                    "导入") {
+                    lifecycleScope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            runCatching { SettingsInterchange.importRole(this@SettingsActivity, roleId, data) }
+                        }
+                        Toast.makeText(this@SettingsActivity,
+                            result.fold({ "已导入 $it 项设置" }, { "导入失败：${it.message}" }),
+                            Toast.LENGTH_LONG).show()
+                        if (result.isSuccess) recreate()
+                    }
+                }
+            }.onFailure { Toast.makeText(this@SettingsActivity,
+                "读取失败：${it.message}", Toast.LENGTH_LONG).show() }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
@@ -71,6 +126,8 @@ class SettingsActivity : AppCompatActivity() {
             popupLayoutRes = R.layout.popup_settings_more,
             items = mapOf(
                 R.id.item_threshold to { startActivity(Intent(this, MainThresholdActivity::class.java).apply { putExtra("role_id", roleId) }) },
+                R.id.item_settings_import to { importRoleSettings.launch(arrayOf("application/json", "text/plain")) },
+                R.id.item_settings_export to { exportRoleSettings.launch("CakePet-RoleSettings-$roleId.json") },
                 R.id.item_rename to { showRename() },
                 R.id.item_reset_all to { confirmResetAll() },
                 R.id.item_delete to { confirmDeleteRole() }
