@@ -107,7 +107,13 @@
             android:theme="@style/Theme.CakePet.FullscreenTitle" />
 
         <activity
-            android:name=".RangeSettingsActivity"
+            android:name=".DisplayAdaptActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".DisplayInteractionActivity"
             android:exported="true"
             android:theme="@style/Theme.CakePet.FullscreenTitle"
             android:windowSoftInputMode="adjustResize" />
