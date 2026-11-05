@@ -661,11 +661,15 @@ class PetConfig private constructor(
 
     // 按阈值页的「用户默认值」恢复：把指定页 bounds 中记录的 default 写回 PetConfig。
     // 这样用户在阈值页设定的默认值，会在各设置页「恢复默认」时生效。
-    suspend fun resetFromBounds(petBounds: PetBounds, page: SettingsPage) {
+    suspend fun resetFromBounds(petBounds: PetBounds, page: SettingsPage, rangeAdaptOnly: Boolean? = null) {
         val b = petBounds.getBlocking(page)
         update { c ->
             var nc = c
             b.sliders.forEach { s ->
+                if (page == SettingsPage.RANGE && rangeAdaptOnly != null) {
+                    val isAdapt = s.key == "imeLiftOffset"
+                    if (rangeAdaptOnly != isAdapt) return@forEach
+                }
                 nc = when (s.key) {
                     "scale" -> nc.copy(scale = s.default)
                     "alpha" -> nc.copy(alpha = s.default / 100f)
@@ -703,6 +707,8 @@ class PetConfig private constructor(
                 }
             }
             b.switches.forEach { sw ->
+                if (page == SettingsPage.RANGE && rangeAdaptOnly != null &&
+                    (sw.key == "imeResetBottomOffset") != rangeAdaptOnly) return@forEach
                 nc = when (sw.key) {
                     "snapEnabled" -> nc.copy(snapEnabled = sw.default)
                     "snapTop" -> nc.copy(snapTop = sw.default)
@@ -744,11 +750,26 @@ class PetConfig private constructor(
                     else -> nc
                 }
             }
-            // Restore the five-way user default exactly; legacy switches no longer decide this mode.
+            // Dropdown defaults are independent of current values, including the rotation placeholder.
             if (page == SettingsPage.RANGE) {
-                nc = nc.copy(imeMode = b.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE,
-                    interactionMode = "core-transparent", hitMode = ConfigDefaults.HIT_CORE,
-                    forceOpaque = false, rangeFullScreen = false, rotationAdaptMode = "stretch")
+                if (rangeAdaptOnly != false) {
+                    nc = nc.copy(imeMode = b.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE,
+                        rotationAdaptMode = b.choices.firstOrNull {
+                            it.key == "rotationAdaptMode"
+                        }?.default ?: "stretch")
+                }
+                if (rangeAdaptOnly != true) {
+                    val choice = b.choices.firstOrNull { it.key == "interactionMode" }?.default
+                        ?: "core-transparent"
+                    // Never restore an inaccessible window as a live mode.
+                    val safe = if (choice == "core-opaque" &&
+                        CakePetAccessibilityService.active == null) "core-transparent" else choice
+                    val full = b.choices.firstOrNull { it.key == "rangeFullScreen" }?.default == "full"
+                    nc = nc.copy(interactionMode = safe,
+                        hitMode = if (safe == "display-opaque") ConfigDefaults.HIT_BOUNDARY else ConfigDefaults.HIT_CORE,
+                        forceOpaque = safe == "display-opaque",
+                        rangeFullScreen = full)
+                }
             }
             b.colors.forEach { c ->
                 nc = when (c.key) {
