@@ -108,7 +108,7 @@ data class PetConfigData(
     val imeLiftOffset: Float = ConfigDefaults.IME_LIFT_OFFSET,   // 抬高偏移（px）：对键盘抬高后的宠物地面再额外修正，范围 -800~800，默认 100
     val imeResetBottomOffset: Boolean = ConfigDefaults.IME_RESET_BOTTOM_OFFSET, // 键盘适应-重置边界：键盘弹出时无视上/下边界偏移，仅用键盘高度+抬高偏移决定活动下边界（默认开）
     val imeHide: Boolean = ConfigDefaults.IME_HIDE, // Legacy keyboard option retained for old saved configs
-    val imeMode: String = "", // Empty = infer legacy settings; off/global/stretch/local/hide/pass are exclusive modes
+    val imeMode: String = AppBounds.KEYBOARD_DEFAULT_MODE, // Exclusive mode; "" remains a legacy migration marker
     val thinkingEnabled: Boolean = ConfigDefaults.THINKING_ENABLED, // 碎碎念：屏幕底部居中随机轮播文字
     val thinkingOffset: Float = ConfigDefaults.THINKING_OFFSET,   // 碎碎念 Y 偏移（px）：不受底部偏移影响，正=向上（离屏幕底边更远）
     // ===== 碎碎念样式 =====
@@ -428,7 +428,9 @@ class PetConfig private constructor(
             imeLiftOffset = (prefs[KEY_IME_LIFT_OFFSET] ?: ConfigDefaults.IME_LIFT_OFFSET).coerceIn(-800f, 800f),
             imeResetBottomOffset = prefs[KEY_IME_RESET_BOTTOM] ?: ConfigDefaults.IME_RESET_BOTTOM_OFFSET,
             imeHide = prefs[KEY_IME_HIDE] ?: ConfigDefaults.IME_HIDE,
-            imeMode = prefs[KEY_IME_MODE] ?: "",
+            imeMode = prefs[KEY_IME_MODE] ?: if (
+                prefs[KEY_IME_ADAPT] != null || prefs[KEY_IME_HIDE] != null
+            ) "" else AppBounds.KEYBOARD_DEFAULT_MODE,
             alpha = (prefs[KEY_ALPHA] ?: ConfigDefaults.ALPHA).coerceIn(0f, 1f),
             clickThrough = prefs[KEY_CLICK_THROUGH] ?: ConfigDefaults.CLICK_THROUGH,
         freezeDraggable = prefs[KEY_FREEZE_DRAGGABLE] ?: ConfigDefaults.FREEZE_DRAGGABLE,
