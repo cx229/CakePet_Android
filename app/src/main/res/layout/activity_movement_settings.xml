@@ -85,13 +85,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp">
 
                 <!-- 移动总开关：关闭后「酥」静止（不运动/不掉落） -->
-                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="移动" style="@style/SettingsOptionTitle"
@@ -102,10 +99,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_move_enabled" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 最大速度 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
@@ -127,7 +124,7 @@
                         android:id="@+id/maxspeed_bar" android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
 
             <!-- All following movement modules share the movement master fold,
@@ -147,12 +144,9 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp">
 
-                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="重力" style="@style/SettingsOptionTitle"
@@ -163,10 +157,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_gravity_enabled" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 体感重力（倾斜重力）-->
-                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="体感重力" style="@style/SettingsOptionTitle"
@@ -177,10 +171,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_tilt_gravity" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 重力强度 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
@@ -202,7 +196,7 @@
                         android:id="@+id/gravity_bar" android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <LinearLayout android:id="@+id/group_gravity_directions" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
                     android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
@@ -214,7 +208,7 @@
                         android:text="默认的重力方向，上下互斥，左右互斥"/>
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                             android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -222,8 +216,8 @@
                                 android:text="上" style="@style/SettingsOptionSub"/>
                             <Switch android:id="@+id/sw_top" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                        </LinearLayout>
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        </com.cx.cakepet.SettingsRippleRow>
+                        <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                             android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -231,8 +225,8 @@
                                 android:text="下" style="@style/SettingsOptionSub"/>
                             <Switch android:id="@+id/sw_bottom" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                        </LinearLayout>
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        </com.cx.cakepet.SettingsRippleRow>
+                        <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                             android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -240,8 +234,8 @@
                                 android:text="左" style="@style/SettingsOptionSub"/>
                             <Switch android:id="@+id/sw_left" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                        </LinearLayout>
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        </com.cx.cakepet.SettingsRippleRow>
+                        <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                             android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -249,7 +243,7 @@
                                 android:text="右" style="@style/SettingsOptionSub"/>
                             <Switch android:id="@+id/sw_right" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                        </LinearLayout>
+                        </com.cx.cakepet.SettingsRippleRow>
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -264,13 +258,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp">
 
                 <!-- 反弹总开关：关闭后所有碰撞反弹失效（撞墙停靠、不反弹、不振动），四边弹力与反弹系数均不生效 -->
-                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="边缘反弹" style="@style/SettingsOptionTitle"
@@ -281,9 +272,9 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_rebound_enabled" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
-                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="反弹振动" style="@style/SettingsOptionTitle"
@@ -294,10 +285,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_bounce_vibrate" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 反弹系数 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
@@ -319,7 +310,7 @@
                         android:id="@+id/rebound_bar" android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <LinearLayout android:id="@+id/group_rebound_directions" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
                     android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
@@ -331,7 +322,7 @@
                         android:text="触碰边界时候触发反弹"/>
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                             android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -339,8 +330,8 @@
                                 android:text="上" style="@style/SettingsOptionSub"/>
                             <Switch android:id="@+id/sw_rtop" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                        </LinearLayout>
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        </com.cx.cakepet.SettingsRippleRow>
+                        <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                             android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -348,8 +339,8 @@
                                 android:text="下" style="@style/SettingsOptionSub"/>
                             <Switch android:id="@+id/sw_rbottom" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                        </LinearLayout>
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        </com.cx.cakepet.SettingsRippleRow>
+                        <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                             android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -357,8 +348,8 @@
                                 android:text="左" style="@style/SettingsOptionSub"/>
                             <Switch android:id="@+id/sw_rleft" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                        </LinearLayout>
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        </com.cx.cakepet.SettingsRippleRow>
+                        <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                             android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -366,7 +357,7 @@
                                 android:text="右" style="@style/SettingsOptionSub"/>
                             <Switch android:id="@+id/sw_rright" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                        </LinearLayout>
+                        </com.cx.cakepet.SettingsRippleRow>
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -381,13 +372,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp">
 
                 <!-- 抛掷开关 -->
-                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="抛掷" style="@style/SettingsOptionTitle"
@@ -398,10 +386,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_throw" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 抛掷系数 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
@@ -423,7 +411,7 @@
                         android:id="@+id/throwcoeff_bar" android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
 
             <!-- ===== 模块：攀攀攀 ===== -->
@@ -436,13 +424,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp">
 
                 <!-- 攀岩走壁开关 -->
-                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="攀岩走壁" style="@style/SettingsOptionTitle"
@@ -453,10 +438,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_wallclimb" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 自动觅食开关（攀岩走壁子开关，需先开启 移动→攀岩走壁） -->
-                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="自动觅食" style="@style/SettingsOptionTitle"
@@ -467,10 +452,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_auto_forage" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 觅食速度：攀岩走壁自动觅食时沿墙奔向食物的速度（px/s） -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
@@ -492,10 +477,10 @@
                         android:id="@+id/foragespeed_bar" android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:valueFrom="0.0" android:valueTo="300.0" android:stepSize="10.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 好动飞跃开关（置于自动觅食之后） -->
-                <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
+                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="飞跃" style="@style/SettingsOptionTitle"
@@ -506,10 +491,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_leap" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 飞跃概率 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
@@ -531,7 +516,7 @@
                         android:id="@+id/leap_prob_bar" android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:valueFrom="0.0" android:valueTo="1.0" android:stepSize="0.01" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
             </LinearLayout> <!-- group_movement_details -->
         </LinearLayout>
