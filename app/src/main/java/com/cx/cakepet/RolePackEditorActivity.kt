@@ -234,6 +234,17 @@ class RolePackEditorActivity : AppCompatActivity() {
         else (resources.displayMetrics.density * 24f).toInt()
     }
     private fun px(dp: Int) = (dp * resources.displayMetrics.density).toInt()
+    /** Rounded foreground ripple retains each card's original background. */
+    private fun rippleCard(view: View) {
+        val mask = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = px(12).toFloat()
+            setColor(android.graphics.Color.WHITE)
+        }
+        view.foreground = android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf(0x33000000), null, mask)
+        view.isClickable = true
+        view.isFocusable = true
+    }
     private fun button(label: String, click: () -> Unit) =
         com.google.android.material.button.MaterialButton(this).apply {
             text = label
@@ -270,6 +281,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundResource(R.drawable.card_bg)
+            rippleCard(this)
             setPadding(px(16), px(10), px(12), px(10))
             isClickable = true
             isFocusable = true
@@ -521,6 +533,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setBackgroundResource(R.drawable.card_bg)
+                rippleCard(this)
                 setPadding(px(12), px(6), px(12), px(6))
                 isClickable = true
                 setOnClickListener {
@@ -550,13 +563,13 @@ class RolePackEditorActivity : AppCompatActivity() {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     setBackgroundResource(R.drawable.card_bg)
+                    rippleCard(this)
                     setPadding(px(8), px(5), px(4), px(5))
                 }
                 val content = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    isClickable = true
-                    setOnClickListener { showMode(key) }
+                    isClickable = false
                 }
                 content.addView(ImageView(this).apply {
                     scaleType = ImageView.ScaleType.FIT_CENTER
@@ -592,6 +605,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
                 content.addView(label, LinearLayout.LayoutParams(0, -2, 1f))
                 card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
+                card.setOnClickListener { showMode(key) }
                 card.addView(text("⋮", 24f).apply {
                     gravity = Gravity.CENTER
                     isClickable = true
@@ -831,6 +845,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     setBackgroundResource(R.drawable.card_bg)
+                    rippleCard(this)
                     setPadding(px(8), px(3), px(8), px(3))
                     minimumHeight = px(64)
                     layoutParams = RecyclerView.LayoutParams(-1, -2).apply {
@@ -1708,6 +1723,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.card_bg)
+            rippleCard(this)
             setPadding(px(12), px(7), px(12), px(7))
             isClickable = true
             setOnClickListener { click() }
@@ -2104,18 +2120,13 @@ class RolePackEditorActivity : AppCompatActivity() {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     setBackgroundResource(R.drawable.card_bg)
+                    rippleCard(this)
                     setPadding(px(8), px(4), px(4), px(4))
                 }
                 val main = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    isClickable = true
-                    setOnClickListener {
-                        if (file.isDirectory) {
-                            if (!expandedResourceFolders.add(path)) expandedResourceFolders.remove(path)
-                            images()
-                        } else imageDetails(path)
-                    }
+                    isClickable = false
                 }
                 if (file.isDirectory) {
                     main.addView(text(if (path in expandedResourceFolders) "▾ 📂" else "▸ 📁", 15f),
@@ -2149,6 +2160,12 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
                 main.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
                 row.addView(main, LinearLayout.LayoutParams(0, -2, 1f))
+                row.setOnClickListener {
+                    if (file.isDirectory) {
+                        if (!expandedResourceFolders.add(path)) expandedResourceFolders.remove(path)
+                        images()
+                    } else imageDetails(path)
+                }
                 if (file.isDirectory) {
                     row.addView(text("+", 22f).apply {
                         gravity = Gravity.CENTER
