@@ -12,6 +12,15 @@ class PetAnimationController(private val assets: ImageModeManager) {
     private var forcedStart: String? = null
     private var modeChanged = false
     private var frameMotionPending = true
+    /** Active state-owned Functions path. A finished action chain resumes from this pool. */
+    private var activeStateFunction: List<String>? = null
+
+    fun setActiveStateFunction(path: List<String>?) {
+        activeStateFunction = path
+    }
+
+    private fun activeStateMode(): String? =
+        activeStateFunction?.let { path -> assets.leavesOf(*path.toTypedArray()).takeIf { it.isNotEmpty() }?.random() }
 
     var useStaticPool = false
     var leapEnabled = false
@@ -42,7 +51,10 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun getMode(): String = clip?.currentModeId ?: ""
     fun isPlayingForced(): Boolean = forced
     /** A motion clip remains a motion clip even when reached through a forced entrance. */
-    fun isWalk(): Boolean = clip?.isMotionLoop == true
+    fun isWalk(): Boolean = clip?.let {
+        it.hasFrameMotion && (assets.isFunctionMode(it.currentModeId, "climb", "walk") ||
+            assets.isFunctionMode(it.currentModeId, "touch", "walk"))
+    } == true
     /** Frame impulse is consumed once for initial frame, every advance and loop wrap. */
     fun consumeFrameDisplacement(): Pair<Int, Int>? {
         if (!frameMotionPending) return null
@@ -92,7 +104,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         currentName = id
         if (different) modeChanged = true
         frameMotionPending = true
-        updateWalkState(if (next.isMotionLoop) next.currentWalkSpeed else 0f)
+        updateWalkState(if (isWalk()) next.currentWalkSpeed else 0f)
     }
 
     fun playOnce(id: String, endMode: String? = null) {
@@ -129,6 +141,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         forcedReturn = null
         forcedStart = null
         currentName = ""
+        activeStateFunction = null
         modeOf("static", "sit")?.let { setMode(it) }
     }
 
@@ -150,7 +163,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
             if (!continuation) currentName = current.currentModeId
             modeChanged = true
             frameMotionPending = true
-            updateWalkState(if (current.isMotionLoop) current.currentWalkSpeed else 0f)
+            updateWalkState(if (isWalk()) current.currentWalkSpeed else 0f)
         }
         if (step.changed) {
             frameMotionPending = true
@@ -164,7 +177,15 @@ class PetAnimationController(private val assets: ImageModeManager) {
             forced = false
             forcedReturn = null
             forcedStart = null
-            setMode(endMode ?: pickStandbyMode(getMode()))
+            val desired = endMode ?: activeStateMode() ?: pickStandbyMode(getMode())
+            if (desired == current.currentModeId) {
+                // Re-enter the same mode without replacing the cursor or resetting heading.
+                current.restart()
+                frameMotionPending = true
+                updateWalkState(if (isWalk()) current.currentWalkSpeed else 0f, resetDirection = false)
+            } else {
+                setMode(desired)
+            }
             return ImageModeManager.FrameStep(true)
         }
         return ImageModeManager.FrameStep(step.changed)
