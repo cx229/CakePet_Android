@@ -50,7 +50,8 @@ object RolePackEditing {
         val file = File(directory, "modes.jsonc")
         val source = if (file.isFile) file.readText() else ""
         val parsed = runCatching { parseJsonc(source) }.getOrNull()
-        if (parsed == null && source.isNotBlank()) {
+        if (source.isNotBlank() && (parsed == null ||
+            parsed.optString("version") != RolePackageContract.VERSION)) {
             val original = File(directory, "modes.original.jsonc")
             if (!original.exists()) original.writeText(source)
         }
@@ -66,6 +67,15 @@ object RolePackEditing {
         if (json.optJSONObject("modes") == null) json.put("modes", JSONObject())
         file.writeText(CompactJsoncWriter.write(json, if (parsed == null) "" else source))
         return json
+    }
+
+    fun validationErrorsForRole(ctx: Context, role: RoleDescriptor): List<String> {
+        if (role.source == RoleSource.FILES) return validationErrors(dir(ctx, role.rootPath))
+        val temp = File(ctx.cacheDir, "validate_${System.nanoTime()}")
+        return try {
+            copyAssets(ctx, role.rootPath, temp)
+            validationErrors(temp)
+        } finally { temp.deleteRecursively() }
     }
 
     fun validationErrors(directory: File): List<String> {
