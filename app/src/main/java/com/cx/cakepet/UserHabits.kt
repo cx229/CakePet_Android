@@ -44,6 +44,7 @@ object UserHabits {
                 val stored = doc.optJSONObject(section) ?: continue
                 val selected = JSONObject()
                 for (key in enabled(doc, section)) {
+                    if (section == "config" && key in setOf("sprite_pack", "use_new_sprite", "visible")) continue
                     stored.optJSONObject(key)?.let { selected.put(key, it) }
                 }
                 if (selected.length() == 0) continue
