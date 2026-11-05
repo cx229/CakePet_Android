@@ -70,7 +70,7 @@ class DebugActivity : AppCompatActivity() {
             .setOnClickListener { startActivity(Intent(this, TestHitActivity::class.java)) }
 
         // 版本号：全局共享（与 build.gradle.kts 的 versionName 同步）
-        findViewById<android.widget.TextView>(R.id.tv_version).text = "版本：v${AppVersion.name}"
+        findViewById<android.widget.TextView>(R.id.tv_version).text = "版本：${AppVersion.name}"
 
         // 无障碍权限状态：仅展示是否已开启（用户需在系统设置中手动开启，本应用不弹请求弹窗）。
         val tvAccessibility = findViewById<TextView>(R.id.tv_accessibility)
