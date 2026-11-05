@@ -40,14 +40,11 @@ class SettingsActivity : AppCompatActivity() {
     // 各滑块「待确认值」：记录用户最后拖到的滑块值（Int），用于挡住滞后的旧发射回流。
     // 提升为字段，供 onResume 刷新时读取，避免退回本页后滑块被旧值拉回。
     private var pendingScale: Int? = null
-    private var pendingAlpha: Int? = null
     private var pendingSnap: Int? = null
 
     // 滑块视图提升为字段，供 onResume 刷新位置
     private lateinit var scaleBar: Slider
     private lateinit var scaleVal: EditText
-    private lateinit var alphaBar: Slider
-    private lateinit var alphaVal: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,8 +96,6 @@ class SettingsActivity : AppCompatActivity() {
         val rowFeedingMode = findViewById<android.view.View>(R.id.row_feeding_mode)
         val swVisible = findViewById<Switch>(R.id.sw_visible)
         val swClickThrough = findViewById<Switch>(R.id.sw_click_through)
-        alphaBar = findViewById(R.id.alpha_bar)
-        alphaVal = findViewById(R.id.alpha_value)
 
         // 常驻观察 configFlow：菜单等外部改动任意字段后，设置页自动同步，避免残留旧状态。
         // applyConfig 直接 setChecked/setProgress 为程序化赋值，不触发写盘 listener，无回写死循环风险。
@@ -131,10 +126,7 @@ class SettingsActivity : AppCompatActivity() {
             // 体感重力与四边定向重力互不干扰：四边开关始终可交互并显示原值，
             // 开启体感时由 PetPhysics.step() 的 tiltGravity 分支优先接管，四边仅被忽略；
             // 关闭体感后四边原值自动恢复生效，无需用户重新逐个开启。
-            if (alphaBar.setValueFromConfig(bizToSliderValue(c.alpha * 100f, bs["alpha"]!!.from, bs["alpha"]!!.to), pendingAlpha)) {
-                pendingAlpha = null
-                EditSync.setText(alphaVal, "%d%%".format((c.alpha * 100).toInt()))
-            }
+
 
         }
         lifecycleScope.launch {
@@ -188,6 +180,12 @@ class SettingsActivity : AppCompatActivity() {
         // 进入显示范围二级页（边界偏移：顶/底/左/右）
         findViewById<android.view.View>(R.id.row_range_settings).setOnClickListener {
             startActivity(android.content.Intent(this, RangeSettingsActivity::class.java).apply { putExtra("role_id", roleId) })
+        }
+        findViewById<android.view.View>(R.id.row_adapt_settings).setOnClickListener {
+            startActivity(android.content.Intent(this, RangeSettingsActivity::class.java).apply {
+                putExtra("role_id", roleId)
+                putExtra("adapt_page", true)
+            })
         }
         // 体感重力：只切换 tiltGravity 标志，不改动四边定向重力的存储值与 UI 状态。
         // 物理层 PetPhysics.step() 在 tiltGravity=true 时优先走体感分支（忽略四边），
@@ -309,23 +307,6 @@ class SettingsActivity : AppCompatActivity() {
             lifecycleScope.launch { config.update { it.copy(scale = v) } }
         }
 
-        alphaBar.apply { applyBlackStyle(); trackTouchState() }
-        alphaBar.applyBizRange(bs["alpha"]!!.from, bs["alpha"]!!.to, c.alpha * 100f,
-            formatter = { "%d%%".format(it.toInt()) }) { a ->
-            pendingAlpha = bizToSliderValue(a, bs["alpha"]!!.from, bs["alpha"]!!.to).toInt()
-            EditSync.setText(alphaVal, "%d%%".format(a.toInt()))
-            lifecycleScope.launch { config.update { it.copy(alpha = a / 100f) } }
-        }
-        EditSync.bind(
-            alphaVal,
-            parse = { it.replace("%", "").toFloatOrNull() },
-            format = { "%d%%".format(it.toInt()) },
-            clamp = { it.coerceIn(bs["alpha"]!!.from, bs["alpha"]!!.to) },
-            defaultValue = bs["alpha"]!!.default
-        ) { v ->
-            alphaBar.value = bizToSliderValue(v, bs["alpha"]!!.from, bs["alpha"]!!.to)
-            lifecycleScope.launch { config.update { it.copy(alpha = v / 100f) } }
-        }
 
     }
 
