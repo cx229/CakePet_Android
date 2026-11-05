@@ -46,13 +46,7 @@ class RangeSettingsActivity : AppCompatActivity() {
     private lateinit var swImeResetBottom: Switch
     private lateinit var swImeHide: Switch
     private lateinit var imeModeSelector: android.widget.Spinner
-    private val keyboardModes = listOf(
-        "关闭" to "off",
-        "整体画布抬高" to "global",
-        "局部抬高" to "local",
-        "键盘时隐藏" to "hide",
-        "键盘时点击穿透" to "pass"
-    )
+    private val keyboardModes = AppBounds.KEYBOARD_MODES
     private fun refreshKeyboardModeUi(c: PetConfigData) {
         if (!::imeModeSelector.isInitialized) return
         val mode = c.keyboardMode()
