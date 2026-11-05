@@ -47,7 +47,7 @@ class CakePetAccessibilityService : AccessibilityService() {
     }
 
     fun detachPetDisplay(view: View) {
-        try { wm.removeView(view) } catch (_: Exception) {}
+        try { wm.removeViewImmediate(view) } catch (_: Exception) {}
     }
 
     fun showHitTest(mode: Int = MODE_SPLIT): Boolean {
