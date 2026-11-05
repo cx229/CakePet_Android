@@ -84,13 +84,10 @@
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 吸附边缘总开关：直接控制 snapEnabled，不影响子选项值 -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
                     android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -102,7 +99,7 @@
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:minWidth="0dp" android:minHeight="0dp"
                         android:paddingStart="6dp" android:paddingEnd="6dp" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 四边吸附（原 bg_cell_gray 横排四宫格，id 保持不变） -->
                 <LinearLayout android:id="@+id/group_snap_directions" android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -113,7 +110,7 @@
                     android:text="四边吸附"/>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="horizontal" android:gravity="center_vertical">
-                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:orientation="horizontal"
                         android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                         android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -121,8 +118,8 @@
                             android:text="上" style="@style/SettingsOptionSub"/>
                         <Switch android:id="@+id/sw_stop" android:layout_width="wrap_content"
                             android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                    </LinearLayout>
-                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    </com.cx.cakepet.SettingsRippleRow>
+                    <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:orientation="horizontal"
                         android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                         android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -130,8 +127,8 @@
                             android:text="下" style="@style/SettingsOptionSub"/>
                         <Switch android:id="@+id/sw_sbottom" android:layout_width="wrap_content"
                             android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                    </LinearLayout>
-                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    </com.cx.cakepet.SettingsRippleRow>
+                    <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:orientation="horizontal"
                         android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                         android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -139,8 +136,8 @@
                             android:text="左" style="@style/SettingsOptionSub"/>
                         <Switch android:id="@+id/sw_sleft" android:layout_width="wrap_content"
                             android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                    </LinearLayout>
-                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    </com.cx.cakepet.SettingsRippleRow>
+                    <com.cx.cakepet.SettingsRippleRow android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:orientation="horizontal"
                         android:gravity="center" android:paddingStart="4dp" android:paddingEnd="4dp"
                         android:background="@drawable/bg_cell_gray" android:layout_margin="2dp">
@@ -148,12 +145,12 @@
                             android:text="右" style="@style/SettingsOptionSub"/>
                         <Switch android:id="@+id/sw_sright" android:layout_width="wrap_content"
                             android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                    </LinearLayout>
+                    </com.cx.cakepet.SettingsRippleRow>
                 </LinearLayout>
                 </LinearLayout>
 
                 <!-- 吸附距离（原设置页同款：id snap_threshold_bar，range 0-600，备注不变） -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
@@ -174,7 +171,7 @@
                             android:id="@+id/snap_threshold_bar" android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:valueFrom="0.0" android:valueTo="600.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
