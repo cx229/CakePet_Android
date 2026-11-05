@@ -41,6 +41,23 @@ data class HomeRoleInstance(
 
 object RoleStore {
 
+    /** Include app-level registry metadata and one-time preset-seeding marker. */
+    suspend fun exportRegistries(ctx: Context): JSONObject = JSONObject().apply {
+        put("userRoles", PreferenceCodec.snapshot(ctx.userRolesStore))
+        put("homeRoles", PreferenceCodec.snapshot(ctx.homeRolesStore))
+        put("catalogOrder", PreferenceCodec.snapshot(ctx.catalogOrderStore))
+    }
+
+    /** Restore through active stores to avoid DataStore stale-cache corruption. */
+    suspend fun importRegistries(ctx: Context, json: JSONObject, replace: Boolean = false) {
+        json.optJSONObject("userRoles")?.let {
+            PreferenceCodec.apply(ctx.userRolesStore, it, replace)
+            RoleRegistry.refreshUserRoles(ctx)
+        }
+        json.optJSONObject("homeRoles")?.let { PreferenceCodec.apply(ctx.homeRolesStore, it, replace) }
+        json.optJSONObject("catalogOrder")?.let { PreferenceCodec.apply(ctx.catalogOrderStore, it, replace) }
+    }
+
     /** 读取用户上传素材模板清单。 */
     fun getUserRoles(ctx: Context): List<UserRoleTemplate> = runBlocking {
         val raw = ctx.userRolesStore.data.first()[KEY_USER_ROLES] ?: "[]"
