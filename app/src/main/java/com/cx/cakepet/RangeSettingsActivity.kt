@@ -47,6 +47,8 @@ class RangeSettingsActivity : AppCompatActivity() {
     private lateinit var swImeHide: Switch
     private lateinit var imeModeSelector: android.widget.Spinner
     private val keyboardModes = AppBounds.KEYBOARD_MODES
+    private val adaptPage by lazy { intent.getBooleanExtra("adapt_page", false) }
+    private var interactionRefresh: (() -> Unit)? = null
     private fun refreshKeyboardModeUi(c: PetConfigData) {
         if (!::imeModeSelector.isInitialized) return
         val mode = c.keyboardMode()
@@ -168,8 +170,9 @@ class RangeSettingsActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
 
-        // 偏移滑块绑定 + 初始回填（抽成 refreshUI，onResume 复用实现热更新）
+        // Existing offset/keyboard business controls stay bound to their original config.
         refreshUI()
+        configureDisplayPage()
 
         // 「恢复默认设置」已移入右上角“更多”浮窗，逻辑封装为 doResetDefault()
     }
@@ -339,8 +342,245 @@ class RangeSettingsActivity : AppCompatActivity() {
         }
     }
 
+
+    /** Shares the original bounds/keyboard editors, without duplicating their save logic. */
+    private fun configureDisplayPage() {
+        val title = findViewById<TextView>(R.id.tv_title)
+        val rangeTitle = findViewById<View>(R.id.module_range_title)
+        val rangeCard = findViewById<android.widget.LinearLayout>(R.id.module_range_card)
+        val keyboardTitle = findViewById<View>(R.id.module_keyboard_title)
+        val keyboardCard = findViewById<android.widget.LinearLayout>(R.id.module_keyboard_card)
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+        fun note(s: String) = TextView(this).apply {
+            text = s; textSize = 11f; setTextColor(getColor(R.color.cp_note))
+        }
+        fun label(s: String) = TextView(this).apply {
+            text = s; textSize = 15f; setTextColor(getColor(R.color.cp_title))
+        }
+        fun spinner(labels: List<String>): android.widget.Spinner =
+            android.widget.Spinner(this).apply {
+                adapter = android.widget.ArrayAdapter(this@RangeSettingsActivity,
+                    android.R.layout.simple_spinner_item, labels).also {
+                    it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                }
+                minimumHeight = dp(44)
+            }
+        fun addSection(parent: android.widget.LinearLayout, name: String,
+                       description: String, choices: List<String>,
+                       initial: Int, onChoice: (Int) -> Unit): android.widget.Spinner {
+            val line = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding(dp(20), dp(8), dp(20), dp(8))
+            }
+            line.addView(label(name))
+            if (description.isNotEmpty()) line.addView(note(description))
+            val chooser = spinner(choices)
+            line.addView(chooser, android.widget.LinearLayout.LayoutParams(-1, dp(48)))
+            parent.addView(line)
+            chooser.setSelection(initial.coerceIn(0, choices.lastIndex))
+            chooser.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(p: android.widget.AdapterView<*>?, view: View?,
+                                            position: Int, id: Long) = onChoice(position)
+                override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+            }
+            return chooser
+        }
+
+        title.text = if (adaptPage) "显示-适应" else "显示-交互"
+        if (adaptPage) {
+            rangeTitle.visibility = View.GONE
+            rangeCard.visibility = View.GONE
+            keyboardTitle.visibility = View.VISIBLE
+            keyboardCard.visibility = View.VISIBLE
+            val body = keyboardCard.parent as android.widget.LinearLayout
+            val rotateTitle = label("旋转适应").apply {
+                textSize = 14f
+                setPadding(dp(4), dp(18), 0, dp(6))
+            }
+            body.addView(rotateTitle)
+            val rotateCard = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setBackgroundResource(R.drawable.card_bg)
+            }
+            body.addView(rotateCard, android.widget.LinearLayout.LayoutParams(-1, -2))
+            addSection(rotateCard, "旋转适应", "",
+                listOf("比例拉伸", "固定位置"),
+                if (config.getBlocking().rotationAdaptMode == "fixed") 1 else 0) { selected ->
+                val value = if (selected == 1) "fixed" else "stretch"
+                if (config.getBlocking().rotationAdaptMode != value) runBlocking {
+                    config.update { it.copy(rotationAdaptMode = value) }
+                }
+                // Placeholder preference only. No effect on screen rotation or positioning.
+            }
+            return
+        }
+
+        keyboardTitle.visibility = View.GONE
+        keyboardCard.visibility = View.GONE
+        val body = rangeCard.parent as android.widget.LinearLayout
+        val interactionTitle = label("交互").apply {
+            textSize = 14f; setPadding(dp(4), 0, 0, dp(6))
+        }
+        body.addView(interactionTitle, body.indexOfChild(rangeTitle))
+        val interactionCard = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.card_bg)
+        }
+        body.addView(interactionCard, body.indexOfChild(rangeTitle))
+        val choices = listOf("显示-不透明", "核心-透明", "核心-不透明")
+        val keys = listOf("display-opaque", "core-transparent", "core-opaque")
+        lateinit var hitChooser: android.widget.Spinner
+        val coreLines = mutableListOf<View>()
+        lateinit var opacityNote: TextView
+
+        val current = config.getBlocking()
+        hitChooser = addSection(interactionCard, "命中模式", "「酥」可不是哪都让碰！",
+            choices, keys.indexOf(current.interactionMode).coerceAtLeast(0)) { selected ->
+            val chosen = keys[selected]
+            val saved = config.getBlocking().interactionMode
+            if (chosen == saved) return@addSection
+            if (chosen == "core-opaque" && CakePetAccessibilityService.active == null) {
+                hitChooser.setSelection(keys.indexOf(saved).coerceAtLeast(0))
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("需要无障碍权限")
+                    .setMessage("核心-不透明需要开启 CakePet 无障碍服务。请先在系统设置中开启。")
+                    .setNegativeButton("取消", null)
+                    .setPositiveButton("前往设置") { _, _ ->
+                        startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }.show()
+                return@addSection
+            }
+            runBlocking {
+                config.update {
+                    it.copy(interactionMode = chosen,
+                        hitMode = if (chosen == "display-opaque") ConfigDefaults.HIT_BOUNDARY
+                                  else ConfigDefaults.HIT_CORE,
+                        forceOpaque = chosen == "display-opaque")
+                }
+            }
+            coreLines.forEach { it.visibility =
+                if (chosen == "display-opaque") View.GONE else View.VISIBLE }
+            opacityNote.visibility = if (chosen == "core-transparent") View.VISIBLE else View.GONE
+        }
+
+        fun addValue(key: String, name: String, hint: String, value: Float,
+                     suffix: String, save: (Float) -> Unit): android.widget.LinearLayout {
+            val bound = PetBounds.forRole(this, roleId).getBlocking(SettingsPage.RANGE)
+                .sliders.first { it.key == key }
+            val block = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding(dp(20), dp(8), dp(20), dp(8))
+            }
+            val heading = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+            val texts = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+            }
+            texts.addView(label(name)); texts.addView(note(hint))
+            heading.addView(texts, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+            val input = EditText(this).apply {
+                setSingleLine(true)
+                textSize = 14f
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                gravity = android.view.Gravity.CENTER
+                setBackgroundResource(R.drawable.edit_bg)
+            }
+            heading.addView(input, android.widget.LinearLayout.LayoutParams(dp(76), dp(38)))
+            block.addView(heading)
+            val bar = Slider(this).apply {
+                valueFrom = 0f; valueTo = 100f; stepSize = 1f
+                applyBlackStyle()
+            }
+            block.addView(bar, android.widget.LinearLayout.LayoutParams(-1, -2))
+            interactionCard.addView(block)
+            fun display(v: Float) = if (suffix == "%") "${v.toInt()}%"
+                                    else "%.2f×".format(v)
+            fun progress(v: Float) = if (bound.to == bound.from) 0f else
+                ((v - bound.from) / (bound.to - bound.from) * 100f)
+                    .coerceIn(0f, 100f).toInt().toFloat()
+            input.setText(display(value))
+            bar.value = progress(value)
+            bar.addOnChangeListener { _, v, fromUser ->
+                if (fromUser) {
+                    val actual = bound.from + v / 100f * (bound.to - bound.from)
+                    input.setText(display(actual))
+                    save(actual)
+                }
+            }
+            input.setOnFocusChangeListener { _, hasFocus ->
+                if (!hasFocus) {
+                    val parsed = input.text.toString().replace("%", "").replace("×", "").toFloatOrNull()
+                    val actual = (parsed ?: value).coerceIn(bound.hardMin, bound.hardMax)
+                    input.setText(display(actual))
+                    bar.value = progress(actual)
+                    save(actual)
+                }
+            }
+            return block
+        }
+        addValue("alpha", "透明度", "「酥」的可见程度",
+            current.alpha * 100f, "%") { value ->
+            runBlocking { config.update { it.copy(alpha = value / 100f) } }
+        }
+        opacityNote = note("系统发力，100%透明度不是100%").apply {
+            setPadding(dp(20), 0, dp(20), dp(8))
+            interactionCard.addView(this)
+        }
+        coreLines += addValue("coreHeight", "核心缩放-高", "控制层矩形高度调整",
+            current.ctrlBoxHeight / ConfigDefaults.CTRL_BOX_HEIGHT, "×") { value ->
+            runBlocking { config.update {
+                it.copy(ctrlBoxHeight = value * ConfigDefaults.CTRL_BOX_HEIGHT)
+            } }
+        }
+        coreLines += addValue("coreWidth", "核心缩放-宽", "控制层矩形宽度调整",
+            current.ctrlBoxWidth / ConfigDefaults.CTRL_BOX_WIDTH, "×") { value ->
+            runBlocking { config.update {
+                it.copy(ctrlBoxWidth = value * ConfigDefaults.CTRL_BOX_WIDTH)
+            } }
+        }
+        fun updateHit() {
+            val cfg = config.getBlocking()
+            val mode = keys.indexOf(cfg.interactionMode).coerceAtLeast(0)
+            if (hitChooser.selectedItemPosition != mode) hitChooser.setSelection(mode)
+            coreLines.forEach { it.visibility = if (mode == 0) View.GONE else View.VISIBLE }
+            opacityNote.visibility = if (mode == 1) View.VISIBLE else View.GONE
+        }
+        updateHit()
+        interactionRefresh = { updateHit() }
+
+        val offsets = listOf(offTopBar, offBottomBar, offLeftBar, offRightBar)
+            .map { it.parent as View }
+        val heading = rangeCard.getChildAt(0)
+        val rangeChooser = addSection(rangeCard, "活动范围", "",
+            listOf("全屏", "自定义"),
+            if (current.rangeFullScreen) 0 else 1) { selected ->
+            val full = selected == 0
+            if (config.getBlocking().rangeFullScreen != full) runBlocking {
+                config.update { it.copy(rangeFullScreen = full) }
+            }
+            heading.visibility = if (full) View.GONE else View.VISIBLE
+            offsets.forEach { it.visibility = if (full) View.GONE else View.VISIBLE }
+        }
+        val chooserRow = rangeCard.getChildAt(rangeCard.childCount - 1)
+        rangeCard.removeView(chooserRow)
+        rangeCard.addView(chooserRow, 0)
+        rangeChooser.setSelection(if (current.rangeFullScreen) 0 else 1)
+        heading.visibility = if (current.rangeFullScreen) View.GONE else View.VISIBLE
+        offsets.forEach { it.visibility = if (current.rangeFullScreen) View.GONE else View.VISIBLE }
+    }
+
     override fun onResume() {
         super.onResume()
         refreshUI()
+        if (!adaptPage && config.getBlocking().interactionMode == "core-opaque" &&
+            CakePetAccessibilityService.active == null) {
+            runBlocking { config.update { it.copy(interactionMode = "core-transparent",
+                hitMode = ConfigDefaults.HIT_CORE, forceOpaque = false) } }
+        }
+        interactionRefresh?.invoke()
     }
 }
