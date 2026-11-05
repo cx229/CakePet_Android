@@ -62,11 +62,10 @@ object AppBounds {
 
     )
     val MAIN_SWITCHES = listOf(
-        SwitchBound("visible", "显示 / 隐藏", "显示", true),
         SwitchBound("clickThrough", "点击穿透", "显示", false)
     )
     val MAIN_ORDER = listOf(
-        "scale", "visible", "clickThrough"
+        "scale", "clickThrough"
     )
 
     // ---------------- MOVEMENT 页 ----------------
