@@ -166,11 +166,15 @@ class PetMenu(
             }
             service.startActivity(intent)
         }
-        v.findViewById<View>(R.id.menu_recall).setOnClickListener {
-            service.performAction(MenuActivity.ACTION_RECALL, petView); dismiss()
+        // Match the home card: returnHome repositions the summoned role,
+        // whereas recall actually removes this role's floating windows/runtime.
+        v.findViewById<View>(R.id.menu_return_home).setOnClickListener {
+            dismiss()
+            service.returnHome(roleId)
         }
-        v.findViewById<View>(R.id.menu_hide).setOnClickListener {
-            service.performAction(MenuActivity.ACTION_HIDE, petView); dismiss()
+        v.findViewById<View>(R.id.menu_recall).setOnClickListener {
+            dismiss()
+            service.recall(roleId)
         }
         v.findViewById<View>(R.id.menu_exit).setOnClickListener {
             // 不再直接退出：进入退出确认子页，由用户二次确认
