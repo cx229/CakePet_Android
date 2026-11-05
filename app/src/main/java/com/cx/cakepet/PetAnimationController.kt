@@ -155,7 +155,15 @@ class PetAnimationController(private val assets: ImageModeManager) {
             val continuation = forced && forcedStart?.let {
                 assets.isContinuationOf(current.currentModeId, it)
             } == true
-            if (forced && !continuation) {
+            // A forced interaction can naturally return to the state-owned
+            // infinite idle animation (e.g. snapped pat -> snapped idle).
+            // At that point the state, not the old interaction, owns playback.
+            val stateOwnsInfinite = current.isInfiniteLoop && activeStateFunction?.let { path ->
+                assets.leavesOf(*path.toTypedArray()).any {
+                    assets.isContinuationOf(current.currentModeId, it)
+                }
+            } == true
+            if (forced && (!continuation || stateOwnsInfinite)) {
                 forced = false
                 forcedReturn = null
                 forcedStart = null
