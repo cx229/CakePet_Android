@@ -7,12 +7,20 @@ import org.json.JSONObject
 /** Standalone human-readable settings format shared by role settings and habits. */
 object SettingsInterchange {
     fun exportRole(ctx: Context, roleId: String): JSONObject = runBlocking {
+        val config = PetConfig.forRole(ctx, roleId)
+        val bounds = PetBounds.forRole(ctx, roleId)
+        // Include settings that are currently using implicit defaults, too.
+        // This is a standalone copy of the role's complete effective settings.
+        config.update { it }
+        for (page in SettingsPage.entries) {
+            bounds.updateBounds(page, bounds.getBlocking(page))
+        }
         JSONObject()
             .put("type", "cakepet-settings")
             .put("source", "role")
             .put("appVersion", BuildConfig.VERSION_NAME)
-            .put("config", PetConfig.forRole(ctx, roleId).exportSettings())
-            .put("bounds", PetBounds.forRole(ctx, roleId).exportSettings())
+            .put("config", config.exportSettings())
+            .put("bounds", bounds.exportSettings())
     }
 
     fun importRole(ctx: Context, roleId: String, data: JSONObject): Int = runBlocking {
