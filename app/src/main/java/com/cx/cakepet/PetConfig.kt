@@ -264,6 +264,12 @@ class PetConfig private constructor(
         }
     }
 
+    /** Serialize every stored preference, including fields not exposed in the current UI. */
+    suspend fun exportSettings(): org.json.JSONObject = PreferenceCodec.snapshot(dataStore)
+
+    suspend fun importSettings(values: org.json.JSONObject, replace: Boolean = false): Int =
+        PreferenceCodec.apply(dataStore, values, replace)
+
     private val KEY_SCALE = floatPreferencesKey("scale")
     private val KEY_GRAVITY = floatPreferencesKey("gravity")
     private val KEY_REBOUND = floatPreferencesKey("rebound_ratio")
