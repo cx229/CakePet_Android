@@ -49,7 +49,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CakePet-v1.26.11.06.02.22-rename-dialog-single-scroll-debug-apk
+          name: CakePet-v1.26.11.06.02.28-catalog-count-layout-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
