@@ -84,7 +84,10 @@
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 吸附边缘总开关：直接控制 snapEnabled，不影响子选项值 -->
                 <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
