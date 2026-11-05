@@ -292,24 +292,17 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
 
 
-    /** Matched to the role rename dialog: outlined cancel and filled primary. */
-    private fun dialogButton(label: String, primary: Boolean, click: () -> Unit) =
-        com.google.android.material.button.MaterialButton(this).apply {
-            text = label
-            isAllCaps = false
-            textSize = 14f
-            minHeight = px(44)
-            minimumHeight = 0
-            insetTop = 0
-            insetBottom = 0
-            cornerRadius = px(14)
-            strokeWidth = if (primary) 0 else px(1)
-            strokeColor = android.content.res.ColorStateList.valueOf(getColor(R.color.cp_btn_outline_stroke))
-            backgroundTintList = android.content.res.ColorStateList.valueOf(
-                if (primary) getColor(R.color.cp_btn_primary_bg) else android.graphics.Color.TRANSPARENT)
-            setTextColor(getColor(if (primary) R.color.cp_btn_primary_text else R.color.cp_btn_outline_text))
-            setOnClickListener { click() }
-        }
+    /** Reuse the actual Material button inflated from the rename XML. */
+    private fun dialogButton(label: String, primary: Boolean, click: () -> Unit):
+        com.google.android.material.button.MaterialButton {
+        val source = layoutInflater.inflate(R.layout.dialog_rename_role, null)
+        val id = if (primary) R.id.btn_positive else R.id.btn_negative
+        val control = source.findViewById<com.google.android.material.button.MaterialButton>(id)
+        (control.parent as android.view.ViewGroup).removeView(control)
+        control.text = label
+        control.setOnClickListener { click() }
+        return control
+    }
 
     private fun addDialogDivider(parent: LinearLayout, top: Int = 10, bottom: Int = 10) {
         parent.addView(View(this).apply {
@@ -415,63 +408,52 @@ class RolePackEditorActivity : AppCompatActivity() {
         draft = RolePackEditing.draft(this, id)
         Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show()
     }
-    /** Match the role-settings rename dialog: a single rounded Material card, not a nested AlertDialog. */
+    /**
+     * Use the EXACT role-rename XML shell (title, card, margins, and actual
+     * Material buttons), not a programmatic approximation of its appearance.
+     * Only the variable body area is replaced by this editor's form.
+     */
     private fun editor(title: String, compact: Boolean = false, create: (LinearLayout) -> (() -> Unit)) {
-        val frame = android.widget.FrameLayout(this).apply {
-            setPadding(px(24), 0, px(24), 0)
-        }
-        val card = com.google.android.material.card.MaterialCardView(this).apply {
-            radius = px(28).toFloat()
-            cardElevation = px(6).toFloat()
-            setCardBackgroundColor(getColor(R.color.cp_card_bg))
-        }
-        frame.addView(card, android.widget.FrameLayout.LayoutParams(-1, -2))
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(if (compact) 16 else 20), px(if (compact) 12 else 20),
-                px(if (compact) 16 else 20), px(if (compact) 12 else 20))
-        }
-        card.addView(content)
-        content.addView(text(title, 18f).apply {
-            gravity = Gravity.CENTER
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(0, 0, 0, px(if (compact) 7 else 12))
-        })
-        addDialogDivider(content, top = 2, bottom = 10)
+        val frame = layoutInflater.inflate(R.layout.dialog_rename_role, null)
+        frame.findViewById<TextView>(R.id.tv_title).text = title
+        val card = (frame as android.view.ViewGroup).getChildAt(0) as android.view.ViewGroup
+        val content = card.getChildAt(0) as LinearLayout
+        // Remove the rename-specific name/short label+field pairs.
+        repeat(4) { content.removeViewAt(1) }
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val save = create(form)
         val viewport = ScrollView(this).apply {
             isFillViewport = false
             addView(form)
         }
-        content.addView(viewport, LinearLayout.LayoutParams(-1, -2))
-        val actions = LinearLayout(this).apply {
-            gravity = Gravity.CENTER
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, px(12), 0, 0)
-        }
+        content.addView(viewport, 1, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = px(if (compact) 12 else 20)
+        })
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
-            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
-        actions.addView(dialogButton("保存", primary = true) {
-            runCatching(save).onSuccess { dialog.dismiss() }
-                .onFailure { Toast.makeText(this, it.message ?: "输入错误", Toast.LENGTH_LONG).show() }
-        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
-        content.addView(actions)
+        frame.findViewById<View>(R.id.btn_negative).setOnClickListener { dialog.dismiss() }
+        frame.findViewById<TextView>(R.id.btn_positive).apply {
+            text = "保存"
+            setOnClickListener {
+                runCatching(save).onSuccess { dialog.dismiss() }
+                    .onFailure { Toast.makeText(this@RolePackEditorActivity,
+                        it.message ?: "输入错误", Toast.LENGTH_LONG).show() }
+            }
+        }
         dialog.setContentView(frame)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
         dialog.window?.setLayout(-1, -2)
-        // Recompute the scroll viewport as optional fields appear or disappear.
+        // Keep save/cancel fixed while the form scrolls with keyboard and
+        // conditional fields (such as timed playback) independently.
         fun resizeForm() {
             if (!dialog.isShowing || viewport.width <= 0) return
-            val maxHeight = (resources.displayMetrics.heightPixels * 0.70f).toInt()
-            val contentWidth = (viewport.width - viewport.paddingLeft - viewport.paddingRight).coerceAtLeast(1)
+            val maxHeight = (resources.displayMetrics.heightPixels * 0.65f).toInt()
+            val contentWidth = viewport.width.coerceAtLeast(1)
             form.measure(
                 View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             )
-            val desired = minOf(form.measuredHeight + viewport.paddingTop + viewport.paddingBottom, maxHeight)
+            val desired = minOf(form.measuredHeight, maxHeight)
             if (viewport.layoutParams.height != desired) {
                 viewport.layoutParams = viewport.layoutParams.apply { height = desired }
                 dialog.window?.setLayout(-1, -2)
@@ -501,7 +483,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
-        addDialogDivider(content, top = 8, bottom = 8)
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
         items.forEachIndexed { index, option ->
@@ -1191,7 +1172,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             (name.parent as? LinearLayout)?.let { field ->
                 (field.getChildAt(0) as? TextView)?.setTextColor(android.graphics.Color.BLACK)
             }
-            addDialogDivider(box, top = 4, bottom = 4)
             val playbackModes = listOf("关闭", "定时循环", "无限循环")
             val previous = mode.optJSONObject("duration")
             val playback = Spinner(this)
@@ -1235,23 +1215,38 @@ class RolePackEditorActivity : AppCompatActivity() {
             timedFields.addView(finish)
             timedFields.setPadding(px(12), 0, 0, px(5))
             box.addView(timedFields)
-            addDialogDivider(box, top = 6, bottom = 10)
 
             // This is a subordinate setting of loop playback: hidden for infinite
             // playback, but its stored value is never erased by changing the mode.
             var nextModeId = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
-            val nextFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            nextFields.addView(text("播放结束后的动画", 12f).apply {
-                setTextColor(getColor(R.color.cp_sub))
-            })
-            lateinit var nextChoice: com.google.android.material.button.MaterialButton
-            nextChoice = button(if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId) {
-                chooseModes(single = true, initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
-                    nextModeId = chosen.firstOrNull().orEmpty()
-                    nextChoice.text = if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId
+            val nextFields = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, px(8), 0, px(8))
+            }
+            nextFields.addView(text("播放结束后的动画", 14f).apply {
+                setPadding(0, 0, px(12), 0)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            val nextChoice = TextView(this).apply {
+                text = if (nextModeId.isEmpty()) "无（由控制器决定）  ▾" else "$nextModeId  ▾"
+                textSize = 13f
+                setSingleLine(true)
+                ellipsize = TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER_VERTICAL or Gravity.END
+                setTextColor(getColor(R.color.cp_title))
+                setBackgroundResource(R.drawable.bg_input)
+                setPadding(px(12), 0, px(12), 0)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    chooseModes(single = true,
+                        initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
+                        nextModeId = chosen.firstOrNull().orEmpty()
+                        text = if (nextModeId.isEmpty()) "无（由控制器决定）  ▾" else "$nextModeId  ▾"
+                    }
                 }
             }
-            nextFields.addView(nextChoice, LinearLayout.LayoutParams(-1, px(44)))
+            nextFields.addView(nextChoice, LinearLayout.LayoutParams(0, px(44), 1f))
             box.addView(nextFields)
             fun refreshFields() {
                 val selected = playback.selectedItemPosition
@@ -1431,7 +1426,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
-        addDialogDivider(body, top = 8, bottom = 8)
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(info)
         val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -2050,7 +2044,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
-        addDialogDivider(body, top = 8, bottom = 8)
         body.addView(text("动画：$modeId\n勾选要绑定的功能；取消勾选将解除对应绑定。", 12f).apply {
             gravity = Gravity.CENTER
             setPadding(px(4), 0, px(4), px(10))
@@ -2210,7 +2203,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
-        addDialogDivider(body, top = 8, bottom = 8)
         if (!headerDescription.isNullOrBlank()) body.addView(text(headerDescription, 12f).apply {
             gravity = Gravity.CENTER
             setPadding(px(4), 0, px(4), px(10))
@@ -2455,7 +2447,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
-        addDialogDivider(body, top = 8, bottom = 8)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
