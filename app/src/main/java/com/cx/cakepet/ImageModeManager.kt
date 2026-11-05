@@ -282,6 +282,7 @@ class ImageModeManager(
         val currentResName: String get() = def.frames[frameIndex].resName
         val currentModeId: String get() = def.name
         val currentFrameIndex: Int get() = frameIndex
+        val isInfiniteLoop: Boolean get() = def.loopMode == "infinite"
         val currentDx: Int get() = def.frames[frameIndex].dx
         val currentDy: Int get() = def.frames[frameIndex].dy
         val currentWalkSpeed: Float get() = kotlin.math.abs(currentDx) * 1000f / frameDelay.coerceAtLeast(1L)
