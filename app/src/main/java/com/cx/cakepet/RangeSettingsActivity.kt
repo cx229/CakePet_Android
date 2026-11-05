@@ -82,7 +82,10 @@ class RangeSettingsActivity : AppCompatActivity() {
             anchor = rangeBtnMore,
             popupLayoutRes = R.layout.popup_settings_more_simple,
             items = mapOf(
-                R.id.item_threshold to { startActivity(Intent(this, RangeThresholdActivity::class.java).apply { putExtra("role_id", roleId) }) }
+                R.id.item_threshold to { startActivity(Intent(this, RangeThresholdActivity::class.java).apply {
+                    putExtra("role_id", roleId)
+                    putExtra("adapt_page", adaptPage)
+                }) }
             )
         )
         rangeBtnMore.setOnClickListener { rangeMoreMenu.show() }
