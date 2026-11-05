@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/cp_bg"
+    android:focusableInTouchMode="true"
+    android:descendantFocusability="afterDescendants">
+
+    <!-- 状态栏占位条：纯黑，高度由 Activity 按真实状态栏高度设置，与标题栏连成整体覆盖状态栏 -->
+    <View android:id="@+id/status_bar_spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/cp_status_bar" />
+
+    <!-- 标题栏：黑底，紧跟占位条之下，与设置页完全一致，仅文本不同 -->
+    <LinearLayout android:id="@+id/title_bar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:minHeight="?attr/actionBarSize"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/cp_bg">
+
+        <ImageView android:id="@+id/iv_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/cp_title"
+            android:padding="14dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="返回" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical">
+
+            <TextView android:id="@+id/tv_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="显示-交互"
+                android:textSize="20dp"
+                android:textStyle="bold"
+                android:textColor="@color/cp_title" />
+
+            <TextView android:id="@+id/tv_title_sub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="@color/cp_hint_dark" />
+        </LinearLayout>
+
+        <ImageView android:id="@+id/btn_more"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_more"
+            app:tint="@color/cp_title"
+            android:padding="12dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="更多"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true" android:focusable="true"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scrollbarStyle="outsideOverlay"
+        android:fadeScrollbars="false"
+        android:scrollbarFadeDuration="0"
+        android:clipToPadding="false">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="交互" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginTop="0dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:text="命中模式" style="@style/SettingsOptionTitle"/>
+                        <TextView android:text="「酥」可不是哪都让碰！" style="@style/SettingsOptionNote" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                    </LinearLayout>
+                    <Spinner android:id="@+id/spinner_hit_mode" android:layout_width="172dp" android:layout_height="48dp"/>
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:text="透明度" style="@style/SettingsOptionTitle"/>
+                            <TextView android:text="「酥」的可见程度" style="@style/SettingsOptionNote" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                            <TextView android:id="@+id/alpha_extra" android:text="系统发力，100%透明度不是100%" android:textSize="11sp" android:textColor="#888888" android:visibility="gone" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/alpha_value" android:layout_width="72dp" android:layout_height="wrap_content"
+                            android:text="100%" android:textSize="16dp" android:background="@drawable/edit_bg"
+                            android:inputType="number" android:imeOptions="actionDone"
+                            android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider android:id="@+id/alpha_bar" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:valueFrom="0" android:valueTo="100" android:stepSize="1"
+                        app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                </com.cx.cakepet.SettingsRippleRow>
+                <LinearLayout android:id="@+id/group_core_scale" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:text="核心缩放-高" style="@style/SettingsOptionTitle"/>
+                            <TextView android:text="控制层矩形高度调整" style="@style/SettingsOptionNote" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/core_height_value" android:layout_width="72dp" android:layout_height="wrap_content"
+                            android:text="1.00×" android:textSize="16dp" android:background="@drawable/edit_bg"
+                            android:inputType="numberDecimal" android:imeOptions="actionDone"
+                            android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider android:id="@+id/core_height_bar" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:valueFrom="0" android:valueTo="100" android:stepSize="1"
+                        app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:text="核心缩放-宽" style="@style/SettingsOptionTitle"/>
+                            <TextView android:text="控制层矩形宽度调整" style="@style/SettingsOptionNote" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                        </LinearLayout>
+                        <EditText android:id="@+id/core_width_value" android:layout_width="72dp" android:layout_height="wrap_content"
+                            android:text="1.00×" android:textSize="16dp" android:background="@drawable/edit_bg"
+                            android:inputType="numberDecimal" android:imeOptions="actionDone"
+                            android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <com.google.android.material.slider.Slider android:id="@+id/core_width_bar" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:valueFrom="0" android:valueTo="100" android:stepSize="1"
+                        app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                </com.cx.cakepet.SettingsRippleRow>
+                </LinearLayout>
+            </LinearLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="活动范围" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:layout_marginStart="4dp" android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:divider="@drawable/item_divider" android:showDividers="middle"
+                android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:text="活动范围" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
+                    <Spinner android:id="@+id/spinner_activity_range" android:layout_width="172dp" android:layout_height="48dp"/>
+                </com.cx.cakepet.SettingsRippleRow>
+                <LinearLayout android:id="@+id/group_range_offsets" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="边界偏移" style="@style/SettingsOptionTitle" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="「芝麻酥」与屏幕边缘的间距" style="@style/SettingsOptionNote" />
+                </LinearLayout>
+
+                <!-- 顶部偏移 -->
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="顶部偏移" style="@style/SettingsOptionTitle"/>
+        <EditText android:id="@+id/off_top_value" android:layout_width="72dp"
+                                android:layout_height="wrap_content" android:text="140" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="numberSigned"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/off_top_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="-300" android:valueTo="2100" android:stepSize="1"
+                            android:value="140" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
+
+                <!-- 底部偏移 -->
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="底部偏移" style="@style/SettingsOptionTitle"/>
+        <EditText android:id="@+id/off_bottom_value" android:layout_width="72dp"
+                                android:layout_height="wrap_content" android:text="140" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="numberSigned"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/off_bottom_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="-300" android:valueTo="2100" android:stepSize="1"
+                            android:value="140" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
+
+                <!-- 左部偏移 -->
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="左部偏移" style="@style/SettingsOptionTitle"/>
+        <EditText android:id="@+id/off_left_value" android:layout_width="72dp"
+                                android:layout_height="wrap_content" android:text="20" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="numberSigned"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/off_left_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="-300" android:valueTo="1000" android:stepSize="1"
+                            android:value="0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
+
+                <!-- 右部偏移 -->
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="右部偏移" style="@style/SettingsOptionTitle"/>
+        <EditText android:id="@+id/off_right_value" android:layout_width="72dp"
+                                android:layout_height="wrap_content" android:text="20" android:textSize="16dp"
+                                android:background="@drawable/edit_bg" android:inputType="numberSigned"
+                                android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <com.google.android.material.slider.Slider
+                            android:id="@+id/off_right_bar" android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="-300" android:valueTo="1000" android:stepSize="1"
+                            android:value="0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+</LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
