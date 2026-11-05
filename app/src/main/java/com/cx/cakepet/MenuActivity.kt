@@ -18,7 +18,6 @@ object MenuActivity {
     const val ACTION_WRIGGLE = "com.cx.cakepet.action.WRIGGLE"
     const val ACTION_LIE = "com.cx.cakepet.action.LIE"
     const val ACTION_PROBE_HEAD = "com.cx.cakepet.action.PROBE_HEAD"
-    const val ACTION_HIDE = "com.cx.cakepet.action.HIDE"
     const val ACTION_RECALL = "com.cx.cakepet.action.RECALL"
     const val ACTION_EXIT = "com.cx.cakepet.action.EXIT"
     const val ACTION_SETTINGS = "com.cx.cakepet.action.SETTINGS"
