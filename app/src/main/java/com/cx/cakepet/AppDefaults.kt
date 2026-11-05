@@ -215,14 +215,17 @@ object AppBounds {
             step = 1f, default = 100f
         )
     )
+    val KEYBOARD_MODES = listOf(
+        "关闭" to "off", "整体画布抬高" to "global", "局部抬高" to "local",
+        "键盘时隐藏" to "hide", "键盘时点击穿透" to "pass"
+    )
+    const val KEYBOARD_DEFAULT_MODE = "global"
     val RANGE_SWITCHES = listOf(
-        SwitchBound("imeAdapt", "键盘时抬高", "键盘适应", true),
-        SwitchBound("imeResetBottomOffset", "重置边界", "键盘适应", true),
-        SwitchBound("imeHide", "键盘时隐藏", "键盘适应", false)
+        SwitchBound("imeResetBottomOffset", "重置边界", "键盘适应", true)
     )
     val RANGE_ORDER = listOf(
         "offsetTop", "offsetBottom", "offsetLeft", "offsetRight",
-        "imeAdapt", "imeResetBottomOffset", "imeLiftOffset", "imeHide"
+        "imeMode", "imeResetBottomOffset", "imeLiftOffset"
     )
 
     // ---------------- THINKING 页 ----------------
