@@ -113,8 +113,8 @@ class MainActivity : AppCompatActivity() {
     private fun setupHomeRecycler() {
         // 页面级「+」按钮（列表之外的独立按钮，与角色素材管理页的「＋导入素材包」同级）：
         // 进入角色素材管理页挑选并添加角色。不占 adapter position，不参与拖拽与预览。
-        // 由 <include> 引入，ViewBinding 生成的是 ItemAddRoleBinding，需取 .root 才是按钮本身
-        binding.btnAddRole.root.setOnClickListener {
+        // 首页直接使用 TextView 作为加号按钮，不再嵌套 item_add_role。
+        binding.btnAddRole.setOnClickListener {
             startActivity(Intent(this, RoleManageActivity::class.java))
         }
         binding.roleList.layoutManager = LinearLayoutManager(this)
