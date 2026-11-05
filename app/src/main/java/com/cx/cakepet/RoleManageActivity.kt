@@ -122,11 +122,12 @@ class RoleManageActivity : AppCompatActivity() {
 
     private fun editRole(role: RoleDescriptor) {
         if (role.source == RoleSource.ASSETS) {
-            AlertDialog.Builder(this)
-                .setTitle("模板不可编辑")
-                .setMessage("模板“白酥”不可编辑，请通过复制或者新建素材包创建可编辑副本。")
-                .setPositiveButton("知道了", null)
-                .show()
+            showConfirmDialog(
+                title = "模板不可编辑",
+                bodyHtml = "模板「${role.displayName}」不可编辑，请通过复制或新建素材包创建可编辑副本。",
+                positiveText = "知道了",
+                showNegative = false
+            ) { }
         } else startActivity(android.content.Intent(this, RolePackEditorActivity::class.java).putExtra("role_id", role.id))
     }
 
