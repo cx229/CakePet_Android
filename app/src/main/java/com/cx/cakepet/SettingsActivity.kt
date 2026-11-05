@@ -94,7 +94,6 @@ class SettingsActivity : AppCompatActivity() {
         val rowThinkingMode = findViewById<android.view.View>(R.id.row_thinking_mode)
         val tvFeedingState = findViewById<TextView>(R.id.tv_feeding_state)
         val rowFeedingMode = findViewById<android.view.View>(R.id.row_feeding_mode)
-        val swVisible = findViewById<Switch>(R.id.sw_visible)
         val swClickThrough = findViewById<Switch>(R.id.sw_click_through)
 
         // 常驻观察 configFlow：菜单等外部改动任意字段后，设置页自动同步，避免残留旧状态。
@@ -114,7 +113,6 @@ class SettingsActivity : AppCompatActivity() {
 
             // 程序化回填所有开关用 suppressSwitch 包住：回流 setChecked 不再触发 listener 写盘，避免并发改多个开关自激闪动
             suppressSwitch = true
-            swVisible.isChecked = c.visible
             swClickThrough.isChecked = c.clickThrough
             suppressSwitch = false
             // 回写入口状态文本
@@ -151,11 +149,6 @@ class SettingsActivity : AppCompatActivity() {
         rowRandomMode.setOnClickListener {
             startActivity(android.content.Intent(this, RandomSettingsActivity::class.java).apply { putExtra("role_id", roleId) })
         }
-        swVisible.setOnCheckedChangeListener { _, b ->
-            if (suppressSwitch) return@setOnCheckedChangeListener
-            lifecycleScope.launch { config.update { it.copy(visible = b) } }
-        }
-
         swClickThrough.setOnCheckedChangeListener { _, b ->
             if (suppressSwitch) return@setOnCheckedChangeListener
             lifecycleScope.launch { config.update { it.copy(clickThrough = b) } }
