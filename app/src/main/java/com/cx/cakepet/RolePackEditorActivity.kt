@@ -829,7 +829,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                 }
-                headline.addView(text("", 15f))
+                headline.addView(text("", 15f).apply {
+                    setPadding(px(4), px(2), px(4), px(2))
+                })
                 headline.addView(text("", 8f).apply {
                     setPadding(px(4), 0, px(4), 0)
                     setTextColor(getColor(R.color.cp_note))
