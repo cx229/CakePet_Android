@@ -60,6 +60,7 @@ class SettingsFoldController(private val host: Activity) {
         ancestors: List<Int> = emptyList(),
         depth: Int = 0,
         expandedInitially: Boolean = true,
+        indentChildren: Boolean = true,
         dependency: (PetConfigData) -> Boolean = { true },
         unavailableText: String? = null
     ) {
@@ -89,7 +90,7 @@ class SettingsFoldController(private val host: Activity) {
             dependency, expandedInitially, arrow, hint)
         sections.add(section)
         indent(header, depth)
-        children.forEach { childId -> row(childId)?.let { indent(it, depth + 1) } }
+        if (indentChildren) children.forEach { childId -> row(childId)?.let { indent(it, depth + 1) } }
         arrow.setOnClickListener {
             section.expanded = !section.expanded
             refresh()
