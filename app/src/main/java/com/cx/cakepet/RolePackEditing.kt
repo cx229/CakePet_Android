@@ -25,11 +25,7 @@ object RolePackEditing {
             if (source.source == RoleSource.ASSETS) copyAssets(ctx, source.rootPath, target)
             else check(dir(ctx, source.rootPath).copyRecursively(target))
             val file = File(target, "modes.jsonc")
-            val json = parseJsonc(file.readText())
-            json.put("id", id)
-            json.put("name", displayName.trim())
-            file.writeText(CompactJsoncWriter.write(json, file.readText()))
-            verify(target, json)
+            val json = prepareEditable(target, id, displayName.trim())
             RoleStore.addUserRole(ctx, UserRoleTemplate(id, json.getString("name"), id, -1,
                 json.optString("shortName"), "FILES", parseAuthors(json)))
             return id
@@ -45,6 +41,40 @@ object RolePackEditing {
             children.forEach { copyAssets(ctx, "$path/$it", File(out, it)) }
         }
     }
+    /**
+     * Transport and editing accept incomplete packs. Preserve malformed original JSONC,
+     * add only structural defaults, and never invent pictures or animation frames.
+     */
+    fun prepareEditable(directory: File, id: String, suggestedName: String): JSONObject {
+        directory.mkdirs()
+        val file = File(directory, "modes.jsonc")
+        val source = if (file.isFile) file.readText() else ""
+        val parsed = runCatching { parseJsonc(source) }.getOrNull()
+        if (parsed == null && source.isNotBlank()) {
+            val original = File(directory, "modes.original.jsonc")
+            if (!original.exists()) original.writeText(source)
+        }
+        val json = parsed ?: JSONObject()
+        json.put("version", RolePackageContract.VERSION)
+        json.put("id", id)
+        if (json.optString("name").isBlank()) json.put("name", suggestedName.ifBlank { id })
+        if (json.optString("shortName").isBlank()) json.put("shortName", json.optString("name"))
+        if (json.optJSONArray("authors") == null) json.put("authors", JSONArray().put("未知"))
+        if (json.opt("decodeTarget") !is Number) json.put("decodeTarget", 256)
+        if (json.opt("anchorRes") !is Number) json.put("anchorRes", 128)
+        if (json.optJSONObject("functions") == null) json.put("functions", JSONObject())
+        if (json.optJSONObject("modes") == null) json.put("modes", JSONObject())
+        file.writeText(CompactJsoncWriter.write(json, if (parsed == null) "" else source))
+        return json
+    }
+
+    fun validationErrors(directory: File): List<String> {
+        val file = File(directory, "modes.jsonc")
+        val json = try { parseJsonc(file.readText()) }
+        catch (e: Exception) { return listOf("modes.jsonc 解析失败：${e.message}") }
+        return RolePackageContract.validate(json).errors + RolePackageContract.verifyAssets(directory, json)
+    }
+
     fun verify(directory: File, json: JSONObject) {
         val errors = RolePackageContract.validate(json).errors + RolePackageContract.verifyAssets(directory, json)
         require(errors.isEmpty()) { errors.take(12).joinToString("\n") }
@@ -58,7 +88,6 @@ object RolePackEditing {
         require(json.optString("id") == id) { "角色 ID 不可变更" }
         val configFile = File(draft, "modes.jsonc")
         configFile.writeText(CompactJsoncWriter.write(json, configFile.readText()))
-        verify(draft, json)
         val live = dir(ctx, id)
         val backup = File(live.parentFile, "$id.bak")
         backup.deleteRecursively()
@@ -66,7 +95,7 @@ object RolePackEditing {
         if (!draft.renameTo(live)) { backup.renameTo(live); error("保存失败") }
         backup.deleteRecursively()
         RoleStore.updateUserRole(ctx, id, json.optString("name"), json.optString("shortName"), parseAuthors(json))
-        PetService.instance?.refreshMaterialPack(id)
+        if (validationErrors(live).isEmpty()) PetService.instance?.refreshMaterialPack(id)
     }
     fun export(ctx: Context, role: RoleDescriptor, uri: Uri) {
         ctx.contentResolver.openOutputStream(uri)?.use { stream ->
@@ -74,7 +103,22 @@ object RolePackEditing {
                 if (role.source == RoleSource.ASSETS) zipAssets(ctx, role.rootPath, "", zip)
                 else {
                     val root = dir(ctx, role.rootPath)
-                    root.walkTopDown().filter { it.isFile }.forEach { file ->
+                    val config = File(root, "modes.jsonc")
+                    val original = config.takeIf { it.isFile }?.readText().orEmpty()
+                    val normalized = runCatching { parseJsonc(original) }.getOrNull() ?: JSONObject()
+                    normalized.put("version", RolePackageContract.VERSION)
+                    normalized.put("id", role.id)
+                    if (normalized.optString("name").isBlank()) normalized.put("name", role.displayName)
+                    if (normalized.optString("shortName").isBlank()) normalized.put("shortName", role.shortName.ifBlank { role.displayName })
+                    if (normalized.optJSONArray("authors") == null) normalized.put("authors", JSONArray().put("未知"))
+                    if (normalized.opt("decodeTarget") !is Number) normalized.put("decodeTarget", 256)
+                    if (normalized.opt("anchorRes") !is Number) normalized.put("anchorRes", 128)
+                    if (normalized.optJSONObject("functions") == null) normalized.put("functions", JSONObject())
+                    if (normalized.optJSONObject("modes") == null) normalized.put("modes", JSONObject())
+                    zip.putNextEntry(ZipEntry("modes.jsonc"))
+                    zip.write(CompactJsoncWriter.write(normalized, if (original.isBlank()) "" else original).toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
+                    if (root.isDirectory) root.walkTopDown().filter { it.isFile && it != config }.forEach { file ->
                         zip.putNextEntry(ZipEntry(file.relativeTo(root).invariantSeparatorsPath))
                         file.inputStream().use { it.copyTo(zip) }
                         zip.closeEntry()
