@@ -730,9 +730,10 @@ class PetConfig private constructor(
                     else -> nc
                 }
             }
-            // Range defaults still expose legacy switch entries; clear an explicit mode so
-            // their restored values determine the effective exclusive keyboard mode.
-            if (page == SettingsPage.RANGE) nc = nc.copy(imeMode = "")
+            // Restore the five-way user default exactly; legacy switches no longer decide this mode.
+            if (page == SettingsPage.RANGE) {
+                nc = nc.copy(imeMode = b.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE)
+            }
             b.colors.forEach { c ->
                 nc = when (c.key) {
                     "thinkingBgColor" -> nc.copy(thinkingBgColor = c.default)
