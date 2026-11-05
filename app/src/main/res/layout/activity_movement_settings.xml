@@ -130,6 +130,13 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- All following movement modules share the movement master fold,
+                 but preserve their own independent toggle and expansion states. -->
+            <LinearLayout android:id="@+id/group_movement_details"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
             <!-- ===== 模块：重重重 ===== -->
             <View android:layout_width="match_parent" android:layout_height="0dp"
                 android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
@@ -526,6 +533,7 @@
                         android:valueFrom="0.0" android:valueTo="1.0" android:stepSize="0.01" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
                 </LinearLayout>
             </LinearLayout>
+            </LinearLayout> <!-- group_movement_details -->
         </LinearLayout>
     </ScrollView>
 
