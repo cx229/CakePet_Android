@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -111,6 +112,7 @@ data class PageBounds(
     val duals: List<DualSliderBound> = emptyList(),
     val switches: List<SwitchBound> = emptyList(),
     val colors: List<ColorBound> = emptyList(),
+    val keyboardModeDefault: String? = null,
     val order: List<String> = emptyList()
 ) {
     /**
@@ -202,6 +204,7 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
         SettingsPage.RANGE -> PageBounds(
             sliders = AppBounds.RANGE_SLIDERS,
             switches = AppBounds.RANGE_SWITCHES,
+            keyboardModeDefault = AppBounds.KEYBOARD_DEFAULT_MODE,
             order = AppBounds.RANGE_ORDER
         )
         SettingsPage.THINKING -> PageBounds(
@@ -237,6 +240,7 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
         floatPreferencesKey("${page.tag}_${key}_$field")
     private fun bk(page: SettingsPage, key: String, field: String) =
         booleanPreferencesKey("${page.tag}_${key}_$field")
+    private fun keyboardModeKey(page: SettingsPage) = stringPreferencesKey("${page.tag}_imeMode_default")
     private fun ck(page: SettingsPage, key: String) =
         intPreferencesKey("${page.tag}_${key}_default")
 
@@ -268,6 +272,16 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
             colors = sys.colors.map { c ->
                 c.copy(default = prefs[ck(page, c.key)] ?: c.default)
             },
+            keyboardModeDefault = sys.keyboardModeDefault?.let { default ->
+                val saved = prefs[keyboardModeKey(page)]
+                when {
+                    saved != null && AppBounds.KEYBOARD_MODES.any { it.second == saved } -> saved
+                    // Migrate old user defaults if an explicit mode has not been set yet.
+                    prefs[bk(page, "imeHide", "default")] == true -> "hide"
+                    prefs[bk(page, "imeAdapt", "default")] == false -> "off"
+                    else -> default
+                }
+            },
             order = sys.order
         ).normalize()
     }
@@ -297,6 +311,10 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
             bounds.colors.forEach { c ->
                 prefs[ck(page, c.key)] = c.default
             }
+            bounds.keyboardModeDefault?.let { mode ->
+                require(AppBounds.KEYBOARD_MODES.any { it.second == mode }) { "Invalid keyboard mode" }
+                prefs[keyboardModeKey(page)] = mode
+            }
         }
     }
 
@@ -320,11 +338,13 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
         sys.colors.forEach { c ->
             keys += "${page.tag}_${c.key}_default"
         }
+        if (sys.keyboardModeDefault != null) keys += "${page.tag}_imeMode_default"
         dataStore.edit { prefs ->
             keys.forEach { k ->
                 prefs.remove(floatPreferencesKey(k))
                 prefs.remove(booleanPreferencesKey(k))
                 prefs.remove(intPreferencesKey(k))
+                prefs.remove(stringPreferencesKey(k))
             }
         }
     }
