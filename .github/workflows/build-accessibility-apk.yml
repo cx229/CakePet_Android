@@ -7,6 +7,7 @@ on:
       - feat/261103-v102-mode-decoupling
       - feat/261105-frame-flip
       - feat/261105-keyboard-stretch-ripple-version
+      - feat/261105-preset-packs-experiment
   workflow_dispatch:
 
 permissions:
@@ -47,7 +48,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CakePet-v1.26.11.05.19.52-debug-apk
+          name: CakePet-v1.26.11.05.20.21-preset-experiment-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
