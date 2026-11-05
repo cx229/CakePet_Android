@@ -6,6 +6,10 @@ import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.Switch
+import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.widget.AdapterView
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -133,23 +137,77 @@ class UserHabitsActivity : AppCompatActivity() {
             }
             row.addView(check)
             row.addView(info(key))
-            val value = EditText(this).apply {
-                setSingleLine(true)
-                textSize = 14f
-                setText(PreferenceCodec.displayValue(existing))
-                setSelectAllOnFocus(true)
-                setOnFocusChangeListener { _, focused ->
-                    if (!focused) commit(key, this, chosen, existing)
+            when (existing.optString("type")) {
+                "boolean" -> {
+                    row.addView(Switch(this).apply {
+                        text = "设置值"
+                        textSize = 12f
+                        isChecked = existing.optBoolean("value")
+                        setOnCheckedChangeListener { _, checked ->
+                            chosen.put(key, JSONObject().put("type", "boolean").put("value", checked))
+                            save()
+                        }
+                    })
                 }
-                setOnEditorActionListener { _, _, _ ->
-                    commit(key, this, chosen, existing)
-                    clearFocus()
-                    true
+                "string" -> {
+                    val options = optionsFor(key)
+                    if (options != null) {
+                        val values = options.map { it.second }
+                        val spinner = Spinner(this)
+                        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
+                            options.map { it.first })
+                        val current = existing.optString("value")
+                        spinner.setSelection(values.indexOf(current).coerceAtLeast(0), false)
+                        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                            override fun onNothingSelected(parent: AdapterView<*>?) {}
+                            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                                if (current != values[position] || chosen.has(key)) {
+                                    chosen.put(key, JSONObject().put("type", "string").put("value", values[position]))
+                                    save()
+                                }
+                            }
+                        }
+                        row.addView(spinner)
+                    } else row.addView(valueInput(key, chosen, existing))
                 }
+                else -> row.addView(valueInput(key, chosen, existing))
             }
-            row.addView(value)
             holder.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
+    }
+
+    private fun valueInput(key: String, chosen: JSONObject, old: JSONObject) =
+        EditText(this).apply {
+            setSingleLine(true)
+            textSize = 14f
+            setText(PreferenceCodec.displayValue(old))
+            setSelectAllOnFocus(true)
+            setOnFocusChangeListener { _, focused ->
+                if (!focused) commit(key, this, chosen, old)
+            }
+            setOnEditorActionListener { _, _, _ ->
+                commit(key, this, chosen, old)
+                clearFocus()
+                true
+            }
+        }
+
+    private fun optionsFor(key: String): List<Pair<String, String>>? {
+        if (key == "ime_mode" || key.endsWith("_imeMode_default"))
+            return AppBounds.KEYBOARD_MODES
+        if (key == "rotation_adapt_mode")
+            return AppBounds.RANGE_CHOICES.first { it.key == "rotationAdaptMode" }.options
+        if (key == "interaction_mode")
+            return AppBounds.RANGE_CHOICES.first { it.key == "interactionMode" }.options
+        if (section == "bounds") {
+            for (page in SettingsPage.entries) {
+                if (!key.startsWith(page.tag + "_")) continue
+                val choice = PetBounds.forRole(this, RoleRegistry.DEFAULT.id).systemItems(page)
+                    .choices.firstOrNull { key == "${page.tag}_${it.key}_default" }
+                if (choice != null) return choice.options
+            }
+        }
+        return null
     }
 
     private fun commit(key: String, input: EditText, chosen: JSONObject, old: JSONObject) {
