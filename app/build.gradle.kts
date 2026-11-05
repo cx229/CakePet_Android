@@ -12,8 +12,8 @@ android {
         applicationId = "com.cx.cakepet"
         minSdk = 29
         targetSdk = 37
-        versionCode = 126859   // [TO AI] 每次修改版本号都需要递增
-        versionName = "t1.26.11.5.6" // [TO AI] 正式版本的1.<年后二位>.<月，无前导零>.<日，无前导零>,如果是测试版本，则增加前缀“t";如果需要，可能后面还会增加小时的标志
+        versionCode = 126860 // Android upgrade requires monotonically increasing versionCode
+        versionName = "v1.26.11.05.14.13" // v1.YY.MM.DD.hh.mm, Beijing time (UTC+8); update for each APK build
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
