@@ -373,6 +373,7 @@ class PetService : Service() {
         freezeLayers.add(layer)
         // 显示定格边框开关开启时，叠加红色真实窗口边框（调试用，不拦截交互）
         if (rc.freezeBorderShow) setFreezeBorder(layer, true)
+        if (keyboardUp) { recalcBounds(); syncKeyboardAuxiliary(roleId, rc, true) }
     }
 
     /** 为指定定格层创建红色真实窗口边框（NOT_TOUCHABLE，不拦截拖动/长按）。 */
@@ -418,6 +419,7 @@ class PetService : Service() {
             layer.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         }
         freezeLayers.removeAll(list)
+        list.forEach { imeFreezeOffsets.remove(it.iv) }
     }
 
     /** 全部定格显示层重置位置到屏幕中心（y 受静态边界约束）。roleId 为 null 时重置全部；否则仅重置【该角色】的定格层。 */
@@ -441,6 +443,7 @@ class PetService : Service() {
         (layer.iv.drawable as? BitmapDrawable)?.bitmap?.recycle()
         layer.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         freezeLayers.remove(layer)
+        imeFreezeOffsets.remove(layer.iv)
     }
 
     /** 更新指定定格层的备注文本（失焦自动保存，仅存于内存，随层清除而丢失）。 */
@@ -457,6 +460,8 @@ class PetService : Service() {
             layer.lp.flags = if (on) WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                              else WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             if (on) layer.iv.setOnTouchListener(freezeDragListener) else layer.iv.setOnTouchListener(null)
+            if (keyboardUp && roleCfg(roleId)?.keyboardMode() in listOf("pass", "hide"))
+                layer.lp.flags = layer.lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) {}
         }
     }
@@ -1587,6 +1592,7 @@ class PetService : Service() {
         fishLayers.add(layer)
         if (c.feedingBorderShow) setFishBorder(layer, true)
         if (c.feedingAutoExpire) scheduleFishExpire(layer, c.feedingExpireTime)
+        if (keyboardUp) { recalcBounds(); syncKeyboardAuxiliary(roleId, c, true) }
     }
 
     private fun scheduleFishExpire(layer: FishLayer, secs: Int) {
@@ -1608,6 +1614,7 @@ class PetService : Service() {
         try { windowManager.removeView(cur.iv) } catch (_: Exception) {}
         cur.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         fishLayers.removeAt(idx)
+        imeFishOffsets.remove(cur.iv)
     }
 
     // 清除支鱼浮窗。roleId 为 null 时清除全部；否则仅清除【该角色】的支鱼（含其过期计时与边框）。
@@ -3391,16 +3398,41 @@ class PetService : Service() {
      *  that are still enabled and visible in their own role configuration.
      *  Window attach/detach is handled by syncDisplayWindows/syncControlWindows.
      */
+    /** Apply keyboard canvas behavior to food/freeze; mutters are not canvas objects. */
+    private fun syncKeyboardAuxiliary(roleId: String, c: PetConfigData, kbUp: Boolean) {
+        val hide = kbUp && c.keyboardMode() == "hide"
+        val pass = kbUp && c.keyboardMode() == "pass"
+        freezeLayers.filter { it.roleId == roleId }.forEach { layer ->
+            layer.iv.visibility = if (hide) View.GONE else View.VISIBLE
+            layer.borderView?.visibility = if (hide) View.GONE else View.VISIBLE
+            val flags = layer.lp.flags
+            layer.lp.flags = if (hide || pass || !c.freezeDraggable)
+                flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            else flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) {}
+        }
+        fishLayers.filter { it.roleId == roleId }.forEach { layer ->
+            layer.iv.visibility = if (hide) View.GONE else View.VISIBLE
+            layer.borderView?.visibility = if (hide) View.GONE else View.VISIBLE
+            val flags = layer.lp.flags
+            layer.lp.flags = if (hide || pass)
+                flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            else flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            try { windowManager.updateViewLayout(layer.iv, layer.lp) } catch (_: Exception) {}
+        }
+    }
+
     private fun applyImeHide(kbUp: Boolean) {
         for ((roleId, rt) in engines) {
             val c = rt.config.getBlocking()
             val shown = c.visible && c.enabled && !(kbUp && c.keyboardMode() == "hide")
+            syncKeyboardAuxiliary(roleId, c, kbUp)
             pets.filter { it.roleId == roleId }.forEachIndexed { index, inst ->
                 inst.view.visibility = if (shown) android.view.View.VISIBLE else android.view.View.GONE
                 inst.displayView?.visibility =
                     if (shown) android.view.View.VISIBLE else android.view.View.GONE
                 val showMutter = c.thinkingEnabled && (index == 0 || !c.singleTrayMsg)
-                inst.petMsg.setVisible(shown && showMutter)
+                inst.petMsg.setVisible(c.visible && c.enabled && showMutter)
             }
         }
     }
@@ -3799,6 +3831,7 @@ class PetService : Service() {
             try { inst.petMsg.destroy() } catch (_: Exception) {}
         }
         pets.removeAll(removed)
+        removed.forEach { imePetOffsets.remove(it.view) }
         // 别名 petView/layoutParams 仅“最后召唤角色”创建时赋值，移除后必须重指到当前 pets[0]，
         // 否则它与实时列表错位（调试浮层/拖拽/帧循环其余引用会指向旧实例）。
         pets.getOrNull(0)?.let { first ->
@@ -3808,7 +3841,9 @@ class PetService : Service() {
         // 仅清除该角色的定格层（不串其它角色）。
         clearAllFreeze(roleId)
         engines.remove(roleId)
-        imeShiftY.remove(roleId)   // 清键盘顶起残留，避免重新召唤时 delta 误判导致宠物未随画布顶起
+        imeShiftY.remove(roleId)
+        imeLastMode.remove(roleId)
+        imeLastTop.remove(roleId)
         // 通知首页：该角色已退场（在屏状态变化）。
         onActiveRolesChanged?.invoke()
         if (engines.isEmpty()) {
