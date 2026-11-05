@@ -18,6 +18,10 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 
@@ -112,6 +116,9 @@ class UserHabitsActivity : AppCompatActivity() {
             exportFile.launch("CakePet-UserHabits.json")
         }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(operations)
+        root.addView(button("将已启用的习惯应用到全部现有角色") {
+            confirmApply(null, null)
+        }, LinearLayout.LayoutParams(-1, dp(44)))
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         tabs.addView(button("角色设置") { section = "config"; render() },
             LinearLayout.LayoutParams(0, dp(44), 1f))
@@ -158,6 +165,21 @@ class UserHabitsActivity : AppCompatActivity() {
             }
             row.addView(check)
             row.addView(info(key))
+            row.addView(TextView(this).apply {
+                text = "将本项应用到现有角色"
+                textSize = 11f
+                gravity = Gravity.END
+                setTextColor(getColor(R.color.cp_title))
+                setPadding(dp(2), dp(4), dp(2), dp(8))
+                isClickable = true
+                setOnClickListener {
+                    if (!chosen.has(key)) {
+                        chosen.put(key, existing)
+                        save()
+                    }
+                    confirmApply(section, key)
+                }
+            })
             when (existing.optString("type")) {
                 "boolean" -> {
                     row.addView(Switch(this).apply {
@@ -194,6 +216,25 @@ class UserHabitsActivity : AppCompatActivity() {
                 else -> row.addView(valueInput(key, chosen, existing))
             }
             holder.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        }
+    }
+
+    private fun confirmApply(section: String?, key: String?) {
+        val detail = if (key == null) "已启用的全部个人偏好" else "「${labelFor(key)}」"
+        showConfirmDialog(
+            title = "应用用户习惯",
+            bodyHtml = "将 $detail 覆盖到<b>全部已有角色</b>。本操作不会修改素材包，也不会改变以后新建角色的覆盖规则。",
+            positiveText = "应用"
+        ) {
+            lifecycleScope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        UserHabits.applyToExisting(this@UserHabitsActivity, section, key)
+                    }
+                }
+                result.onSuccess { notice("已更新 $it 个已有角色") }
+                    .onFailure { notice("应用失败：${it.message}") }
+            }
         }
     }
 
