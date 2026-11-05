@@ -491,6 +491,7 @@ class RoleManageActivity : AppCompatActivity() {
             val role = items.getOrNull(position) ?: return
             holder.roleId = role.id
             holder.count?.let { bindCount(it, role.id) }
+            holder.updateTitleWidth()
         }
 
         override fun onBindViewHolder(holder: VH, position: Int) {
@@ -503,6 +504,7 @@ class RoleManageActivity : AppCompatActivity() {
             name.text = role.displayName
             // 已加入首页的实例数量：小号灰字紧跟标题后实时显示（如 "(2)"）。
             holder.count?.let { bindCount(it, role.id) }
+            holder.updateTitleWidth()
             // 作者署名：小号灰字显示在标题下方；无作者信息时隐藏该行，避免留空行。
             val authorsTv = holder.authors
             if (authorsTv != null) {
@@ -545,6 +547,32 @@ class RoleManageActivity : AppCompatActivity() {
             val thumb: ImageView? = itemView.findViewById(R.id.role_thumb)
             val name: TextView? = itemView.findViewById(R.id.role_name)
             val count: TextView? = itemView.findViewById(R.id.role_count)
+            private val titleRow: LinearLayout? = itemView.findViewById(R.id.role_title_row)
+
+            /**
+             * Reserve the count label's natural (single-line) width first.
+             * A short name stays wrap_content; a long name wraps within the
+             * remaining width. Recalculate for both layout width and count changes.
+             */
+            fun updateTitleWidth() {
+                val row = titleRow ?: return
+                val title = name ?: return
+                val badge = count ?: return
+                if (row.width <= 0) return
+                val naturalCountWidth = kotlin.math.ceil(
+                    badge.paint.measureText(badge.text.toString()).toDouble()
+                ).toInt() + badge.compoundPaddingLeft + badge.compoundPaddingRight
+                val margin = (badge.layoutParams as? ViewGroup.MarginLayoutParams)
+                    ?.let { it.marginStart + it.marginEnd } ?: 0
+                val available = (row.width - naturalCountWidth - margin).coerceAtLeast(1)
+                if (title.maxWidth != available) title.maxWidth = available
+            }
+
+            init {
+                titleRow?.addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
+                    if (right > left) updateTitleWidth()
+                }
+            }
             val authors: TextView? = itemView.findViewById(R.id.role_authors)
             val options: View? = itemView.findViewById(R.id.btn_role_options)
         }
