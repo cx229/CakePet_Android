@@ -195,11 +195,22 @@ object SoftwareBackup {
                 runBlocking {
                     RoleStore.importRegistries(ctx, registry, replace = true)
                     // Explicitly clear previously known role prefs not in backup.
+                    val desired = RoleStore.getHomeRoles(ctx).map { it.instanceId }.toSet() +
+                        PreferenceCodec.entries(restoredConfigs) + PreferenceCodec.entries(bounds)
                     val allIds = roleIds(ctx) + PreferenceCodec.entries(oldConfigs.first) +
                         PreferenceCodec.entries(restoredConfigs) + PreferenceCodec.entries(bounds)
                     for (id in allIds) {
-                        PetConfig.forRole(ctx, id).importSettings(restoredConfigs.optJSONObject(id) ?: JSONObject(), replace = true)
-                        PetBounds.forRole(ctx, id).importSettings(bounds.optJSONObject(id) ?: JSONObject(), replace = true)
+                        // A retired role is removed. A setting absent from an
+                        // older backup retains its current value (or app default).
+                        val config = restoredConfigs.optJSONObject(id)
+                        val bound = bounds.optJSONObject(id)
+                        if (id !in desired) {
+                            PetConfig.forRole(ctx, id).importSettings(JSONObject(), replace = true)
+                            PetBounds.forRole(ctx, id).importSettings(JSONObject(), replace = true)
+                        } else {
+                            if (config != null) PetConfig.forRole(ctx, id).importSettings(config)
+                            if (bound != null) PetBounds.forRole(ctx, id).importSettings(bound)
+                        }
                     }
                 }
                 UserHabits.save(ctx, habits)
