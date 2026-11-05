@@ -117,6 +117,7 @@
   "modes": {
     "食物": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -133,6 +134,7 @@
     },
     "静坐": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -183,6 +185,7 @@
     },
     "炸毛": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -233,6 +236,7 @@
     },
     "摸摸头": {
       "loop": true,
+      "loopMode": "timed",
       "duration": {
         "min": 3000,
         "max": 4000
@@ -292,6 +296,7 @@
     },
     "摇头": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": "炸毛",
       "frames": [
         {
@@ -325,6 +330,7 @@
     },
     "落地": {
       "loop": false,
+      "loopMode": "off",
       "nextMode": "走动短距离",
       "frames": [
         {
@@ -363,6 +369,7 @@
     },
     "轻晃提起": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -392,6 +399,7 @@
     },
     "中速向左提起": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -409,6 +417,7 @@
     },
     "快速向左提起": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -426,6 +435,7 @@
     },
     "中速向右提起": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -443,6 +453,7 @@
     },
     "快速向右提起": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -460,6 +471,7 @@
     },
     "滚动": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -525,6 +537,7 @@
     },
     "走动短距离": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -563,6 +576,7 @@
     },
     "走路": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -602,6 +616,7 @@
     },
     "跳起": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -621,6 +636,7 @@
     },
     "美白": {
       "loop": false,
+      "loopMode": "off",
       "nextMode": null,
       "frames": [
         {
@@ -670,6 +686,7 @@
     },
     "蠕动": {
       "loop": true,
+      "loopMode": "infinite",
       "nextMode": null,
       "frames": [
         {
@@ -707,6 +724,7 @@
     },
     "探头中": {
       "loop": false,
+      "loopMode": "off",
       "nextMode": "探头",
       "frames": [
         {
@@ -736,6 +754,7 @@
     },
     "摸摸头-探头": {
       "loop": true,
+      "loopMode": "timed",
       "duration": {
         "min": 3000,
         "max": 4000
@@ -801,6 +820,7 @@
     },
     "投食": {
       "loop": false,
+      "loopMode": "off",
       "nextMode": "高兴",
       "frames": [
         {
@@ -870,6 +890,7 @@
     },
     "投食-探头": {
       "loop": false,
+      "loopMode": "off",
       "nextMode": "高兴-探头",
       "frames": [
         {
@@ -940,6 +961,7 @@
     },
     "趴着": {
       "loop": false,
+      "loopMode": "off",
       "nextMode": null,
       "frames": [
         {
@@ -958,6 +980,7 @@
     },
     "传送门": {
       "loop": false,
+      "loopMode": "off",
       "nextMode": "静坐",
       "frames": [
         {
@@ -970,6 +993,7 @@
     },
     "扒鱼": {
       "loop": false,
+      "loopMode": "off",
       "nextMode": "趴着",
       "frames": [
         {
@@ -1049,6 +1073,7 @@
     },
     "探头": {
       "loop": true,
+      "loopMode": "infinite",
       "duration": null,
       "finishCycle": true,
       "nextMode": null,
@@ -1080,6 +1105,7 @@
     },
     "高兴": {
       "loop": true,
+      "loopMode": "timed",
       "duration": {
         "min": 2000,
         "max": 3000
@@ -1124,6 +1150,7 @@
     },
     "高兴-探头": {
       "loop": true,
+      "loopMode": "timed",
       "duration": {
         "min": 2000,
         "max": 3000
