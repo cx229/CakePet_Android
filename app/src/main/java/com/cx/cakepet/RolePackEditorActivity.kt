@@ -282,6 +282,36 @@ class RolePackEditorActivity : AppCompatActivity() {
             setOnClickListener { click() }
         }
 
+
+    /** Matched to the role rename dialog: outlined cancel and filled primary. */
+    private fun dialogButton(label: String, primary: Boolean, click: () -> Unit) =
+        com.google.android.material.button.MaterialButton(this).apply {
+            text = label
+            isAllCaps = false
+            textSize = 14f
+            minHeight = px(44)
+            minimumHeight = 0
+            insetTop = 0
+            insetBottom = 0
+            cornerRadius = px(14)
+            strokeWidth = if (primary) 0 else px(1)
+            strokeColor = android.content.res.ColorStateList.valueOf(getColor(R.color.cp_btn_outline_stroke))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(
+                if (primary) getColor(R.color.cp_btn_primary_bg) else android.graphics.Color.TRANSPARENT)
+            setTextColor(getColor(if (primary) R.color.cp_btn_primary_text else R.color.cp_btn_outline_text))
+            setOnClickListener { click() }
+        }
+
+    private fun addDialogDivider(parent: LinearLayout, top: Int = 10, bottom: Int = 10) {
+        parent.addView(View(this).apply {
+            setBackgroundColor(getColor(R.color.cp_btn_outline_stroke))
+            alpha = 0.35f
+        }, LinearLayout.LayoutParams(-1, px(1)).apply {
+            topMargin = px(top)
+            bottomMargin = px(bottom)
+        })
+    }
+
     private fun actionPair(first: String, firstClick: () -> Unit,
                            second: String, secondClick: () -> Unit) {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -390,6 +420,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setPadding(0, 0, 0, px(if (compact) 7 else 12))
         })
+        addDialogDivider(content, top = 2, bottom = 10)
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val save = create(form)
         val viewport = ScrollView(this).apply {
@@ -403,9 +434,9 @@ class RolePackEditorActivity : AppCompatActivity() {
             setPadding(0, px(12), 0, 0)
         }
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        actions.addView(button("取消") { dialog.dismiss() },
+        actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
-        actions.addView(button("保存") {
+        actions.addView(dialogButton("保存", primary = true) {
             runCatching(save).onSuccess { dialog.dismiss() }
                 .onFailure { Toast.makeText(this, it.message ?: "输入错误", Toast.LENGTH_LONG).show() }
         }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
@@ -453,6 +484,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
+        addDialogDivider(content, top = 8, bottom = 8)
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
         items.forEachIndexed { index, option ->
@@ -469,7 +501,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         content.addView(ScrollView(this).apply { addView(list) },
             LinearLayout.LayoutParams(-1,
                 minOf(px(56 * items.size + 10), resources.displayMetrics.heightPixels / 2)))
-        content.addView(button("关闭") { dialog.dismiss() },
+        content.addView(dialogButton("关闭", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(-1, px(42)).apply { topMargin = px(10) })
         dialog.setContentView(frame)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
@@ -478,25 +510,23 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun entry(box: LinearLayout, title: String, initial: String, compact: Boolean = false): EditText {
-        val item = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundResource(R.drawable.card_bg)
-            setPadding(px(if (compact) 9 else 12), px(if (compact) 3 else 7),
-                px(if (compact) 9 else 12), px(if (compact) 3 else 7))
-        }
-        item.addView(text(title, if (compact) 12f else 13f).apply {
-            setPadding(0, 0, 0, 0)
-            setTextColor(getColor(R.color.cp_note))
+        val item = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        item.addView(text(title, 12f).apply {
+            setPadding(0, 0, 0, px(4))
+            setTextColor(getColor(R.color.cp_sub))
         })
         val field = EditText(this).apply {
             setText(initial)
             setSingleLine(true)
-            textSize = if (compact) 14f else 15f
-            setTextColor(getColor(R.color.cp_title))
+            textSize = 15f
+            setTextColor(getColor(R.color.cp_text))
+            setHintTextColor(getColor(R.color.cp_sub))
+            setBackgroundResource(R.drawable.bg_input)
+            setPadding(px(12), px(8), px(12), px(8))
         }
-        item.addView(field, LinearLayout.LayoutParams(-1, px(if (compact) 38 else 44)))
+        item.addView(field, LinearLayout.LayoutParams(-1, px(if (compact) 42 else 46)))
         box.addView(item, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = px(if (compact) 5 else 8)
+            bottomMargin = px(if (compact) 8 else 12)
         })
         return field
     }
@@ -1152,6 +1182,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             (name.parent as? LinearLayout)?.let { field ->
                 (field.getChildAt(0) as? TextView)?.setTextColor(android.graphics.Color.BLACK)
             }
+            addDialogDivider(box, top = 4, bottom = 4)
             val playbackModes = listOf("关闭", "定时循环", "无限循环")
             val previous = mode.optJSONObject("duration")
             val playback = Spinner(this)
@@ -1193,13 +1224,17 @@ class RolePackEditorActivity : AppCompatActivity() {
                 isChecked = mode.optBoolean("finishCycle", true)
             }
             timedFields.addView(finish)
+            timedFields.setPadding(px(12), 0, 0, px(5))
             box.addView(timedFields)
+            addDialogDivider(box, top = 6, bottom = 10)
 
             // This is a subordinate setting of loop playback: hidden for infinite
             // playback, but its stored value is never erased by changing the mode.
             var nextModeId = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
             val nextFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            nextFields.addView(text("播放结束后的动画", 13f))
+            nextFields.addView(text("播放结束后的动画", 12f).apply {
+                setTextColor(getColor(R.color.cp_sub))
+            })
             lateinit var nextChoice: com.google.android.material.button.MaterialButton
             nextChoice = button(if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId) {
                 chooseModes(single = true, initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
@@ -1207,7 +1242,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     nextChoice.text = if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId
                 }
             }
-            nextFields.addView(nextChoice, LinearLayout.LayoutParams(-1, px(38)))
+            nextFields.addView(nextChoice, LinearLayout.LayoutParams(-1, px(44)))
             box.addView(nextFields)
             fun refreshFields() {
                 val selected = playback.selectedItemPosition
@@ -2113,7 +2148,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         redraw()
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(button("取消") { dialog.dismiss() },
+        actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
         actions.addView(button("确认") {
             attempt {
@@ -2229,7 +2264,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.cp_note))
         })
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(button("取消") { dialog.dismiss() },
+        actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
         actions.addView(button("确认") {
             if (!single && selected.isEmpty()) {
