@@ -137,7 +137,11 @@ class RangeSettingsActivity : AppCompatActivity() {
                 keyboardModes.map { it.first }
             ) {
                 private fun small(view: View): View = view.apply {
-                    (this as? TextView)?.textSize = 13f
+                    (this as? TextView)?.apply {
+                        textSize = 13f
+                        gravity = android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
+                        textAlignment = View.TEXT_ALIGNMENT_GRAVITY
+                    }
                 }
                 override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
                     small(super.getView(position, convertView, parent))
