@@ -49,29 +49,39 @@ class GlobalSettingsActivity : AppCompatActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri ?: return@registerForActivityResult
-        showConfirmDialog(
-            title = "导入软件备份",
-            bodyHtml = "备份中的素材包、角色实例和所有可恢复的持久化设置将<b>替换当前数据</b>。建议先导出当前备份。",
-            positiveText = "覆盖恢复",
-            titleColorRes = R.color.cp_danger
-        ) {
-            lifecycleScope.launch {
-                // No running overlay must retain a role whose assets are being replaced.
-                PetService.instance?.let { svc ->
-                    RoleStore.getHomeRoles(this@GlobalSettingsActivity)
-                        .forEach { svc.recall(it.instanceId) }
-                }
-                stopService(Intent(this@GlobalSettingsActivity, PetService::class.java))
-                val result = withContext(Dispatchers.IO) {
-                    runCatching { SoftwareBackup.restore(this@GlobalSettingsActivity, uri) }
-                }
+        lifecycleScope.launch {
+            // Do not tear down a running pet when a ZIP is invalid.
+            val preview = withContext(Dispatchers.IO) {
+                runCatching { SoftwareBackup.inspect(this@GlobalSettingsActivity, uri) }
+            }
+            preview.onFailure {
                 Toast.makeText(this@GlobalSettingsActivity,
-                    result.fold({ it }, { "恢复失败：${it.message}" }),
-                    Toast.LENGTH_LONG).show()
-                if (result.isSuccess) {
-                    // Home will rebuild the catalog on resume. We do not
-                    // summon old runtime instances automatically.
-                    finish()
+                    "备份校验失败：${it.message}", Toast.LENGTH_LONG).show()
+            }.onSuccess { manifest ->
+                val version = manifest.optString("appVersion", "未知")
+                val summary = manifest.optJSONObject("summary")
+                val roles = summary?.optInt("roleInstances", -1) ?: -1
+                val roleText = if (roles >= 0) "$roles 个角色实例" else "角色实例"
+                showConfirmDialog(
+                    title = "导入软件备份",
+                    bodyHtml = "来源版本：$version<br/>包含：$roleText。<br/>将<b>覆盖当前素材包、实例及持久化设置</b>，建议先备份当前数据。",
+                    positiveText = "覆盖恢复",
+                    titleColorRes = R.color.cp_danger
+                ) {
+                    lifecycleScope.launch {
+                        PetService.instance?.let { svc ->
+                            RoleStore.getHomeRoles(this@GlobalSettingsActivity)
+                                .forEach { svc.recall(it.instanceId) }
+                        }
+                        stopService(Intent(this@GlobalSettingsActivity, PetService::class.java))
+                        val result = withContext(Dispatchers.IO) {
+                            runCatching { SoftwareBackup.restore(this@GlobalSettingsActivity, uri) }
+                        }
+                        Toast.makeText(this@GlobalSettingsActivity,
+                            result.fold({ it }, { "恢复失败：${it.message}" }),
+                            Toast.LENGTH_LONG).show()
+                        if (result.isSuccess) finish()
+                    }
                 }
             }
         }
