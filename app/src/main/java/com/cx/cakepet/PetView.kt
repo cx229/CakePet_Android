@@ -1111,6 +1111,20 @@ class PetView @JvmOverloads constructor(
                 }
             }
         }
+        // State is the authority for which Functions pool resumes when the current
+        // action chain ends. Mode IDs, frame names and loop flags are not inspected.
+        // Forced action chains are preserved until their natural end or state interrupt.
+        val activeFunction = when {
+            physics.isDragging && !useStaticPool ->
+                listOf("touch", "lift_up", activeDragFunction ?: "slow")
+            physics.isThrowing && !useStaticPool -> listOf("touch", "roll")
+            physics.isSnapped -> listOf("snap", "snap_head")
+            flying -> listOf("climb", "jump_up")
+            physics.isClimbing && forageActive && imageManager.forageSelected ->
+                listOf("climb", "walk")
+            else -> null
+        }
+        imageManager.setActiveStateFunction(activeFunction)
     }
 
     /**
