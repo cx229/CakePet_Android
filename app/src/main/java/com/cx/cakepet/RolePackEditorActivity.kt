@@ -785,7 +785,11 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val name = key.text.toString().trim()
                 validId(name)
                 require(!root.getJSONObject("modes").has(name)) { "动作名称已存在" }
-                val source = root.getJSONObject("modes").getJSONObject(ids().first()).getJSONArray("frames").getJSONObject(0).getString("res")
+                val source = ids().firstNotNullOfOrNull { mode ->
+                    root.getJSONObject("modes").optJSONObject(mode)
+                        ?.optJSONArray("frames")?.optJSONObject(0)?.optString("res")
+                        ?.takeIf { it.isNotBlank() }
+                }.orEmpty()
                 change { json ->
                     json.getJSONObject("modes").put(name, JSONObject()
                         .put("loop", true)
