@@ -280,7 +280,7 @@ class ImageModeManager(
         val currentDy: Int get() = def.frames[frameIndex].dy
         val currentWalkSpeed: Float get() = kotlin.math.abs(currentDx) * 1000f / frameDelay.coerceAtLeast(1L)
         // Movement capability must not depend on the animation's loop policy.
-        val isMotionLoop: Boolean get() = def.frames.any { it.dx != 0 || it.dy != 0 }
+        val hasFrameMotion: Boolean get() = def.frames.any { it.dx != 0 || it.dy != 0 }
         val currentVerticalAlign: String get() = def.frames[frameIndex].verticalAlign
         val currentFlipX: Boolean get() = def.frames[frameIndex].flipX
         val currentAnchorX: Int get() = def.frames[frameIndex].anchorX
@@ -339,9 +339,10 @@ class ImageModeManager(
                     if (def.finishCycle) pendingFinish = true
                     else {
                         val next = def.nextModeName
+                        val sameMode = next == def.name
                         if (next != null && switchTo(next)) {
                             changed = true
-                            modeChanged = next != def.name
+                            modeChanged = !sameMode
                         } else {
                             timeTarget = Long.MAX_VALUE
                             timerRequested = true
@@ -361,9 +362,10 @@ class ImageModeManager(
                         changed = true
                     } else {
                         val next = def.nextModeName
+                        val sameMode = next == def.name
                         if (next != null && allowModeSwitch && switchTo(next)) {
                             changed = true
-                            modeChanged = next != def.name
+                            modeChanged = !sameMode
                         } else if (def.loop && def.durationMin != null && allowModeSwitch) {
                             timeTarget = Long.MAX_VALUE
                             timerRequested = true
