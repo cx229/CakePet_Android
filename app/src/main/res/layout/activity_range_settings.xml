@@ -43,7 +43,7 @@
             <TextView android:id="@+id/tv_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="显示-其他"
+                android:text="显示-交互"
                 android:textSize="20dp"
                 android:textStyle="bold"
                 android:textColor="@color/cp_title" />
@@ -83,10 +83,11 @@
 
             <!-- ===== 模块1：活动范围（标题在卡片矩形外面） ===== -->
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:id="@+id/module_range_title"
                 android:text="活动范围" android:textSize="14dp" android:textColor="@color/cp_sub"
                 android:layout_marginStart="4dp" android:layout_marginBottom="6dp" />
 
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            <LinearLayout android:id="@+id/module_range_card" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
@@ -192,10 +193,11 @@
 
             <!-- ===== 模块2：键盘适应（标题在卡片矩形外面） ===== -->
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:id="@+id/module_keyboard_title"
                 android:text="键盘适应" android:textSize="14dp" android:textColor="@color/cp_sub"
                 android:layout_marginStart="4dp" android:layout_marginTop="24dp" android:layout_marginBottom="6dp" />
 
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            <LinearLayout android:id="@+id/module_keyboard_card" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
