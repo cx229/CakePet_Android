@@ -234,16 +234,30 @@ class RolePackEditorActivity : AppCompatActivity() {
         else (resources.displayMetrics.density * 24f).toInt()
     }
     private fun px(dp: Int) = (dp * resources.displayMetrics.density).toInt()
-    /** Rounded foreground ripple retains each card's original background. */
+    /** Keep the editor card surface while matching the native ripple color used on home cards. */
     private fun rippleCard(view: View) {
         val mask = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = px(12).toFloat()
             setColor(android.graphics.Color.WHITE)
         }
         view.foreground = android.graphics.drawable.RippleDrawable(
-            android.content.res.ColorStateList.valueOf(0x33000000), null, mask)
+            android.content.res.ColorStateList.valueOf(getColor(R.color.cp_ripple_on_light)),
+            null, mask)
         view.isClickable = true
         view.isFocusable = true
+    }
+
+    /**
+     * Cards which navigate or redraw immediately otherwise disappear before a short tap ripple
+     * becomes visible. Delay only their click action; Android still owns press, release and
+     * long-press feedback, without extra touch listeners or interfering with frame drag.
+     */
+    private fun rippleClick(view: View, action: () -> Unit) {
+        view.setOnClickListener {
+            view.postDelayed({
+                if (!isFinishing && !isDestroyed) action()
+            }, 110L)
+        }
     }
     private fun button(label: String, click: () -> Unit) =
         com.google.android.material.button.MaterialButton(this).apply {
@@ -285,7 +299,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             setPadding(px(16), px(10), px(12), px(10))
             isClickable = true
             isFocusable = true
-            setOnClickListener { click() }
+            rippleClick(this) { click() }
         }
         val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         labels.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
@@ -536,7 +550,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 rippleCard(this)
                 setPadding(px(12), px(6), px(12), px(6))
                 isClickable = true
-                setOnClickListener {
+                rippleClick(this) {
                     if (!expandedModeGroups.add(group)) expandedModeGroups.remove(group)
                     modes()
                 }
@@ -605,7 +619,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
                 content.addView(label, LinearLayout.LayoutParams(0, -2, 1f))
                 card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
-                card.setOnClickListener { showMode(key) }
+                rippleClick(card) { showMode(key) }
                 card.addView(text("⋮", 24f).apply {
                     gravity = Gravity.CENTER
                     isClickable = true
@@ -976,7 +990,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     if (index != RecyclerView.NO_POSITION && bulkSelected.isEmpty())
                         showFrameOptions(more, key, index)
                 }
-                card.setOnClickListener {
+                rippleClick(card) {
                     val index = holder.bindingAdapterPosition
                     if (index != RecyclerView.NO_POSITION) {
                         if (bulkSelected.isEmpty()) editFrame(key, index)
@@ -1726,7 +1740,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             rippleCard(this)
             setPadding(px(12), px(7), px(12), px(7))
             isClickable = true
-            setOnClickListener { click() }
+            rippleClick(this) { click() }
         }
         val titleText = text(title, 16f).apply {
             setPadding(px(2), px(2), px(2), px(2))
@@ -2160,7 +2174,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
                 main.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
                 row.addView(main, LinearLayout.LayoutParams(0, -2, 1f))
-                row.setOnClickListener {
+                rippleClick(row) {
                     if (file.isDirectory) {
                         if (!expandedResourceFolders.add(path)) expandedResourceFolders.remove(path)
                         images()
