@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
         // 与设置页一致：按真实状态栏高度设置占位条，使顶栏与状态栏连成整体（三点按钮不再压在状态栏上）。
         binding.statusBarSpacer.layoutParams.height = getStatusBarHeight()
         binding.statusBarSpacer.requestLayout()
-        binding.tvAuthor.text = "初心丶CX  ·  v${AppVersion.name}"
+        binding.tvAuthor.text = "初心丶CX  ·  ${AppVersion.name}"
         setupHomeRecycler()
         buildRoleCards()
         setupMainMenu()
