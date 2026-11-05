@@ -3,6 +3,7 @@ package com.cx.cakepet
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -87,30 +88,60 @@ object RoleStore {
         RoleRegistry.refreshUserRoles(ctx)
     }
 
-    /** 读取首页实例清单；首次为空则用「每个预装模板一个实例」播种。 */
+    /**
+     * Experimental preset pack rollout: migrate existing home lists once, without
+     * deleting or reordering any user's instances. After migration, removing a
+     * preset stays removed (no repeated automatic insertion).
+     */
     fun getHomeRoles(ctx: Context): List<HomeRoleInstance> = runBlocking {
+        val presets = RoleRegistry.PRESETS
         val raw = ctx.homeRolesStore.data.first()[KEY_HOME_ROLES] ?: ""
         if (raw.isEmpty()) {
-            val seed = RoleRegistry.PRESETS.map { HomeRoleInstance(it.id, it.id) }
-            setHomeRoles(ctx, seed)
+            val seed = presets.map { HomeRoleInstance(it.id, it.id) }
+            ctx.homeRolesStore.edit { prefs ->
+                prefs[KEY_HOME_ROLES] = instancesToJson(seed).toString()
+                prefs[KEY_ADDITIONAL_PRESETS_SEEDED] = true
+            }
             seed
         } else {
             val arr = JSONArray(raw)
-            // 预装角色精简后，旧版本已经写入首页的退役模板不再展示；
-            // 已导入的用户模板以及白酥的实例不受影响。
-            (0 until arr.length()).map {
-                val o = arr.getJSONObject(it)
+            val stored = (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
                 HomeRoleInstance(
                     instanceId = o.getString("instanceId"),
                     templateId = o.getString("templateId"),
                     displayName = o.optString("displayName", ""),
                     shortName = o.optString("shortName", "")
                 )
-            }.filter { RoleRegistry.byId(it.templateId) != null }.let { visible ->
-                if (visible.isEmpty() && arr.length() > 0)
-                    RoleRegistry.PRESETS.map { HomeRoleInstance(it.id, it.id) }
-                else visible
             }
+            if (ctx.homeRolesStore.data.first()[KEY_ADDITIONAL_PRESETS_SEEDED] != true) {
+                val known = stored.map { it.templateId }.toSet()
+                val missing = presets.filter { it.id !in known }
+                    .map { HomeRoleInstance(it.id, it.id) }
+                val merged = stored + missing
+                ctx.homeRolesStore.edit { prefs ->
+                    prefs[KEY_HOME_ROLES] = instancesToJson(merged).toString()
+                    prefs[KEY_ADDITIONAL_PRESETS_SEEDED] = true
+                }
+                merged.filter { RoleRegistry.byId(it.templateId) != null }
+            } else {
+                stored.filter { RoleRegistry.byId(it.templateId) != null }.let { visible ->
+                    if (visible.isEmpty() && stored.isNotEmpty())
+                        presets.map { HomeRoleInstance(it.id, it.id) }
+                    else visible
+                }
+            }
+        }
+    }
+
+    private fun instancesToJson(list: List<HomeRoleInstance>): JSONArray = JSONArray().apply {
+        list.forEach { inst ->
+            put(JSONObject().apply {
+                put("instanceId", inst.instanceId)
+                put("templateId", inst.templateId)
+                put("displayName", inst.displayName)
+                put("shortName", inst.shortName)
+            })
         }
     }
 
@@ -333,5 +364,6 @@ object RoleStore {
 
     private val KEY_USER_ROLES = stringPreferencesKey("user_roles")
     private val KEY_HOME_ROLES = stringPreferencesKey("home_roles")
+    private val KEY_ADDITIONAL_PRESETS_SEEDED = booleanPreferencesKey("extra_presets_seeded_v102")
     private val KEY_CATALOG_ORDER = stringPreferencesKey("catalog_order")
 }
