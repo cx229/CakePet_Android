@@ -86,6 +86,66 @@
                     app:tint="@color/icon_chevron"
                     android:contentDescription="@null" />
             </LinearLayout>
+            <!-- Persistent data and personal defaults. Only visible on app-wide settings. -->
+            <LinearLayout
+                android:id="@+id/backup_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="6dp"
+                    android:paddingBottom="8dp"
+                    android:text="数据与备份"
+                    android:textSize="13sp"
+                    android:textColor="@color/cp_sub" />
+
+                <TextView
+                    android:id="@+id/row_user_habits"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:gravity="center_vertical"
+                    android:paddingStart="20dp"
+                    android:background="@drawable/card_bg"
+                    android:foreground="@drawable/settings_row_ripple"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:text="用户习惯"
+                    android:textSize="14sp"
+                    android:textColor="@color/cp_title" />
+                <TextView
+                    android:id="@+id/row_backup_export"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:paddingStart="20dp"
+                    android:background="@drawable/card_bg"
+                    android:foreground="@drawable/settings_row_ripple"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:text="导出软件备份"
+                    android:textSize="14sp"
+                    android:textColor="@color/cp_title" />
+                <TextView
+                    android:id="@+id/row_backup_import"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:paddingStart="20dp"
+                    android:background="@drawable/card_bg"
+                    android:foreground="@drawable/settings_row_ripple"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:text="导入软件备份"
+                    android:textSize="14sp"
+                    android:textColor="@color/cp_title" />
+            </LinearLayout>
+
             <LinearLayout android:id="@+id/test_buttons"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
