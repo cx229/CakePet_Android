@@ -3833,8 +3833,8 @@ class PetService : Service() {
      * 与 performAction 的区别：这里直接接受【模式名】而非固定的 ACTION 常量，
      * 菜单项因此完全由素材包驱动（角色差异 = 改 JSON，不动代码）。
      *
-     * 循环与否由素材包 modes 的 loop 声明：循环类（walk / wriggle 等带位移的常驻动作）
-     * 必须走 setMode（常驻），一次性动作走 playOnce——代码不写死哪些动作该常驻。
+     * 所选 Mode 自行控制循环与 nextMode；菜单触发只负责启动交互。
+     * 不通过 loop 属性猜测用户想要的功能生命周期。
      */
     fun performMenuMode(roleId: String, mode: String?, target: PetView?) {
         if (mode.isNullOrEmpty()) return
