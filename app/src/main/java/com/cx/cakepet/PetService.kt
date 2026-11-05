@@ -2556,8 +2556,11 @@ class PetService : Service() {
             val kb = maxOf(viewImeInset, globalImeInset)
             val active = kb > 0f && mode in listOf("global", "stretch", "local")
             val rawKeyboardTop = vis.bottom - kb - (if (active) c.imeLiftOffset else 0f)
+            val rotatedBottomOffset = rotatedBoundOffsets(floatArrayOf(
+                boundOffsetTop, boundOffsetBottom, boundOffsetLeft, boundOffsetRight
+            ))[2]
             val keyboardTop = if (active && mode == "global" && c.imeResetBottomOffset)
-                rawKeyboardTop + c.offsetBottom else rawKeyboardTop
+                rawKeyboardTop + rotatedBottomOffset else rawKeyboardTop
             val wasLocal = imeLastMode[rid] == "local"
             val closingLocal = kb <= 0f && wasLocal
             val previousTop = imeLastTop[rid]
@@ -2568,11 +2571,16 @@ class PetService : Service() {
                 fishLayers.filter { it.roleId == rid }.map { it to detectGlueEdge(oldRect, it.lp) }
             } else emptyList()
 
+            val grounded = mutableMapOf<PetView, Boolean>()
             pets.filter { it.roleId == rid }.forEach { inst ->
                 val p = inst.view.physics
+                grounded[inst.view] = p.maxY > vis.top + 10f &&
+                    kotlin.math.abs(p.y - p.maxY) < 1.5f
                 val applied = imePetOffsets[inst.view] ?: 0
                 val oldY = Math.round(p.y)
-                val (newY, newOffset) = imePosition(oldY, inst.view.height, applied,
+                val imageHeight = inst.view.height.takeIf { it > 0 }
+                    ?: inst.view.getBaseBitmapSize().second
+                val (newY, newOffset) = imePosition(oldY, imageHeight, applied,
                     mode, keyboardTop, vis, active, closingLocal, previousTop)
                 if (newY != oldY) p.y += newY - oldY
                 if (newOffset == 0) imePetOffsets.remove(inst.view)
@@ -2592,7 +2600,19 @@ class PetService : Service() {
                 moveAuxiliary(fl.iv, fl.lp, newY - fl.lp.y, fl.borderView)
                 if (newOffset == 0) imeFreezeOffsets.remove(fl.iv) else imeFreezeOffsets[fl.iv] = newOffset
             }
-            pets.filter { it.roleId == rid }.forEach { inst -> recalcBoundsFor(inst.view, vis, rid) }
+            pets.filter { it.roleId == rid }.forEach { inst ->
+                val p = inst.view.physics
+                recalcBoundsFor(inst.view, vis, rid)
+                // A grounded pet must remain on its new effective floor.
+                // Adjust coordinates and the bookkeeping offset, never its animation/state.
+                if (grounded[inst.view] == true) {
+                    val correction = p.maxY - p.y
+                    if (kotlin.math.abs(correction) > 0.5f) {
+                        p.y = p.maxY
+                        imePetOffsets[inst.view] = (imePetOffsets[inst.view] ?: 0) + Math.round(correction)
+                    }
+                }
+            }
             val newRect = if (c.feedingFullScreen) null else activityRectOf(rid)
             if (oldRect != null && newRect != null && oldRect != newRect && mode == "global") {
                 repinGluedFish(gluedEdges, newRect)
