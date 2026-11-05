@@ -491,7 +491,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:visibility="gone">
 
                 <TextView
                     style="@style/SettingsOptionSub"
@@ -511,10 +512,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="命中模式" />
+                android:text="命中模式" android:visibility="gone" />
 
             <RadioGroup
                 android:id="@+id/rg_hit_mode"
+                android:visibility="gone"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
@@ -541,6 +543,7 @@
             <!-- 核心(脚底盒)命中区尺寸（128 逻辑基数，应用层 ×scale 转像素） -->
             <LinearLayout
                 android:id="@+id/row_ctrl_box"
+                android:visibility="gone"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
