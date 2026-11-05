@@ -85,7 +85,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 移动总开关：关闭后「酥」静止（不运动/不掉落） -->
                 <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
@@ -137,7 +140,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
@@ -251,7 +257,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 反弹总开关：关闭后所有碰撞反弹失效（撞墙停靠、不反弹、不振动），四边弹力与反弹系数均不生效 -->
                 <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
@@ -365,7 +374,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 抛掷开关 -->
                 <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
@@ -417,7 +429,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 攀岩走壁开关 -->
                 <LinearLayout android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
