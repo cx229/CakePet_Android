@@ -92,6 +92,16 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         else (resources.displayMetrics.density * 24f).toInt()
     }
 
+    private val displayAdaptPage: Boolean
+        get() = page == SettingsPage.RANGE && intent.getBooleanExtra("adapt_page", false)
+
+    /** Only the active visual page participates in its reset, despite shared legacy RANGE storage. */
+    private fun displayedKeys(): Set<String>? = if (page != SettingsPage.RANGE) null else
+        if (displayAdaptPage)
+            setOf("imeMode", "imeResetBottomOffset", "imeLiftOffset", "rotationAdaptMode")
+        else setOf("interactionMode", "alpha", "coreHeight", "coreWidth",
+            "rangeFullScreen", "offsetTop", "offsetBottom", "offsetLeft", "offsetRight")
+
     // ===== 渲染（纯 UI 引擎，不区分 page） =====
     // 按「所属设置页的模块(group)」分组渲染，与设置页的视觉结构完全一致：
     // 每个模块 = 分隔线 + 标题(include_module_header) + 卡片(card_bg) 包裹的内容。
@@ -102,19 +112,17 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         val order = current.order.ifEmpty {
             // 兜底：无 order 时按 group 首次出现顺序
             current.sliders.map { it.key } + current.duals.map { it.key } + current.switches.map { it.key } +
-                (if (current.keyboardModeDefault != null) listOf("imeMode") else emptyList())
+                (if (current.keyboardModeDefault != null) listOf("imeMode") else emptyList()) +
+                current.choices.map { it.key }
         }
         // 两个显示页面共用 RANGE 阈值存储，但仅呈现本页相关项目。
-        val shownOrder = if (page == SettingsPage.RANGE) {
-            if (intent.getBooleanExtra("adapt_page", false))
-                order.filter { it == "imeMode" || it == "imeLiftOffset" || it == "imeResetBottomOffset" }
-            else order.filter { it != "imeMode" && it != "imeLiftOffset" && it != "imeResetBottomOffset" }
-        } else order
+        val shownOrder = displayedKeys()?.let { allowed -> order.filter { it in allowed } } ?: order
         // 建立 key -> 项 的索引
         val sliderMap = current.sliders.withIndex().associate { it.value.key to it }
         val dualMap = current.duals.withIndex().associate { it.value.key to it }
         val switchMap = current.switches.withIndex().associate { it.value.key to it }
         val colorMap = current.colors.withIndex().associate { it.value.key to it }
+        val choiceMap = current.choices.withIndex().associate { it.value.key to it }
 
         // 模块顺序 = order 中首次出现的 group 顺序
         val groupOrder = mutableListOf<String>()
@@ -123,6 +131,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 ?: dualMap[key]?.value?.group
                 ?: switchMap[key]?.value?.group
                 ?: colorMap[key]?.value?.group
+                ?: choiceMap[key]?.value?.group
                 ?: if (key == "imeMode" && current.keyboardModeDefault != null) "键盘适应" else null) ?: return@forEach
             if (g !in groupOrder) groupOrder.add(g)
         }
@@ -157,7 +166,24 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             shownOrder.forEach { key ->
                 when {
                     key == "imeMode" && current.keyboardModeDefault != null && g == "键盘适应" -> {
-                        card.addView(keyboardModeItem())
+                        card.addView(choiceRow("键盘适应", AppBounds.KEYBOARD_MODES,
+                            current.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE) { selected ->
+                            if (selected != current.keyboardModeDefault) {
+                                current = current.copy(keyboardModeDefault = selected)
+                                commitOne()
+                            }
+                        })
+                    }
+                    choiceMap[key]?.value?.group == g -> {
+                        val (idx, choice) = choiceMap.getValue(key)
+                        card.addView(choiceRow(choice.label, choice.options, choice.default) { selected ->
+                            if (selected != current.choices[idx].default) {
+                                current = current.copy(choices = current.choices.toMutableList().also {
+                                    it[idx] = it[idx].copy(default = selected)
+                                })
+                                commitOne()
+                            }
+                        })
                     }
                     sliderMap[key]?.value?.group == g -> {
                         val (idx, s) = sliderMap.getValue(key)
@@ -366,47 +392,36 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         return v
     }
 
-    /** Default selection is independent of the currently active keyboard mode. */
-    private fun keyboardModeItem(): View {
+    /** The same dropdown presentation as the already tuned keyboard setting row. */
+    private fun choiceRow(
+        title: String, options: List<Pair<String, String>>, selectedValue: String,
+        onSelected: (String) -> Unit
+    ): View {
         fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(20), dp(8), dp(20), dp(8))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
-        row.addView(TextView(this).apply {
-            text = "键盘适应默认行为"
-            textSize = 15f
+        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        texts.addView(TextView(this).apply {
+            text = title
+            textSize = 14f
+            setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(getColor(R.color.cp_title))
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        val spinner = android.widget.Spinner(this)
-        spinner.adapter = object : android.widget.ArrayAdapter<String>(
-            this, android.R.layout.simple_spinner_item, AppBounds.KEYBOARD_MODES.map { it.first }
-        ) {
-            private fun align(view: View): View = view.apply {
-                (this as? TextView)?.apply {
-                    textSize = 13f
-                    gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                    textAlignment = View.TEXT_ALIGNMENT_GRAVITY
-                }
-            }
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
-                align(super.getView(position, convertView, parent))
-            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View =
-                align(super.getDropDownView(position, convertView, parent))
-        }.apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        spinner.setSelection(AppBounds.KEYBOARD_MODES.indexOfFirst {
-            it.second == current.keyboardModeDefault
-        }.coerceAtLeast(0))
-        spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val selected = AppBounds.KEYBOARD_MODES[position].second
-                if (selected != current.keyboardModeDefault) {
-                    current = current.copy(keyboardModeDefault = selected)
-                    commitOne()
-                }
-            }
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        })
+        texts.addView(TextView(this).apply {
+            text = "默认行为"
+            textSize = 11f
+            setTextColor(getColor(R.color.cp_note))
+        })
+        row.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val spinner = Spinner(this)
+        SettingsSpinnerBinder.bind(spinner, options.map { it.first },
+            options.indexOfFirst { it.second == selectedValue }.coerceAtLeast(0)) { position ->
+            onSelected(options[position].second)
         }
         row.addView(spinner, LinearLayout.LayoutParams(dp(172), dp(48)))
         return row
@@ -526,9 +541,9 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         // 先让仍持有焦点的输入框失焦，触发挂起提交（随后 resetSystem 清空用户值，挂起编辑被一起丢弃，符合预期）。
         currentFocus?.clearFocus()
         runBlocking {
-            petBounds.resetSystem(page)
+            petBounds.resetSystem(page, displayedKeys())
             coerceConfigToBounds(page)
-            petConfig.resetFromBounds(petBounds, page)
+            petConfig.resetFromBounds(petBounds, page, if (page == SettingsPage.RANGE) displayAdaptPage else null)
         }
         current = petBounds.getBlocking(page)
         render()
@@ -559,7 +574,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         // 否则直接点「更多→恢复用户默认」时 EditText 未失焦、编辑值从未提交，菜单读到的仍是旧默认值。
         currentFocus?.clearFocus()
         runBlocking {
-            petConfig.resetFromBounds(petBounds, page)
+            petConfig.resetFromBounds(petBounds, page, if (page == SettingsPage.RANGE) displayAdaptPage else null)
             coerceConfigToBounds(page)
         }
         current = petBounds.getBlocking(page)
@@ -572,6 +587,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         petConfig.update { c ->
             var nc = c
             b.sliders.forEach { s ->
+                if (displayedKeys()?.contains(s.key) == false) return@forEach
                 nc = when (s.key) {
                     "scale" -> nc.copy(scale = nc.scale.coerceIn(s.from, s.to))
                     "alpha" -> nc.copy(alpha = (nc.alpha * 100f).coerceIn(s.from, s.to) / 100f)
