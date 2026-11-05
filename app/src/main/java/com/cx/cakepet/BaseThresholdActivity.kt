@@ -104,6 +104,12 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             current.sliders.map { it.key } + current.duals.map { it.key } + current.switches.map { it.key } +
                 (if (current.keyboardModeDefault != null) listOf("imeMode") else emptyList())
         }
+        // 两个显示页面共用 RANGE 阈值存储，但仅呈现本页相关项目。
+        val shownOrder = if (page == SettingsPage.RANGE) {
+            if (intent.getBooleanExtra("adapt_page", false))
+                order.filter { it == "imeMode" || it == "imeLiftOffset" || it == "imeResetBottomOffset" }
+            else order.filter { it != "imeMode" && it != "imeLiftOffset" && it != "imeResetBottomOffset" }
+        } else order
         // 建立 key -> 项 的索引
         val sliderMap = current.sliders.withIndex().associate { it.value.key to it }
         val dualMap = current.duals.withIndex().associate { it.value.key to it }
@@ -112,7 +118,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
 
         // 模块顺序 = order 中首次出现的 group 顺序
         val groupOrder = mutableListOf<String>()
-        order.forEach { key ->
+        shownOrder.forEach { key ->
             val g = (sliderMap[key]?.value?.group
                 ?: dualMap[key]?.value?.group
                 ?: switchMap[key]?.value?.group
@@ -148,7 +154,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 ).apply { setMargins(16, 0, 16, 0) }
                 setPadding(0, cardPadV, 0, cardPadV)
             }
-            order.forEach { key ->
+            shownOrder.forEach { key ->
                 when {
                     key == "imeMode" && current.keyboardModeDefault != null && g == "键盘适应" -> {
                         card.addView(keyboardModeItem())
