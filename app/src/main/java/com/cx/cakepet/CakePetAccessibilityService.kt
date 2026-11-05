@@ -33,6 +33,23 @@ class CakePetAccessibilityService : AccessibilityService() {
         active = this
     }
 
+    /** Production display windows are not part of the A/B/C experimental test overlay. */
+    fun attachPetDisplay(view: View, params: WindowManager.LayoutParams): Boolean = try {
+        wm.addView(view, params)
+        true
+    } catch (e: Exception) {
+        Log.w(debugTag, "Cannot add accessibility pet display", e)
+        false
+    }
+
+    fun updatePetDisplay(view: View, params: WindowManager.LayoutParams) {
+        try { wm.updateViewLayout(view, params) } catch (_: Exception) {}
+    }
+
+    fun detachPetDisplay(view: View) {
+        try { wm.removeView(view) } catch (_: Exception) {}
+    }
+
     fun showHitTest(mode: Int = MODE_SPLIT): Boolean {
         hideHitTest()
         return try {
@@ -145,7 +162,10 @@ class CakePetAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         hideHitTest()
-        if (active === this) active = null
+        if (active === this) {
+            active = null
+            PetService.instance?.onAccessibilityUnavailable()
+        }
         super.onDestroy()
     }
 
