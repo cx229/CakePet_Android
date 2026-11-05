@@ -216,10 +216,11 @@ object AppBounds {
         )
     )
     val KEYBOARD_MODES = listOf(
-        "关闭" to "off", "整体画布抬高" to "global", "局部抬高" to "local",
-        "键盘时隐藏" to "hide", "键盘时点击穿透" to "pass"
+        "关闭" to "off", "画布·整体抬高" to "global",
+        "画布·整体拉伸" to "stretch", "画布·局部抬高" to "local",
+        "画布·隐藏" to "hide", "画布·点击穿透" to "pass"
     )
-    const val KEYBOARD_DEFAULT_MODE = "global"
+    const val KEYBOARD_DEFAULT_MODE = "local"
     val RANGE_SWITCHES = listOf(
         SwitchBound("imeResetBottomOffset", "重置边界", "键盘适应", true)
     )
