@@ -115,6 +115,9 @@ class PetAnimationController(private val assets: ImageModeManager) {
         forcedStart = id
         modeChanged = true
         frameMotionPending = true
+        // A menu interaction may choose a moving function. Movement derives from
+        // its mapped function, not from loop=true or the image resource name.
+        if (isWalk()) updateWalkState(next.currentWalkSpeed)
     }
 
     fun cancelForced() {
