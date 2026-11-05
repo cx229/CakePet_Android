@@ -166,6 +166,16 @@ object SoftwareBackup {
         }
     }
 
+    /** Preflight validation before asking for destructive restore confirmation. */
+    fun inspect(ctx: Context, uri: Uri): JSONObject {
+        val staged = extract(ctx, uri)
+        return try {
+            JSONObject(File(staged, "manifest.json").readText())
+        } finally {
+            staged.deleteRecursively()
+        }
+    }
+
     /** All input is parsed and extracted before editing live state. */
     fun restore(ctx: Context, uri: Uri): String {
         val staged = extract(ctx, uri)
