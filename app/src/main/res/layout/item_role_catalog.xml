@@ -35,17 +35,17 @@
             android:orientation="vertical">
             <!-- 标题行：名称 + 已加入数量（小号灰字，实时更新）。数量底部对齐左侧标题。 -->
             <LinearLayout
+                android:id="@+id/role_title_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="bottom">
-                <!-- The name receives only remaining width and wraps naturally;
-                     the instance count keeps its own uncompressed single line. -->
+                <!-- Wrap short names tightly. Code caps the maximum width using
+                     the available space after reserving the count label. -->
                 <TextView
                     android:id="@+id/role_name"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:singleLine="false"
                     android:textSize="18sp"
                     android:textStyle="bold"
