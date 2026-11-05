@@ -212,6 +212,16 @@ object AppBounds {
             step = 1f, default = 100f
         )
     )
+    val RANGE_CHOICES = listOf(
+        ChoiceBound("interactionMode", "命中模式", "交互",
+            listOf("显示-不透明" to "display-opaque",
+                "核心-透明" to "core-transparent",
+                "核心-不透明" to "core-opaque"), "core-transparent"),
+        ChoiceBound("rangeFullScreen", "活动范围", "活动范围",
+            listOf("全屏" to "full", "自定义" to "custom"), "custom"),
+        ChoiceBound("rotationAdaptMode", "旋转适应", "旋转适应",
+            listOf("比例拉伸" to "stretch", "固定位置" to "fixed"), "stretch")
+    )
     val KEYBOARD_MODES = listOf(
         "关闭" to "off", "画布·整体抬高" to "global",
         "画布·整体拉伸" to "stretch", "画布·局部抬高" to "local",
@@ -222,9 +232,9 @@ object AppBounds {
         SwitchBound("imeResetBottomOffset", "重置边界", "键盘适应", true)
     )
     val RANGE_ORDER = listOf(
-        "alpha", "coreHeight", "coreWidth",
-        "offsetTop", "offsetBottom", "offsetLeft", "offsetRight",
-        "imeMode", "imeResetBottomOffset", "imeLiftOffset"
+        "interactionMode", "alpha", "coreHeight", "coreWidth",
+        "rangeFullScreen", "offsetTop", "offsetBottom", "offsetLeft", "offsetRight",
+        "imeMode", "imeResetBottomOffset", "imeLiftOffset", "rotationAdaptMode"
     )
 
     // ---------------- THINKING 页 ----------------
