@@ -174,7 +174,7 @@ object SoftwareBackup {
         var moved = false
         try {
             val registry = JSONObject(File(staged, "registries.json").readText())
-            val configs = JSONObject(File(staged, "role-config.json").readText())
+            val restoredConfigs = JSONObject(File(staged, "role-config.json").readText())
             val bounds = JSONObject(File(staged, "role-bounds.json").readText())
             val habits = JSONObject(File(staged, "user-habits.json").readText())
             val originals = runBlocking { RoleStore.exportRegistries(ctx) }
@@ -194,9 +194,9 @@ object SoftwareBackup {
                     RoleStore.importRegistries(ctx, registry, replace = true)
                     // Explicitly clear previously known role prefs not in backup.
                     val allIds = roleIds(ctx) + PreferenceCodec.entries(oldConfigs.first) +
-                        PreferenceCodec.entries(configs) + PreferenceCodec.entries(bounds)
+                        PreferenceCodec.entries(restoredConfigs) + PreferenceCodec.entries(bounds)
                     for (id in allIds) {
-                        PetConfig.forRole(ctx, id).importSettings(configs.optJSONObject(id) ?: JSONObject(), replace = true)
+                        PetConfig.forRole(ctx, id).importSettings(restoredConfigs.optJSONObject(id) ?: JSONObject(), replace = true)
                         PetBounds.forRole(ctx, id).importSettings(bounds.optJSONObject(id) ?: JSONObject(), replace = true)
                     }
                 }
