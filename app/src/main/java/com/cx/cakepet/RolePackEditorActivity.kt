@@ -2455,15 +2455,42 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }
             })
         }
-        body.addView(ScrollView(this).apply { addView(content) },
-            LinearLayout.LayoutParams(-1,
-                minOf(px(250 + uses.size * 36), resources.displayMetrics.heightPixels / 2)))
+        // Let short image details take their actual height, rather than guessing
+        // from the number of references. Long details scroll independently while
+        // the title and action buttons remain visible.
+        val detailsScroll = ScrollView(this).apply {
+            isFillViewport = false
+            addView(content, ScrollView.LayoutParams(-1, -2))
+        }
+        body.addView(detailsScroll, LinearLayout.LayoutParams(-1, -2))
         actionPairForDialog(body, "关闭", { dialog.dismiss() },
             "重命名", { dialog.dismiss(); renameDialog(relative, false) })
         dialog.setContentView(frame)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
         dialog.window?.setLayout(-1, -2)
+        detailsScroll.post {
+            if (!dialog.isShowing) return@post
+            val visibleFrame = android.graphics.Rect()
+            dialog.window?.decorView?.getWindowVisibleDisplayFrame(visibleFrame)
+            val screenHeight = visibleFrame.height().takeIf { it > 0 }
+                ?: resources.displayMetrics.heightPixels
+            // Keep headroom for system bars, navigation, card shadow and IME.
+            val maxDialogHeight = (screenHeight * 0.85f).toInt()
+            val fixedHeight = body.paddingTop + body.paddingBottom +
+                body.getChildAt(0).measuredHeight + body.getChildAt(2).measuredHeight
+            val contentWidth = detailsScroll.width.coerceAtLeast(1)
+            content.measure(
+                View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            val desired = minOf(content.measuredHeight,
+                (maxDialogHeight - fixedHeight).coerceAtLeast(px(120)))
+            if (detailsScroll.layoutParams.height != desired) {
+                detailsScroll.layoutParams = detailsScroll.layoutParams.apply { height = desired }
+                dialog.window?.setLayout(-1, -2)
+            }
+        }
     }
 
     private fun actionPairForDialog(parent: LinearLayout, left: String,
