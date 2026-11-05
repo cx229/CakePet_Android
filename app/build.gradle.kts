@@ -12,8 +12,8 @@ android {
         applicationId = "com.cx.cakepet"
         minSdk = 29
         targetSdk = 37
-        versionCode = 126857   // [TO AI] 每次修改版本号都需要递增
-        versionName = "t1.26.11.5.4" // [TO AI] 正式版本的1.<年后二位>.<月，无前导零>.<日，无前导零>,如果是测试版本，则增加前缀“t";如果需要，可能后面还会增加小时的标志
+        versionCode = 126858   // [TO AI] 每次修改版本号都需要递增
+        versionName = "t1.26.11.5.5" // [TO AI] 正式版本的1.<年后二位>.<月，无前导零>.<日，无前导零>,如果是测试版本，则增加前缀“t";如果需要，可能后面还会增加小时的标志
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
