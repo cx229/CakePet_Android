@@ -291,7 +291,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
     }
 
-    private fun menuCard(title: String, english: String, click: () -> Unit) {
+    private fun menuCard(title: String, english: String, note: String, click: () -> Unit) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -303,9 +303,18 @@ class RolePackEditorActivity : AppCompatActivity() {
             rippleClick(this) { click() }
         }
         val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        labels.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
-        labels.addView(text(english, 12f).apply {
-            setPadding(0, px(2), 0, 0)
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        heading.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
+        heading.addView(text(english, 11f).apply {
+            setPadding(px(8), 0, 0, 0)
+            setTextColor(getColor(R.color.cp_note))
+        })
+        labels.addView(heading)
+        labels.addView(text(note, 12f).apply {
+            setPadding(0, px(4), 0, 0)
             setTextColor(getColor(R.color.cp_note))
         })
         card.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
@@ -399,17 +408,25 @@ class RolePackEditorActivity : AppCompatActivity() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
         dialog.window?.setLayout(-1, -2)
-        viewport.post {
+        // Recompute the scroll viewport as optional fields appear or disappear.
+        fun resizeForm() {
+            if (!dialog.isShowing || viewport.width <= 0) return
             val maxHeight = (resources.displayMetrics.heightPixels * 0.70f).toInt()
             val contentWidth = (viewport.width - viewport.paddingLeft - viewport.paddingRight).coerceAtLeast(1)
             form.measure(
                 View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             )
-            viewport.layoutParams = viewport.layoutParams.apply {
-                height = minOf(form.measuredHeight + viewport.paddingTop + viewport.paddingBottom, maxHeight)
+            val desired = minOf(form.measuredHeight + viewport.paddingTop + viewport.paddingBottom, maxHeight)
+            if (viewport.layoutParams.height != desired) {
+                viewport.layoutParams = viewport.layoutParams.apply { height = desired }
+                dialog.window?.setLayout(-1, -2)
             }
         }
+        form.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            viewport.post { resizeForm() }
+        }
+        viewport.post { resizeForm() }
     }
     private fun optionsDialog(title: String, items: List<String>, choose: (Int) -> Unit) {
         val frame = android.widget.FrameLayout(this).apply {
@@ -480,10 +497,11 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun ids(): List<String> = root.getJSONObject("modes").keys().asSequence().toList().sorted()
     private fun home() {
         section("素材包编辑", "home")
-        menuCard("基本信息", "Info") { info() }
-        menuCard("功能映射", "Functions") { functions() }
-        menuCard("全部动作", "Modes") { modes() }
-        menuCard("图片资源", "Images") { images() }
+        val roleName = root.optString("name").ifBlank { "角色" }
+        menuCard("基本信息", "Info", "定义了「$roleName」的身份与信息") { info() }
+        menuCard("功能映射", "Functions", "决定了「$roleName」在何时会触发什么动作动画") { functions() }
+        menuCard("动作动画", "Modes", "制定了「$roleName」有什么动作动画") { modes() }
+        menuCard("图片资源", "Images", "列举了「$roleName」所用的图片") { images() }
     }
     private fun info() {
         editor("基本信息", compact = true) { box ->
@@ -532,7 +550,11 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun knownGroups(): List<String> = ids().flatMap { modeGroups(it) }.distinct()
 
     private fun modes() {
-        section("全部动作", "modes")
+        section("动作动画", "modes")
+        panel.addView(text("管理角色的动画动作、逐帧参数和播放规则。", 12f).apply {
+            setPadding(px(4), 0, px(4), px(4))
+            setTextColor(getColor(R.color.cp_note))
+        })
         action("＋ 新建动作") { newMode() }
         val grouped = linkedMapOf<String, MutableList<String>>()
         knownGroups().forEach { grouped[it] = mutableListOf() }
@@ -792,7 +814,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }.orEmpty()
                 change { json ->
                     json.getJSONObject("modes").put(name, JSONObject()
-                        .put("loop", true)
+                        .put("loop", false)
                         .put("nextMode", JSONObject.NULL)
                         .put("duration", JSONObject.NULL).put("finishCycle", true)
                         .put("groups", JSONArray().apply { if (group != null) put(group) })
@@ -1104,10 +1126,17 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
                 minimumHeight = px(44)
             }
-            box.addView(text("循环播放", 13f).apply {
-                setTextColor(getColor(R.color.cp_note))
+            val playbackRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, px(12), 0, px(8))
+            }
+            playbackRow.addView(text("循环播放", 14f).apply {
+                setTextColor(android.graphics.Color.BLACK)
+                setPadding(0, 0, px(12), 0)
             })
-            box.addView(playback, LinearLayout.LayoutParams(-1, px(48)))
+            playbackRow.addView(playback, LinearLayout.LayoutParams(0, px(48), 1f))
+            box.addView(playbackRow, LinearLayout.LayoutParams(-1, -2))
             val timedFields = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
             }
@@ -1125,7 +1154,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
             timedFields.addView(rangeRow)
             val finish = Switch(this).apply {
-                text = "到达时长后，播放完本轮再切换"
+                text = "循环结束时完整播放一轮"
                 isChecked = mode.optBoolean("finishCycle", true)
             }
             timedFields.addView(finish)
@@ -1746,8 +1775,33 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun functionPathName(path: List<String>): String =
         path.indices.joinToString("/") { functionSegment(path.take(it + 1)) }
 
+    private fun functionDescription(path: List<String>): String = when (path.joinToString("/")) {
+        "static/sit" -> "进入静止状态时播放的基础动作"
+        "static/pool" -> "静止状态下随机选取的候选动作"
+        "standby/pool" -> "角色待机时随机选取的候选动作"
+        "touch/roll" -> "触摸角色触发滚动行为时播放"
+        "touch/walk" -> "触摸交互触发行走行为时播放"
+        "touch/jump_down" -> "触摸交互后角色落地时播放"
+        "touch/lift_up/slow" -> "缓慢提起角色时播放"
+        "touch/lift_up/left_medium" -> "向左中速拖动提起时播放"
+        "touch/lift_up/left_fast" -> "向左快速拖动提起时播放"
+        "touch/lift_up/right_medium" -> "向右中速拖动提起时播放"
+        "touch/lift_up/right_fast" -> "向右快速拖动提起时播放"
+        "snap/snap_head" -> "角色吸附边缘后探头时播放"
+        "snap/pat_head/pat_head" -> "角色吸附状态被摸头时播放"
+        "snap/feed/eat" -> "角色吸附状态接受投喂时播放"
+        "climb/walk" -> "角色沿边缘攀爬移动时播放"
+        "climb/jump_up" -> "角色从攀爬状态跳起时播放"
+        "pat_head/pat_head" -> "正常状态下摸头互动时播放"
+        "feed/eat" -> "角色接受投喂并进食时播放"
+        "feed/food" -> "投喂时显示的食物动画"
+        "menu/pool" -> "菜单中供手动选择的动画"
+        else -> "执行该功能时，从关联动作中选择播放"
+    }
+
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
-                             level: Int, immediate: Boolean = false, click: () -> Unit): LinearLayout {
+                             level: Int, immediate: Boolean = false, description: String = "",
+                             click: () -> Unit): LinearLayout {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.card_bg)
@@ -1757,16 +1811,15 @@ class RolePackEditorActivity : AppCompatActivity() {
             if (immediate) setOnClickListener { click() }
             else rippleClick(this) { click() }
         }
-        val titleText = text(title, 16f).apply {
-            setPadding(px(2), px(2), px(2), px(2))
-        }
-        card.addView(titleText, LinearLayout.LayoutParams(-1, -2))
-        if (subtitle.isNotBlank()) {
-            val description = text(subtitle, 13f).apply {
-                setTextColor(getColor(R.color.cp_note))
-            }
-            card.addView(description, LinearLayout.LayoutParams(-1, -2))
-        }
+        card.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
+        if (description.isNotBlank()) card.addView(text(description, 12f).apply {
+            setPadding(0, px(2), 0, 0)
+            setTextColor(getColor(R.color.cp_note))
+        })
+        if (subtitle.isNotBlank()) card.addView(text(subtitle, 11f).apply {
+            setPadding(0, px(2), 0, 0)
+            setTextColor(getColor(R.color.cp_note))
+        })
         val indent = px((level * 12).coerceAtMost(48))
         val params = LinearLayout.LayoutParams(-1, -2).apply {
             leftMargin = indent
@@ -1808,8 +1861,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                 is JSONArray -> {
                     val selected = (0 until child.length()).map { child.optString(it) }
                         .filter { it.isNotBlank() }
-                    functionItem(parent, "▣  " + displayName + "   ›",
-                        "动作：" + selected.joinToString("、"), path.size) {
+                    functionItem(parent, "▣  " + functionPathName(currentPath) + "   ›",
+                        "动作：" + selected.joinToString("、"), path.size,
+                        description = functionDescription(currentPath)) {
                         chooseFunctions(currentPath, selected)
                     }
                 }
@@ -1819,11 +1873,16 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun functions() {
         section("功能映射", "functions")
+        panel.addView(text("将功能触发条件关联到动作动画，决定何时播放哪些动作。", 12f).apply {
+            setPadding(px(4), 0, px(4), px(6))
+            setTextColor(getColor(R.color.cp_note))
+        })
         functionTree(panel, root.getJSONObject("functions"), emptyList())
     }
     /** Shared grouped Mode selector for nextMode (single) and Functions leaves (multiple). */
     private fun chooseModes(single: Boolean, initial: List<String>,
-                            onConfirm: (List<String>) -> Unit) {
+                            headerTitle: String? = null, headerDescription: String? = null,
+                            footerNote: String? = null, onConfirm: (List<String>) -> Unit) {
         val selected = linkedSetOf<String>().apply { addAll(initial.filter { it in ids() }) }
         val groups = knownGroups() + "未分组"
         val expanded = mutableSetOf<String>()
@@ -1839,9 +1898,14 @@ class RolePackEditorActivity : AppCompatActivity() {
             setPadding(px(16), px(14), px(16), px(14))
         }
         card.addView(body)
-        body.addView(text(if (single) "选择后续动作" else "选择功能动作", 18f).apply {
+        body.addView(text(headerTitle ?: if (single) "选择后续动作" else "选择功能动作", 18f).apply {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        if (!headerDescription.isNullOrBlank()) body.addView(text(headerDescription, 12f).apply {
+            gravity = Gravity.CENTER
+            setPadding(px(4), 0, px(4), px(10))
+            setTextColor(getColor(R.color.cp_note))
         })
         val selectionInfo = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(selectionInfo)
@@ -1894,6 +1958,10 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         redraw()
+        if (!footerNote.isNullOrBlank()) body.addView(text(footerNote, 11f).apply {
+            setPadding(px(2), px(10), px(2), px(8))
+            setTextColor(getColor(R.color.cp_note))
+        })
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(button("取消") { dialog.dismiss() },
             LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
@@ -1913,7 +1981,10 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun chooseFunctions(path: List<String>, chosen: List<String>) {
-        chooseModes(single = false, initial = chosen) { selected ->
+        chooseModes(single = false, initial = chosen,
+            headerTitle = functionPathName(path),
+            headerDescription = functionDescription(path),
+            footerNote = "执行到该功能时，将随机选中以上动作播放") { selected ->
             attempt {
                 change { json ->
                     var node = json.getJSONObject("functions")
