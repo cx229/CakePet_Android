@@ -26,6 +26,11 @@ object SettingsInterchange {
                     for (key in keys) obj.optJSONObject(key)?.let { put(key, it) }
                 }
             } else obj
+            // These are internal material identity and retired visibility keys,
+            // not portable user settings for a different character.
+            if (section == "config") {
+                listOf("sprite_pack", "use_new_sprite", "visible").forEach { selected.remove(it) }
+            }
             applied += if (section == "config")
                 PetConfig.forRole(ctx, roleId).importSettings(selected)
             else PetBounds.forRole(ctx, roleId).importSettings(selected)
