@@ -126,7 +126,7 @@ class UserHabitsActivity : AppCompatActivity() {
                 setTextColor(getColor(R.color.cp_title))
                 isChecked = key in selected
                 setOnCheckedChangeListener { _, checked ->
-                    chosen.put(key, existing)
+                    if (!chosen.has(key)) chosen.put(key, existing)
                     UserHabits.setEnabled(data, section, key, checked)
                     save()
                 }
