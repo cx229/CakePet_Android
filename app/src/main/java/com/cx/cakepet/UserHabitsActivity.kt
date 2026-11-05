@@ -11,6 +11,7 @@ import android.widget.Spinner
 import android.widget.ArrayAdapter
 import android.widget.AdapterView
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -78,13 +79,31 @@ class UserHabitsActivity : AppCompatActivity() {
             setBackgroundColor(getColor(R.color.cp_bg))
             setPadding(dp(16), dp(16), dp(16), dp(10))
         }
-        val title = TextView(this).apply {
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(getColor(R.color.cp_bg))
+        }
+        val statusHeight = resources.getIdentifier("status_bar_height", "dimen", "android")
+            .takeIf { it != 0 }?.let { resources.getDimensionPixelSize(it) } ?: dp(24)
+        outer.addView(View(this).apply { setBackgroundColor(getColor(R.color.cp_status_bar)) },
+            LinearLayout.LayoutParams(-1, statusHeight))
+        val toolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        toolbar.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_back)
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            setOnClickListener { finish() }
+            contentDescription = "返回"
+        }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        toolbar.addView(TextView(this).apply {
             text = "用户习惯"
-            textSize = 22f
+            textSize = 20f
             setTextColor(getColor(R.color.cp_title))
             setTypeface(typeface, android.graphics.Typeface.BOLD)
-        }
-        root.addView(title)
+        })
+        outer.addView(toolbar, LinearLayout.LayoutParams(-1, dp(48)))
         root.addView(info("仅作用于之后新建的角色；取消勾选会保留已填写的值。"))
         val operations = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         operations.addView(button("导入设置") { importFile.launch(arrayOf("application/json", "text/plain")) },
@@ -102,7 +121,8 @@ class UserHabitsActivity : AppCompatActivity() {
         holder = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply { addView(holder) },
             LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
+        outer.addView(root, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(outer)
         render()
     }
 
