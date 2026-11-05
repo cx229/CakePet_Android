@@ -138,6 +138,7 @@ class UserHabitsActivity : AppCompatActivity() {
         holder.addView(info(if (section == "config") "选择新角色要沿用的设置项"
             else "选择新角色的默认值、上下限和选项"))
         for (key in PreferenceCodec.entries(source)) {
+            if (section == "config" && key in setOf("sprite_pack", "use_new_sprite", "visible")) continue
             val existing = chosen.optJSONObject(key) ?: source.optJSONObject(key) ?: continue
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
