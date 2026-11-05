@@ -12,13 +12,28 @@ android {
         applicationId = "com.cx.cakepet"
         minSdk = 29
         targetSdk = 37
-        versionCode = 126872 // Android upgrade requires monotonically increasing versionCode
-        versionName = "v1.26.11.05.23.56" // v1.YY.MM.DD.hh.mm, Beijing time (UTC+8); update for each APK build
+        versionCode = 126873 // Android upgrade requires monotonically increasing versionCode
+        versionName = "v1.26.11.06.00.17" // v1.YY.MM.DD.hh.mm, Beijing time (UTC+8); update for each APK build
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Development-only key. Intentionally shareable because debug builds use a
+    // distinct package ID; never use this key for the official release application.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("signing/cakepet-shared-debug.jks")
+            storePassword = "android"
+            keyAlias = "cakepet-debug"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             optimization {
                 enable = false
