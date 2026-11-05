@@ -134,7 +134,7 @@
     },
     "静坐": {
       "loop": true,
-      "loopMode": "infinite",
+      "loopMode": "timed",
       "nextMode": null,
       "frames": [
         {
@@ -185,7 +185,7 @@
     },
     "炸毛": {
       "loop": true,
-      "loopMode": "infinite",
+      "loopMode": "timed",
       "nextMode": null,
       "frames": [
         {
@@ -296,7 +296,7 @@
     },
     "摇头": {
       "loop": true,
-      "loopMode": "infinite",
+      "loopMode": "timed",
       "nextMode": "炸毛",
       "frames": [
         {
@@ -537,7 +537,7 @@
     },
     "走动短距离": {
       "loop": true,
-      "loopMode": "infinite",
+      "loopMode": "timed",
       "nextMode": null,
       "frames": [
         {
@@ -576,7 +576,7 @@
     },
     "走路": {
       "loop": true,
-      "loopMode": "infinite",
+      "loopMode": "timed",
       "nextMode": null,
       "frames": [
         {
@@ -686,7 +686,7 @@
     },
     "蠕动": {
       "loop": true,
-      "loopMode": "infinite",
+      "loopMode": "timed",
       "nextMode": null,
       "frames": [
         {
