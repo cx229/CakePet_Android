@@ -2773,10 +2773,10 @@ class PetService : Service() {
         // （boundOffset*/imeAdaptEnabled 等为单例 scratch，多角色下会被最后加载角色覆盖，导致串角色）。
         val rt = engines[roleId] ?: return
         val rc = rt.config.getBlocking()
-        val offTop = r(if (c.rangeFullScreen) 0f else c.offsetTop).coerceIn(-300f, 2100f)
-        val offBottom = r(if (c.rangeFullScreen) 0f else c.offsetBottom).coerceIn(-300f, 2100f)
-        val offLeft = r(if (c.rangeFullScreen) 0f else c.offsetLeft).coerceIn(-300f, 1000f)
-        val offRight = r(if (c.rangeFullScreen) 0f else c.offsetRight).coerceIn(-300f, 1000f)
+        val offTop = (if (rc.rangeFullScreen) 0f else rc.offsetTop).coerceIn(-300f, 2100f)
+        val offBottom = (if (rc.rangeFullScreen) 0f else rc.offsetBottom).coerceIn(-300f, 2100f)
+        val offLeft = (if (rc.rangeFullScreen) 0f else rc.offsetLeft).coerceIn(-300f, 1000f)
+        val offRight = (if (rc.rangeFullScreen) 0f else rc.offsetRight).coerceIn(-300f, 1000f)
         // physics.x/y 为【窗口左上角坐标】（位置真值），脚锚点 = physics ∓ anchorOff 仅在贴边/snap 时派生。
         // 边界模型（探头/出界）：脚朝向的那一侧为【锚点边】——只约束“锚点(脚)不超可见区”，
         // 图底可越过屏幕外（被裁切=探头）；其余三侧仍为【PNG 四边】约束（图边不超可见区）。
