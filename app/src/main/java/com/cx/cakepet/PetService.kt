@@ -1795,6 +1795,8 @@ class PetService : Service() {
 
     private fun loadConfig(roleId: String) {
         val rt = engines[roleId] ?: return
+        if (rt.config.getBlocking().interactionMode == "core-opaque" &&
+            CakePetAccessibilityService.active == null) onAccessibilityUnavailable()
         config.normalizeBlocking() // 启动时清洗历史残留的非法四边重力组合
         val c = config.getBlocking()
         showDebug = c.showDebug
