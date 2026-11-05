@@ -435,6 +435,7 @@ class RangeSettingsActivity : AppCompatActivity() {
         val keys = listOf("display-opaque", "core-transparent", "core-opaque")
         lateinit var hitChooser: android.widget.Spinner
         val coreLines = mutableListOf<View>()
+        val valueRefreshers = mutableListOf<() -> Unit>()
         lateinit var opacityNote: TextView
 
         val current = config.getBlocking()
@@ -469,8 +470,9 @@ class RangeSettingsActivity : AppCompatActivity() {
 
         fun addValue(key: String, name: String, hint: String, value: Float,
                      suffix: String, save: (Float) -> Unit): android.widget.LinearLayout {
-            val bound = PetBounds.forRole(this, roleId).getBlocking(SettingsPage.RANGE)
+            fun readBound() = PetBounds.forRole(this, roleId).getBlocking(SettingsPage.RANGE)
                 .sliders.first { it.key == key }
+            var bound = readBound()
             val block = android.widget.LinearLayout(this).apply {
                 orientation = android.widget.LinearLayout.VERTICAL
                 setPadding(dp(20), dp(8), dp(20), dp(8))
@@ -514,6 +516,17 @@ class RangeSettingsActivity : AppCompatActivity() {
                     save(actual)
                 }
             }
+            valueRefreshers += {
+                bound = readBound()
+                val cfg = config.getBlocking()
+                val actual = when (key) {
+                    "alpha" -> cfg.alpha * 100f
+                    "coreHeight" -> cfg.ctrlBoxHeight / ConfigDefaults.CTRL_BOX_HEIGHT
+                    else -> cfg.ctrlBoxWidth / ConfigDefaults.CTRL_BOX_WIDTH
+                }
+                input.setText(display(actual))
+                bar.value = progress(actual)
+            }
             input.setOnFocusChangeListener { _, hasFocus ->
                 if (!hasFocus) {
                     val parsed = input.text.toString().replace("%", "").replace("×", "").toFloatOrNull()
@@ -553,7 +566,10 @@ class RangeSettingsActivity : AppCompatActivity() {
             opacityNote.visibility = if (mode == 1) View.VISIBLE else View.GONE
         }
         updateHit()
-        interactionRefresh = { updateHit() }
+        interactionRefresh = {
+            updateHit()
+            valueRefreshers.forEach { it() }
+        }
 
         val offsets = listOf(offTopBar, offBottomBar, offLeftBar, offRightBar)
             .map { it.parent as View }
