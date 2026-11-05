@@ -61,26 +61,45 @@
             android:textColor="@color/cp_hint_dark"
             android:gravity="center" />
 
-        <!-- 首页独立的加号按钮：普通文本符号，文字不保留上下内外边距。
-             按钮高度仍为 44dp，与列表的 12dp 间隔保持不变。 -->
-        <TextView
+        <!-- 首页独立加号入口：44dp 高，主符号为普通文字 +，
+             6sp 副标题恢复；子文本无上下内外边距与额外字体留白。 -->
+        <LinearLayout
             android:id="@+id/btn_add_role"
             android:layout_width="match_parent"
             android:layout_height="44dp"
-            android:layout_marginTop="0dp"
             android:layout_marginBottom="12dp"
+            android:orientation="vertical"
+            android:gravity="center"
             android:paddingTop="0dp"
             android:paddingBottom="0dp"
-            android:includeFontPadding="false"
-            android:gravity="center"
-            android:text="+"
-            android:textSize="22sp"
-            android:textStyle="normal"
-            android:textColor="@color/cp_btn_outline_text"
             android:background="@drawable/bg_btn_outline"
             android:clickable="true"
             android:focusable="true"
-            android:contentDescription="添加角色" />
+            android:contentDescription="添加角色">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:paddingTop="0dp"
+                android:paddingBottom="0dp"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="0dp"
+                android:text="+"
+                android:textSize="22sp"
+                android:textStyle="normal"
+                android:textColor="@color/cp_btn_outline_text"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:paddingTop="0dp"
+                android:paddingBottom="0dp"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="0dp"
+                android:text="创建/导入角色"
+                android:textSize="6sp"
+                android:textColor="@color/cp_note"/>
+        </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/role_list"
