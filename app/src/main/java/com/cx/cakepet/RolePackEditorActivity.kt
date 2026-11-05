@@ -542,21 +542,16 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         val thumbnails = mutableMapOf<String, android.graphics.Bitmap?>()
         for ((group, names) in grouped) {
-            val opened = group in expandedModeGroups
+            val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val header = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setBackgroundResource(R.drawable.card_bg)
                 rippleCard(this)
                 setPadding(px(12), px(6), px(12), px(6))
-                isClickable = true
-                rippleClick(this) {
-                    if (!expandedModeGroups.add(group)) expandedModeGroups.remove(group)
-                    modes()
-                }
             }
-            header.addView(text((if (opened) "▾ 📂  " else "▸ 📁  ") + group +
-                "  (${names.size})", 16f), LinearLayout.LayoutParams(0, -2, 1f))
+            val heading = text("", 16f)
+            header.addView(heading, LinearLayout.LayoutParams(0, -2, 1f))
             header.addView(text("+", 23f).apply {
                 gravity = Gravity.CENTER
                 isClickable = true
@@ -567,8 +562,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 isClickable = true
                 setOnClickListener { anchor -> showModeGroupOptions(anchor, group) }
             }, LinearLayout.LayoutParams(px(38), px(44)))
-            panel.addView(header, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
-            if (!opened) continue
+            fun fillChildren() {
             for (key in names) {
                 val mode = root.getJSONObject("modes").getJSONObject(key)
                 val frames = mode.getJSONArray("frames")
@@ -625,11 +619,26 @@ class RolePackEditorActivity : AppCompatActivity() {
                     isClickable = true
                     setOnClickListener { anchor -> showModeOptions(anchor, key) }
                 }, LinearLayout.LayoutParams(px(42), px(54)))
-                panel.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
+                children.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
                     leftMargin = px(14)
                     topMargin = px(4)
                 })
             }
+            }
+            fun refreshHeader() {
+                val opened = group in expandedModeGroups
+                heading.text = (if (opened) "▾ 📂  " else "▸ 📁  ") + group +
+                    "  (${names.size})"
+                if (opened && children.childCount == 0) fillChildren()
+                children.visibility = if (opened) View.VISIBLE else View.GONE
+            }
+            rippleClick(header) {
+                if (!expandedModeGroups.add(group)) expandedModeGroups.remove(group)
+                refreshHeader()
+            }
+            panel.addView(header, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
+            panel.addView(children, LinearLayout.LayoutParams(-1, -2))
+            refreshHeader()
         }
     }
 
