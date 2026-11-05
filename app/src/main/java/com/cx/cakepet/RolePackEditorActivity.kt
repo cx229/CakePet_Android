@@ -1422,10 +1422,11 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
+        addDialogDivider(body, top = 8, bottom = 8)
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(info)
         val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        tools.addView(button("新建文件夹") {
+        tools.addView(dialogButton("新建文件夹", primary = false) {
             dialog.dismiss()
             newResourceFolder {
                 showImageChooser(request, selected.toList())
@@ -1516,9 +1517,9 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         redraw()
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        buttons.addView(button("取消") { dialog.dismiss() },
+        buttons.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(4) })
-        buttons.addView(button("确认") {
+        buttons.addView(dialogButton("确认", primary = true) {
             if (selected.isEmpty()) Toast.makeText(this, "请至少选择一张图片", Toast.LENGTH_SHORT).show()
             else attempt {
                 val paths = selected.sortedWith(compareBy(::naturalOrder))
@@ -2044,6 +2045,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
+        addDialogDivider(body, top = 8, bottom = 8)
         body.addView(text("动画：$modeId\n勾选要绑定的功能；取消勾选将解除对应绑定。", 12f).apply {
             gravity = Gravity.CENTER
             setPadding(px(4), 0, px(4), px(10))
@@ -2150,7 +2152,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
-        actions.addView(button("确认") {
+        actions.addView(dialogButton("确认", primary = true) {
             attempt {
                 // Verify again at commit time; never clear an existing function pool.
                 change { json ->
@@ -2203,6 +2205,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
+        addDialogDivider(body, top = 8, bottom = 8)
         if (!headerDescription.isNullOrBlank()) body.addView(text(headerDescription, 12f).apply {
             gravity = Gravity.CENTER
             setPadding(px(4), 0, px(4), px(10))
@@ -2266,7 +2269,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
-        actions.addView(button("确认") {
+        actions.addView(dialogButton("确认", primary = true) {
             if (!single && selected.isEmpty()) {
                 Toast.makeText(this, "至少选择一个动画", Toast.LENGTH_SHORT).show()
             } else {
@@ -2447,6 +2450,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
+        addDialogDivider(body, top = 8, bottom = 8)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
@@ -2482,10 +2486,10 @@ class RolePackEditorActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, px(10), 0, 0)
         }
-        row.addView(button(left, onLeft), LinearLayout.LayoutParams(0, px(44), 1f).apply {
+        row.addView(dialogButton(left, primary = false, click = onLeft), LinearLayout.LayoutParams(0, px(44), 1f).apply {
             rightMargin = px(5)
         })
-        row.addView(button(right, onRight), LinearLayout.LayoutParams(0, px(44), 1f).apply {
+        row.addView(dialogButton(right, primary = true, click = onRight), LinearLayout.LayoutParams(0, px(44), 1f).apply {
             leftMargin = px(5)
         })
         parent.addView(row)
