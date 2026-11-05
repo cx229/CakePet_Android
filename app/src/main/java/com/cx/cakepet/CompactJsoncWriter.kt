@@ -80,7 +80,7 @@ internal object CompactJsoncWriter {
                     out.append("  ".repeat(depth)).append(']')
                 }
             }
-            else -> out.append(JSONObject.valueToString(value ?: JSONObject.NULL))
+            else -> out.append(JSONArray().put(value ?: JSONObject.NULL).toString().let { it.substring(1, it.length - 1) })
         }
     }
 
@@ -89,8 +89,8 @@ internal object CompactJsoncWriter {
         // Conservative: preserve only standalone comments immediately before a key
         // whose name occurs once in this document. This avoids shifting a frame's
         // "delay" annotation to a different frame when frames are reordered.
-        val keyLine = Regex("^\\s*\\\"((?:[^\\\"\\\\]|\\\\.)+)\\\"\\s*:")
-        val commentLine = Regex("^\\s*(//.*|/\\*.*\\*/)[ \\t]*$")
+        val keyLine = Regex("""^\s*"((?:[^"\\]|\\.)+)"\s*:""")
+        val commentLine = Regex("""^\s*(//.*|/\*.*\*/)[ \t]*$""")
         val lines = source.lines()
         val keys = lines.mapNotNull { keyLine.find(it)?.groupValues?.get(1) }
         val counts = keys.groupingBy { it }.eachCount()
