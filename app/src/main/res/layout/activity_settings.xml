@@ -88,7 +88,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 大小（输入框在右，滑块满宽居下） -->
                 <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -213,7 +216,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 移动 总入口：进入阈值等详情设置页 -->
                 <LinearLayout android:id="@+id/row_movement"
@@ -258,7 +264,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 吸附边缘 总开关入口 -->
                 <LinearLayout android:id="@+id/row_snap_mode"
@@ -298,7 +307,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
                 <LinearLayout android:id="@+id/row_thinking_mode"
                     style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
                     android:layout_marginBottom="0dp"
@@ -336,7 +348,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
                 <LinearLayout android:id="@+id/row_feeding_mode"
                     style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
                     android:layout_marginBottom="0dp"
@@ -374,7 +389,10 @@
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
                 android:dividerPadding="16dp"
-                android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
                 <LinearLayout android:id="@+id/row_random_mode"
                     style="@style/SettingsSwitchRow" android:layout_marginTop="0dp"
                     android:layout_marginBottom="0dp"
