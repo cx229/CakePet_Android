@@ -531,7 +531,7 @@ class PetService : Service() {
         if (lp.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY &&
             CakePetAccessibilityService.active != null)
             CakePetAccessibilityService.active?.detachPetDisplay(view)
-        else try { windowManager.removeView(view) } catch (_: Exception) {}
+        else try { windowManager.removeViewImmediate(view) } catch (_: Exception) {}
     }
 
     private fun updateDisplay(view: PetDisplayView, lp: WindowManager.LayoutParams) {
