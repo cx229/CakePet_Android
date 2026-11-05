@@ -3762,62 +3762,18 @@ class PetService : Service() {
         roleId?.let { rid -> pets.firstOrNull { it.roleId == rid }?.petMsg } ?: trayMsgManager
 
     /**
-     * 处理菜单/广播/通知下发的动作（供浮窗菜单与 onStartCommand 共用）。
-     * @param target 具体执行动作的宠物（长按菜单打开于某只宠物时传入该 PetView，动作只作用于它）；
-     *               null 表示广播/通知等无明确目标的全局动作，回落到主实例 petView（index 0）。
+     * Compatibility entry point for non-menu actions. The long-press menu now
+     * uses returnHome(roleId) and recall(roleId) directly, matching home cards.
+     * The old persistent HIDE action has been removed.
      */
     fun performAction(action: String?, target: PetView? = null) {
-        // 退出(EXIT)必须最先处理：不依赖 petView 是否已初始化，否则一旦 petView 未就绪，
-        // 下面的吸附态判断会抛异常，导致 exitApp() 永不执行、退出静默失败。
-        if (action == MenuActivity.ACTION_EXIT) {
-            exitApp()
-            return
-        }
-        // tv = 实际执行动作的目标宠物（菜单动作取触发菜单的宠物，广播回落主实例）。
-        val tv = target ?: petView
-        val targetRoleId = target?.let { t -> pets.firstOrNull { it.view === t }?.roleId } ?: currentRoleId
-        // 吸附态：菜单里的动作切换一律忽略（探头常驻，仅用户手动拉出/召回才退出）。
-        // 召回(RECALL)是用户主动退出，允许；隐藏(HIDE)只改可见性、不动吸附态，允许。
-        // 用目标宠物自身的吸附态判定（多数量下每只独立吸附），而非写死主实例。
-        if (::petView.isInitialized && tv.physics.isSnapped &&
-            action != MenuActivity.ACTION_RECALL && action != MenuActivity.ACTION_HIDE
-        ) return
         when (action) {
-            // 说明：动作类菜单项已改为由素材包 menuPool 驱动（见 PetMenu.buildActions /
-            // PetService.performMenuMode），项数与内容随角色而异（差异化），
-            // 故此处不再保留任何固定动作分支——代码不直接引用模式名。
-            // 保留的仅为与素材包无关的系统动作（RECALL / HIDE / EXIT 等）。
-            MenuActivity.ACTION_HIDE -> {
-                // 隐藏 = 置 visible=false（与设置页“显示宠物”开关同源同一标志），
-                // 保持服务运行，仅隐藏浮窗；不再 stopService，避免与设置页状态不同步。
-                // 碎碎念跟随隐藏。
-                thinkingPetMsg(targetRoleId)?.setVisible(false)
-                scope.launch { (target?.let { tv -> pets.firstOrNull { inst -> inst.view === tv }?.roleId?.let { engines[it]?.config } } ?: config).update { it.copy(visible = false) } }
-            }
+            MenuActivity.ACTION_EXIT -> exitApp()
             MenuActivity.ACTION_RECALL -> {
-                // 召回：强制复位 —— 归位底部中心、静止、显示 sit-calm，
-                // 并清除抛掷/滚动/速度/加速度/拖拽等所有运动状态。
-                // 仅作用于【目标角色】全部实例（多分身统一召回，不串其它角色）；
-                // 无明确目标（广播/通知全局动作）时回落到全部实例，保持原有全局语义。
-                // 顺序至关重要：先复位朝向 → 再重算边界 → 最后按新边界归位。
-                // 背景：吸附期间 snapRotation 被设为贴附边朝向，帧循环【只对吸附实例】重算边界；
-                // 退出吸附后不再重算，若直接用旧的 p.maxY 归位，用的其实是吸附态包围盒的地面，
-                // 表现为“召回后位置/地面判断错误”（贴底时 snapRotation=0 恰好正确 → 呈概率性）。
-                val rolePets = if (targetRoleId != null) pets.filter { it.roleId == targetRoleId } else pets
-                for (inst in rolePets) inst.view.forceReset()
-                recalcBounds()   // 直立朝向下重算全部实例边界，maxY 才是真实地面
-                for (inst in rolePets) {
-                    val p = inst.view.physics
-                    val cx = (p.minX + p.maxX) / 2f   // 底部中心（锚点屏幕坐标）
-                    val cy = p.maxY
-                    p.resetTo(cx, cy)
-                }
-                // 若当前处于隐藏，同步修改设置与浮窗显示（与“显示宠物”开关同源同一标志）
-                // 碎碎念跟随显示。
-                thinkingPetMsg(targetRoleId)?.setVisible(thinkingOn(targetRoleId))
-                scope.launch {
-                    (target?.let { tv -> pets.firstOrNull { inst -> inst.view === tv }?.roleId?.let { engines[it]?.config } } ?: config).update { if (!it.visible) it.copy(visible = true) else it }
-                }
+                val role = target?.let { targetView ->
+                    pets.firstOrNull { it.view === targetView }?.roleId
+                } ?: currentRoleId
+                if (role.isNotBlank()) recall(role)
             }
         }
     }
@@ -3883,6 +3839,14 @@ class PetService : Service() {
             RoleRuntime(roleId, PetConfig.forRole(this, roleId), PetBounds.forRole(this, roleId))
         }
         rt.descriptor = descriptor
+        // Summoning always shows the character. Clear any old persistent
+        // visible=false before windows are created, rather than migrating an
+        // obsolete hide/show setting or leaving an invisible active runtime.
+        if (!rt.config.getBlocking().visible) {
+            kotlinx.coroutines.runBlocking {
+                rt.config.update { it.copy(visible = true) }
+            }
+        }
         config = rt.config
         currentRoleId = roleId
         currentShortName = RoleStore.resolveShortName(this, roleId)
