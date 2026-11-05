@@ -32,7 +32,6 @@ android {
     buildTypes {
         getByName("debug") {
             applicationIdSuffix = ".debug"
-            versionNameSuffix = "-t"
             signingConfig = signingConfigs.getByName("debug")
         }
         release {
