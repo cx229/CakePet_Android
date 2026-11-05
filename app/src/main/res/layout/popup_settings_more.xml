@@ -24,6 +24,35 @@
         android:background="@color/cp_subtle" />
 
     <TextView
+        android:id="@+id/item_settings_import"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="导入角色设置"
+        android:textSize="11sp"
+        android:textColor="@color/cp_title"
+        android:background="?attr/selectableItemBackground" />
+
+    <TextView
+        android:id="@+id/item_settings_export"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="导出角色设置"
+        android:textSize="11sp"
+        android:textColor="@color/cp_title"
+        android:background="?attr/selectableItemBackground" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/cp_subtle" />
+
+    <TextView
         android:id="@+id/item_rename"
         android:layout_width="200dp"
         android:layout_height="48dp"
