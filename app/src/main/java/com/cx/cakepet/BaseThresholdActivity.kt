@@ -1,6 +1,7 @@
 package com.cx.cakepet
 
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -8,6 +9,7 @@ import android.widget.EditText
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import android.view.MotionEvent
@@ -360,6 +362,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
 
     /** Default selection is independent of the currently active keyboard mode. */
     private fun keyboardModeItem(): View {
+        fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
