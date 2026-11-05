@@ -36,6 +36,34 @@ object UserHabits {
         doc.put(section + "Enabled", JSONArray(selected.sorted()))
     }
 
+    /**
+     * Explicit, user-confirmed one-off application of personal values to
+     * already existing roles. Does not change the inheritance policy.
+     * section/key null means all currently enabled personal settings.
+     */
+    fun applyToExisting(ctx: Context, section: String? = null, key: String? = null): Int {
+        val doc = load(ctx)
+        val instances = RoleStore.getHomeRoles(ctx)
+        runBlocking {
+            for (instance in instances) {
+                for (part in listOf("config", "bounds")) {
+                    if (section != null && section != part) continue
+                    val stored = doc.optJSONObject(part) ?: continue
+                    val keys = if (key != null) listOf(key) else enabled(doc, part).toList()
+                    val picked = JSONObject()
+                    for (name in keys) {
+                        if (part == "config" && name in setOf("sprite_pack", "use_new_sprite", "visible")) continue
+                        stored.optJSONObject(name)?.let { picked.put(name, it) }
+                    }
+                    if (picked.length() == 0) continue
+                    if (part == "config") PetConfig.forRole(ctx, instance.instanceId).importSettings(picked)
+                    else PetBounds.forRole(ctx, instance.instanceId).importSettings(picked)
+                }
+            }
+        }
+        return instances.size
+    }
+
     /** Runs once after adding a role to home, not when recalling or summoning it. */
     fun applyToNewRole(ctx: Context, roleId: String) {
         val doc = load(ctx)
