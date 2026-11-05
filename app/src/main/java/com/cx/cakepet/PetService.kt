@@ -2498,10 +2498,61 @@ class PetService : Service() {
     // 消除“脚方向变化→锚点变→位置被改→又重算”的跳变/抖动回归。
     @Volatile private var boundsDirty = false
 
-    // 各角色边界独立：按已召唤角色逐一重算（偏移配置来自各自 pet_bounds_<id>）。
-    // 键盘适应「画布整体顶起」：记录每个角色已施加的 Y 向位移(shiftY)，用于在键盘状态变化时计算 delta，
-    // 仅对宠物 physics.y 与该角色食物 lp.y 做一次性平移，使其与活动范围(本身在 recalcBoundsFor 按 shiftY 平移)同向同量移动。
+    // Keyboard adaptation changes coordinates only; animation and physics states remain intact.
+    // Separate offsets per object prevent one pet from dragging every fish / freeze with it.
     private val imeShiftY = mutableMapOf<String, Float>()
+    private val imePetOffsets = mutableMapOf<PetView, Int>()
+    private val imeFishOffsets = mutableMapOf<ImageView, Int>()
+    private val imeFreezeOffsets = mutableMapOf<ImageView, Int>()
+    private val imeLastMode = mutableMapOf<String, String>()
+    private val imeLastTop = mutableMapOf<String, Float>()
+
+    private fun imePosition(
+        currentY: Int, height: Int, applied: Int, mode: String,
+        keyboardTop: Float, vis: Rect, active: Boolean, localClosing: Boolean,
+        previousTop: Float?
+    ): Pair<Int, Int> {
+        val baseY = currentY - applied
+        if (localClosing) {
+            // By design, closing local lift gathers objects at the old keyboard
+            // top back to the canvas bottom, regardless of why they got there.
+            val atKeyboardTop = previousTop != null &&
+                kotlin.math.abs(currentY + height - previousTop) <= 12f * resources.displayMetrics.density
+            val newY = if (atKeyboardTop) vis.bottom - height else currentY
+            return newY to 0
+        }
+        if (!active) return baseY to 0
+        val targetY = when (mode) {
+            "global" -> baseY + (keyboardTop - vis.bottom).toInt()
+            "stretch" -> {
+                val sourceHeight = (vis.bottom - vis.top).coerceAtLeast(1)
+                val targetHeight = (keyboardTop - vis.top).coerceAtLeast(1f)
+                val center = baseY + height / 2f
+                val mappedCenter = vis.top + (center - vis.top) * targetHeight / sourceHeight
+                (mappedCenter - height / 2f).toInt().coerceIn(
+                    vis.top, (keyboardTop.toInt() - height).coerceAtLeast(vis.top)
+                )
+            }
+            "local" -> minOf(baseY, keyboardTop.toInt() - height)
+            else -> baseY
+        }
+        return targetY to (targetY - baseY)
+    }
+
+    private fun moveAuxiliary(layer: ImageView, lp: WindowManager.LayoutParams, dy: Int, border: View?) {
+        if (dy != 0) {
+            lp.y += dy
+            try { windowManager.updateViewLayout(layer, lp) } catch (_: Exception) {}
+            border?.let { bv ->
+                val blp = bv.layoutParams as? WindowManager.LayoutParams
+                if (blp != null) {
+                    blp.x = lp.x
+                    blp.y = lp.y
+                    try { windowManager.updateViewLayout(bv, blp) } catch (_: Exception) {}
+                }
+            }
+        }
+    }
 
     private fun recalcBounds() {
         val vis = getScreenBounds()
@@ -2512,69 +2563,57 @@ class PetService : Service() {
             boundOffsetBottom = c.offsetBottom.coerceIn(-300f, 2100f)
             boundOffsetLeft = c.offsetLeft.coerceIn(-300f, 1000f)
             boundOffsetRight = c.offsetRight.coerceIn(-300f, 1000f)
-            // 键盘适应「画布整体顶起」：本角色当前 shiftY 与已施加值的差，同步到宠物位置与该角色食物位置，
-            // 使【宠物/食物/活动范围】作为整体一起上移(键盘出现)/复原(键盘消失)。范围本身由 recalcBoundsFor 按 shiftY 平移。
-            // 仅键盘状态真变化(di≠0)时才搬移位置，避免无谓移动；位置与范围同向同量，故相对布局不变。
-            val imeMode = c.keyboardMode()
-            val imeActive = imeMode in listOf("global", "local") &&
-                (viewImeInset > 0f || globalImeInset > 0f)
-            val imeKb = if (imeActive) maxOf(viewImeInset, globalImeInset) else 0f
-            val imeL = if (imeActive) c.imeLiftOffset else 0f
-            val prevShiftY = imeShiftY.getOrPut(rid) { 0f }
-            val newShiftY = when {
-                !imeActive -> 0f
-                imeMode == "global" -> -(imeKb + imeL)
-                else -> {
-                    // Local lift: only move a pet that would actually intersect the keyboard.
-                    // Reconstruct its unshifted bottom to avoid accumulating offset every tick.
-                    val keyboardTop = vis.bottom - imeKb - imeL
-                    pets.filter { it.roleId == rid }.minOfOrNull { inst ->
-                        minOf(0f, keyboardTop -
-                            (inst.view.physics.y - prevShiftY + inst.view.height))
-                    } ?: 0f
-                }
-            }
-            // 位移量按【绝对目标取整】而非「增量取整」：Σ(round(目标)−round(上次)) 可连锁相消，
-            // 最终位移恒等于 round(最终shiftY)，与浮点边界差 <0.5px，且不随键盘动画帧数累积漂移。
-            val di = Math.round(newShiftY) - Math.round(prevShiftY)
-            // 重算【前】的活动范围：用于判定鱼的贴边关系（必须在施加 di 位移之前取）。
+            val mode = c.keyboardMode()
+            val kb = maxOf(viewImeInset, globalImeInset)
+            val active = kb > 0f && mode in listOf("global", "stretch", "local")
+            val keyboardTop = vis.bottom - kb - (if (active) c.imeLiftOffset else 0f)
+            val wasLocal = imeLastMode[rid] == "local"
+            val closingLocal = kb <= 0f && wasLocal
+            val previousTop = imeLastTop[rid]
+            val newGlobalShift = if (active && mode == "global") keyboardTop - vis.bottom else 0f
+            imeShiftY[rid] = newGlobalShift
             val oldRect = if (c.feedingFullScreen) null else activityRectOf(rid)
-            // 记录每条鱼在【旧边界】贴的是哪条边（判定须用 di 位移前的位置）。
             val gluedEdges = if (oldRect != null) {
-                fishLayers.filter { it.roleId == rid }.map { fl -> fl to detectGlueEdge(oldRect, fl.lp) }
+                fishLayers.filter { it.roleId == rid }.map { it to detectGlueEdge(oldRect, it.lp) }
             } else emptyList()
-            if (di != 0) {
-                // 宠物与食物必须用【同一整数】位移量，否则浮点(pet)/整型(food) 分歧会让贴底食物偏离底边。
-                // 1) 该角色全部宠物当前位置同步上移 di（窗口左上角真值 physics.y，与食物同量）
-                for (inst in pets.filter { it.roleId == rid }) {
-                    inst.view.physics.y += di
-                }
-                // 2) 该角色全部食物浮窗同步上移 di（lp.y 为 Int，与宠物同量）
-                for (fl in fishLayers.filter { it.roleId == rid }) {
-                    fl.lp.y += di
-                    try { windowManager.updateViewLayout(fl.iv, fl.lp) } catch (_: Exception) {}
-                    fl.borderView?.let { bv ->
-                        val blp = bv.layoutParams as? WindowManager.LayoutParams
-                        if (blp != null) {
-                            blp.y = fl.lp.y
-                            try { windowManager.updateViewLayout(bv, blp) } catch (_: Exception) {}
-                        }
-                    }
-                }
-                imeShiftY[rid] = newShiftY
+
+            pets.filter { it.roleId == rid }.forEach { inst ->
+                val p = inst.view.physics
+                val applied = imePetOffsets[inst.view] ?: 0
+                val oldY = Math.round(p.y)
+                val (newY, newOffset) = imePosition(oldY, inst.view.height, applied,
+                    mode, keyboardTop, vis, active, closingLocal, previousTop)
+                if (newY != oldY) p.y += newY - oldY
+                if (newOffset == 0) imePetOffsets.remove(inst.view)
+                else imePetOffsets[inst.view] = newOffset
+            }
+            fishLayers.filter { it.roleId == rid }.forEach { fl ->
+                val applied = imeFishOffsets[fl.iv] ?: 0
+                val (newY, newOffset) = imePosition(fl.lp.y, fl.lp.height, applied,
+                    mode, keyboardTop, vis, active, closingLocal, previousTop)
+                moveAuxiliary(fl.iv, fl.lp, newY - fl.lp.y, fl.borderView)
+                if (newOffset == 0) imeFishOffsets.remove(fl.iv) else imeFishOffsets[fl.iv] = newOffset
+            }
+            freezeLayers.filter { it.roleId == rid }.forEach { fl ->
+                val applied = imeFreezeOffsets[fl.iv] ?: 0
+                val (newY, newOffset) = imePosition(fl.lp.y, fl.lp.height, applied,
+                    mode, keyboardTop, vis, active, closingLocal, previousTop)
+                moveAuxiliary(fl.iv, fl.lp, newY - fl.lp.y, fl.borderView)
+                if (newOffset == 0) imeFreezeOffsets.remove(fl.iv) else imeFreezeOffsets[fl.iv] = newOffset
             }
             pets.filter { it.roleId == rid }.forEach { inst -> recalcBoundsFor(inst.view, vis, rid) }
-            // 重算【后】的活动范围：若发生变化，把「贴边」的鱼重钉到新边界的对应边。
-            // 必要原因：键盘态且 imeResetBottomOffset 开启时，recalcBoundsFor 会把上下偏移归零
-            // (topOff/botOff=0)，使活动区底边额外下移 rotBottom，而上面的位移只搬了 shiftY
-            // → 所有底部鱼恒定悬空 rotBottom；且悬空后仍在界内，reclampAllFish 的 coerceIn 不校正它。
             val newRect = if (c.feedingFullScreen) null else activityRectOf(rid)
-            if (oldRect != null && newRect != null && oldRect != newRect) {
+            if (oldRect != null && newRect != null && oldRect != newRect && mode == "global") {
                 repinGluedFish(gluedEdges, newRect)
             }
+            if (kb > 0f) {
+                imeLastTop[rid] = keyboardTop
+                imeLastMode[rid] = mode
+            } else {
+                imeLastTop.remove(rid)
+                imeLastMode.remove(rid)
+            }
         }
-        // 宠物活动范围(边界偏移)变化后，把支鱼重钳进各自允许范围：关全屏→跟随活动范围；开全屏→不钳。
-        // 覆盖「修改偏移/重置/键盘偏移/复位/全屏开关/旋转」等所有经 recalcBounds 的范围变更，且仅触发一次。
         reclampAllFish()
     }
 
