@@ -49,7 +49,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CakePet-v1.26.11.06.02.39-return-home-recall-debug-apk
+          name: CakePet-v1.26.11.06.02.50-home-subtitle-image-dialog-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
