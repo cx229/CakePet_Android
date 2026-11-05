@@ -83,7 +83,10 @@
                 android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
                 <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -106,7 +109,10 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 字号 -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -275,7 +281,10 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
 
                 <!-- 文字闪现：控制显形特效（空白结束 -> 文字出现） -->
                 <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
@@ -315,7 +324,10 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
+                android:foreground="@drawable/settings_row_ripple"
+                android:clickable="true"
+                android:longClickable="true">
                 <!-- 气泡背景 -->
                 <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
