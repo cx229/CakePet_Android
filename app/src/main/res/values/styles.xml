@@ -55,6 +55,10 @@
 
     <!-- 开关行外层：标题与备注整体垂直居中于开关 -->
     <style name="SettingsSwitchRow">
+        <!-- Visual-only feedback for the full setting row, without consuming child control gestures. -->
+        <item name="android:foreground">@drawable/settings_row_ripple</item>
+        <item name="android:clickable">true</item>
+        <item name="android:longClickable">true</item>
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:orientation">horizontal</item>
@@ -72,6 +76,10 @@
 
     <!-- 设置页：底部操作按钮（如“恢复默认设置”），风格与卡片模块一致 -->
     <style name="SettingsButton">
+        <!-- Visual-only feedback for the full setting row, without consuming child control gestures. -->
+        <item name="android:foreground">@drawable/settings_row_ripple</item>
+        <item name="android:clickable">true</item>
+        <item name="android:longClickable">true</item>
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:paddingTop">14dp</item>
@@ -86,6 +94,10 @@
 
     <!-- 滑块行外层：标题与备注整体垂直居中，右侧数值输入与滑块横向排列 -->
     <style name="SettingsSliderRow">
+        <!-- Visual-only feedback for the full setting row, without consuming child control gestures. -->
+        <item name="android:foreground">@drawable/settings_row_ripple</item>
+        <item name="android:clickable">true</item>
+        <item name="android:longClickable">true</item>
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:orientation">horizontal</item>
