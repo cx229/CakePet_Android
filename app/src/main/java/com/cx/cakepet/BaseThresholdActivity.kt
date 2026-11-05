@@ -99,7 +99,8 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         binding.container.removeAllViews()
         val order = current.order.ifEmpty {
             // 兜底：无 order 时按 group 首次出现顺序
-            current.sliders.map { it.key } + current.duals.map { it.key } + current.switches.map { it.key }
+            current.sliders.map { it.key } + current.duals.map { it.key } + current.switches.map { it.key } +
+                (if (current.keyboardModeDefault != null) listOf("imeMode") else emptyList())
         }
         // 建立 key -> 项 的索引
         val sliderMap = current.sliders.withIndex().associate { it.value.key to it }
@@ -113,7 +114,8 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             val g = (sliderMap[key]?.value?.group
                 ?: dualMap[key]?.value?.group
                 ?: switchMap[key]?.value?.group
-                ?: colorMap[key]?.value?.group) ?: return@forEach
+                ?: colorMap[key]?.value?.group
+                ?: if (key == "imeMode" && current.keyboardModeDefault != null) "键盘适应" else null) ?: return@forEach
             if (g !in groupOrder) groupOrder.add(g)
         }
 
@@ -146,6 +148,9 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             }
             order.forEach { key ->
                 when {
+                    key == "imeMode" && current.keyboardModeDefault != null && g == "键盘适应" -> {
+                        card.addView(keyboardModeItem())
+                    }
                     sliderMap[key]?.value?.group == g -> {
                         val (idx, s) = sliderMap.getValue(key)
                         card.addView(sliderItem(s, idx))
@@ -351,6 +356,51 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             commitOne() // 仅存阈值默认(pet_bounds)，不改当前值(live)；只在「恢复用户默认」时才写回
         }
         return v
+    }
+
+    /** Default selection is independent of the currently active keyboard mode. */
+    private fun keyboardModeItem(): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+        }
+        row.addView(TextView(this).apply {
+            text = "键盘适应默认行为"
+            textSize = 15f
+            setTextColor(getColor(R.color.cp_title))
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val spinner = android.widget.Spinner(this)
+        spinner.adapter = object : android.widget.ArrayAdapter<String>(
+            this, android.R.layout.simple_spinner_item, AppBounds.KEYBOARD_MODES.map { it.first }
+        ) {
+            private fun align(view: View): View = view.apply {
+                (this as? TextView)?.apply {
+                    textSize = 13f
+                    gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                    textAlignment = View.TEXT_ALIGNMENT_GRAVITY
+                }
+            }
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                align(super.getView(position, convertView, parent))
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View =
+                align(super.getDropDownView(position, convertView, parent))
+        }.apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        spinner.setSelection(AppBounds.KEYBOARD_MODES.indexOfFirst {
+            it.second == current.keyboardModeDefault
+        }.coerceAtLeast(0))
+        spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val selected = AppBounds.KEYBOARD_MODES[position].second
+                if (selected != current.keyboardModeDefault) {
+                    current = current.copy(keyboardModeDefault = selected)
+                    commitOne()
+                }
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+        row.addView(spinner, LinearLayout.LayoutParams(dp(172), dp(48)))
+        return row
     }
 
     private fun colorItem(c: ColorBound, index: Int): View {
