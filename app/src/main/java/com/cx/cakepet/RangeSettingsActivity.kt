@@ -52,7 +52,7 @@ class RangeSettingsActivity : AppCompatActivity() {
         val mode = c.keyboardMode()
         val position = keyboardModes.indexOfFirst { it.second == mode }.coerceAtLeast(0)
         if (imeModeSelector.selectedItemPosition != position) imeModeSelector.setSelection(position)
-        val needsLift = mode == "global" || mode == "local"
+        val needsLift = mode == "global" || mode == "local" || mode == "stretch"
         (swImeAdapt.parent as View).visibility = View.GONE
         (swImeHide.parent as View).visibility = View.GONE
         (swImeResetBottom.parent as View).visibility =
