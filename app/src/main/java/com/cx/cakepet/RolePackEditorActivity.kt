@@ -807,6 +807,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 change { json ->
                     json.getJSONObject("modes").put(name, JSONObject()
                         .put("loop", false)
+                        .put("loopMode", "off")
                         .put("nextMode", JSONObject.NULL)
                         .put("duration", JSONObject.NULL).put("finishCycle", true)
                         .put("groups", JSONArray().apply { if (group != null) put(group) })
