@@ -2605,7 +2605,7 @@ class PetService : Service() {
                 recalcBoundsFor(inst.view, vis, rid)
                 // A grounded pet must remain on its new effective floor.
                 // Adjust coordinates and the bookkeeping offset, never its animation/state.
-                if (grounded[inst.view] == true) {
+                if (active && grounded[inst.view] == true) {
                     val correction = p.maxY - p.y
                     if (kotlin.math.abs(correction) > 0.5f) {
                         p.y = p.maxY
