@@ -32,7 +32,7 @@ import net.lingala.zip4j.ZipFile
 
 /**
  * 角色素材管理页（即“导入页”）：
- * - 列出全部素材模板（预装 + 用户上传 FILES），每张卡片含动态预览、名称、删除（仅 FILES）、加入按钮。
+ * - 列出全部素材模板（预装 + 用户上传 FILES），每张卡片含动态预览、名称及含“加入首页”的操作菜单。
  * - 「加入」：把该素材模板加为一个首页实例（同模板可重复，pet_config_<instanceId> 完全独立）。直接加入，不弹窗。
  * - 「删除」（仅用户上传）：二次确认后级联清该素材包的全部首页实例、配置与私有存储目录，
  *   仅删软件内存储，不动用户本地的原文件。
@@ -71,51 +71,38 @@ class RoleManageActivity : AppCompatActivity() {
             .onFailure { Toast.makeText(this, it.message ?: "导出失败", Toast.LENGTH_LONG).show() }
     }
 
+    /** Match Settings' rounded rename dialog; only the material name is required here. */
     private fun askMaterialName(title: String, initial: String, submit: (String) -> Unit) {
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding((24 * resources.displayMetrics.density).toInt(),
-                (12 * resources.displayMetrics.density).toInt(),
-                (24 * resources.displayMetrics.density).toInt(),
-                (12 * resources.displayMetrics.density).toInt())
-        }
-        val label = TextView(this).apply {
-            text = "素材包名称"
-            setTextColor(getColor(R.color.cp_title))
-            textSize = 14f
-        }
-        val input = EditText(this).apply {
-            setSingleLine(true)
-            setText(initial)
-            hint = "请输入素材包名称"
-            setTextColor(getColor(R.color.cp_title))
-            setSelectAllOnFocus(initial.isNotEmpty())
-        }
-        container.addView(label)
-        container.addView(input, LinearLayout.LayoutParams(-1, -2))
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(title)
-            .setView(container)
-            .setNegativeButton("取消", null)
-            .setPositiveButton("确定", null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+        val view = layoutInflater.inflate(R.layout.dialog_rename_role, null)
+        view.findViewById<TextView>(R.id.tv_title).text = title
+        val card = (view as ViewGroup).getChildAt(0) as ViewGroup
+        val content = card.getChildAt(0) as LinearLayout
+        (content.getChildAt(1) as TextView).text = "素材包名称"
+        content.getChildAt(3).visibility = View.GONE
+        view.findViewById<EditText>(R.id.et_short).visibility = View.GONE
+        val input = view.findViewById<EditText>(R.id.et_name)
+        input.hint = "请输入素材包名称"
+        input.setText(initial)
+        input.setSelectAllOnFocus(initial.isNotBlank())
+        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        dialog.setContentView(view)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        view.findViewById<View>(R.id.btn_negative).setOnClickListener { dialog.dismiss() }
+        view.findViewById<TextView>(R.id.btn_positive).apply {
+            text = "确定"
+            setOnClickListener {
                 val name = input.text.toString().trim()
-                if (name.isEmpty()) {
-                    input.error = "请填写素材包名称"
-                    return@setOnClickListener
+                when {
+                    name.isEmpty() -> input.error = "请填写素材包名称"
+                    name.length > 60 -> input.error = "名称不能超过 60 个字符"
+                    else -> runCatching { submit(name) }
+                        .onSuccess { dialog.dismiss() }
+                        .onFailure { input.error = it.message ?: "操作失败" }
                 }
-                if (name.length > 60) {
-                    input.error = "名称不能超过 60 个字符"
-                    return@setOnClickListener
-                }
-                runCatching { submit(name) }
-                    .onSuccess { dialog.dismiss() }
-                    .onFailure { input.error = it.message ?: "操作失败" }
             }
         }
         dialog.show()
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     private fun newRole() {
@@ -144,11 +131,11 @@ class RoleManageActivity : AppCompatActivity() {
     }
 
     private fun showRoleOperations(anchor: View, role: RoleDescriptor) {
-        val popup = android.widget.PopupMenu(this, anchor)
-        listOf("编辑", "复制", "导出 ZIP").forEach { popup.menu.add(it) }
-        if (role.source == RoleSource.FILES) popup.menu.add("删除")
-        popup.setOnMenuItemClickListener {
-            when (it.title.toString()) {
+        val options = listOf("加入首页", "编辑", "复制", "导出 ZIP") +
+            if (role.source == RoleSource.FILES) listOf("删除") else emptyList()
+        UnifiedOptionMenu.show(anchor, options, setOf("删除")) { choice ->
+            when (choice) {
+                "加入首页" -> importToHome(role)
                 "编辑" -> editRole(role)
                 "复制" -> copyRole(role)
                 "删除" -> confirmDelete(role)
@@ -157,9 +144,7 @@ class RoleManageActivity : AppCompatActivity() {
                     exportZip.launch(role.displayName + ".zip")
                 }
             }
-            true
         }
-        popup.show()
     }
 
 
@@ -515,7 +500,6 @@ class RoleManageActivity : AppCompatActivity() {
             // 仅素材卡片布局含这些视图。
             val name = holder.name ?: return
             val thumb = holder.thumb ?: return
-            val importBtn = holder.importBtn ?: return
             name.text = role.displayName
             // 已加入首页的实例数量：小号灰字紧跟标题后实时显示（如 "(2)"）。
             holder.count?.let { bindCount(it, role.id) }
@@ -541,7 +525,9 @@ class RoleManageActivity : AppCompatActivity() {
             player.start()
 
             // 删除统一置于更多菜单，预装模板不显示删除选项。
-            importBtn.setOnClickListener { importToHome(role) }
+            holder.itemView.setOnClickListener {
+                showRoleOperations(holder.options ?: holder.itemView, role)
+            }
             holder.options?.setOnClickListener { showRoleOperations(it, role) }
         }
 
@@ -560,7 +546,6 @@ class RoleManageActivity : AppCompatActivity() {
             val name: TextView? = itemView.findViewById(R.id.role_name)
             val count: TextView? = itemView.findViewById(R.id.role_count)
             val authors: TextView? = itemView.findViewById(R.id.role_authors)
-            val importBtn: Button? = itemView.findViewById(R.id.btn_import)
             val options: View? = itemView.findViewById(R.id.btn_role_options)
         }
     }
