@@ -86,7 +86,8 @@ class ImageModeManager(
     private data class ImageModeDef(
         val name: String,
         val frames: List<Frame>,
-        val loop: Boolean,              // true: 到末尾后回到首帧（常驻循环）；false: 播完触发 onSequenceEnd
+        val loop: Boolean,              // kept for callers consuming the existing modeLoops metadata
+        val loopMode: String = "off",    // off / timed / infinite: independent of stored duration
         val durationMin: Long? = null,
         val durationMax: Long? = null,
         val finishCycle: Boolean = true,
@@ -125,7 +126,7 @@ class ImageModeManager(
         val continuation = modes[name] ?: return false
         // A shared continuation may also appear in a standalone function/menu pool.
         // Its reuse must not break the entrance-to-loop relationship.
-        return !entry.loop && continuation.loop && entry.nextModeName == name
+        return entry.nextModeName == name && name != start
     }
 
     /** Consider an internal continuation part of the same user-facing function. */
@@ -161,10 +162,17 @@ class ImageModeManager(
         while (kit.hasNext()) {
             val name = kit.next()
             val m = modesObj.getJSONObject(name)
-            val loop = m.optBoolean("loop", false)
             val duration = m.optJSONObject("duration")
-            val durationMin = duration?.optLong("min")
-            val durationMax = duration?.optLong("max")
+            val configuredKind = m.optString("loopMode")
+            val loopMode = if (configuredKind in listOf("off", "timed", "infinite")) configuredKind else when {
+                !m.optBoolean("loop", false) -> "off"
+                duration != null -> "timed"
+                else -> "infinite"
+            }
+            val loop = loopMode != "off"
+            // Inactive settings remain on disk and must not control runtime playback.
+            val durationMin = if (loopMode == "timed") duration?.optLong("min") else null
+            val durationMax = if (loopMode == "timed") duration?.optLong("max") else null
             val finishCycle = m.optBoolean("finishCycle", true)
             val nextModeName = if (m.has("nextMode") && !m.isNull("nextMode")) m.getString("nextMode") else null
             val framesArr = m.getJSONArray("frames")
@@ -181,7 +189,7 @@ class ImageModeManager(
                 frames.add(Frame(res, delay, anchorX, anchorY, dx, dy, align,
                     f.optBoolean("flipX", false)))
             }
-            registerMode(ImageModeDef(name, frames, loop, durationMin,
+            registerMode(ImageModeDef(name, frames, loop, loopMode, durationMin,
                 durationMax, finishCycle, nextModeName))
         }
     }
@@ -271,7 +279,8 @@ class ImageModeManager(
         val currentDx: Int get() = def.frames[frameIndex].dx
         val currentDy: Int get() = def.frames[frameIndex].dy
         val currentWalkSpeed: Float get() = kotlin.math.abs(currentDx) * 1000f / frameDelay.coerceAtLeast(1L)
-        val isMotionLoop: Boolean get() = def.loop && def.frames.any { it.dx != 0 || it.dy != 0 }
+        // Movement capability must not depend on the animation's loop policy.
+        val isMotionLoop: Boolean get() = def.frames.any { it.dx != 0 || it.dy != 0 }
         val currentVerticalAlign: String get() = def.frames[frameIndex].verticalAlign
         val currentFlipX: Boolean get() = def.frames[frameIndex].flipX
         val currentAnchorX: Int get() = def.frames[frameIndex].anchorX
@@ -285,16 +294,30 @@ class ImageModeManager(
             return if (max == Long.MAX_VALUE) max else Random.nextLong(min.coerceAtLeast(1), max + 1)
         }
 
-        private fun switchTo(id: String): Boolean {
-            val next = modes[id] ?: return false
-            def = next
+        private fun resetPlayback(restartTimer: Boolean) {
             frameIndex = 0
             elapsed = 0L
-            timeElapsed = 0L
             frameDelay = def.frames[0].delay().coerceAtLeast(1L)
-            timeTarget = sampleTimeTarget()
-            pendingFinish = false
+            if (restartTimer) {
+                timeElapsed = 0L
+                timeTarget = sampleTimeTarget()
+                pendingFinish = false
+            }
             isEnded = false
+        }
+
+        /** Reuse the cursor when a function pool selects its current mode again. */
+        fun restart() = resetPlayback(restartTimer = true)
+
+        private fun switchTo(id: String): Boolean {
+            if (id == def.name) {
+                // A self nextMode is a new cycle, not a real mode transition.
+                resetPlayback(restartTimer = true)
+                return true
+            }
+            val next = modes[id] ?: return false
+            def = next
+            resetPlayback(restartTimer = true)
             return true
         }
 
@@ -318,7 +341,7 @@ class ImageModeManager(
                         val next = def.nextModeName
                         if (next != null && switchTo(next)) {
                             changed = true
-                            modeChanged = true
+                            modeChanged = next != def.name
                         } else {
                             timeTarget = Long.MAX_VALUE
                             timerRequested = true
@@ -333,15 +356,14 @@ class ImageModeManager(
                         frameDelay = def.frames[frameIndex].delay().coerceAtLeast(1L)
                         changed = true
                     } else if (def.loop && !pendingFinish) {
-                        frameIndex = 0
-                        elapsed = 0L
-                        frameDelay = def.frames[0].delay().coerceAtLeast(1L)
+                        // Looping frames retain their sampled timer; no mode switch.
+                        resetPlayback(restartTimer = false)
                         changed = true
                     } else {
                         val next = def.nextModeName
                         if (next != null && allowModeSwitch && switchTo(next)) {
                             changed = true
-                            modeChanged = true
+                            modeChanged = next != def.name
                         } else if (def.loop && def.durationMin != null && allowModeSwitch) {
                             timeTarget = Long.MAX_VALUE
                             timerRequested = true
