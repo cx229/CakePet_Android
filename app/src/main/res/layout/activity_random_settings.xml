@@ -82,11 +82,8 @@
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="随机模式" style="@style/SettingsOptionTitle"/>
@@ -96,7 +93,7 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_random_mode" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
 
             <!-- ===== 模块：随机项（每个一项一个开关） ===== -->
@@ -108,84 +105,81 @@
             <LinearLayout android:id="@+id/group_random_items" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="大小 (0.6-2.0)" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_scale" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="透明度 (0.3-1.0)" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_alpha" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="重力" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_gravity_enabled" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="体感重力" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_tilt_gravity" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="最大速度 (2000-20000)" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_max_speed" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="重力强度 (500-7000)" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_gravity" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="反弹系数 (0.45-0.95)" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_rebound" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="四边重力·上下" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_gdir_v" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="四边重力·左右" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_gdir_h" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical"
@@ -194,38 +188,38 @@
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                     style="@style/SettingsOptionSub"
                     android:text="四边反弹"/>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="四边反弹·上" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_rbound_top" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="四边反弹·下" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_rbound_bottom" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="四边反弹·左" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_rbound_left" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
+                </com.cx.cakepet.SettingsRippleRow>
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginBottom="0dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="四边反弹·右" style="@style/SettingsOptionTitle"/>
                     </LinearLayout>
                     <Switch android:id="@+id/sw_r_rbound_right" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
                 </LinearLayout>
             </LinearLayout>
 
@@ -238,12 +232,9 @@
             <LinearLayout android:id="@+id/group_random_period" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
 
                     <!-- 顶行：左标题+备注(占满) / 右双数值输入框 -->
@@ -293,7 +284,7 @@
                         app:trackHeight="2dp"
                         app:thumbRadius="5dp"
                         android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
