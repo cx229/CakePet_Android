@@ -569,6 +569,10 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 nc = when (s.key) {
                     "scale" -> nc.copy(scale = nc.scale.coerceIn(s.from, s.to))
                     "alpha" -> nc.copy(alpha = (nc.alpha * 100f).coerceIn(s.from, s.to) / 100f)
+                    "coreWidth" -> nc.copy(ctrlBoxWidth = (nc.ctrlBoxWidth / ConfigDefaults.CTRL_BOX_WIDTH)
+                        .coerceIn(s.from, s.to) * ConfigDefaults.CTRL_BOX_WIDTH)
+                    "coreHeight" -> nc.copy(ctrlBoxHeight = (nc.ctrlBoxHeight / ConfigDefaults.CTRL_BOX_HEIGHT)
+                        .coerceIn(s.from, s.to) * ConfigDefaults.CTRL_BOX_HEIGHT)
                     "gravity" -> nc.copy(gravity = nc.gravity.coerceIn(s.from, s.to))
                     "maxSpeed" -> nc.copy(maxSpeed = nc.maxSpeed.coerceIn(s.from, s.to))
                     "rebound" -> nc.copy(reboundRatio = nc.reboundRatio.coerceIn(s.from, s.to))
