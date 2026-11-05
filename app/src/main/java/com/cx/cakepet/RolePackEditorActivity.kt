@@ -666,17 +666,14 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun showModeOptions(anchor: View, key: String) {
-        val menu = PopupMenu(this, anchor)
-        listOf("复制动作", "动作组", "删除动作").forEach { menu.menu.add(it) }
-        menu.setOnMenuItemClickListener {
-            when (it.title.toString()) {
+        UnifiedOptionMenu.show(anchor, listOf("复制动作", "动作组", "删除动作"),
+            setOf("删除动作")) { choice ->
+            when (choice) {
                 "复制动作" -> copyMode(key)
                 "动作组" -> editModeGroups(key)
                 "删除动作" -> deleteMode(key)
             }
-            true
         }
-        menu.show()
     }
 
     private fun editModeGroups(key: String) {
@@ -741,11 +738,8 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun showModeGroupOptions(anchor: View, group: String) {
-        val menu = PopupMenu(this, anchor)
-        menu.menu.add("重命名")
-        menu.menu.add("解散")
-        menu.setOnMenuItemClickListener {
-            when (it.title.toString()) {
+        UnifiedOptionMenu.show(anchor, listOf("重命名", "解散"), setOf("解散")) { choice ->
+            when (choice) {
                 "重命名" -> editor("重命名动作组", compact = true) { box ->
                     val name = entry(box, "动作组名称", group, compact = true)
                     val save: () -> Unit = {
@@ -795,9 +789,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     }
                 }
             }
-            true
         }
-        menu.show()
     }
 
     private fun newMode(group: String? = null) {
@@ -1029,7 +1021,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 rippleClick(card) {
                     val index = holder.bindingAdapterPosition
                     if (index != RecyclerView.NO_POSITION) {
-                        if (bulkSelected.isEmpty()) editFrame(key, index)
+                        if (bulkSelected.isEmpty()) showFrameOptions(more, key, index)
                         else {
                             if (!bulkSelected.add(index)) bulkSelected.remove(index)
                             recycler.adapter?.notifyDataSetChanged()
@@ -1116,16 +1108,12 @@ class RolePackEditorActivity : AppCompatActivity() {
             box.addView(nextChoice, LinearLayout.LayoutParams(-1, px(38)))
             val playbackModes = listOf("关闭", "无限循环", "定时循环")
             val previous = mode.optJSONObject("duration")
-            val playback = Spinner(this).apply {
-                adapter = ArrayAdapter(this@RolePackEditorActivity,
-                    android.R.layout.simple_spinner_dropdown_item, playbackModes)
-                setSelection(when {
-                    !mode.optBoolean("loop") -> 0
-                    previous != null -> 2
-                    else -> 1
-                })
-                minimumHeight = px(44)
-            }
+            val playback = Spinner(this)
+            SettingsSpinnerBinder.bind(playback, playbackModes, when {
+                !mode.optBoolean("loop") -> 0
+                previous != null -> 2
+                else -> 1
+            }) { }
             val playbackRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -1613,14 +1601,10 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun showFrameOptions(anchor: View, key: String, index: Int) {
-        val menu = PopupMenu(this, anchor)
-        listOf("替换", "在上方插入", "在下方插入").forEach { menu.menu.add(it) }
-        val danger = android.text.SpannableString("删除")
-        danger.setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.cp_danger)),
-            0, danger.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        menu.menu.add(danger)
-        menu.setOnMenuItemClickListener { item ->
-            when (item.title.toString()) {
+        UnifiedOptionMenu.show(anchor,
+            listOf("编辑", "替换", "在上方插入", "在下方插入", "删除"), setOf("删除")) { choice ->
+            when (choice) {
+                "编辑" -> editFrame(key, index)
                 "替换" -> showImageChooser(ImagePickRequest(key, "replace", index))
                 "在上方插入" -> showImageChooser(ImagePickRequest(key, "before", index))
                 "在下方插入" -> showImageChooser(ImagePickRequest(key, "after", index))
@@ -1641,9 +1625,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     }
                 }
             }
-            true
         }
-        menu.show()
     }
 
     private fun editFrame(key: String, index: Int) {
@@ -2105,11 +2087,8 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun showResourceFolderOptions(anchor: View, relative: String) {
-        val menu = PopupMenu(this, anchor)
-        menu.menu.add("重命名")
-        menu.menu.add("删除")
-        menu.setOnMenuItemClickListener {
-            when (it.title.toString()) {
+        UnifiedOptionMenu.show(anchor, listOf("重命名", "删除"), setOf("删除")) { choice ->
+            when (choice) {
                 "重命名" -> renameDialog(relative, true)
                 "删除" -> showConfirmDialog(
                     title = "删除文件夹",
@@ -2117,9 +2096,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     positiveText = "删除"
                 ) { attempt { deleteResourceFolder(relative) } }
             }
-            true
         }
-        menu.show()
     }
 
     private fun deleteImage(relative: String) {
@@ -2195,17 +2172,17 @@ class RolePackEditorActivity : AppCompatActivity() {
         parent.addView(row)
     }
 
-    private fun imageOptions(relative: String) {
+    private fun imageOptions(anchor: View, relative: String) {
         val users = imageUses()[relative].orEmpty()
-        optionsDialog(File(relative).name, listOf("大图及引用详情", "重命名", "替换图片", "删除")) { selected ->
+        UnifiedOptionMenu.show(anchor, listOf("大图及引用详情", "重命名", "替换图片", "删除"), setOf("删除")) { selected ->
             when (selected) {
-                0 -> imageDetails(relative)
-                1 -> renameDialog(relative, false)
-                2 -> {
+                "大图及引用详情" -> imageDetails(relative)
+                "重命名" -> renameDialog(relative, false)
+                "替换图片" -> {
                     resourceReplacePath = relative
                     resourcePicker.launch(arrayOf("image/*"))
                 }
-                3 -> if (users.isNotEmpty()) {
+                "删除" -> if (users.isNotEmpty()) {
                     showConfirmDialog(
                         title = "图片正在使用",
                         bodyHtml = "该图片被 ${users.size} 帧引用，不能直接删除。",
@@ -2307,7 +2284,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     isClickable = true
                     setOnClickListener { anchor ->
                         if (file.isDirectory) showResourceFolderOptions(anchor, path)
-                        else imageOptions(path)
+                        else imageOptions(anchor, path)
                     }
                 }, LinearLayout.LayoutParams(px(40), px(48)))
                 target.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
