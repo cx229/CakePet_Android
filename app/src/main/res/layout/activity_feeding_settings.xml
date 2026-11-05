@@ -82,12 +82,9 @@
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="投食" style="@style/SettingsOptionTitle"/>
@@ -97,10 +94,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_feeding_enabled" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 大小 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center_vertical">
@@ -129,10 +126,10 @@
                         app:trackColorInactive="@color/slider_track_inactive"
                         app:tickColorActive="@color/slider_active"
                         app:tickColorInactive="@color/slider_track_inactive" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-</LinearLayout>
+</com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 透明度 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center_vertical">
@@ -161,7 +158,7 @@
                         app:trackColorInactive="@color/slider_track_inactive"
                         app:tickColorActive="@color/slider_active"
                         app:tickColorInactive="@color/slider_track_inactive" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-</LinearLayout>
+</com.cx.cakepet.SettingsRippleRow>
 
             </LinearLayout>
 
@@ -174,13 +171,10 @@
             <LinearLayout android:id="@+id/group_feed_scope" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 全屏范围 -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="全屏范围" style="@style/SettingsOptionTitle"/>
@@ -190,10 +184,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_full_screen" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 边缘刷新 -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="边缘刷新" style="@style/SettingsOptionTitle"/>
@@ -203,7 +197,7 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_edge_refresh" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
 
             <!-- ===== 模块：投食变大 ===== -->
@@ -215,13 +209,10 @@
             <LinearLayout android:id="@+id/group_feed_growth" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 投喂变大（总开关） -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="投喂变大" style="@style/SettingsOptionTitle"/>
@@ -231,10 +222,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_feed_grow" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 变大系数 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center_vertical">
@@ -263,7 +254,7 @@
                         app:trackColorInactive="@color/slider_track_inactive"
                         app:tickColorActive="@color/slider_active"
                         app:tickColorInactive="@color/slider_track_inactive" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-</LinearLayout>
+</com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
 
             <!-- ===== 模块：随机掉落 ===== -->
@@ -275,13 +266,10 @@
             <LinearLayout android:id="@+id/group_feed_period" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 最大数量 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center_vertical">
@@ -310,10 +298,10 @@
                         app:trackColorInactive="@color/slider_track_inactive"
                         app:tickColorActive="@color/slider_active"
                         app:tickColorInactive="@color/slider_track_inactive" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-</LinearLayout>
+</com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 频率（双滑块） -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
 
                     <!-- 顶行：左标题+备注(占满) / 右双数值输入框 -->
@@ -361,7 +349,7 @@
                         app:trackHeight="2dp"
                         app:thumbRadius="5dp"
                         android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
 
             <!-- ===== 模块：自动过期 ===== -->
@@ -373,12 +361,9 @@
             <LinearLayout android:id="@+id/group_feed_expiration" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="自动过期" style="@style/SettingsOptionTitle"/>
@@ -388,10 +373,10 @@
                     </LinearLayout>
                     <Switch android:id="@+id/sw_auto_expire" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 过期时间 -->
-                <LinearLayout android:id="@+id/expire_block" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow android:id="@+id/expire_block" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
@@ -418,7 +403,7 @@
                         app:trackColorInactive="@color/slider_track_inactive"
                         app:tickColorActive="@color/slider_active"
                         app:tickColorInactive="@color/slider_track_inactive" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
 
         </LinearLayout>
