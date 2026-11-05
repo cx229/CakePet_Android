@@ -632,7 +632,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 if (opened && children.childCount == 0) fillChildren()
                 children.visibility = if (opened) View.VISIBLE else View.GONE
             }
-            rippleClick(header) {
+            header.setOnClickListener {
                 if (!expandedModeGroups.add(group)) expandedModeGroups.remove(group)
                 refreshHeader()
             }
@@ -1742,14 +1742,15 @@ class RolePackEditorActivity : AppCompatActivity() {
         path.indices.joinToString("/") { functionSegment(path.take(it + 1)) }
 
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
-                             level: Int, click: () -> Unit): LinearLayout {
+                             level: Int, immediate: Boolean = false, click: () -> Unit): LinearLayout {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.card_bg)
             rippleCard(this)
             setPadding(px(12), px(7), px(12), px(7))
             isClickable = true
-            rippleClick(this) { click() }
+            if (immediate) setOnClickListener { click() }
+            else rippleClick(this) { click() }
         }
         val titleText = text(title, 16f).apply {
             setPadding(px(2), px(2), px(2), px(2))
@@ -1792,7 +1793,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                         }
                         children.visibility = if (opened) View.VISIBLE else View.GONE
                     }
-                    folderCard = functionItem(parent, "", "", path.size) {
+                    folderCard = functionItem(parent, "", "", path.size, immediate = true) {
                         if (!openedFunctionFolders.add(fullKey)) openedFunctionFolders.remove(fullKey)
                         refreshFolder()
                     }
@@ -2210,7 +2211,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                         children.visibility = if (opened) View.VISIBLE else View.GONE
                     }
                 }
-                rippleClick(row) {
+                row.setOnClickListener {
                     if (file.isDirectory) {
                         if (!expandedResourceFolders.add(path)) expandedResourceFolders.remove(path)
                         refreshResourceFolder()
