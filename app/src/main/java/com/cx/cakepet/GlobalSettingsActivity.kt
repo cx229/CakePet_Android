@@ -8,6 +8,15 @@ import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.widget.Toast
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 应用级页面：全局设置 -> 调试 -> 无障碍点击测试。
@@ -20,6 +29,52 @@ class GlobalSettingsActivity : AppCompatActivity() {
         const val PAGE_SETTINGS = "settings"
         const val PAGE_DEBUG = "debug"
         const val PAGE_ACCESSIBILITY_TEST = "accessibility_test"
+    }
+
+    private val exportBackup = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { SoftwareBackup.export(this@GlobalSettingsActivity, uri) }
+            }
+            Toast.makeText(this@GlobalSettingsActivity,
+                result.fold({ "软件备份已导出" }, { "导出失败：${it.message}" }),
+                Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val importBackup = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        showConfirmDialog(
+            title = "导入软件备份",
+            bodyHtml = "备份中的素材包、角色实例和所有可恢复的持久化设置将<b>替换当前数据</b>。建议先导出当前备份。",
+            positiveText = "覆盖恢复",
+            titleColorRes = R.color.cp_danger
+        ) {
+            lifecycleScope.launch {
+                // No running overlay must retain a role whose assets are being replaced.
+                PetService.instance?.let { svc ->
+                    RoleStore.getHomeRoles(this@GlobalSettingsActivity)
+                        .forEach { svc.recall(it.instanceId) }
+                }
+                stopService(Intent(this@GlobalSettingsActivity, PetService::class.java))
+                val result = withContext(Dispatchers.IO) {
+                    runCatching { SoftwareBackup.restore(this@GlobalSettingsActivity, uri) }
+                }
+                Toast.makeText(this@GlobalSettingsActivity,
+                    result.fold({ it }, { "恢复失败：${it.message}" }),
+                    Toast.LENGTH_LONG).show()
+                if (result.isSuccess) {
+                    // Home will rebuild the catalog on resume. We do not
+                    // summon old runtime instances automatically.
+                    finish()
+                }
+            }
+        }
     }
 
     private var page = PAGE_SETTINGS
@@ -50,16 +105,28 @@ class GlobalSettingsActivity : AppCompatActivity() {
         val nextRow = findViewById<View>(R.id.row_next)
         when (page) {
             PAGE_SETTINGS -> {
+                findViewById<View>(R.id.row_user_habits).setOnClickListener {
+                    startActivity(Intent(this, UserHabitsActivity::class.java))
+                }
+                findViewById<View>(R.id.row_backup_export).setOnClickListener {
+                    val timestamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
+                    exportBackup.launch("CakePet-Backup-$timestamp.zip")
+                }
+                findViewById<View>(R.id.row_backup_import).setOnClickListener {
+                    importBackup.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                }
                 // 状态只读；不把系统权限伪装成可由应用切换的开关。
                 findViewById<TextView>(R.id.tv_next).text = "调试"
                 nextRow.setOnClickListener { openPage(PAGE_DEBUG) }
             }
             PAGE_DEBUG -> {
+                findViewById<View>(R.id.backup_group).visibility = View.GONE
                 accessibilityRow.visibility = View.GONE
                 findViewById<TextView>(R.id.tv_next).text = "无障碍点击测试"
                 nextRow.setOnClickListener { openPage(PAGE_ACCESSIBILITY_TEST) }
             }
             else -> {
+                findViewById<View>(R.id.backup_group).visibility = View.GONE
                 // 实验尚未实现，按需求保留空白内容区。
                 accessibilityRow.visibility = View.GONE
                 nextRow.visibility = View.GONE
