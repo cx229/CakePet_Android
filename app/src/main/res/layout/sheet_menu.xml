@@ -72,13 +72,13 @@
     <LinearLayout android:layout_width="match_parent"
         android:layout_height="56dp" android:orientation="horizontal"
         android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
+        <TextView android:id="@+id/menu_return_home" android:layout_width="0dp"
+            android:layout_height="match_parent" android:layout_weight="1"
+            android:layout_margin="4dp" android:gravity="center"             android:text="归位"
+            android:textSize="17dp" android:textColor="@color/cp_title" android:background="@drawable/cell_bg"/>
         <TextView android:id="@+id/menu_recall" android:layout_width="0dp"
             android:layout_height="match_parent" android:layout_weight="1"
-            android:layout_margin="4dp" android:gravity="center"             android:text="召回"
-            android:textSize="17dp" android:textColor="@color/cp_title" android:background="@drawable/cell_bg"/>
-        <TextView android:id="@+id/menu_hide" android:layout_width="0dp"
-            android:layout_height="match_parent" android:layout_weight="1"
-            android:layout_margin="4dp" android:gravity="center" android:text="隐藏"
+            android:layout_margin="4dp" android:gravity="center" android:text="召回"
             android:textSize="17dp" android:textColor="@color/cp_title" android:background="@drawable/cell_bg"/>
     </LinearLayout>
 
