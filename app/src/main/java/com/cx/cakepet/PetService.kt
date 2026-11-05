@@ -663,26 +663,8 @@ class PetService : Service() {
                 for (inst in pets) inst.view.stepPhysics(PHYS_STEP_MS / 1000f)
                 physAccumulator -= PHYS_STEP_MS
             }
-            // Local keyboard lift must also respond when a moving pet enters/leaves
-            // the keyboard region after the IME was already shown. Throttle this
-            // geometry comparison; only recalculate when the rounded target changes.
-            if (keyboardUp && now - lastLocalImeCheck > 200L) {
-                lastLocalImeCheck = now
-                val keyboardHeight = maxOf(viewImeInset, globalImeInset)
-                val vis = getScreenBounds()
-                val needsLocalRecalc = engines.any { (roleId, runtime) ->
-                    val rc = runtime.config.getBlocking()
-                    if (rc.keyboardMode() != "local") false else {
-                        val prev = imeShiftY[roleId] ?: 0f
-                        val target = pets.filter { it.roleId == roleId }.minOfOrNull { inst ->
-                            minOf(0f, vis.bottom - keyboardHeight - rc.imeLiftOffset -
-                                (inst.view.physics.y - prev + inst.view.height))
-                        } ?: 0f
-                        Math.round(target) != Math.round(prev)
-                    }
-                }
-                if (needsLocalRecalc) recalcBounds()
-            }
+            // Local lift is an event-based alignment, not a periodic physics correction.
+            // Do not re-snap a walking / climbing pet each 200ms into a fake fall.
 
             // 自动觅食驱动（攀岩走壁子开关）：在动画推进前计算每只宠物的觅食状态，
             // 选最近食物/沿墙走/吃到投喂。优先级高于飞跃但不拦截（无食物则回落飞跃/选池）。
@@ -2566,7 +2548,9 @@ class PetService : Service() {
             val mode = c.keyboardMode()
             val kb = maxOf(viewImeInset, globalImeInset)
             val active = kb > 0f && mode in listOf("global", "stretch", "local")
-            val keyboardTop = vis.bottom - kb - (if (active) c.imeLiftOffset else 0f)
+            val rawKeyboardTop = vis.bottom - kb - (if (active) c.imeLiftOffset else 0f)
+            val keyboardTop = if (active && mode == "global" && c.imeResetBottomOffset)
+                rawKeyboardTop + c.offsetBottom else rawKeyboardTop
             val wasLocal = imeLastMode[rid] == "local"
             val closingLocal = kb <= 0f && wasLocal
             val previousTop = imeLastTop[rid]
@@ -2774,18 +2758,25 @@ class PetService : Service() {
         // 键盘适应-重置偏移：键盘弹出时无视“物理”上/下边界偏移（rotTop/rotBottom 归零），
         // 仅以键盘高度+lift 决定顶起幅度（底座仍落在键盘上方），避免高底部偏移导致键盘弹起时额外位移。
         val imeResetActive = rc.imeResetBottomOffset && imeActive
-        val topOff = if (imeResetActive) 0f else rotTop
+        // Keep the top offset independent of keyboard adaptation. Resetting the
+        // bottom offset must be paired with the same delta in the canvas translation.
+        val topOff = rotTop
         val botOff = if (imeResetActive) 0f else rotBottom
         // 活动范围【基底】(不含键盘)：顶/底按锚点边与用户偏移照常计算。
         val minY0 = vis.top.toFloat() + (if (topIsAnchor) 0f else topInset) + topOff
         val maxY0 = (vis.bottom.toFloat() - (if (botIsAnchor) 0f else botInset) - botOff).coerceAtLeast(minY0)
-        // 统一顶起位移 shiftY（自洽：与 recalcBounds 中按同一公式算出的 newShiftY 完全一致）。
-        val shiftY = if (keyboardMode == "local") imeShiftY[roleId] ?: 0f
-            else if (imeActive) -(imeBottomInset + lift) else 0f
-        // 顶部为锚点边 → minY 直接 = 屏幕顶+shiftY（脚贴顶，图顶可出界）；否则图顶不超屏幕顶+shiftY
-        val minY = minY0 + shiftY
-        // 底部为锚点边 → maxY 直接 = 屏幕底+shiftY（脚贴底，图底可出界下垂）；否则图底不超屏幕底+shiftY
-        val maxY = maxY0 + shiftY
+        // All effective bounds use the same geometry as the object mapping.
+        // Global translation preserves the pre-keyboard distance to both floors.
+        // Local/stretch changes the available bottom edge but not the top edge.
+        val shiftY = if (keyboardMode == "global" && imeActive) imeShiftY[roleId] ?: 0f else 0f
+        val rawMinY = minY0 + shiftY
+        val rawMaxY = maxY0 + shiftY
+        val adaptedBottom = vis.bottom.toFloat() - imeBottomInset - lift - botOff
+        val maxY = if (imeActive && keyboardMode in listOf("local", "stretch"))
+            minOf(rawMaxY, adaptedBottom - (if (botIsAnchor) 0f else botInset))
+                .coerceAtLeast(rawMinY)
+        else rawMaxY
+        val minY = rawMinY
         // physics.x/y = 窗口左上角真值；活动范围换算为窗口范围 = 脚范围(上面 min/max) − 锚点偏移(ax,ay)。
         // 旋转/缩放只改该范围、不再改写 physics.x/y → 锚点变化不会触发窗口跳变（脚锚点按需派生）。
         // 活动范围 = 脚范围(min/max) − 锚点偏移(ax,ay)。此处【只设定活动范围，不钳制 physics.x/y】。
@@ -2799,7 +2790,8 @@ class PetService : Service() {
             vis.left.toFloat() + rotLeft,
             vis.top.toFloat() + topOff + shiftY,
             vis.right.toFloat() - rotRight,
-            vis.bottom.toFloat() - botOff + shiftY
+            if (imeActive && keyboardMode in listOf("local", "stretch")) adaptedBottom
+            else vis.bottom.toFloat() - botOff + shiftY
         )
     }
 
