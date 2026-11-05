@@ -179,13 +179,10 @@ class SettingsActivity : AppCompatActivity() {
         }
         // 进入显示范围二级页（边界偏移：顶/底/左/右）
         findViewById<android.view.View>(R.id.row_range_settings).setOnClickListener {
-            startActivity(android.content.Intent(this, RangeSettingsActivity::class.java).apply { putExtra("role_id", roleId) })
+            startActivity(android.content.Intent(this, DisplayInteractionActivity::class.java).apply { putExtra("role_id", roleId) })
         }
         findViewById<android.view.View>(R.id.row_adapt_settings).setOnClickListener {
-            startActivity(android.content.Intent(this, RangeSettingsActivity::class.java).apply {
-                putExtra("role_id", roleId)
-                putExtra("adapt_page", true)
-            })
+            startActivity(android.content.Intent(this, DisplayAdaptActivity::class.java).apply { putExtra("role_id", roleId) })
         }
         // 体感重力：只切换 tiltGravity 标志，不改动四边定向重力的存储值与 UI 状态。
         // 物理层 PetPhysics.step() 在 tiltGravity=true 时优先走体感分支（忽略四边），
