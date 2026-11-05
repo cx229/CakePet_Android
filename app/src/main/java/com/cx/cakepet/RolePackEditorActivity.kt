@@ -1742,7 +1742,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         path.indices.joinToString("/") { functionSegment(path.take(it + 1)) }
 
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
-                             level: Int, click: () -> Unit) {
+                             level: Int, click: () -> Unit): LinearLayout {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.card_bg)
@@ -1768,6 +1768,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             bottomMargin = px(4)
         }
         node.addView(card, params)
+        return card
     }
 
     private fun functionTree(parent: LinearLayout, values: JSONObject, path: List<String>) {
@@ -1778,14 +1779,25 @@ class RolePackEditorActivity : AppCompatActivity() {
             val displayName = functionSegment(currentPath)
             when (val child = values.opt(key)) {
                 is JSONObject -> {
-                    val opened = fullKey in openedFunctionFolders
-                    functionItem(parent, (if (opened) "▾ 📂  " else "▸ 📁  ") + displayName,
-                        "", path.size) {
-                        if (opened) openedFunctionFolders.remove(fullKey)
-                        else openedFunctionFolders.add(fullKey)
-                        functions()
+                    val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                    var populated = false
+                    lateinit var folderCard: LinearLayout
+                    fun refreshFolder() {
+                        val opened = fullKey in openedFunctionFolders
+                        (folderCard.getChildAt(0) as TextView).text =
+                            (if (opened) "▾ 📂  " else "▸ 📁  ") + displayName
+                        if (opened && !populated) {
+                            populated = true
+                            functionTree(children, child, currentPath)
+                        }
+                        children.visibility = if (opened) View.VISIBLE else View.GONE
                     }
-                    if (opened) functionTree(parent, child, currentPath)
+                    folderCard = functionItem(parent, "", "", path.size) {
+                        if (!openedFunctionFolders.add(fullKey)) openedFunctionFolders.remove(fullKey)
+                        refreshFolder()
+                    }
+                    parent.addView(children, LinearLayout.LayoutParams(-1, -2))
+                    refreshFolder()
                 }
                 is JSONArray -> {
                     val selected = (0 until child.length()).map { child.optString(it) }
@@ -2133,7 +2145,8 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun resourceBranch(directory: File, level: Int,
-                               uses: Map<String, List<Pair<String, Int>>>) {
+                               uses: Map<String, List<Pair<String, Int>>>,
+                               target: LinearLayout = panel) {
         directory.listFiles().orEmpty()
             .filter { isImage(it) || it.isDirectory && !it.name.startsWith(".") }
             .sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase() }))
@@ -2183,10 +2196,24 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
                 main.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
                 row.addView(main, LinearLayout.LayoutParams(0, -2, 1f))
+                val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                var populated = false
+                fun refreshResourceFolder() {
+                    if (file.isDirectory) {
+                        val opened = path in expandedResourceFolders
+                        (main.getChildAt(0) as TextView).text =
+                            if (opened) "▾ 📂" else "▸ 📁"
+                        if (opened && !populated) {
+                            populated = true
+                            resourceBranch(file, level + 1, uses, children)
+                        }
+                        children.visibility = if (opened) View.VISIBLE else View.GONE
+                    }
+                }
                 rippleClick(row) {
                     if (file.isDirectory) {
                         if (!expandedResourceFolders.add(path)) expandedResourceFolders.remove(path)
-                        images()
+                        refreshResourceFolder()
                     } else imageDetails(path)
                 }
                 if (file.isDirectory) {
@@ -2206,12 +2233,14 @@ class RolePackEditorActivity : AppCompatActivity() {
                         else imageOptions(path)
                     }
                 }, LinearLayout.LayoutParams(px(40), px(48)))
-                panel.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                target.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
                     leftMargin = px((level * 12).coerceAtMost(48))
                     topMargin = px(4)
                 })
-                if (file.isDirectory && path in expandedResourceFolders)
-                    resourceBranch(file, level + 1, uses)
+                if (file.isDirectory) {
+                    target.addView(children, LinearLayout.LayoutParams(-1, -2))
+                    refreshResourceFolder()
+                }
             }
     }
 
