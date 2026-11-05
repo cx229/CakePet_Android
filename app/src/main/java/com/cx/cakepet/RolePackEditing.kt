@@ -65,6 +65,25 @@ object RolePackEditing {
         if (json.opt("anchorRes") !is Number) json.put("anchorRes", 128)
         if (json.optJSONObject("functions") == null) json.put("functions", JSONObject())
         if (json.optJSONObject("modes") == null) json.put("modes", JSONObject())
+        // Normalize malformed action containers for the visual editor, retaining
+        // the untouched source in a sidecar for manual recovery.
+        val modes = json.getJSONObject("modes")
+        var malformed = false
+        val actionIds = modes.keys().asSequence().toList()
+        for (actionId in actionIds) {
+            val action = modes.optJSONObject(actionId)
+            if (action == null) {
+                modes.put(actionId, JSONObject().put("frames", JSONArray()))
+                malformed = true
+            } else if (action.optJSONArray("frames") == null) {
+                action.put("frames", JSONArray())
+                malformed = true
+            }
+        }
+        if (malformed && source.isNotBlank()) {
+            val original = File(directory, "modes.original.jsonc")
+            if (!original.exists()) original.writeText(source)
+        }
         file.writeText(CompactJsoncWriter.write(json, if (parsed == null) "" else source))
         return json
     }
