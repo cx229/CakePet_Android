@@ -22,7 +22,7 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-/** One-package visual editor; every edit validates the whole v1.02 package before replacing it. */
+/** Edit incomplete packs incrementally; validate strictly only when adding a home role. */
 class RolePackEditorActivity : AppCompatActivity() {
     private lateinit var id: String
     private lateinit var draft: File
@@ -184,7 +184,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         id = intent.getStringExtra("role_id") ?: run { finish(); return }
         try {
             draft = RolePackEditing.draft(this, id)
-            root = parseJsonc(File(draft, "modes.jsonc").readText())
+            val name = RoleRegistry.byId(id)?.displayName ?: id
+            root = RolePackEditing.prepareEditable(draft, id, name)
         } catch (e: Exception) {
             Toast.makeText(this, e.message ?: "打开失败", Toast.LENGTH_LONG).show()
             finish()
