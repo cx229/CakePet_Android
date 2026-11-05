@@ -173,6 +173,7 @@ object SoftwareBackup {
         val previousMisc = File(ctx.cacheDir, "cakepet_previous_misc_" + System.nanoTime())
         val liveRoles = File(ctx.filesDir, "roles")
         var moved = false
+        var assetsTouched = false
         var miscMoved = false
         try {
             val registry = JSONObject(File(staged, "registries.json").readText())
@@ -188,6 +189,7 @@ object SoftwareBackup {
                     check(liveRoles.renameTo(previousDir)) { "无法暂存旧素材包" }
                     moved = true
                 }
+                assetsTouched = true
                 val incoming = File(staged, "roles")
                 if (incoming.exists()) {
                     check(incoming.renameTo(liveRoles)) { "无法安装素材包" }
@@ -216,14 +218,16 @@ object SoftwareBackup {
                 UserHabits.save(ctx, habits)
                 // Replace other persistent files as a group (excluding live
                 // DataStore files and the separately restored roles/habits).
-                previousMisc.mkdirs()
-                ctx.filesDir.listFiles().orEmpty().filter {
+                check(previousMisc.mkdirs()) { "无法创建临时备份目录" }
+                val miscFiles = ctx.filesDir.listFiles().orEmpty().filter {
                     it.name !in setOf("datastore", "roles", "user_habits.json")
-                }.forEach { old ->
-                    check(old.renameTo(File(previousMisc, old.name))) {
-                        "无法暂存现有持久化文件：${old.name}"
-                    }
-                    miscMoved = true
+                }
+                // Copy ALL originals first, before removing even one file.
+                // A partial safety-copy failure must leave every original intact.
+                miscFiles.forEach { old -> copyTree(old, File(previousMisc, old.name)) }
+                miscMoved = true
+                miscFiles.forEach { old ->
+                    check(old.deleteRecursively()) { "无法替换持久化文件：${old.name}" }
                 }
                 File(staged, "misc").takeIf { it.isDirectory }?.listFiles().orEmpty()
                     .forEach { copyTree(it, File(ctx.filesDir, it.name)) }
@@ -231,8 +235,8 @@ object SoftwareBackup {
                 previousDir.deleteRecursively()
                 return "软件备份已恢复。素材包和角色设置已替换；系统权限保持不变。"
             } catch (problem: Exception) {
-                runCatching {
-                    liveRoles.deleteRecursively()
+                val rollback = runCatching {
+                    if (assetsTouched) liveRoles.deleteRecursively()
                     if (moved) check(previousDir.renameTo(liveRoles)) {
                         "无法还原原素材目录"
                     }
@@ -257,6 +261,12 @@ object SoftwareBackup {
                         }
                     }
                     UserHabits.save(ctx, oldHabits)
+                }
+                if (rollback.isFailure) {
+                    throw IllegalStateException(
+                        "恢复失败，且自动回滚未完全成功；旧数据安全副本仍保留在应用缓存目录。原错误：${problem.message}",
+                        rollback.exceptionOrNull()
+                    )
                 }
                 throw problem
             }
