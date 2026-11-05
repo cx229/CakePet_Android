@@ -112,10 +112,12 @@ class MovementSettingsActivity : AppCompatActivity() {
         swLeap = findViewById(R.id.sw_leap)
         swAutoForage = findViewById(R.id.sw_auto_forage)
 
-        // Movement is a cross-module runtime gate, NOT a UI container that hides
-        // gravity, rebound, throwing, or climbing controls.
+        // The movement master chevron folds the whole page content below its card.
+        // This is visual-only: switching movement off never resets child settings.
         val folds = SettingsFoldController(this).apply {
-            add(R.id.sw_move_enabled, listOf(R.id.maxspeed_bar))
+            add(R.id.sw_move_enabled,
+                listOf(R.id.maxspeed_bar, R.id.group_movement_details),
+                indentChildren = false)
             add(R.id.sw_gravity_enabled,
                 listOf(R.id.sw_tilt_gravity, R.id.gravity_bar, R.id.group_gravity_directions),
                 dependency = { it.moveEnabled }, unavailableText = "移动总开关已关闭，此功能暂不生效")
