@@ -42,6 +42,11 @@ jobs:
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Verify shared debug signing key
+        run: |
+          test -s app/signing/cakepet-shared-debug.jks
+          keytool -list -keystore app/signing/cakepet-shared-debug.jks -storepass android -alias cakepet-debug
+
       - name: Build debug APK
         run: bash ./gradlew --no-daemon assembleDebug
 
@@ -49,7 +54,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CakePet-v1.26.11.05.23.56-popup-compile-fix-debug-apk
+          name: CakePet-v1.26.11.06.00.17-shared-signing-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
