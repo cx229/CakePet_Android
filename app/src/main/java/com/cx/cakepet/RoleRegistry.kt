@@ -13,7 +13,7 @@ object RoleRegistry {
     /** 预装角色：启动时扫描 assets 下「含合法 modes.jsonc」的素材目录自动注册（packId 取自 JSON）。不再写死。 */
     private var presets: List<RoleDescriptor> = emptyList()
 
-    /** 默认模板仍为白酥，即使实验分支增加其他预装角色。 */
+    /** 唯一内置模板为白酥，其余角色通过素材包导入。 */
     val DEFAULT: RoleDescriptor
         get() = PRESETS.firstOrNull { it.id == "baiasu" } ?: PRESETS.first()
 
@@ -34,9 +34,7 @@ object RoleRegistry {
      * 新增预装包：在此加一行 + assets 放带合法 modes.jsonc 的目录即可。
      */
     private val PRESET_FOLDERS: Map<Int, String> = mapOf(
-        3 to "白酥",
-        1 to "芝麻酥",
-        2 to "芝麻球促销"
+        3 to "白酥"
     )
 
     /**
