@@ -2300,6 +2300,10 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun images() {
         section("图片资源", "images")
+        panel.addView(text("列出素材包使用的图片；点击文件夹展开，右侧 + 可添加图片。", 12f).apply {
+            setPadding(px(4), 0, px(4), px(6))
+            setTextColor(getColor(R.color.cp_note))
+        })
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -2314,7 +2318,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             topMargin = px(8)
             bottomMargin = px(8)
         })
-        panel.addView(text("点击文件夹展开；文件夹右侧 + 可添加图片。", 12f))
         resourceBranch(draft, 0, imageUses())
     }
 }
