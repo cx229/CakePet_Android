@@ -3841,7 +3841,9 @@ class PetService : Service() {
         val tv = target ?: pets.firstOrNull { it.roleId == roleId }?.view ?: return
         // 吸附态下菜单动作一律忽略（探头常驻）
         if (tv.physics.isSnapped) return
-        if (spritePackForRole(roleId).modeLoops[mode] == true) tv.setMode(mode) else tv.playOnce(mode)
+        // Menu invocation is an interaction regardless of the selected Mode's
+        // loop policy. The Mode itself decides whether/when playback ends.
+        tv.playOnce(mode)
     }
 
     /** 彻底退出：持久化退出意图，释放资源，停止服务并结束整个应用进程。 */
