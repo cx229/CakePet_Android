@@ -198,6 +198,11 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
         }
     }
 
+    suspend fun exportSettings(): org.json.JSONObject = PreferenceCodec.snapshot(dataStore)
+
+    suspend fun importSettings(values: org.json.JSONObject, replace: Boolean = false): Int =
+        PreferenceCodec.apply(dataStore, values, replace)
+
     // ===== 系统默认（基础款 + 极限款） =====
     // 所有字面量已集中到 AppDefaults.AppBounds，本处仅装配引用。
     private fun systemPage(page: SettingsPage): PageBounds = when (page) {
