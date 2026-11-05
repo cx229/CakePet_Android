@@ -240,12 +240,7 @@ class RoleManageActivity : AppCompatActivity() {
     /** 素材模板 → 首页实例（可重复导入，配置按 instanceId 完全独立）。直接加入，不弹窗。 */
     private fun importToHome(role: RoleDescriptor) {
         val errors = runCatching {
-            if (role.source == RoleSource.FILES) {
-                RolePackEditing.validationErrors(RolePackEditing.dir(this, role.rootPath))
-            } else {
-                val pack = RolePackEditing.draft(this, role.rootPath)
-                try { RolePackEditing.validationErrors(pack) } finally { pack.deleteRecursively() }
-            }
+            RolePackEditing.validationErrorsForRole(this, role)
         }.getOrElse { listOf("读取素材包失败：${it.message}") }
         if (errors.isNotEmpty()) {
             AlertDialog.Builder(this)
