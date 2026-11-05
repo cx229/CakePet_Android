@@ -13,9 +13,9 @@ object RoleRegistry {
     /** 预装角色：启动时扫描 assets 下「含合法 modes.jsonc」的素材目录自动注册（packId 取自 JSON）。不再写死。 */
     private var presets: List<RoleDescriptor> = emptyList()
 
-    /** 默认角色始终是唯一预装模板白酥；上传角色仍独立保留。 */
+    /** 默认模板仍为白酥，即使实验分支增加其他预装角色。 */
     val DEFAULT: RoleDescriptor
-        get() = PRESETS.first()
+        get() = PRESETS.firstOrNull { it.id == "baiasu" } ?: PRESETS.first()
 
     /** 用户上传素材模板缓存（由 [refreshUserRoles] 从 RoleStore 载入，避免每次走 DataStore）。 */
     private var cachedUser: List<RoleDescriptor> = emptyList()
@@ -34,7 +34,9 @@ object RoleRegistry {
      * 新增预装包：在此加一行 + assets 放带合法 modes.jsonc 的目录即可。
      */
     private val PRESET_FOLDERS: Map<Int, String> = mapOf(
-        3 to "白酥"
+        3 to "白酥",
+        1 to "芝麻酥",
+        2 to "芝麻球促销"
     )
 
     /**
@@ -62,7 +64,7 @@ object RoleRegistry {
                 authors = parseAuthors(root)
             )
         }
-        presets = list.sortedBy { it.packId }
+        presets = list.sortedWith(compareBy<RoleDescriptor> { it.id != "baiasu" }.thenBy { it.packId })
         setPresetPacks(presets.associate { it.packId to PackRef(it.id, it.rootPath, RoleSource.ASSETS) })
     }
 
