@@ -239,6 +239,22 @@ class RoleManageActivity : AppCompatActivity() {
 
     /** 素材模板 → 首页实例（可重复导入，配置按 instanceId 完全独立）。直接加入，不弹窗。 */
     private fun importToHome(role: RoleDescriptor) {
+        val errors = runCatching {
+            if (role.source == RoleSource.FILES) {
+                RolePackEditing.validationErrors(RolePackEditing.dir(this, role.rootPath))
+            } else {
+                val pack = RolePackEditing.draft(this, role.rootPath)
+                try { RolePackEditing.validationErrors(pack) } finally { pack.deleteRecursively() }
+            }
+        }.getOrElse { listOf("读取素材包失败：${it.message}") }
+        if (errors.isNotEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("素材包暂时无法加入角色")
+                .setMessage(errors.mapIndexed { index, error -> "${index + 1}. $error" }.joinToString("\n"))
+                .setPositiveButton("知道了", null)
+                .show()
+            return
+        }
         val instanceId = "inst_${System.currentTimeMillis()}_${(Math.random() * 10000).toInt()}"
         RoleStore.addHomeRole(this, HomeRoleInstance(instanceId, role.id))
         Toast.makeText(this, "已加入：${role.displayName}", Toast.LENGTH_SHORT).show()
@@ -320,45 +336,19 @@ class RoleManageActivity : AppCompatActivity() {
                         sub.delete()
                     }
                 }
-                // 以"通过完整资源包校验"判定该编码正确，否则换下一个编码重试。
+                // ZIP 解压成功即接受；资源或配置缺陷留到“加入角色”时诊断。
+                // 仍需使用合理的文件名编码，并保留可恢复的原始配置。
                 val modesFile = File(dest, "modes.jsonc")
                 if (!modesFile.exists()) {
-                    // 诊断用：打印实际解出的目录树，用于区分"多层包裹目录""条目带盘符/绝对路径前缀"
-                    // "条目名编码错误""包内根本没有 modes.jsonc"等情况。定位后可移除。
-                    val tree = try {
-                        dest.walkTopDown().take(30).joinToString("\n  ") { it.relativeTo(dest).path }
-                    } catch (_: Exception) { "<遍历失败>" }
-                    val topLevel = dest.listFiles()?.joinToString { it.name } ?: "<空>"
-                    Log.e(TAG_IMPORT, "[$cs] 根目录无 modes.jsonc。顶层=[$topLevel]\n  实际解出:\n  $tree")
-                    dest.deleteRecursively(); dest.mkdirs(); continue
-                }
-                val jsonText = try { modesFile.readText() } catch (e: Exception) {
-                    jsonError = e
-                    Log.e(TAG_IMPORT, "[$cs] modes.jsonc 读取失败", e)
-                    null
-                }
-                val json = if (jsonText != null) {
-                    try { parseJsonc(jsonText) } catch (e: Exception) {
-                        jsonError = e
-                        // 打印出错字符位置及其上下文：能一眼看出是多余逗号、注释还是被截断。
-                        // 消息可能极长（含整段 JSON），故统一限长，避免 logcat 刷屏。
-                        Log.e(
-                            TAG_IMPORT,
-                            "[$cs] modes.jsonc 解析失败（${jsonText.length}字符）：${e.message?.take(300)}" +
-                                jsonErrorContext(jsonText, e.message),
-                            e
-                        )
-                        null
+                    val sub = dest.listFiles()?.firstOrNull { it.isDirectory && File(it, "modes.jsonc").isFile }
+                    if (sub != null) {
+                        sub.listFiles()?.forEach { it.renameTo(File(dest, it.name)) }
+                        sub.delete()
                     }
-                } else null
-                if (json == null) { dest.deleteRecursively(); dest.mkdirs(); continue }
-                val validation = RolePackageContract.validate(json)
-                val missingAssets = RolePackageContract.verifyAssets(dest, json)
-                val errors = validation.errors + missingAssets
-                if (errors.isNotEmpty()) {
-                    lastErrors = errors
-                    dest.deleteRecursively(); dest.mkdirs(); continue
                 }
+                val originalName = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')
+                    ?.takeIf { it.isNotBlank() } ?: "导入素材包"
+                RolePackEditing.prepareEditable(dest, id, originalName)
                 ok = true
                 break
             } catch (e: Exception) {
@@ -397,7 +387,7 @@ class RoleManageActivity : AppCompatActivity() {
         }
         tmp.delete() // 解压成功，清理临时文件
 
-        // 校验已在上方通过，重新读取 modes.jsonc 写入清单。
+        // 导入时仅整理结构，严格检查留给加入角色。
         val modesFile = File(dest, "modes.jsonc")
         val json = try { parseJsonc(modesFile.readText()) } catch (_: Exception) { null }
         if (json == null) {
@@ -406,7 +396,7 @@ class RoleManageActivity : AppCompatActivity() {
             return
         }
         val packId = try { json.getInt("packId") } catch (_: Exception) { -1 }
-        val displayName = json.getString("name")
+        val displayName = json.optString("name", "导入素材包")
         val shortName = json.optString("shortName", "")
         RoleStore.addUserRole(
             this,
