@@ -850,6 +850,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         panel.addView(previewContainer, LinearLayout.LayoutParams(-1, -2))
         animate(preview, key)
         action("编辑动作属性") { attributes(key) }
+        action("绑定到功能") { bindModeToFunctions(key) }
         panel.addView(button("导入 GIF 并覆盖") {
             showConfirmDialog(
                 title = "GIF 覆盖动作",
@@ -1899,6 +1900,184 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
         functionTree(panel, root.getJSONObject("functions"), emptyList())
     }
+
+    /**
+     * Reverse editor for Functions: a Mode may belong to multiple function pools.
+     * The actual source of truth remains functions.jsonc; no duplicated Mode-side binding.
+     */
+    private fun bindModeToFunctions(modeId: String) {
+        val functionsRoot = root.getJSONObject("functions")
+        val leaves = linkedMapOf<String, Pair<List<String>, List<String>>>()
+        fun collect(node: JSONObject, parent: List<String>) {
+            node.keys().asSequence().toList().forEach { segment ->
+                val path = parent + segment
+                when (val value = node.opt(segment)) {
+                    is JSONObject -> collect(value, path)
+                    is JSONArray -> leaves[path.joinToString("/")] = path to
+                        (0 until value.length()).map { value.optString(it) }.filter { it.isNotBlank() }
+                }
+            }
+        }
+        collect(functionsRoot, emptyList())
+        val selected = leaves.filterValues { modeId in it.second }.keys.toMutableSet()
+        val expanded = mutableSetOf<String>()
+        selected.forEach { key ->
+            val path = leaves.getValue(key).first
+            (1 until path.size).forEach { depth ->
+                expanded.add(path.take(depth).joinToString("/"))
+            }
+        }
+
+        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        val frame = FrameLayout(this).apply { setPadding(px(22), 0, px(22), 0) }
+        val card = com.google.android.material.card.MaterialCardView(this).apply {
+            radius = px(26).toFloat()
+            setCardBackgroundColor(getColor(R.color.cp_card_bg))
+        }
+        frame.addView(card, FrameLayout.LayoutParams(-1, -2))
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(16), px(14), px(16), px(14))
+        }
+        card.addView(body)
+        body.addView(text("绑定到功能", 18f).apply {
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        body.addView(text("动作：$modeId\\n勾选要绑定的功能；取消勾选将解除对应绑定。", 12f).apply {
+            gravity = Gravity.CENTER
+            setPadding(px(4), 0, px(4), px(10))
+            setTextColor(getColor(R.color.cp_note))
+        })
+        val selectionInfo = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
+        body.addView(selectionInfo)
+        val listing = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val viewport = ScrollView(this).apply { addView(listing) }
+        body.addView(viewport, LinearLayout.LayoutParams(
+            -1, (resources.displayMetrics.heightPixels * .55f).toInt()
+        ))
+
+        fun warnLastBinding(path: List<String>) {
+            showConfirmDialog(
+                title = "无法解除绑定",
+                bodyHtml = "功能「${functionPathName(path)}」至少需要保留一个动作。",
+                subText = "当前只有「$modeId」绑定到这个功能。请先为该功能添加其他动作。",
+                positiveText = "我知道了"
+            ) { }
+        }
+
+        lateinit var redraw: () -> Unit
+        redraw = {
+            val scrollPosition = viewport.scrollY
+            listing.removeAllViews()
+            selectionInfo.text = "已绑定 ${selected.size} 个功能"
+
+            fun drawNode(node: JSONObject, parent: List<String>, depth: Int) {
+                node.keys().asSequence().toList().forEach { segment ->
+                    val path = parent + segment
+                    val key = path.joinToString("/")
+                    when (val child = node.opt(segment)) {
+                        is JSONObject -> {
+                            val descendantPaths = leaves.keys.filter { it.startsWith("$key/") }
+                            val open = key in expanded
+                            val folder = LinearLayout(this).apply {
+                                orientation = LinearLayout.HORIZONTAL
+                                gravity = Gravity.CENTER_VERTICAL
+                                setBackgroundResource(R.drawable.card_bg)
+                                rippleCard(this)
+                                setPadding(px(12), px(5), px(10), px(5))
+                            }
+                            folder.addView(text(
+                                (if (open) "▾ 📂  " else "▸ 📁  ") + functionSegment(path), 15f
+                            ).apply { setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(0, -2, 1f))
+                            folder.addView(text(
+                                "${descendantPaths.count { it in selected }}/${descendantPaths.size}", 11f
+                            ).apply { setTextColor(getColor(R.color.cp_note)) })
+                            listing.addView(folder, LinearLayout.LayoutParams(-1, px(49)).apply {
+                                leftMargin = px((depth * 12).coerceAtMost(48))
+                                topMargin = px(4)
+                            })
+                            rippleClick(folder) {
+                                if (!expanded.add(key)) expanded.remove(key)
+                                redraw()
+                            }
+                            if (open) drawNode(child, path, depth + 1)
+                        }
+                        is JSONArray -> {
+                            val checked = key in selected
+                            val row = LinearLayout(this).apply {
+                                orientation = LinearLayout.VERTICAL
+                                setBackgroundResource(R.drawable.card_bg)
+                                rippleCard(this)
+                                setPadding(px(10), px(4), px(8), px(4))
+                            }
+                            val check = CheckBox(this).apply {
+                                text = functionSegment(path)
+                                textSize = 14f
+                                isChecked = checked
+                                setTextColor(getColor(R.color.cp_title))
+                            }
+                            row.addView(check, LinearLayout.LayoutParams(-1, px(42)))
+                            row.addView(text(functionDescription(path), 11f).apply {
+                                setTextColor(getColor(R.color.cp_note))
+                                setPadding(px(10), 0, px(6), px(4))
+                            })
+                            listing.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                                leftMargin = px(((depth + 1) * 12).coerceAtMost(60))
+                                topMargin = px(3)
+                            })
+                            check.setOnCheckedChangeListener { _, nowChecked ->
+                                if (!nowChecked && checked && leaves.getValue(key).second
+                                        .filter { it != modeId }.isEmpty()) {
+                                    check.isChecked = true
+                                    warnLastBinding(path)
+                                } else {
+                                    if (nowChecked) selected.add(key) else selected.remove(key)
+                                    redraw()
+                                }
+                            }
+                            rippleClick(row) { check.isChecked = !check.isChecked }
+                        }
+                    }
+                }
+            }
+            drawNode(functionsRoot, emptyList(), 0)
+            viewport.post { viewport.scrollTo(0, scrollPosition) }
+        }
+        redraw()
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        actions.addView(button("取消") { dialog.dismiss() },
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+        actions.addView(button("确认") {
+            attempt {
+                // Verify again at commit time; never clear an existing function pool.
+                change { json ->
+                    val functions = json.getJSONObject("functions")
+                    for ((key, pair) in leaves) {
+                        val (path, _) = pair
+                        var node = functions
+                        path.dropLast(1).forEach { node = node.getJSONObject(it) }
+                        val original = node.getJSONArray(path.last())
+                        val oldModes = (0 until original.length()).map { original.optString(it) }
+                            .filter { it.isNotBlank() }
+                        val updated = oldModes.filter { it != modeId }.toMutableList()
+                        if (key in selected && modeId !in updated) updated.add(modeId)
+                        require(oldModes.isEmpty() || updated.isNotEmpty()) {
+                            "功能「${functionPathName(path)}」至少需要保留一个动作"
+                        }
+                        node.put(path.last(), JSONArray().apply { updated.distinct().forEach { put(it) } })
+                    }
+                }
+                dialog.dismiss()
+            }
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        body.addView(actions)
+        dialog.setContentView(frame)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+        dialog.window?.setLayout(-1, -2)
+    }
+
     /** Shared grouped Mode selector for nextMode (single) and Functions leaves (multiple). */
     private fun chooseModes(single: Boolean, initial: List<String>,
                             headerTitle: String? = null, headerDescription: String? = null,
