@@ -370,7 +370,11 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
             keys += "${page.tag}_${option.key}_default"
         }
         val applicable = if (onlyKeys == null) keys else keys.filter { key ->
-            onlyKeys.any { item -> key.startsWith("${page.tag}_${item}_") }
+            onlyKeys.any { item ->
+                key.startsWith("${page.tag}_${item}_") ||
+                    (item == "imeMode" && (key == "${page.tag}_imeAdapt_default" ||
+                        key == "${page.tag}_imeHide_default"))
+            }
         }
         dataStore.edit { prefs ->
             applicable.forEach { k ->
