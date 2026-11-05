@@ -810,7 +810,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     setBackgroundResource(R.drawable.card_bg)
-                    setPadding(px(8), px(5), px(8), px(5))
+                    setPadding(px(8), px(3), px(8), px(3))
                     minimumHeight = px(64)
                     layoutParams = RecyclerView.LayoutParams(-1, -2).apply {
                         topMargin = px(3)
@@ -838,13 +838,18 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }, LinearLayout.LayoutParams(0, -2, 1f).apply {
                     leftMargin = px(8)
                 })
+                (headline.getChildAt(0) as TextView).includeFontPadding = false
+                (headline.getChildAt(1) as TextView).includeFontPadding = false
                 labels.addView(headline)
                 labels.addView(text("", 11f).apply {
-                    // Content is set in the headline. Preserve this slot for
-                    // stable ViewHolder child indices without reserving space.
-                    visibility = View.GONE
+                    includeFontPadding = false
+                    setTextColor(getColor(R.color.cp_note))
+                    setSingleLine(false)
+                    maxLines = Int.MAX_VALUE
+                    ellipsize = null
                 })
                 labels.addView(text("", 11f).apply {
+                    includeFontPadding = false
                     setTextColor(getColor(R.color.cp_note))
                     setSingleLine(false)
                     maxLines = Int.MAX_VALUE
@@ -901,13 +906,15 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val y = coord("anchorY")
                 val dx = coord("dx")
                 val dy = coord("dy")
-                val detailParts = mutableListOf(delayText)
-                if (x != "-" || y != "-") detailParts.add("XY($x,$y)")
-                if (dx != "-" || dy != "-") detailParts.add("dxy($dx,$dy)")
-                frameInfo.text = detailParts.joinToString("  ")
-                (labels.getChildAt(1) as TextView).visibility = View.GONE
-                (labels.getChildAt(2) as TextView).text =
-                    (if (frame.optBoolean("flipX", false)) "左右镜像 · " else "") + source
+                frameInfo.text = delayText + (if (frame.optBoolean("flipX", false)) "  左右镜像" else "")
+                val coords = mutableListOf<String>()
+                if (x != "-" || y != "-") coords.add("XY($x,$y)")
+                if (dx != "-" || dy != "-") coords.add("dxy($dx,$dy)")
+                (labels.getChildAt(1) as TextView).apply {
+                    text = coords.joinToString("  ")
+                    visibility = if (coords.isEmpty()) View.GONE else View.VISIBLE
+                }
+                (labels.getChildAt(2) as TextView).text = source
                 image.setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
                 image.scaleX = if (frame.optBoolean("flipX", false)) -1f else 1f
                 val at = holder.bindingAdapterPosition
