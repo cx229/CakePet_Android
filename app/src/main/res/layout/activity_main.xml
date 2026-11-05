@@ -61,19 +61,26 @@
             android:textColor="@color/cp_hint_dark"
             android:gravity="center" />
 
-        <!-- 【复用素材页同款「+」按钮布局】item_add_role，保证外观与角色素材管理页完全一致
-             （text="+"、20sp 粗体、44dp 高、描边圆角）。位于角色列表【之外】的独立按钮，
-             不占 adapter position，故不参与列表绑定、预览与长按拖拽重排。
-             上外边距为 0（紧跟作者文字）；下方与列表保留 12dp 间距。
-             【注意】<include> 会【忽略】被 include 布局根元素自带的 layout_margin*——
-             item_add_role.xml 里的 marginBottom="12dp" 在此不会自动生效，必须在本标签上显式声明。
-             （该 margin 仍会正常作用于 RoleHomeManageActivity 中把它当列表 item 的场景。） -->
-        <include
+        <!-- 首页独立的加号按钮：普通文本符号，文字不保留上下内外边距。
+             按钮高度仍为 44dp，与列表的 12dp 间隔保持不变。 -->
+        <TextView
             android:id="@+id/btn_add_role"
-            layout="@layout/item_add_role"
             android:layout_width="match_parent"
             android:layout_height="44dp"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginTop="0dp"
+            android:layout_marginBottom="12dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:includeFontPadding="false"
+            android:gravity="center"
+            android:text="+"
+            android:textSize="22sp"
+            android:textStyle="normal"
+            android:textColor="@color/cp_btn_outline_text"
+            android:background="@drawable/bg_btn_outline"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="添加角色" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/role_list"
