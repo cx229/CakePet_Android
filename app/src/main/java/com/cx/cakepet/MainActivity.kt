@@ -77,6 +77,9 @@ class MainActivity : AppCompatActivity() {
                     // 进入角色素材管理页（模板清单 + 从存储导入 + 删除等）。
                     startActivity(Intent(this, RoleManageActivity::class.java))
                 },
+                R.id.item_user_habits to {
+                    startActivity(Intent(this, UserHabitsActivity::class.java))
+                },
                 R.id.item_global_settings to {
                     startActivity(Intent(this, GlobalSettingsActivity::class.java))
                 },
