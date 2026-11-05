@@ -28,6 +28,7 @@ fun AppCompatActivity.showConfirmDialog(
     positiveText: String,
     subText: String? = null,
     titleColorRes: Int? = null,
+    showNegative: Boolean = true,
     onPositive: () -> Unit
 ) {
     val view = LayoutInflater.from(this).inflate(R.layout.dialog_confirm, null)
@@ -48,6 +49,7 @@ fun AppCompatActivity.showConfirmDialog(
     }
     btnPositive.text = positiveText
     btnNegative.text = "取消"
+    btnNegative.visibility = if (showNegative) android.view.View.VISIBLE else android.view.View.GONE
 
     val dialog = Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
     dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
