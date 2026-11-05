@@ -291,7 +291,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
     }
 
-    private fun menuCard(title: String, english: String, note: String, click: () -> Unit) {
+    private fun menuCard(title: String, english: String, note: String, iconRes: Int, click: () -> Unit) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -302,6 +302,12 @@ class RolePackEditorActivity : AppCompatActivity() {
             isFocusable = true
             rippleClick(this) { click() }
         }
+        card.addView(ImageView(this).apply {
+            setImageResource(iconRes)
+            imageTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.cp_note))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = null
+        }, LinearLayout.LayoutParams(px(22), px(22)).apply { rightMargin = px(12) })
         val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val heading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -498,10 +504,10 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun home() {
         section("素材包编辑", "home")
         val roleName = root.optString("name").ifBlank { "角色" }
-        menuCard("基本信息", "Info", "定义了「$roleName」的身份与信息") { info() }
-        menuCard("功能映射", "Functions", "决定了「$roleName」在何时会触发什么动作动画") { functions() }
-        menuCard("动作动画", "Modes", "制定了「$roleName」有什么动作动画") { modes() }
-        menuCard("图片资源", "Images", "列举了「$roleName」所用的图片") { images() }
+        menuCard("基本信息", "Info", "定义了「$roleName」的身份与信息", android.R.drawable.ic_menu_info_details) { info() }
+        menuCard("功能映射", "Functions", "决定了「$roleName」在何时会触发什么动作动画", android.R.drawable.ic_menu_manage) { functions() }
+        menuCard("动作动画", "Modes", "制定了「$roleName」有什么动作动画", android.R.drawable.ic_media_play) { modes() }
+        menuCard("图片资源", "Images", "列举了「$roleName」所用的图片", android.R.drawable.ic_menu_gallery) { images() }
     }
     private fun info() {
         editor("基本信息", compact = true) { box ->
@@ -551,7 +557,7 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun modes() {
         section("动作动画", "modes")
-        panel.addView(text("管理角色的动画动作、逐帧参数和播放规则。", 12f).apply {
+        panel.addView(text("管理角色的动作动画与播放规则。\n点击“+”创建动作，点击卡片编辑。", 12f).apply {
             setPadding(px(4), 0, px(4), px(4))
             setTextColor(getColor(R.color.cp_note))
         })
@@ -1781,6 +1787,21 @@ class RolePackEditorActivity : AppCompatActivity() {
         else -> "执行该功能时，从关联动作中选择播放"
     }
 
+    private fun functionFolderDescription(path: List<String>): String = when (path.joinToString("/")) {
+        "static" -> "角色静止时的基础动画"
+        "standby" -> "角色待机时的候选动画"
+        "touch" -> "角色触摸与拖动时的动画"
+        "touch/lift_up" -> "角色被提起时的动画"
+        "snap" -> "角色贴边吸附时的动画"
+        "snap/pat_head" -> "角色吸附时的摸头动画"
+        "snap/feed" -> "角色吸附时的投喂动画"
+        "climb" -> "角色沿边缘移动时的动画"
+        "pat_head" -> "角色被摸头时的互动动画"
+        "feed" -> "角色接受投喂时的动画"
+        "menu" -> "菜单中可手动选择的动画"
+        else -> "展开查看该分类下的功能"
+    }
+
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
                              level: Int, immediate: Boolean = false, description: String = "",
                              click: () -> Unit): LinearLayout {
@@ -1833,7 +1854,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                         }
                         children.visibility = if (opened) View.VISIBLE else View.GONE
                     }
-                    folderCard = functionItem(parent, "", "", path.size, immediate = true) {
+                    folderCard = functionItem(parent, "", functionFolderDescription(currentPath), path.size, immediate = true) {
                         if (!openedFunctionFolders.add(fullKey)) openedFunctionFolders.remove(fullKey)
                         refreshFolder()
                     }
@@ -1855,7 +1876,7 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun functions() {
         section("功能映射", "functions")
-        panel.addView(text("将功能触发条件关联到动作动画，决定何时播放哪些动作。", 12f).apply {
+        panel.addView(text("决定角色在不同情况下播放的动作。\n点击文件夹展开，点击功能卡片编辑。", 12f).apply {
             setPadding(px(4), 0, px(4), px(6))
             setTextColor(getColor(R.color.cp_note))
         })
@@ -2300,7 +2321,7 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun images() {
         section("图片资源", "images")
-        panel.addView(text("列出素材包使用的图片；点击文件夹展开，右侧 + 可添加图片。", 12f).apply {
+        panel.addView(text("管理角色使用的图片资源。\n点击文件夹展开，点击图片查看详情。", 12f).apply {
             setPadding(px(4), 0, px(4), px(6))
             setTextColor(getColor(R.color.cp_note))
         })
