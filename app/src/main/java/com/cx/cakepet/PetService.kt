@@ -513,7 +513,41 @@ class PetService : Service() {
     /** 该角色显示窗是否应带 FLAG_NOT_TOUCHABLE：控制层隐藏/穿透/隐藏画布 或 未强制无透明 → 带（穿透）；
      *  强制无透明且控制层可见 → 不带（100% 不透明，代价是显示层吃宠物区点击）。 */
     private fun roleDisplayNotTouchable(roleId: String): Boolean =
-        roleControlHidden(roleId) || !(roleCfg(roleId)?.forceOpaque ?: false)
+        roleControlHidden(roleId) || roleCfg(roleId)?.interactionMode != "display-opaque"
+
+    private fun roleDisplayType(roleId: String): Int =
+        if (roleCfg(roleId)?.interactionMode == "core-opaque" &&
+            CakePetAccessibilityService.active != null)
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+        else WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+
+    /** Accessibility overlays are owned by the accessibility service window context. */
+    private fun addDisplay(view: PetDisplayView, lp: WindowManager.LayoutParams): Boolean =
+        if (lp.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+            CakePetAccessibilityService.active?.attachPetDisplay(view, lp) == true
+        else try { windowManager.addView(view, lp); true } catch (_: Exception) { false }
+
+    private fun removeDisplay(view: PetDisplayView, lp: WindowManager.LayoutParams) {
+        if (lp.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+            CakePetAccessibilityService.active?.detachPetDisplay(view)
+        else try { windowManager.removeView(view) } catch (_: Exception) {}
+    }
+
+    private fun updateDisplay(view: PetDisplayView, lp: WindowManager.LayoutParams) {
+        if (lp.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+            CakePetAccessibilityService.active?.updatePetDisplay(view, lp)
+        else try { windowManager.updateViewLayout(view, lp) } catch (_: Exception) {}
+    }
+
+    /** Service revoked mid-session: persist the safe fallback, without changing alpha or core sizes. */
+    fun onAccessibilityUnavailable() {
+        engines.values.forEach { rt ->
+            if (rt.config.getBlocking().interactionMode == "core-opaque") scope.launch {
+                rt.config.update { it.copy(interactionMode = "core-transparent",
+                    hitMode = ConfigDefaults.HIT_CORE, forceOpaque = false) }
+            }
+        }
+    }
     /** 该角色是否隐藏画布（调试：隐藏显示窗）。 */
     private fun roleHideStage(roleId: String): Boolean = roleCfg(roleId)?.hideStage ?: false
     // 宠物整体透明度（0.1~1，1=完全不透明），需逐显示窗设置；单独记账以便 hideStage 重挂后保持。
@@ -535,7 +569,7 @@ class PetService : Service() {
             }
             if (dlp.flags != newFlags) {
                 dlp.flags = newFlags
-                try { windowManager.updateViewLayout(disp, dlp) } catch (_: Exception) {}
+                updateDisplay(disp, dlp)
             }
         }
     }
@@ -1066,7 +1100,7 @@ class PetService : Service() {
         // 位置/尺寸与位图矩形一致，初始算到底部中心（与 view 同源）。
         val disp = PetDisplayView(this, view)
         val dispLp = WindowManager.LayoutParams().apply {
-            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            type = roleDisplayType(roleId)
             format = PixelFormat.TRANSLUCENT
             // FLAG_LAYOUT_IN_SCREEN：显示窗 (0,0) 对齐物理屏幕左上角，baseX/baseY(来自 getScreenBounds 物理坐标)
             //   1:1 映射，状态栏显隐不再让宠物整体移位（否则落点原点在活动窗口=状态栏下，会下移状态栏高度并随其跳变）。
@@ -1091,8 +1125,7 @@ class PetService : Service() {
         // 诊断开关 hideStage：开启时不挂显示窗（仅透明控制窗，即 9.27 几何），用于二分点击拦截来源。
         var dispAdded = false
         if (!roleHideStage(roleId) && rolePetVisible(roleId)) {
-            windowManager.addView(disp, dispLp)
-            dispAdded = true
+            dispAdded = addDisplay(disp, dispLp)
         }
 
         // 控制窗是否挂载：调试“隐藏控制层”或用户“点击穿透”任一为真即不挂（二者语义等价，
@@ -1126,7 +1159,9 @@ class PetService : Service() {
         while (rolePets.size > target) {
             val inst = rolePets.removeAt(rolePets.lastIndex)
             // 显示窗（PetDisplayView）必须显式 removeView，否则残留屏幕且强引用旧 PetView/位图 → 泄漏。
-            if (inst.displayAdded) try { windowManager.removeView(inst.displayView) } catch (_: Exception) {}
+            if (inst.displayAdded) inst.displayView?.let { d ->
+            inst.displayLp?.let { removeDisplay(d, it) }
+        }
             if (inst.controlAdded) try { windowManager.removeView(inst.view) } catch (_: Exception) {}
             try { inst.petMsg.destroy() } catch (_: Exception) {}
             pets.remove(inst)
@@ -2286,16 +2321,26 @@ class PetService : Service() {
 
     /** 按 hideStage 开关增删各宠物的显示窗（诊断用，实时生效）。 */
     private fun syncDisplayWindows(roleId: String) {
+        val wantedType = roleDisplayType(roleId)
         for (inst in pets.filter { it.roleId == roleId }) {
             val disp = inst.displayView ?: continue
             val dlp = inst.displayLp ?: continue
-            if ((roleHideStage(roleId) || !rolePetVisible(roleId)) && inst.displayAdded) {
-                try { windowManager.removeView(disp) } catch (_: Exception) {}
+            val shouldShow = !roleHideStage(roleId) && rolePetVisible(roleId)
+            if (inst.displayAdded && (!shouldShow || dlp.type != wantedType)) {
+                removeDisplay(disp, dlp)
                 inst.displayAdded = false
-            } else if (!roleHideStage(roleId) && rolePetVisible(roleId) && !inst.displayAdded) {
-                // 重挂时窗内位图已带当前透明度（petAlpha 在 view 上），窗口 alpha 保持 1，无需设 disp.alpha
-                try { windowManager.addView(disp, dlp) } catch (_: Exception) {}
-                inst.displayAdded = true
+            }
+            dlp.type = wantedType
+            // Trusted accessibility displays must always be non-touchable.
+            dlp.flags = if (wantedType == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY ||
+                    roleDisplayNotTouchable(roleId))
+                dlp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            else dlp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            if (shouldShow && !inst.displayAdded) {
+                inst.displayAdded = addDisplay(disp, dlp)
+                if (!inst.displayAdded && wantedType == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) {
+                    onAccessibilityUnavailable()
+                }
             }
         }
     }
