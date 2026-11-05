@@ -123,15 +123,7 @@
                         android:layout_marginTop="0dp"/>
                 </com.cx.cakepet.SettingsRippleRow>
 
-                <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
-                    <LinearLayout style="@style/SettingsSwitchTexts">
-                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:text="显示 / 隐藏" style="@style/SettingsOptionTitle"
-                            android:textStyle="bold"/>
-                    </LinearLayout>
-                    <Switch android:id="@+id/sw_visible" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </com.cx.cakepet.SettingsRippleRow>
+
 
                 <com.cx.cakepet.SettingsRippleRow android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" style="@style/SettingsSwitchRow">
                     <LinearLayout style="@style/SettingsSwitchTexts">
