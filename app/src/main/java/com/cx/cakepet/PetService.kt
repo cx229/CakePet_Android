@@ -2564,7 +2564,9 @@ class PetService : Service() {
             val wasLocal = imeLastMode[rid] == "local"
             val closingLocal = kb <= 0f && wasLocal
             val previousTop = imeLastTop[rid]
-            val newGlobalShift = if (active && mode == "global") keyboardTop - vis.bottom else 0f
+            // Bounds reset uses the raw keyboard translation. The extra bottom-offset
+            // compensation applies only to object positions, otherwise the floor moves twice.
+            val newGlobalShift = if (active && mode == "global") rawKeyboardTop - vis.bottom else 0f
             imeShiftY[rid] = newGlobalShift
             val oldRect = if (c.feedingFullScreen) null else activityRectOf(rid)
             val gluedEdges = if (oldRect != null) {
