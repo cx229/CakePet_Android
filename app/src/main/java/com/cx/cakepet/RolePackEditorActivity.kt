@@ -1023,7 +1023,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     }
                 }
                 val more = card.getChildAt(2) as TextView
-                more.visibility = if (bulkSelected.isEmpty()) View.VISIBLE else View.GONE
+                more.visibility = if (bulkSelected.isEmpty()) View.VISIBLE else View.INVISIBLE
                 more.setOnClickListener {
                     val index = holder.bindingAdapterPosition
                     if (index != RecyclerView.NO_POSITION && bulkSelected.isEmpty())
@@ -1483,7 +1483,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 (row.getChildAt(0) as CheckBox).isChecked = position in bulkSelected
                 val card = row.getChildAt(1) as LinearLayout
                 (card.getChildAt(2) as TextView).visibility =
-                    if (bulkSelected.isEmpty()) View.VISIBLE else View.GONE
+                    if (bulkSelected.isEmpty()) View.VISIBLE else View.INVISIBLE
             }
         } finally {
             syncingBulkSelection = false
