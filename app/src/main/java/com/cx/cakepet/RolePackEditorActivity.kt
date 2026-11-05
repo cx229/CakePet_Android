@@ -2460,7 +2460,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         // the title and action buttons remain visible.
         val detailsScroll = ScrollView(this).apply {
             isFillViewport = false
-            addView(content, ScrollView.LayoutParams(-1, -2))
+            addView(content, FrameLayout.LayoutParams(-1, -2))
         }
         body.addView(detailsScroll, LinearLayout.LayoutParams(-1, -2))
         actionPairForDialog(body, "关闭", { dialog.dismiss() },
