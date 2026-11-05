@@ -421,12 +421,9 @@ class PetConfig private constructor(
             hideStage = prefs[KEY_HIDE_STAGE] ?: ConfigDefaults.HIDE_STAGE,
             showBoundOffset = prefs[KEY_SHOW_BOUND_OFFSET] ?: ConfigDefaults.SHOW_BOUND_OFFSET,
             showSnapOffset = prefs[KEY_SHOW_SNAP_OFFSET] ?: ConfigDefaults.SHOW_SNAP_OFFSET,
-            hitMode = prefs[KEY_HIT_MODE] ?: run {
-                // 迁移：旧 rect_hit_mode 布尔 -> 三态（true=边界, false=像素）
-                if (prefs.contains(KEY_RECT_HIT_MODE)) {
-                    if (prefs[KEY_RECT_HIT_MODE] == true) ConfigDefaults.HIT_BOUNDARY else ConfigDefaults.HIT_PIXEL
-                } else ConfigDefaults.HIT_MODE
-            },
+            hitMode = if ((prefs[KEY_INTERACTION_MODE] ?: "") == "display-opaque" ||
+                (prefs[KEY_INTERACTION_MODE] == null && prefs[KEY_FORCE_OPAQUE] == true))
+                ConfigDefaults.HIT_BOUNDARY else ConfigDefaults.HIT_CORE,
             interactionMode = prefs[KEY_INTERACTION_MODE] ?: if (prefs[KEY_FORCE_OPAQUE] == true) "display-opaque" else "core-transparent",
             rangeFullScreen = prefs[KEY_RANGE_FULLSCREEN] ?: false,
             rotationAdaptMode = prefs[KEY_ROTATION_ADAPT_MODE] ?: "stretch",
