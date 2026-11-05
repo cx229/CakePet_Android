@@ -768,8 +768,29 @@ class RolePackEditorActivity : AppCompatActivity() {
         val m = root.getJSONObject("modes").getJSONObject(key)
 
         val preview = RoleAnimationPreview(this)
-        panel.addView(preview, LinearLayout.LayoutParams(-1, -2))
-        panel.addView(button("↺ 从头播放") { animate(preview, key) }, LinearLayout.LayoutParams(-1, px(44)))
+        val previewContainer = FrameLayout(this).apply {
+            addView(preview, FrameLayout.LayoutParams(-1, -2))
+            addView(TextView(this@RolePackEditorActivity).apply {
+                text = "↺"
+                textSize = 22f
+                gravity = Gravity.CENTER
+                setTextColor(getColor(R.color.cp_title))
+                setPadding(0, 0, 0, 0)
+                contentDescription = "从头播放"
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(0xDDFFFFFF.toInt())
+                }
+                elevation = px(3).toFloat()
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { animate(preview, key) }
+            }, FrameLayout.LayoutParams(px(36), px(36), Gravity.END or Gravity.BOTTOM).apply {
+                rightMargin = px(8)
+                bottomMargin = px(8)
+            })
+        }
+        panel.addView(previewContainer, LinearLayout.LayoutParams(-1, -2))
         animate(preview, key)
         action("编辑动作属性") { attributes(key) }
         panel.addView(button("导入 GIF 并覆盖") {
