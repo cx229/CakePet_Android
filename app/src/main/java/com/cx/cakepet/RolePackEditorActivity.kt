@@ -830,7 +830,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                     gravity = Gravity.CENTER_VERTICAL
                 }
                 headline.addView(text("", 15f))
-                headline.addView(text("", 11f).apply {
+                headline.addView(text("", 8f).apply {
+                    setPadding(px(4), 0, px(4), 0)
                     setTextColor(getColor(R.color.cp_note))
                     setSingleLine(false)
                     maxLines = Int.MAX_VALUE
@@ -841,14 +842,16 @@ class RolePackEditorActivity : AppCompatActivity() {
                 (headline.getChildAt(0) as TextView).includeFontPadding = false
                 (headline.getChildAt(1) as TextView).includeFontPadding = false
                 labels.addView(headline)
-                labels.addView(text("", 11f).apply {
+                labels.addView(text("", 8f).apply {
+                    setPadding(px(4), 0, px(4), 0)
                     includeFontPadding = false
                     setTextColor(getColor(R.color.cp_note))
                     setSingleLine(false)
                     maxLines = Int.MAX_VALUE
                     ellipsize = null
                 })
-                labels.addView(text("", 11f).apply {
+                labels.addView(text("", 8f).apply {
+                    setPadding(px(4), 0, px(4), 0)
                     includeFontPadding = false
                     setTextColor(getColor(R.color.cp_note))
                     setSingleLine(false)
