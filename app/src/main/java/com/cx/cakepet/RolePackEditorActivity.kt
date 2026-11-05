@@ -47,6 +47,9 @@ class RolePackEditorActivity : AppCompatActivity() {
     private var uploadMode = ""
     private val bulkSelected = mutableSetOf<Int>()
     private var bulkBar: View? = null
+    private var bulkCountView: TextView? = null
+    /** Guard programmatic checkbox updates from re-entering selection callbacks. */
+    private var syncingBulkSelection = false
     private var resourceReplacePath: String? = null
     private val handler = Handler(Looper.getMainLooper())
     private var animation: Runnable? = null
@@ -337,6 +340,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private fun section(title: String, dest: String) {
         removeBulkBar()
+        scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, 0)
         stopAnimation()
         val pageChanged = screen != dest
         if (!restoringPage && pageChanged)
@@ -822,6 +826,10 @@ class RolePackEditorActivity : AppCompatActivity() {
         modeId = key
         bulkSelected.clear()
         section("动作：$key", "mode")
+        // Reserve the bottom inset throughout the entire editor page, not on
+        // each selection toggle (which would shift the outer ScrollView).
+        scroll.clipToPadding = false
+        scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, px(120))
         val m = root.getJSONObject("modes").getJSONObject(key)
 
         val preview = RoleAnimationPreview(this)
@@ -1006,10 +1014,11 @@ class RolePackEditorActivity : AppCompatActivity() {
                 select.setOnCheckedChangeListener(null)
                 select.isChecked = at in bulkSelected
                 select.setOnCheckedChangeListener { _, checked ->
+                    if (syncingBulkSelection) return@setOnCheckedChangeListener
                     val index = holder.bindingAdapterPosition
-                    if (index != RecyclerView.NO_POSITION) {
+                    if (index in order.indices) {
                         if (checked) bulkSelected.add(index) else bulkSelected.remove(index)
-                        recycler.adapter?.notifyDataSetChanged()
+                        refreshVisibleFrameSelection(recycler)
                         updateBulkBar(key)
                     }
                 }
@@ -1025,9 +1034,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                     if (index != RecyclerView.NO_POSITION) {
                         if (bulkSelected.isEmpty()) showFrameOptions(more, key, index)
                         else {
-                            if (!bulkSelected.add(index)) bulkSelected.remove(index)
-                            recycler.adapter?.notifyDataSetChanged()
-                            updateBulkBar(key)
+                            // Reuse checkbox handling, avoiding a full list rebind.
+                            select.isChecked = !select.isChecked
                         }
                     }
                 }
@@ -1458,22 +1466,39 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun removeBulkBar() {
         bulkBar?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
         bulkBar = null
-        if (::scroll.isInitialized) {
-            scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, 0)
+        bulkCountView = null
+    }
+
+    /**
+     * Selection updates only visible checkbox and menu state. Row measurements,
+     * images, titles and scroll ranges remain untouched.
+     */
+    private fun refreshVisibleFrameSelection(recycler: RecyclerView) {
+        syncingBulkSelection = true
+        try {
+            for (i in 0 until recycler.childCount) {
+                val row = recycler.getChildAt(i) as? LinearLayout ?: continue
+                val position = recycler.getChildViewHolder(row).bindingAdapterPosition
+                if (position == RecyclerView.NO_POSITION) continue
+                (row.getChildAt(0) as CheckBox).isChecked = position in bulkSelected
+                val card = row.getChildAt(1) as LinearLayout
+                (card.getChildAt(2) as TextView).visibility =
+                    if (bulkSelected.isEmpty()) View.VISIBLE else View.GONE
+            }
+        } finally {
+            syncingBulkSelection = false
         }
     }
 
     private fun updateBulkBar(key: String) {
-        bulkBar?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
-        bulkBar = null
         if (bulkSelected.isEmpty()) {
             removeBulkBar()
             return
         }
-        // Do not toggle scroll padding on each selection: the cards must not jump.
-        scroll.clipToPadding = false
-        if (scroll.paddingBottom != px(120)) {
-            scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, px(120))
+        // Reuse the toolbar instead of repeatedly removing and adding a layout.
+        if (bulkBar != null) {
+            bulkCountView?.text = "已选择 ${bulkSelected.size} 帧"
+            return
         }
         val host = findViewById<FrameLayout>(android.R.id.content)
         val body = LinearLayout(this).apply {
@@ -1486,7 +1511,8 @@ class RolePackEditorActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        header.addView(text("已选择 ${bulkSelected.size} 帧", 14f),
+        bulkCountView = text("已选择 ${bulkSelected.size} 帧", 14f)
+        header.addView(bulkCountView,
             LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(text("全选", 13f).apply {
             isClickable = true
@@ -1495,7 +1521,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                     .getJSONArray("frames").length()
                 bulkSelected.clear()
                 bulkSelected.addAll(0 until n)
-                (panel.findViewById<RecyclerView>(android.R.id.list))?.adapter?.notifyDataSetChanged()
+                (panel.findViewById<RecyclerView>(android.R.id.list))?.let {
+                    refreshVisibleFrameSelection(it)
+                }
                 updateBulkBar(key)
             }
         })
@@ -1503,7 +1531,9 @@ class RolePackEditorActivity : AppCompatActivity() {
             isClickable = true
             setOnClickListener {
                 bulkSelected.clear()
-                (panel.findViewById<RecyclerView>(android.R.id.list))?.adapter?.notifyDataSetChanged()
+                (panel.findViewById<RecyclerView>(android.R.id.list))?.let {
+                    refreshVisibleFrameSelection(it)
+                }
                 updateBulkBar(key)
             }
         })
