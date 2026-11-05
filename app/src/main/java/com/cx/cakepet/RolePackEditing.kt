@@ -28,7 +28,7 @@ object RolePackEditing {
             val json = parseJsonc(file.readText())
             json.put("id", id)
             json.put("name", displayName.trim())
-            file.writeText(json.toString(2))
+            file.writeText(CompactJsoncWriter.write(json, file.readText()))
             verify(target, json)
             RoleStore.addUserRole(ctx, UserRoleTemplate(id, json.getString("name"), id, -1,
                 json.optString("shortName"), "FILES", parseAuthors(json)))
@@ -56,7 +56,8 @@ object RolePackEditing {
     }
     fun commit(ctx: Context, id: String, draft: File, json: JSONObject) {
         require(json.optString("id") == id) { "角色 ID 不可变更" }
-        File(draft, "modes.jsonc").writeText(json.toString(2))
+        val configFile = File(draft, "modes.jsonc")
+        configFile.writeText(CompactJsoncWriter.write(json, configFile.readText()))
         verify(draft, json)
         val live = dir(ctx, id)
         val backup = File(live.parentFile, "$id.bak")
