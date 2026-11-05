@@ -1352,10 +1352,10 @@ class PetService : Service() {
         }
         val vis = getScreenBounds()
         val ob = rotatedBoundOffsets(floatArrayOf(
-            cfg.offsetTop.coerceIn(-300f, 2100f),
-            cfg.offsetBottom.coerceIn(-300f, 2100f),
-            cfg.offsetLeft.coerceIn(-300f, 1000f),
-            cfg.offsetRight.coerceIn(-300f, 1000f)
+            (if (cfg.rangeFullScreen) 0f else cfg.offsetTop).coerceIn(-300f, 2100f),
+            (if (cfg.rangeFullScreen) 0f else cfg.offsetBottom).coerceIn(-300f, 2100f),
+            (if (cfg.rangeFullScreen) 0f else cfg.offsetLeft).coerceIn(-300f, 1000f),
+            (if (cfg.rangeFullScreen) 0f else cfg.offsetRight).coerceIn(-300f, 1000f)
         ))
         return Rect(
             (vis.left + ob[3]).toInt(),
@@ -1382,10 +1382,10 @@ class PetService : Service() {
         // 兜底(理论上该角色已有宠物实例)：按本角色偏移配置直接算 snap 边界(与 recalcBoundsFor 同源)。
         val vis = getScreenBounds()
         val ob = rotatedBoundOffsets(floatArrayOf(
-            c.offsetTop.coerceIn(-300f, 2100f),
-            c.offsetBottom.coerceIn(-300f, 2100f),
-            c.offsetLeft.coerceIn(-300f, 1000f),
-            c.offsetRight.coerceIn(-300f, 1000f)
+            (if (c.rangeFullScreen) 0f else c.offsetTop).coerceIn(-300f, 2100f),
+            (if (c.rangeFullScreen) 0f else c.offsetBottom).coerceIn(-300f, 2100f),
+            (if (c.rangeFullScreen) 0f else c.offsetLeft).coerceIn(-300f, 1000f),
+            (if (c.rangeFullScreen) 0f else c.offsetRight).coerceIn(-300f, 1000f)
         ))
         return Rect(
             (vis.left + ob[3]).toInt(),
@@ -1411,10 +1411,10 @@ class PetService : Service() {
         // 兜底(理论上该角色已有宠物实例)：按本角色偏移配置直接算 snap 边界(与 recalcBoundsFor 同源)。
         val vis = getScreenBounds()
         val ob = rotatedBoundOffsets(floatArrayOf(
-            cfg.offsetTop.coerceIn(-300f, 2100f),
-            cfg.offsetBottom.coerceIn(-300f, 2100f),
-            cfg.offsetLeft.coerceIn(-300f, 1000f),
-            cfg.offsetRight.coerceIn(-300f, 1000f)
+            (if (cfg.rangeFullScreen) 0f else cfg.offsetTop).coerceIn(-300f, 2100f),
+            (if (cfg.rangeFullScreen) 0f else cfg.offsetBottom).coerceIn(-300f, 2100f),
+            (if (cfg.rangeFullScreen) 0f else cfg.offsetLeft).coerceIn(-300f, 1000f),
+            (if (cfg.rangeFullScreen) 0f else cfg.offsetRight).coerceIn(-300f, 1000f)
         ))
         return Rect(
             (vis.left + ob[3]).toInt(),
@@ -1806,10 +1806,10 @@ class PetService : Service() {
         showBoundOffsetFlag = c.showBoundOffset
         showSnapOffsetFlag = c.showSnapOffset
         applyDebugGuides()
-        boundOffsetTop = c.offsetTop.coerceIn(-300f, 2100f)
-        boundOffsetBottom = c.offsetBottom.coerceIn(-300f, 2100f)
-        boundOffsetLeft = c.offsetLeft.coerceIn(-300f, 1000f)
-        boundOffsetRight = c.offsetRight.coerceIn(-300f, 1000f)
+        boundOffsetTop = (if (c.rangeFullScreen) 0f else c.offsetTop).coerceIn(-300f, 2100f)
+        boundOffsetBottom = (if (c.rangeFullScreen) 0f else c.offsetBottom).coerceIn(-300f, 2100f)
+        boundOffsetLeft = (if (c.rangeFullScreen) 0f else c.offsetLeft).coerceIn(-300f, 1000f)
+        boundOffsetRight = (if (c.rangeFullScreen) 0f else c.offsetRight).coerceIn(-300f, 1000f)
         debugView?.visibility = if (showDebug) android.view.View.VISIBLE else android.view.View.GONE
         thinkingEnabled = c.thinkingEnabled
         thinkingOffsetY = c.thinkingOffset
@@ -1967,10 +1967,10 @@ class PetService : Service() {
                 }
             }
             // 与 recalcBounds/loadConfig 一致的 coerce 范围，避免越界值进入全局回落（辅助线用）。
-            boundOffsetTop = c.offsetTop.coerceIn(-300f, 2100f)
-            boundOffsetBottom = c.offsetBottom.coerceIn(-300f, 2100f)
-            boundOffsetLeft = c.offsetLeft.coerceIn(-300f, 1000f)
-            boundOffsetRight = c.offsetRight.coerceIn(-300f, 1000f)
+            boundOffsetTop = (if (c.rangeFullScreen) 0f else c.offsetTop).coerceIn(-300f, 2100f)
+            boundOffsetBottom = (if (c.rangeFullScreen) 0f else c.offsetBottom).coerceIn(-300f, 2100f)
+            boundOffsetLeft = (if (c.rangeFullScreen) 0f else c.offsetLeft).coerceIn(-300f, 1000f)
+            boundOffsetRight = (if (c.rangeFullScreen) 0f else c.offsetRight).coerceIn(-300f, 1000f)
             imeAdaptEnabled = c.imeAdapt
             imeLiftOffset = c.imeLiftOffset
             imeResetBottomOffset = c.imeResetBottomOffset
@@ -2313,7 +2313,7 @@ class PetService : Service() {
             dlp.height = ih
             disp.displayLeft = v.physics.x
             disp.displayTop = v.physics.y
-            try { windowManager.updateViewLayout(disp, dlp) } catch (_: Exception) {}
+            updateDisplay(disp, dlp)
         }
         // 重绘仍需每帧（动画帧在变）；静止帧重绘只是相同位图 blit，开销小。
         disp.invalidate()
@@ -2595,10 +2595,10 @@ class PetService : Service() {
         lastVisRect = vis
         for ((rid, rt) in engines) {
             val c = rt.config.getBlocking()
-            boundOffsetTop = c.offsetTop.coerceIn(-300f, 2100f)
-            boundOffsetBottom = c.offsetBottom.coerceIn(-300f, 2100f)
-            boundOffsetLeft = c.offsetLeft.coerceIn(-300f, 1000f)
-            boundOffsetRight = c.offsetRight.coerceIn(-300f, 1000f)
+            boundOffsetTop = (if (c.rangeFullScreen) 0f else c.offsetTop).coerceIn(-300f, 2100f)
+            boundOffsetBottom = (if (c.rangeFullScreen) 0f else c.offsetBottom).coerceIn(-300f, 2100f)
+            boundOffsetLeft = (if (c.rangeFullScreen) 0f else c.offsetLeft).coerceIn(-300f, 1000f)
+            boundOffsetRight = (if (c.rangeFullScreen) 0f else c.offsetRight).coerceIn(-300f, 1000f)
             val mode = c.keyboardMode()
             val kb = maxOf(viewImeInset, globalImeInset)
             val active = kb > 0f && mode in listOf("global", "stretch", "local")
@@ -2773,10 +2773,10 @@ class PetService : Service() {
         // （boundOffset*/imeAdaptEnabled 等为单例 scratch，多角色下会被最后加载角色覆盖，导致串角色）。
         val rt = engines[roleId] ?: return
         val rc = rt.config.getBlocking()
-        val offTop = rc.offsetTop.coerceIn(-300f, 2100f)
-        val offBottom = rc.offsetBottom.coerceIn(-300f, 2100f)
-        val offLeft = rc.offsetLeft.coerceIn(-300f, 1000f)
-        val offRight = rc.offsetRight.coerceIn(-300f, 1000f)
+        val offTop = r(if (c.rangeFullScreen) 0f else c.offsetTop).coerceIn(-300f, 2100f)
+        val offBottom = r(if (c.rangeFullScreen) 0f else c.offsetBottom).coerceIn(-300f, 2100f)
+        val offLeft = r(if (c.rangeFullScreen) 0f else c.offsetLeft).coerceIn(-300f, 1000f)
+        val offRight = r(if (c.rangeFullScreen) 0f else c.offsetRight).coerceIn(-300f, 1000f)
         // physics.x/y 为【窗口左上角坐标】（位置真值），脚锚点 = physics ∓ anchorOff 仅在贴边/snap 时派生。
         // 边界模型（探头/出界）：脚朝向的那一侧为【锚点边】——只约束“锚点(脚)不超可见区”，
         // 图底可越过屏幕外（被裁切=探头）；其余三侧仍为【PNG 四边】约束（图边不超可见区）。
@@ -3905,7 +3905,7 @@ class PetService : Service() {
         modeAssetManagers.remove(roleId)
         val removed = pets.filter { it.roleId == roleId }
         for (inst in removed) {
-            try { if (inst.displayAdded && inst.displayView != null) windowManager.removeView(inst.displayView) } catch (_: Exception) {}
+            if (inst.displayAdded) inst.displayView?.let { d -> inst.displayLp?.let { removeDisplay(d, it) } }
             try { windowManager.removeView(inst.view) } catch (_: Exception) {}
             try { inst.petMsg.destroy() } catch (_: Exception) {}
         }
@@ -4092,7 +4092,7 @@ class PetService : Service() {
         displayListener = null
         // 移除所有宠物实例：控制窗 + 各自显示窗 + 碎碎念浮窗
         for (inst in pets) {
-            try { if (inst.displayAdded && inst.displayView != null) windowManager.removeView(inst.displayView) } catch (_: Exception) {}
+            if (inst.displayAdded) inst.displayView?.let { d -> inst.displayLp?.let { removeDisplay(d, it) } }
             try { windowManager.removeView(inst.view) } catch (_: Exception) {}
             try { inst.petMsg.destroy() } catch (_: Exception) {}
         }
