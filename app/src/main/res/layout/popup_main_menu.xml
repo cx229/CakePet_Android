@@ -24,6 +24,23 @@
         android:background="@color/cp_subtle" />
 
     <TextView
+        android:id="@+id/item_user_habits"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="用户习惯"
+        android:textSize="11sp"
+        android:textColor="@color/cp_title"
+        android:background="?attr/selectableItemBackground" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/cp_subtle" />
+
+    <TextView
         android:id="@+id/item_global_settings"
         android:layout_width="200dp"
         android:layout_height="48dp"
