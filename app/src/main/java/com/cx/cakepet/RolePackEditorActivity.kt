@@ -623,18 +623,12 @@ class RolePackEditorActivity : AppCompatActivity() {
                     gravity = Gravity.CENTER_VERTICAL
                 }
                 headline.addView(text(key, 16f).apply { setPadding(0, 0, 0, 0) })
-                val nextMode = mode.optString("nextMode", "").takeUnless { it == "null" }.orEmpty()
-                headline.addView(text("  →" + nextMode.ifBlank { "无" }, 11f).apply {
-                    setTextColor(getColor(R.color.cp_note))
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
-                }, LinearLayout.LayoutParams(0, -2, 1f))
                 label.addView(headline)
                 val duration = mode.optJSONObject("duration")
-                val playback = when {
-                    !mode.optBoolean("loop") -> "播放一次"
-                    duration == null -> "无限循环"
-                    else -> "循环（${duration.optLong("min")} ms-${duration.optLong("max")} ms）"
+                val playback = when (playbackKind(mode)) {
+                    "off" -> "播放一次"
+                    "infinite" -> "无限循环"
+                    else -> "循环（${duration?.optLong("min", 3000) ?: 3000} ms-${duration?.optLong("max", 4000) ?: 4000} ms）"
                 }
                 label.addView(text("${frames.length()} 帧 · $playback", 12f).apply {
                     setPadding(0, 0, 0, 0)
@@ -1095,6 +1089,17 @@ class RolePackEditorActivity : AppCompatActivity() {
         animation?.let { handler.removeCallbacks(it) }
         animation = null
     }
+    /** The active loop policy is independent of stored inactive timer settings. */
+    private fun playbackKind(mode: JSONObject): String {
+        val explicit = mode.optString("loopMode")
+        if (explicit in listOf("off", "timed", "infinite")) return explicit
+        return when {
+            !mode.optBoolean("loop", false) -> "off"
+            mode.optJSONObject("duration") != null -> "timed"
+            else -> "infinite"
+        }
+    }
+
     private fun attributes(key: String) {
         val mode = root.getJSONObject("modes").getJSONObject(key)
         editor("动作属性") { box ->
@@ -1102,24 +1107,15 @@ class RolePackEditorActivity : AppCompatActivity() {
             (name.parent as? LinearLayout)?.let { field ->
                 (field.getChildAt(0) as? TextView)?.setTextColor(android.graphics.Color.BLACK)
             }
-            var nextModeId = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
-            box.addView(text("播放结束后的动作", 13f))
-            lateinit var nextChoice: com.google.android.material.button.MaterialButton
-            nextChoice = button(if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId) {
-                chooseModes(single = true, initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
-                    nextModeId = chosen.firstOrNull().orEmpty()
-                    nextChoice.text = if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId
-                }
-            }
-            box.addView(nextChoice, LinearLayout.LayoutParams(-1, px(38)))
-            val playbackModes = listOf("关闭", "无限循环", "定时循环")
+            val playbackModes = listOf("关闭", "定时循环", "无限循环")
             val previous = mode.optJSONObject("duration")
             val playback = Spinner(this)
-            SettingsSpinnerBinder.bind(playback, playbackModes, when {
-                !mode.optBoolean("loop") -> 0
-                previous != null -> 2
-                else -> 1
-            }) { }
+            val initialPosition = when (playbackKind(mode)) {
+                "timed" -> 1
+                "infinite" -> 2
+                else -> 0
+            }
+            SettingsSpinnerBinder.bind(playback, playbackModes, initialPosition) { }
             val playbackRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -1153,8 +1149,25 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             timedFields.addView(finish)
             box.addView(timedFields)
+
+            // This is a subordinate setting of loop playback: hidden for infinite
+            // playback, but its stored value is never erased by changing the mode.
+            var nextModeId = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+            val nextFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            nextFields.addView(text("播放结束后的动作", 13f))
+            lateinit var nextChoice: com.google.android.material.button.MaterialButton
+            nextChoice = button(if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId) {
+                chooseModes(single = true, initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
+                    nextModeId = chosen.firstOrNull().orEmpty()
+                    nextChoice.text = if (nextModeId.isEmpty()) "无（由控制器决定）" else nextModeId
+                }
+            }
+            nextFields.addView(nextChoice, LinearLayout.LayoutParams(-1, px(38)))
+            box.addView(nextFields)
             fun refreshFields() {
-                timedFields.visibility = if (playback.selectedItemPosition == 2) View.VISIBLE else View.GONE
+                val selected = playback.selectedItemPosition
+                timedFields.visibility = if (selected == 1) View.VISIBLE else View.GONE
+                nextFields.visibility = if (selected == 2) View.GONE else View.VISIBLE
             }
             playback.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(
@@ -1169,7 +1182,14 @@ class RolePackEditorActivity : AppCompatActivity() {
                 require(renamed == key || !root.getJSONObject("modes").has(renamed)) { "动作名称已存在" }
                 val target = nextModeId.trim()
                 require(target.isEmpty() || target == key || root.getJSONObject("modes").has(target)) { "后续动作不存在" }
-                val duration = if (playback.selectedItemPosition == 2) {
+                val loopMode = when (playback.selectedItemPosition) {
+                    1 -> "timed"
+                    2 -> "infinite"
+                    else -> "off"
+                }
+                // Keep inactive duration, finishCycle and nextMode values.
+                // Only a selected timed mode validates and updates the timer inputs.
+                val duration = if (loopMode == "timed") {
                     val lo = min.text.toString().toLong()
                     val hi = max.text.toString().toLong()
                     require(lo > 0 && hi >= lo) { "时长必须为正数，最长不得小于最短" }
@@ -1178,15 +1198,11 @@ class RolePackEditorActivity : AppCompatActivity() {
                 change { json ->
                     val modes = json.getJSONObject("modes")
                     val m = modes.getJSONObject(key)
-                    m.put("loop", playback.selectedItemPosition != 0)
+                    m.put("loopMode", loopMode)
+                    m.put("loop", loopMode != "off")
                     m.put("nextMode", if (target.isEmpty()) JSONObject.NULL else target)
-                    if (playback.selectedItemPosition != 0) {
-                        m.put("duration", duration ?: JSONObject.NULL)
-                        m.put("finishCycle", finish.isChecked)
-                    } else {
-                        m.remove("duration")
-                        m.remove("finishCycle")
-                    }
+                    if (duration != null) m.put("duration", duration)
+                    if (loopMode == "timed") m.put("finishCycle", finish.isChecked)
                     if (renamed != key) {
                         modes.remove(key)
                         modes.put(renamed, m)
