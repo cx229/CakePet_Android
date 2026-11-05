@@ -1944,7 +1944,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
-        body.addView(text("动作：$modeId\\n勾选要绑定的功能；取消勾选将解除对应绑定。", 12f).apply {
+        body.addView(text("动作：$modeId\n勾选要绑定的功能；取消勾选将解除对应绑定。", 12f).apply {
             gravity = Gravity.CENTER
             setPadding(px(4), 0, px(4), px(10))
             setTextColor(getColor(R.color.cp_note))
@@ -2029,6 +2029,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                             check.setOnCheckedChangeListener { _, nowChecked ->
                                 if (!nowChecked && checked && leaves.getValue(key).second
                                         .filter { it != modeId }.isEmpty()) {
+                                    // Restore without firing another selection callback.
+                                    check.setOnCheckedChangeListener(null)
                                     check.isChecked = true
                                     warnLastBinding(path)
                                 } else {
