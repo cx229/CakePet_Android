@@ -83,11 +83,8 @@
                 android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="底部消息" style="@style/SettingsOptionTitle"/>
@@ -98,7 +95,7 @@
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:minWidth="0dp" android:minHeight="0dp"
                         android:paddingStart="6dp" android:paddingEnd="6dp" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
 
             <!-- ===== 模块：显示 ===== -->
@@ -109,13 +106,10 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 字号 -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:layout_marginBottom="0dp">
                     <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="vertical">
@@ -140,10 +134,10 @@
                             android:layout_height="wrap_content"
                             android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
 </LinearLayout>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 透明度 -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:layout_marginBottom="0dp">
                     <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="vertical">
@@ -168,10 +162,10 @@
                             android:layout_height="wrap_content"
                             android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
 </LinearLayout>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 位置偏移（由设置页迁移而来） -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
@@ -192,10 +186,10 @@
                             android:id="@+id/offset_bar" android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 频率：合并进「显示」模块，位于「颜色」之前 -->
-                <LinearLayout android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
 
                     <!-- 顶行：左标题+备注(占满) / 右双数值输入框 -->
@@ -246,11 +240,11 @@
                         app:trackHeight="2dp"
                         app:thumbRadius="5dp"
                         android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 颜色入口：整行可点击（与设置页「显示-其他」入口布局一致，但点击打开取色浮窗而非新页）。
                      左侧标题 + 备注，右侧当前色块 + › 箭头。 -->
-                <LinearLayout android:id="@+id/row_color"
+                <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_color"
                     style="@style/SettingsSwitchRow"
                     android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
                     android:paddingStart="20dp" android:paddingEnd="20dp"
@@ -270,7 +264,7 @@
                         android:src="@drawable/ic_chevron_right"
                         app:tint="@color/icon_chevron"
                         android:layout_marginStart="12dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
 
             <!-- ===== 模块：闪回 ===== -->
@@ -281,13 +275,10 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
 
                 <!-- 文字闪现：控制显形特效（空白结束 -> 文字出现） -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="文字闪现" style="@style/SettingsOptionTitle"/>
@@ -298,10 +289,10 @@
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:minWidth="0dp" android:minHeight="0dp"
                         android:paddingStart="6dp" android:paddingEnd="6dp" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 文字闪回：控制退场特效（文字消失 -> 进入空白） -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="文字闪回" style="@style/SettingsOptionTitle"/>
@@ -312,7 +303,7 @@
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:minWidth="0dp" android:minHeight="0dp"
                         android:paddingStart="6dp" android:paddingEnd="6dp" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
 
             </LinearLayout>
 
@@ -324,12 +315,9 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:divider="@drawable/item_divider" android:showDividers="middle"
-                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp"
-                android:foreground="@drawable/settings_row_ripple"
-                android:clickable="true"
-                android:longClickable="true">
+                android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="0dp" android:paddingEnd="0dp">
                 <!-- 气泡背景 -->
-                <LinearLayout style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <com.cx.cakepet.SettingsRippleRow style="@style/SettingsSwitchRow" android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout style="@style/SettingsSwitchTexts">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:text="气泡背景" style="@style/SettingsOptionTitle"/>
@@ -338,9 +326,9 @@
                     </LinearLayout>
                     <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_thinking_bg_enabled"
                         android:layout_width="wrap_content" android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
                 <!-- 背景透明度 -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -365,9 +353,9 @@
                         android:valueFrom="0.0" android:valueTo="100.0" android:stepSize="1.0"
                         app:trackHeight="2dp" app:thumbRadius="5dp"
                         android:layout_marginTop="0dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
                 <!-- 背景颜色 -->
-                <LinearLayout android:id="@+id/row_bg_color" style="@style/SettingsSwitchRow"
+                <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_bg_color" style="@style/SettingsSwitchRow"
                     android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
                     android:paddingStart="20dp" android:paddingEnd="20dp"
                     android:paddingTop="8dp" android:paddingBottom="8dp">
@@ -386,7 +374,7 @@
                         android:src="@drawable/ic_chevron_right"
                         app:tint="@color/icon_chevron"
                         android:layout_marginStart="12dp"/>
-                </LinearLayout>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
