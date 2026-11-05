@@ -104,6 +104,15 @@ data class SwitchBound(
     val default: Boolean
 )
 
+/** 下拉列表默认值：选项与业务值同源，不是另起一套设置。 */
+data class ChoiceBound(
+    val key: String,
+    val label: String,
+    val group: String,
+    val options: List<Pair<String, String>>,
+    val default: String
+)
+
 /** 一个设置页的完整阈值清单。
  *  [order] 为该页所有项（slider/dual/switch）的显示顺序（按 key），
  *  严格对齐其设置页的视觉顺序；render() 据此决定模块顺序与组内顺序。 */
@@ -113,6 +122,7 @@ data class PageBounds(
     val switches: List<SwitchBound> = emptyList(),
     val colors: List<ColorBound> = emptyList(),
     val keyboardModeDefault: String? = null,
+    val choices: List<ChoiceBound> = emptyList(),
     val order: List<String> = emptyList()
 ) {
     /**
@@ -205,6 +215,7 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
             sliders = AppBounds.RANGE_SLIDERS,
             switches = AppBounds.RANGE_SWITCHES,
             keyboardModeDefault = AppBounds.KEYBOARD_DEFAULT_MODE,
+            choices = AppBounds.RANGE_CHOICES,
             order = AppBounds.RANGE_ORDER
         )
         SettingsPage.THINKING -> PageBounds(
@@ -241,6 +252,7 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
     private fun bk(page: SettingsPage, key: String, field: String) =
         booleanPreferencesKey("${page.tag}_${key}_$field")
     private fun keyboardModeKey(page: SettingsPage) = stringPreferencesKey("${page.tag}_imeMode_default")
+    private fun choiceKey(page: SettingsPage, key: String) = stringPreferencesKey("${page.tag}_${key}_default")
     private fun ck(page: SettingsPage, key: String) =
         intPreferencesKey("${page.tag}_${key}_default")
 
@@ -282,6 +294,12 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
                     else -> default
                 }
             },
+            choices = sys.choices.map { option ->
+                val stored = prefs[choiceKey(page, option.key)]
+                option.copy(default = stored?.takeIf { value ->
+                    option.options.any { it.second == value }
+                } ?: option.default)
+            },
             order = sys.order
         ).normalize()
     }
@@ -315,12 +333,16 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
                 require(AppBounds.KEYBOARD_MODES.any { it.second == mode }) { "Invalid keyboard mode" }
                 prefs[keyboardModeKey(page)] = mode
             }
+            bounds.choices.forEach { option ->
+                require(option.options.any { it.second == option.default }) { "Invalid ${option.key} default" }
+                prefs[choiceKey(page, option.key)] = option.default
+            }
         }
     }
 
     /** 恢复系统默认：清空某页所有用户阈值键（next 读取即回落基础款），
      *  并恢复阈值调整本身（即 bounds 回到系统出厂）。 */
-    suspend fun resetSystem(page: SettingsPage) {
+    suspend fun resetSystem(page: SettingsPage, onlyKeys: Set<String>? = null) {
         val sys = systemPage(page)
         val keys = mutableListOf<String>()
         sys.sliders.forEach { s ->
@@ -344,8 +366,14 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
             keys += "${page.tag}_imeAdapt_default"
             keys += "${page.tag}_imeHide_default"
         }
+        sys.choices.forEach { option ->
+            keys += "${page.tag}_${option.key}_default"
+        }
+        val applicable = if (onlyKeys == null) keys else keys.filter { key ->
+            onlyKeys.any { item -> key.startsWith("${page.tag}_${item}_") }
+        }
         dataStore.edit { prefs ->
-            keys.forEach { k ->
+            applicable.forEach { k ->
                 prefs.remove(floatPreferencesKey(k))
                 prefs.remove(booleanPreferencesKey(k))
                 prefs.remove(intPreferencesKey(k))
