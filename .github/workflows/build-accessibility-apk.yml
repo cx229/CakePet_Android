@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
   build:
@@ -46,10 +48,38 @@ jobs:
           keytool -list -keystore app/signing/cakepet-shared-debug.jks -storepass android -alias cakepet-debug
 
       - name: Build debug APK
-        run: bash ./gradlew --no-daemon assembleDebug
+        run: |
+          set -o pipefail
+          bash ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee build-debug.log
 
       - name: Name GitHub test APK
         run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/CakePet-v1.26.11.06.12.07-gt.apk
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CakePet-build-diagnostics
+          path: build-debug.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Report failed build to PR
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if test -f build-debug.log; then
+            tail -c 15000 build-debug.log > build-tail.txt
+            {
+              echo 'Automated build failure diagnostic (last 15KB):'
+              echo '\`\`\`'
+              cat build-tail.txt
+              echo '\`\`\`'
+            } > failure-comment.md
+            gh pr comment "$PR_NUMBER" --body-file failure-comment.md || true
+          fi
 
       - name: Upload debug APK
         if: success()
