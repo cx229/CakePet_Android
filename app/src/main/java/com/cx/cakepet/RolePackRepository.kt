@@ -65,7 +65,7 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
  *
  * 结构（层数不限，叶子恒为数组）：
  *   "static": {"sit": ["sit_clam"]}
- *   "touch":  {"roll": ["roll"], "walk": ["walk"]}
+ *   "touch":  {"roll": ["roll"]}
  *   "snap":   {"pat_head": {"pat_head": ["snap_pat_head"]}}
  *
  * 路径是完整链路，用以区分同名不同义：
@@ -73,7 +73,7 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
  *   [pat_head, pat_head]       -> pat_head     （普通摸头）
  * 故调用方必须按【完整路径】寻址，只取末段会撞车。
  *
- * 叶子是候选列表：当前多为单元素，为将来"同一功能多个动作（如多种 walk）"预留。
+ * 叶子是候选列表：当前多为单元素，为将来"同一功能多个动作（如多种候选动画）"预留。
  */
 fun parseFunctions(root: JSONObject): Map<List<String>, List<String>> {
     val obj = root.optJSONObject("functions") ?: return emptyMap()
@@ -101,7 +101,7 @@ fun parseFunctions(root: JSONObject): Map<List<String>, List<String>> {
 
 /**
  * 解析各模式是否循环（modes 里每项的 loop）。
- * 循环类（walk / wriggle 等带位移的常驻动作）须用 setMode；一次性类用 playOnce。
+ * 长期播放的动画由循环策略控制；一次性播放由动作生命周期控制。
  * 由素材包声明，代码里不写死"哪些动作该常驻"。
  */
 private fun parseModeLoops(root: JSONObject): Map<String, Boolean> {
