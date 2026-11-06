@@ -759,25 +759,32 @@ class PetConfig private constructor(
                     else -> nc
                 }
             }
-            // Dropdown defaults are independent of current values, including the rotation placeholder.
+            // Keep other dropdowns unchanged when applying just one habit card.
             if (page == SettingsPage.RANGE) {
-                if (rangeAdaptOnly != false && (onlyKey == null || onlyKey == "imeMode" || onlyKey == "rotationAdaptMode")) {
-                    nc = nc.copy(imeMode = b.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE,
-                        rotationAdaptMode = b.choices.firstOrNull {
+                if (rangeAdaptOnly != false) {
+                    if (onlyKey == null || onlyKey == "imeMode") {
+                        nc = nc.copy(imeMode = b.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE)
+                    }
+                    if (onlyKey == null || onlyKey == "rotationAdaptMode") {
+                        nc = nc.copy(rotationAdaptMode = b.choices.firstOrNull {
                             it.key == "rotationAdaptMode"
                         }?.default ?: "stretch")
+                    }
                 }
-                if (rangeAdaptOnly != true && (onlyKey == null || onlyKey == "interactionMode" || onlyKey == "rangeFullScreen")) {
-                    val choice = b.choices.firstOrNull { it.key == "interactionMode" }?.default
-                        ?: "core-transparent"
-                    // Never restore an inaccessible window as a live mode.
-                    val safe = if (choice == "core-opaque" &&
-                        CakePetAccessibilityService.active == null) "core-transparent" else choice
-                    val full = b.choices.firstOrNull { it.key == "rangeFullScreen" }?.default == "full"
-                    nc = nc.copy(interactionMode = safe,
-                        hitMode = if (safe == "display-opaque") ConfigDefaults.HIT_BOUNDARY else ConfigDefaults.HIT_CORE,
-                        forceOpaque = safe == "display-opaque",
-                        rangeFullScreen = full)
+                if (rangeAdaptOnly != true) {
+                    if (onlyKey == null || onlyKey == "interactionMode") {
+                        val choice = b.choices.firstOrNull { it.key == "interactionMode" }?.default
+                            ?: "core-transparent"
+                        val safe = if (choice == "core-opaque" &&
+                            CakePetAccessibilityService.active == null) "core-transparent" else choice
+                        nc = nc.copy(interactionMode = safe,
+                            hitMode = if (safe == "display-opaque") ConfigDefaults.HIT_BOUNDARY else ConfigDefaults.HIT_CORE,
+                            forceOpaque = safe == "display-opaque")
+                    }
+                    if (onlyKey == null || onlyKey == "rangeFullScreen") {
+                        nc = nc.copy(rangeFullScreen =
+                            b.choices.firstOrNull { it.key == "rangeFullScreen" }?.default == "full")
+                    }
                 }
             }
             b.colors.forEach { c ->
@@ -789,8 +796,17 @@ class PetConfig private constructor(
                 }
             }
             // 随机项位掩码：严格以阈值开关默认重建，使「恢复默认」与系统出厂完全一致
-            if (page == SettingsPage.RANDOM && onlyKey == null) {
-                nc = nc.copy(randomItems = AppBounds.randomItemsFromBounds(b))
+            if (page == SettingsPage.RANDOM) {
+                if (onlyKey == null) {
+                    nc = nc.copy(randomItems = AppBounds.randomItemsFromBounds(b))
+                } else {
+                    val spec = AppBounds.RANDOM_ITEM_SPECS.firstOrNull { it.key == onlyKey }
+                    if (spec != null) {
+                        val enabled = b.switches.firstOrNull { it.key == onlyKey }?.default == true
+                        nc = nc.copy(randomItems = if (enabled)
+                            nc.randomItems or spec.flag else nc.randomItems and spec.flag.inv())
+                    }
+                }
             }
             nc
         }
