@@ -1356,12 +1356,7 @@ class PetService : Service() {
             return Rect(sb.snapMinX.toInt(), sb.snapMinY.toInt(), sb.snapMaxX.toInt(), sb.snapMaxY.toInt())
         }
         val vis = getScreenBounds()
-        val ob = rotatedBoundOffsets(floatArrayOf(
-            (if (cfg.rangeFullScreen) 0f else cfg.offsetTop).coerceIn(-300f, 2100f),
-            (if (cfg.rangeFullScreen) 0f else cfg.offsetBottom).coerceIn(-300f, 2100f),
-            (if (cfg.rangeFullScreen) 0f else cfg.offsetLeft).coerceIn(-300f, 1000f),
-            (if (cfg.rangeFullScreen) 0f else cfg.offsetRight).coerceIn(-300f, 1000f)
-        ))
+        val ob = rotatedBoundOffsets(effectiveRangeOffsets(cfg))
         return Rect(
             (vis.left + ob[3]).toInt(),
             (vis.top + ob[0]).toInt(),
@@ -1386,12 +1381,7 @@ class PetService : Service() {
         }
         // 兜底(理论上该角色已有宠物实例)：按本角色偏移配置直接算 snap 边界(与 recalcBoundsFor 同源)。
         val vis = getScreenBounds()
-        val ob = rotatedBoundOffsets(floatArrayOf(
-            (if (c.rangeFullScreen) 0f else c.offsetTop).coerceIn(-300f, 2100f),
-            (if (c.rangeFullScreen) 0f else c.offsetBottom).coerceIn(-300f, 2100f),
-            (if (c.rangeFullScreen) 0f else c.offsetLeft).coerceIn(-300f, 1000f),
-            (if (c.rangeFullScreen) 0f else c.offsetRight).coerceIn(-300f, 1000f)
-        ))
+        val ob = rotatedBoundOffsets(effectiveRangeOffsets(c))
         return Rect(
             (vis.left + ob[3]).toInt(),
             (vis.top + ob[0]).toInt(),
@@ -1415,12 +1405,7 @@ class PetService : Service() {
         }
         // 兜底(理论上该角色已有宠物实例)：按本角色偏移配置直接算 snap 边界(与 recalcBoundsFor 同源)。
         val vis = getScreenBounds()
-        val ob = rotatedBoundOffsets(floatArrayOf(
-            (if (cfg.rangeFullScreen) 0f else cfg.offsetTop).coerceIn(-300f, 2100f),
-            (if (cfg.rangeFullScreen) 0f else cfg.offsetBottom).coerceIn(-300f, 2100f),
-            (if (cfg.rangeFullScreen) 0f else cfg.offsetLeft).coerceIn(-300f, 1000f),
-            (if (cfg.rangeFullScreen) 0f else cfg.offsetRight).coerceIn(-300f, 1000f)
-        ))
+        val ob = rotatedBoundOffsets(effectiveRangeOffsets(cfg))
         return Rect(
             (vis.left + ob[3]).toInt(),
             (vis.top + ob[0]).toInt(),
@@ -1974,10 +1959,11 @@ class PetService : Service() {
                 }
             }
             // 与 recalcBounds/loadConfig 一致的 coerce 范围，避免越界值进入全局回落（辅助线用）。
-            boundOffsetTop = (if (c.rangeFullScreen) 0f else c.offsetTop).coerceIn(-300f, 2100f)
-            boundOffsetBottom = (if (c.rangeFullScreen) 0f else c.offsetBottom).coerceIn(-300f, 2100f)
-            boundOffsetLeft = (if (c.rangeFullScreen) 0f else c.offsetLeft).coerceIn(-300f, 1000f)
-            boundOffsetRight = (if (c.rangeFullScreen) 0f else c.offsetRight).coerceIn(-300f, 1000f)
+            val selectedOffsets = effectiveRangeOffsets(c)
+            boundOffsetTop = selectedOffsets[0]
+            boundOffsetBottom = selectedOffsets[1]
+            boundOffsetLeft = selectedOffsets[2]
+            boundOffsetRight = selectedOffsets[3]
             imeAdaptEnabled = c.imeAdapt
             imeLiftOffset = c.imeLiftOffset
             imeResetBottomOffset = c.imeResetBottomOffset
@@ -2194,8 +2180,12 @@ class PetService : Service() {
             override fun onDisplayChanged(displayId: Int) {
                 if (displayId != Display.DEFAULT_DISPLAY) return
                 val r = readDisplayRotation()
-                if (r != cachedRotation) {
+                val previousRotation = cachedRotation
+                val previousScreen = Rect(lastVisRect)
+                val currentScreen = getScreenBounds()
+                if (r != previousRotation || previousScreen != currentScreen) {
                     cachedRotation = r
+                    adaptCanvasOnScreenChange(previousScreen, currentScreen, previousRotation, r)
                     Log.d("CakePetTilt", "display rotation changed -> rot=$r (recalcBounds)")
                     recalcBounds()   // 横屏/折叠屏切换：同步刷新活动边界与窗口尺寸
                     // 旋转真正生效后才回调此处，此刻 screenRealSize() 已反映新朝向；
@@ -2602,10 +2592,11 @@ class PetService : Service() {
         lastVisRect = vis
         for ((rid, rt) in engines) {
             val c = rt.config.getBlocking()
-            boundOffsetTop = (if (c.rangeFullScreen) 0f else c.offsetTop).coerceIn(-300f, 2100f)
-            boundOffsetBottom = (if (c.rangeFullScreen) 0f else c.offsetBottom).coerceIn(-300f, 2100f)
-            boundOffsetLeft = (if (c.rangeFullScreen) 0f else c.offsetLeft).coerceIn(-300f, 1000f)
-            boundOffsetRight = (if (c.rangeFullScreen) 0f else c.offsetRight).coerceIn(-300f, 1000f)
+            val selectedOffsets = effectiveRangeOffsets(c)
+            boundOffsetTop = selectedOffsets[0]
+            boundOffsetBottom = selectedOffsets[1]
+            boundOffsetLeft = selectedOffsets[2]
+            boundOffsetRight = selectedOffsets[3]
             val mode = c.keyboardMode()
             val kb = maxOf(viewImeInset, globalImeInset)
             val active = kb > 0f && mode in listOf("global", "stretch", "local")
@@ -2757,12 +2748,108 @@ class PetService : Service() {
     // 横/竖屏切换时用真实屏幕旋转 cachedRotation 把它指派到对应的“屏幕边”，保证状态栏/导航栏内缩
     // 始终落在物理栏所在的屏幕边（而非当前屏幕上下），消除横屏时“上下误用 140、左右被压出界”。
     // 返回 [屏Top, 屏Right, 屏Bottom, 屏Left] 四个屏幕边偏移。
-    private fun rotatedBoundOffsets(src: FloatArray? = null): FloatArray {
+    /** Map picture centers between effective canvas rectangles, once per screen change.
+     * Same center-based mapping as the keyboard canvas stretch, extended to both axes.
+     */
+    private fun adaptCanvasOnScreenChange(oldScreen: Rect, newScreen: Rect, oldRotation: Int, newRotation: Int) {
+        if (oldScreen.width() <= 0 || oldScreen.height() <= 0 ||
+            newScreen.width() <= 0 || newScreen.height() <= 0) return
+        val turns = (newRotation - oldRotation + 4) % 4
+        fun canvas(c: PetConfigData, screen: Rect, rot: Int): Rect {
+            val margins = rotatedBoundOffsets(effectiveRangeOffsets(c, screen), rot)
+            return Rect((screen.left + margins[3]).toInt(), (screen.top + margins[0]).toInt(),
+                (screen.right - margins[1]).toInt(), (screen.bottom - margins[2]).toInt())
+        }
+        fun mapped(cx: Float, cy: Float, source: Rect, dest: Rect, rotate: Boolean): Pair<Float, Float> {
+            val u = ((cx - source.left) / source.width().coerceAtLeast(1)).coerceIn(0f, 1f)
+            val v = ((cy - source.top) / source.height().coerceAtLeast(1)).coerceIn(0f, 1f)
+            val (tx, ty) = if (!rotate) u to v else when (turns) {
+                1 -> v to (1f - u)   // physical bottom becomes screen right
+                2 -> (1f - u) to (1f - v)
+                3 -> (1f - v) to u
+                else -> u to v
+            }
+            return (dest.left + tx * dest.width()) to (dest.top + ty * dest.height())
+        }
+        fun rotateSide(side: Int): Int {
+            var s = side
+            repeat(turns) {
+                s = when (s) { 0 -> 2; 2 -> 3; 3 -> 1; else -> 0 }
+            }
+            return s
+        }
+        for ((roleId, runtime) in engines) {
+            val c = runtime.config.getBlocking()
+            val source = canvas(c, oldScreen, oldRotation)
+            val dest = canvas(c, newScreen, newRotation)
+            val followDevice = c.rotationAdaptMode == "device"
+            pets.filter { it.roleId == roleId }.forEach { inst ->
+                val p = inst.view.physics
+                val (w, h) = inst.view.getBaseBitmapSize()
+                val (cx, cy) = mapped(p.x + w / 2f, p.y + h / 2f, source, dest, followDevice)
+                p.x = cx - w / 2f
+                p.y = cy - h / 2f
+                if (followDevice && turns != 0) {
+                    if (p.isClimbing) inst.view.remapClimbWallForRotation(rotateSide(p.climbSide))
+                    if (p.isSnapped) p.snapSide = rotateSide(p.snapSide)
+                    val vx = p.vx; val vy = p.vy
+                    val (nx, ny) = when (turns) {
+                        1 -> vy to -vx
+                        2 -> -vx to -vy
+                        3 -> -vy to vx
+                        else -> vx to vy
+                    }
+                    p.vx = nx; p.vy = ny
+                }
+            }
+            fishLayers.filter { it.roleId == roleId }.forEach { fish ->
+                val lp = fish.lp
+                val (cx, cy) = mapped(lp.x + lp.width / 2f, lp.y + lp.height / 2f, source, dest, followDevice)
+                lp.x = kotlin.math.round(cx - lp.width / 2f).toInt()
+                lp.y = kotlin.math.round(cy - lp.height / 2f).toInt()
+                try { windowManager.updateViewLayout(fish.iv, lp) } catch (_: Exception) {}
+                fish.borderView?.let { border ->
+                    val blp = border.layoutParams as? WindowManager.LayoutParams
+                    if (blp != null) {
+                        blp.x = lp.x; blp.y = lp.y
+                        try { windowManager.updateViewLayout(border, blp) } catch (_: Exception) {}
+                    }
+                }
+            }
+            freezeLayers.filter { it.roleId == roleId }.forEach { layer ->
+                val lp = layer.lp
+                val (cx, cy) = mapped(lp.x + lp.width / 2f, lp.y + lp.height / 2f, source, dest, followDevice)
+                lp.x = kotlin.math.round(cx - lp.width / 2f).toInt()
+                lp.y = kotlin.math.round(cy - lp.height / 2f).toInt()
+                try { windowManager.updateViewLayout(layer.iv, lp) } catch (_: Exception) {}
+                layer.borderView?.let { border ->
+                    val blp = border.layoutParams as? WindowManager.LayoutParams
+                    if (blp != null) {
+                        blp.x = lp.x; blp.y = lp.y
+                        try { windowManager.updateViewLayout(border, blp) } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
+    }
+
+    private fun effectiveRangeOffsets(c: PetConfigData, screen: Rect = getScreenBounds()): FloatArray {
+        if (c.rangeFullScreen || (screen.width() > screen.height() && c.landscapeRangeMode == "full")) {
+            return floatArrayOf(0f, 0f, 0f, 0f)
+        }
+        return floatArrayOf(
+            c.offsetTop.coerceIn(-300f, 2100f), c.offsetBottom.coerceIn(-300f, 2100f),
+            c.offsetLeft.coerceIn(-300f, 1000f), c.offsetRight.coerceIn(-300f, 1000f)
+        )
+    }
+
+    /** Rotation argument lets the old and new canvas use their own physical edges. */
+    private fun rotatedBoundOffsets(src: FloatArray? = null, rotation: Int = cachedRotation): FloatArray {
         val t = src?.getOrElse(0) { boundOffsetTop } ?: boundOffsetTop
         val b = src?.getOrElse(1) { boundOffsetBottom } ?: boundOffsetBottom
         val l = src?.getOrElse(2) { boundOffsetLeft } ?: boundOffsetLeft
         val r = src?.getOrElse(3) { boundOffsetRight } ?: boundOffsetRight
-        return when (cachedRotation) {
+        return when (rotation) {
             Surface.ROTATION_0 -> floatArrayOf(t, r, b, l)   // 原样：屏Top=物理上、屏Right=物理右…
             // ROTATION_90：设备逆时针转 90° → 物理顶(状态栏)→屏左、物理底(充电口)→屏右、
             //   物理左→屏下、物理右→屏上（注意：物理左/右落在屏幕上下，且物理左在屏下、物理右在屏上）。
@@ -2780,10 +2867,11 @@ class PetService : Service() {
         // （boundOffset*/imeAdaptEnabled 等为单例 scratch，多角色下会被最后加载角色覆盖，导致串角色）。
         val rt = engines[roleId] ?: return
         val rc = rt.config.getBlocking()
-        val offTop = (if (rc.rangeFullScreen) 0f else rc.offsetTop).coerceIn(-300f, 2100f)
-        val offBottom = (if (rc.rangeFullScreen) 0f else rc.offsetBottom).coerceIn(-300f, 2100f)
-        val offLeft = (if (rc.rangeFullScreen) 0f else rc.offsetLeft).coerceIn(-300f, 1000f)
-        val offRight = (if (rc.rangeFullScreen) 0f else rc.offsetRight).coerceIn(-300f, 1000f)
+        val selectedOffsets = effectiveRangeOffsets(rc, vis)
+        val offTop = selectedOffsets[0]
+        val offBottom = selectedOffsets[1]
+        val offLeft = selectedOffsets[2]
+        val offRight = selectedOffsets[3]
         // physics.x/y 为【窗口左上角坐标】（位置真值），脚锚点 = physics ∓ anchorOff 仅在贴边/snap 时派生。
         // 边界模型（探头/出界）：脚朝向的那一侧为【锚点边】——只约束“锚点(脚)不超可见区”，
         // 图底可越过屏幕外（被裁切=探头）；其余三侧仍为【PNG 四边】约束（图边不超可见区）。
