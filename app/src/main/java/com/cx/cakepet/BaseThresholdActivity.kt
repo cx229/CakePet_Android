@@ -241,20 +241,12 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         }
         // The existing item layouts use 20dp horizontal margins. In habits mode,
         // recover space for the extra action rail without changing their child layout.
-        (item.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
-            lp.marginStart = dp(12)
-            lp.marginEnd = dp(4)
-            item.layoutParams = lp
-        }
+        val previousLp = item.layoutParams as? ViewGroup.MarginLayoutParams
         row.addView(item, LinearLayout.LayoutParams(0, -2, 1f).apply {
-            // Preserve original per-item vertical spacing for grouped cards.
-            val lp = item.layoutParams as? ViewGroup.MarginLayoutParams
-            if (lp != null) {
-                topMargin = lp.topMargin
-                bottomMargin = lp.bottomMargin
-                marginStart = lp.marginStart
-                marginEnd = lp.marginEnd
-            }
+            topMargin = previousLp?.topMargin ?: 0
+            bottomMargin = previousLp?.bottomMargin ?: 0
+            marginStart = dp(12)
+            marginEnd = dp(4)
         })
         val separator = View(this).apply {
             setBackgroundColor(getColor(R.color.cp_subtle))
