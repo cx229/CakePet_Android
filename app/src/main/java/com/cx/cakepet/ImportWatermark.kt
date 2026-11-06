@@ -2,22 +2,44 @@ package com.cx.cakepet
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import java.io.File
+import kotlin.math.abs
 
 /**
- * Conservative, alpha-only corner component remover for imported resources.
- * Never changes the source URI; each import processes at most one candidate.
+ * Removes at most ONE isolated, transparent-background corner watermark group
+ * from an imported bitmap/GIF. It does not edit the user's source document.
  */
 object ImportWatermark {
     private const val PREFS = "cakepet_global_import"
-    private const val KEY = "remove_corner_watermark"
+    private const val ENABLED_KEY = "remove_corner_watermark"
+    private const val LEVEL_KEY = "remove_corner_watermark_level"
 
-    fun enabled(ctx: Context): Boolean =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, true)
+    fun enabled(ctx: Context) =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(ENABLED_KEY, true)
 
-    fun setEnabled(ctx: Context, value: Boolean) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, value).apply()
+    fun setEnabled(ctx: Context, enabled: Boolean) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(ENABLED_KEY, enabled).apply()
+    }
+
+    enum class Level(val label: String, val region: Float, val maxWidth: Float,
+                     val maxHeight: Float, val maxArea: Float, val gapRatio: Float,
+                     val stableRatio: Float) {
+        LOW("低", 0.20f, 0.19f, 0.12f, 0.012f, 0.012f, 0.995f),
+        MEDIUM("中", 0.25f, 0.25f, 0.18f, 0.025f, 0.025f, 0.975f),
+        HIGH("高", 0.30f, 0.33f, 0.24f, 0.045f, 0.045f, 0.93f)
+    }
+
+    fun level(ctx: Context): Level = runCatching {
+        Level.valueOf(ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(LEVEL_KEY, Level.MEDIUM.name) ?: Level.MEDIUM.name)
+    }.getOrDefault(Level.MEDIUM)
+
+    fun setLevel(ctx: Context, level: Level) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(LEVEL_KEY, level.name).apply()
     }
 
     enum class Corner(val label: String) {
@@ -25,155 +47,193 @@ object ImportWatermark {
         BOTTOM_LEFT("左下角"), BOTTOM_RIGHT("右下角")
     }
 
-    private data class Candidate(val corner: Corner, val pixels: IntArray,
-                                 val x0: Int, val y0: Int, val x1: Int, val y1: Int)
+    private data class Component(val x0: Int, val y0: Int, val x1: Int, val y1: Int,
+                                 val area: Int)
+    private data class Group(val corner: Corner, val x0: Int, val y0: Int,
+                             val x1: Int, val y1: Int, val area: Int)
 
-    private fun detect(bitmap: Bitmap): Candidate? {
+    /**
+     * Analyze the four outer corners only. Flood-fill is local to each corner,
+     * but any component touching its INNER boundary is rejected (it may belong
+     * to the character outside the inspected region).
+     *
+     * Crucially, individual letters are NOT subjected to the final size test:
+     * adjacent disconnected shapes are clustered before judging a watermark.
+     */
+    private fun detect(bitmap: Bitmap, level: Level): Group? {
         val w = bitmap.width
         val h = bitmap.height
-        if (w < 24 || h < 24 || w.toLong() * h > 8_000_000L) return null
-        val data = IntArray(w * h)
-        bitmap.getPixels(data, 0, w, 0, 0, w, h)
-        fun occupied(index: Int) = Color.alpha(data[index]) >= 48
-        val total = data.count { Color.alpha(it) >= 48 }
-        if (total < 120) return null
+        val size = w.toLong() * h
+        if (w < 32 || h < 32 || size > 8_000_000L) return null
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        fun filled(index: Int) = Color.alpha(pixels[index]) >= 32
+        val foreground = pixels.count { Color.alpha(it) >= 32 }
+        if (foreground < 120) return null
 
-        val regionW = (w / 4).coerceAtLeast(1)
-        val regionH = (h / 4).coerceAtLeast(1)
-        val candidates = ArrayList<Candidate>()
+        val cw = (w * level.region).toInt().coerceAtLeast(1)
+        val ch = (h * level.region).toInt().coerceAtLeast(1)
+        val gap = (minOf(w, h) * level.gapRatio).toInt().coerceAtLeast(3)
+        val groups = mutableListOf<Group>()
+
         for (corner in Corner.entries) {
-            val left = if (corner == Corner.TOP_LEFT || corner == Corner.BOTTOM_LEFT) 0 else w - regionW
-            val top = if (corner == Corner.TOP_LEFT || corner == Corner.TOP_RIGHT) 0 else h - regionH
-            val visited = BooleanArray(regionW * regionH)
-            val queue = IntArray(regionW * regionH)
-            for (yy in 0 until regionH) for (xx in 0 until regionW) {
-                val seed = yy * regionW + xx
-                if (visited[seed] || !occupied((top + yy) * w + left + xx)) continue
-                var head = 0
-                var tail = 1
-                queue[0] = seed
-                visited[seed] = true
-                var xMin = xx; var xMax = xx; var yMin = yy; var yMax = yy
-                var touchesInnerEdge = false
-                val component = ArrayList<Int>()
-                while (head < tail) {
-                    val point = queue[head++]
-                    val cx = point % regionW; val cy = point / regionW
-                    component.add((top + cy) * w + left + cx)
-                    xMin = minOf(xMin, cx); xMax = maxOf(xMax, cx)
-                    yMin = minOf(yMin, cy); yMax = maxOf(yMax, cy)
-                    if ((left == 0 && cx == regionW - 1) ||
-                        (left != 0 && cx == 0) ||
-                        (top == 0 && cy == regionH - 1) ||
-                        (top != 0 && cy == 0)) touchesInnerEdge = true
+            val left = if (corner == Corner.TOP_LEFT || corner == Corner.BOTTOM_LEFT) 0 else w - cw
+            val top = if (corner == Corner.TOP_LEFT || corner == Corner.TOP_RIGHT) 0 else h - ch
+            val seen = BooleanArray(cw * ch)
+            val queue = IntArray(cw * ch)
+            val pieces = mutableListOf<Component>()
+
+            for (sy in 0 until ch) for (sx in 0 until cw) {
+                val start = sy * cw + sx
+                if (seen[start] || !filled((top + sy) * w + left + sx)) continue
+                var read = 0
+                var end = 1
+                queue[0] = start
+                seen[start] = true
+                var x0 = sx; var x1 = sx; var y0 = sy; var y1 = sy
+                var inner = false
+                while (read < end) {
+                    val at = queue[read++]
+                    val x = at % cw
+                    val y = at / cw
+                    x0 = minOf(x0, x); x1 = maxOf(x1, x)
+                    y0 = minOf(y0, y); y1 = maxOf(y1, y)
+                    if ((left == 0 && x == cw - 1) || (left != 0 && x == 0) ||
+                        (top == 0 && y == ch - 1) || (top != 0 && y == 0)) inner = true
                     for (dy in -1..1) for (dx in -1..1) {
                         if (dx == 0 && dy == 0) continue
-                        val nx = cx + dx; val ny = cy + dy
-                        if (nx !in 0 until regionW || ny !in 0 until regionH) continue
-                        val next = ny * regionW + nx
-                        if (!visited[next] && occupied((top + ny) * w + left + nx)) {
-                            visited[next] = true
-                            queue[tail++] = next
+                        val nx = x + dx
+                        val ny = y + dy
+                        if (nx !in 0 until cw || ny !in 0 until ch) continue
+                        val next = ny * cw + nx
+                        if (!seen[next] && filled((top + ny) * w + left + nx)) {
+                            seen[next] = true
+                            queue[end++] = next
                         }
                     }
                 }
-                val count = component.size
-                val width = xMax - xMin + 1
-                val height = yMax - yMin + 1
-                if (!touchesInnerEdge &&
-                    count >= 3 && count <= (w.toLong() * h / 250).coerceAtLeast(4) &&
-                    width <= w / 6 && height <= h / 6 &&
-                    total > count * 8 &&
-                    // Require the component to be nearer an actual canvas corner.
-                    minOf(xMin, regionW - 1 - xMax) <= regionW / 2 &&
-                    minOf(yMin, regionH - 1 - yMax) <= regionH / 2) {
-                    candidates.add(Candidate(corner, component.toIntArray(),
-                        left + xMin, top + yMin, left + xMax, top + yMax))
-                }
+                if (!inner) pieces.add(Component(left + x0, top + y0,
+                    left + x1, top + y1, end))
+            }
+
+            // Join neighboring text glyphs / logo pieces into complete groups.
+            // Large parts of the character are still filtered using final group
+            // dimensions, occupied area and the inner-edge check above.
+            val unassigned = pieces.indices.toMutableSet()
+            while (unassigned.isNotEmpty()) {
+                val cluster = mutableSetOf(unassigned.first())
+                var changed: Boolean
+                do {
+                    changed = false
+                    for (i in unassigned) {
+                        if (i in cluster) continue
+                        val p = pieces[i]
+                        if (cluster.any { j ->
+                            val q = pieces[j]
+                            p.x0 <= q.x1 + gap && p.x1 + gap >= q.x0 &&
+                                p.y0 <= q.y1 + gap && p.y1 + gap >= q.y0
+                        }) {
+                            cluster.add(i)
+                            changed = true
+                        }
+                    }
+                } while (changed)
+                unassigned.removeAll(cluster)
+                val x0 = cluster.minOf { pieces[it].x0 }
+                val x1 = cluster.maxOf { pieces[it].x1 }
+                val y0 = cluster.minOf { pieces[it].y0 }
+                val y1 = cluster.maxOf { pieces[it].y1 }
+                val area = cluster.sumOf { pieces[it].area }
+                val boxW = x1 - x0 + 1
+                val boxH = y1 - y0 + 1
+                if (area < 16 || area > size * level.maxArea ||
+                    boxW > w * level.maxWidth || boxH > h * level.maxHeight ||
+                    foreground < area * 5 ||
+                    // Candidate should remain close to both relevant outer edges.
+                    (if (left == 0) x0 else w - 1 - x1) > cw / 2 ||
+                    (if (top == 0) y0 else h - 1 - y1) > ch / 2) continue
+                groups.add(Group(corner, x0, y0, x1, y1, area))
             }
         }
-        // A text watermark often consists of separate letters. Treat nearby
-        // components within the same corner as one cluster, but never remove
-        // unrelated accents in different corners.
-        if (candidates.isEmpty()) return null
-        val corners = candidates.map { it.corner }.distinct()
-        if (corners.size != 1) return null
-        val x0 = candidates.minOf { it.x0 }
-        val y0 = candidates.minOf { it.y0 }
-        val x1 = candidates.maxOf { it.x1 }
-        val y1 = candidates.maxOf { it.y1 }
-        if (x1 - x0 + 1 > w / 5 || y1 - y0 + 1 > h / 5) return null
-        val near = maxOf(4, minOf(w, h) / 24)
-        // Reject separated unrelated pieces; only combine a single contiguous cluster.
-        val connected = mutableSetOf(0)
-        do {
-            val before = connected.size
-            for (i in candidates.indices) {
-                if (i in connected) continue
-                if (connected.any { j ->
-                    val first = candidates[i]; val second = candidates[j]
-                    first.x0 <= second.x1 + near && first.x1 + near >= second.x0 &&
-                        first.y0 <= second.y1 + near && first.y1 + near >= second.y0
-                }) connected.add(i)
-            }
-        } while (before != connected.size)
-        if (connected.size != candidates.size) return null
-        val allPixels = candidates.flatMap { it.pixels.asIterable() }.toIntArray()
-        return Candidate(corners.single(), allPixels, x0, y0, x1, y1)
+        if (groups.isEmpty()) return null
+        // At most ONE watermark per import. Reject near-equal candidates rather
+        // than deleting arbitrary accents in the corners.
+        val sorted = groups.sortedByDescending { it.area }
+        if (sorted.size > 1 && sorted[1].area > sorted[0].area * 0.5f) return null
+        return sorted.first()
     }
 
-    /** Returns the original bitmap when there is no confident candidate. */
-    fun clean(bitmap: Bitmap): Pair<Bitmap, Corner?> {
-        val candidate = detect(bitmap) ?: return bitmap to null
-        val mutable = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val w = mutable.width; val h = mutable.height
-        val pixels = IntArray(w * h)
-        mutable.getPixels(pixels, 0, w, 0, 0, w, h)
-        candidate.pixels.forEach { pixels[it] = Color.TRANSPARENT }
-        mutable.setPixels(pixels, 0, w, 0, 0, w, h)
-        return mutable to candidate.corner
+    private fun bounds(group: Group, w: Int, h: Int): IntArray =
+        intArrayOf((group.x0 - 1).coerceAtLeast(0),
+            (group.y0 - 1).coerceAtLeast(0),
+            (group.x1 + 1).coerceAtMost(w - 1),
+            (group.y1 + 1).coerceAtMost(h - 1))
+
+    /**
+     * Clear the entire isolated watermark rectangle, including low-alpha
+     * antialiasing, text holes, and separate letters on another line.
+     */
+    private fun erase(bitmap: Bitmap, group: Group): Bitmap {
+        val copy = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val box = bounds(group, copy.width, copy.height)
+        val width = box[2] - box[0] + 1
+        val empty = IntArray(width) { Color.TRANSPARENT }
+        for (y in box[1]..box[3]) {
+            copy.setPixels(empty, 0, width, box[0], y, width, 1)
+        }
+        return copy
+    }
+
+    fun clean(bitmap: Bitmap, level: Level = Level.MEDIUM): Pair<Bitmap, Corner?> {
+        val group = detect(bitmap, level) ?: return bitmap to null
+        return erase(bitmap, group) to group.corner
     }
 
     /**
-     * On GIF imports, only delete a corner component if its exact pixels remain
-     * effectively unchanged in every frame. The same mask is then applied to
-     * every decoded frame. Return null if no confident fixed overlay exists.
+     * GIF: the same candidate mask must remain stable in ALL frames.
+     * Compare alpha silhouette rather than exact RGB values, since GIF palettes
+     * may change RGB even when the overlay stays in place.
      */
-    fun cleanGif(frameFiles: List<File>): Corner? {
-        if (frameFiles.size < 2) return null
-        val first = android.graphics.BitmapFactory.decodeFile(frameFiles.first().path) ?: return null
-        val candidate = try { detect(first) } finally { first.recycle() } ?: return null
-        val reference = android.graphics.BitmapFactory.decodeFile(frameFiles.first().path) ?: return null
-        val original = IntArray(candidate.pixels.size) { index ->
-            val at = candidate.pixels[index]
-            reference.getPixel(at % reference.width, at / reference.width)
-        }
-        reference.recycle()
-        for (idx in 1 until frameFiles.size) {
-            val sample = android.graphics.BitmapFactory.decodeFile(frameFiles[idx].path) ?: return null
+    fun cleanGif(files: List<File>, level: Level = Level.MEDIUM): Corner? {
+        if (files.size < 2) return null
+        val first = BitmapFactory.decodeFile(files.first().path) ?: return null
+        val group = try { detect(first, level) } finally { first.recycle() } ?: return null
+        val reference = BitmapFactory.decodeFile(files.first().path) ?: return null
+        val box = bounds(group, reference.width, reference.height)
+        val bw = box[2] - box[0] + 1
+        val bh = box[3] - box[1] + 1
+        val alpha = IntArray(bw * bh)
+        try {
+            reference.getPixels(alpha, 0, bw, box[0], box[1], bw, bh)
+        } finally { reference.recycle() }
+        // Require the overlay to contain a real opaque shape, not only noise.
+        val baseline = alpha.map { Color.alpha(it) >= 32 }
+        for (i in 1 until files.size) {
+            val sample = BitmapFactory.decodeFile(files[i].path) ?: return null
             try {
-                if (sample.width.toLong() * sample.height > 8_000_000L) return null
+                if (sample.width <= box[2] || sample.height <= box[3]) return null
+                val current = IntArray(bw * bh)
+                sample.getPixels(current, 0, bw, box[0], box[1], bw, bh)
                 var same = 0
-                for (i in candidate.pixels.indices) {
-                    val at = candidate.pixels[i]
-                    if (sample.getPixel(at % sample.width, at / sample.width) == original[i]) same++
+                for (j in current.indices) {
+                    if ((Color.alpha(current[j]) >= 32) == baseline[j]) same++
                 }
-                if (same * 100 < candidate.pixels.size * 98) return null
+                if (same.toFloat() / current.size < level.stableRatio) return null
             } finally { sample.recycle() }
         }
-        // Re-encode staged PNGs only after the entire frame consistency check.
-        for (file in frameFiles) {
-            val bitmap = android.graphics.BitmapFactory.decodeFile(file.path) ?: return null
+
+        // Only write output after full verification. Original GIF URI is untouched.
+        for (file in files) {
+            val bitmap = BitmapFactory.decodeFile(file.path) ?: error("GIF 帧解码失败")
             try {
-                val copy = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                val cleaned = erase(bitmap, group)
                 try {
-                    for (at in candidate.pixels) copy.setPixel(at % copy.width, at / copy.width, Color.TRANSPARENT)
-                    file.outputStream().use { output ->
-                        check(copy.compress(Bitmap.CompressFormat.PNG, 100, output))
+                    file.outputStream().use {
+                        check(cleaned.compress(Bitmap.CompressFormat.PNG, 100, it)) { "去水印后的帧写入失败" }
                     }
-                } finally { copy.recycle() }
+                } finally { cleaned.recycle() }
             } finally { bitmap.recycle() }
         }
-        return candidate.corner
+        return group.corner
     }
 }
