@@ -34,10 +34,10 @@ jobs:
           packages: 'platform-tools'
 
       - name: Install Android SDK 37
+        continue-on-error: true
         run: |
-          echo "Available API 37 packages:"
-          sdkmanager --list --channel=3 | grep -E "platforms;android-37|build-tools;37" || true
-          sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0"
+          set -o pipefail
+          { sdkmanager --list --channel=3 | grep -E "platforms;android-37|build-tools;37" || true; sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0"; } 2>&1 | tee sdk-install.log
 
       - name: Set up Gradle 9.5.0 and cache
         uses: gradle/actions/setup-gradle@v4
@@ -62,7 +62,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CakePet-build-diagnostics
-          path: build-debug.log
+          path: |
+            build-debug.log
+            sdk-install.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -72,8 +74,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if test -f build-debug.log; then
-            tail -c 15000 build-debug.log > build-tail.txt
+          if test -f build-debug.log || test -f sdk-install.log; then
+            { test ! -f sdk-install.log || tail -c 5000 sdk-install.log; test ! -f build-debug.log || tail -c 10000 build-debug.log; } > build-tail.txt
             {
               echo 'Automated build failure diagnostic (last 15KB):'
               echo '\`\`\`'
