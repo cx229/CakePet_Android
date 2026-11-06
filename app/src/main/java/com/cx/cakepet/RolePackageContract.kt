@@ -60,184 +60,123 @@ object RolePackageContract {
         val errors: List<String>
     )
 
-    /** 先提取版本号，再校验。尽量列出所有错误（非强制全量），不遇错即停。 */
+    /**
+     * Runtime readiness, NOT a full authoring/lint pass.
+     *
+     * Unused modes and inactive settings may contain arbitrary editor data.
+     * Only modes selected by present Functions (plus their active nextMode
+     * transitions) need to be playable. Package version is informational:
+     * incoming packs are normalized to VERSION by prepareEditable().
+     */
     fun validate(json: JSONObject): ValidationResult {
         val errors = mutableListOf<String>()
-        // v1.02 只接受通用 Modes/Functions；旧 resources 字典和替代图片字段不再有效。
-        if (json.has("menuPool")) errors.add("菜单动作池已移入 functions.menu.pool")
-        if (json.has("resources")) errors.add("v1.02 不再支持 resources 字典")
-        json.optJSONObject("modes")?.keys()?.forEach { id ->
-            if (json.optJSONObject("modes")?.optJSONObject(id)?.has("fallback") == true) {
-                errors.add("动画 $id 不支持 fallback 字段")
-            }
-        }
-
-        // 1) 版本号：非空字符串且必须等于 VERSION（缺失/类型错也收集，不提前返回）
-        val version = json.opt("version")
-        val versionStr = if (version is String) version else {
-            if (!json.has("version")) errors.add("缺少必备字段：version")
-            else errors.add("version 不是整数（应为字符串）")
-            ""
-        }
-        if (versionStr.isNotEmpty() && versionStr != VERSION) {
-            errors.add("不支持的资源包版本：$versionStr（当前仅支持 $VERSION）")
-        }
-
-        // 2) 顶层必填字符串：id / name / shortName 必须非空字符串
-        checkNonEmptyString(json, "id", errors)
-        checkNonEmptyString(json, "name", errors)
-        checkNonEmptyString(json, "shortName", errors)
-
-        // 2.5) 作者列表（必填）：必须是非空数组，且每一项均为非空字符串
-        val authorsArr = json.optJSONArray("authors")
-        if (authorsArr == null) {
-            if (!json.has("authors")) errors.add("缺少必备字段：authors")
-            else errors.add("authors 不是数组（应为非空字符串数组）")
-        } else if (authorsArr.length() == 0) {
-            errors.add("authors 为空数组（至少需填写一位作者）")
-        } else {
-            for (i in 0 until authorsArr.length()) {
-                val v = authorsArr.opt(i)
-                if (v !is String || v.isBlank()) {
-                    errors.add("authors 第 ${i + 1} 项不是非空字符串")
-                    break
-                }
-            }
-        }
-
-        // 3) 整数：decodeTarget / anchorRes 必须为整数（JSON Int，非 String/缺失）
-        checkInt(json, "decodeTarget", errors)
-        checkInt(json, "anchorRes", errors)
-
-        // 4) 功能清单：功能路径必须存在，所有候选目标均应是 Mode。
-        val functions = parseFunctions(json)
-        val missingFuncs = REQUIRED_FUNCTION_PATHS.filter { it !in functions }
-        if (missingFuncs.isNotEmpty()) {
-            errors.add("缺少必备功能：${missingFuncs.joinToString(", ") { it.joinToString("/") }}")
-        }
-
-        // 5) 允许自由命名 Modes；只强制 Functions 所引用的动作必须存在
         val modes = json.optJSONObject("modes")
-        val definedModes = modes?.keys()?.asSequence()?.toSet() ?: emptySet()
-        if (modes == null) {
-            if (!json.has("modes")) errors.add("缺少必备字段：modes")
-            else errors.add("modes 不是整数（应为对象）")
-        } else {
-            for (name in definedModes) {
-                val m = modes.optJSONObject(name)
-                if (m == null) {
-                    errors.add("动作 $name 不是整数（应为对象）")
-                    continue
-                }
-                if (m.has("label")) errors.add("动作 $name 不再支持 label：动作名称就是 Key")
-                if (m.has("groups")) {
-                    val groups = m.optJSONArray("groups")
-                    if (groups == null) errors.add("动作 $name 的 groups 必须为字符串数组")
-                    else {
-                        val seen = mutableSetOf<String>()
-                        for (i in 0 until groups.length()) {
-                            val group = groups.opt(i)
-                            if (group !is String || group.isBlank() || group != group.trim() ||
-                                group.length > 40 || group == "未分组" ||
-                                group.any { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
-                                errors.add("动作 $name 的动作组 $i 名称无效")
-                            } else if (!seen.add(group)) errors.add("动作 $name 重复设置了动作组 $group")
-                        }
-                    }
-                }
+        val functionsObj = json.optJSONObject("functions")
+        if (modes == null) errors.add("缺少可读取的动作列表 modes")
+        if (functionsObj == null) errors.add("缺少可读取的功能映射 functions")
+        if (modes == null || functionsObj == null)
+            return ValidationResult(false, json.optString("version"), errors)
 
-                if (m.has("timeNext")) errors.add("动作 $name 不再支持 timeNext")
-                val loop = m.opt("loop")
-                if (loop !is Boolean) errors.add("动作 $name loop 必须是布尔值")
-                if (loop == false && (m.has("duration") || m.has("finishCycle")))
-                    errors.add("动作 $name 非循环状态不能设置 duration 或 finishCycle")
-                if (loop == true) {
-                    val d = m.opt("duration")
-                    if (m.has("duration") && d != JSONObject.NULL) {
-                        val range = m.optJSONObject("duration")
-                        if (range == null || range.opt("min") !is Number || range.opt("max") !is Number ||
-                            range.optLong("min") <= 0 || range.optLong("max") < range.optLong("min"))
-                            errors.add("动作 $name duration 必须包含有效 min/max")
-                    }
-                    if (m.has("finishCycle") && m.opt("finishCycle") !is Boolean)
-                        errors.add("动作 $name finishCycle 必须是布尔值")
-                }
-                val fr = m.optJSONArray("frames")
-                if (fr == null) errors.add("动作 $name 缺少 frames")
-                else if (fr.length() == 0) errors.add("动作 $name 没有帧数据")
-                if (m.has("walkSpeed") || m.has("verticalAlign"))
-                    errors.add("动作 $name 的运动与填充属性必须写在 frames 内")
+        val functions = runCatching { parseFunctions(json) }
+            .getOrElse {
+                errors.add("功能映射无法解析：${it.message}")
+                return ValidationResult(false, json.optString("version"), errors)
+            }
+        val used = linkedSetOf<String>()
+        // Missing function paths are optional. Do not force a full template.
+        for ((path, refs) in functions) {
+            for (name in refs) {
+                if (name.isBlank()) continue
+                if (modes.optJSONObject(name) == null) {
+                    errors.add("功能 ${path.joinToString("/")} 引用不存在的动作：$name")
+                } else used.add(name)
             }
         }
+        if (used.isEmpty()) errors.add("至少需要一个可用功能及其动作")
 
-        // Mode 是完整动画：每帧必须声明图片、有效下一帧索引和正数延时。
-        // 图片文件的存在性/有效性由 verifyAssets() 在导入时一次性校验。
-        modes?.keys()?.forEach { modeId ->
-            val mode = modes.optJSONObject(modeId) ?: return@forEach
-            val frames = mode.optJSONArray("frames") ?: return@forEach
-            for (idx in 0 until frames.length()) {
-                val frame = frames.optJSONObject(idx)
+        // Active nextMode chains are also part of a playable animation.
+        val pending = java.util.ArrayDeque<String>()
+        used.forEach { pending.add(it) }
+        while (!pending.isEmpty()) {
+            val name = pending.removeFirst()
+            val mode = modes.optJSONObject(name) ?: continue
+            val kind = playbackMode(mode)
+            if (kind == "infinite") continue
+            val next = mode.optString("nextMode").takeUnless { it.isBlank() || it == "null" }
+                ?: continue
+            if (modes.optJSONObject(next) == null) {
+                errors.add("动作 $name 的后续动作不存在：$next")
+            } else if (used.add(next)) pending.add(next)
+        }
+
+        for (name in used) {
+            val mode = modes.optJSONObject(name) ?: continue
+            val frames = mode.optJSONArray("frames")
+            if (frames == null || frames.length() == 0) {
+                errors.add("已使用动作 $name 没有可播放的帧")
+                continue
+            }
+            for (i in 0 until frames.length()) {
+                val frame = frames.optJSONObject(i)
                 if (frame == null) {
-                    errors.add("动画 $modeId 帧 $idx 不是对象")
+                    errors.add("已使用动作 $name 的帧 $i 不是对象")
                     continue
                 }
-                val res = frame.opt("res")
-                if (res !is String || res.isBlank()) errors.add("动画 $modeId 帧 $idx 缺少图片路径")
-                if (frame.has("next")) errors.add("动画 $modeId 帧 $idx 不支持 next")
+                if (frame.optString("res").isBlank())
+                    errors.add("已使用动作 $name 的帧 $i 没有图片资源")
+                // Delay is essential for frame progression; inactive settings
+                // (including duration/finishCycle and other frame properties)
+                // must not cause a whole package to be rejected.
                 val delay = frame.opt("delay")
-                val validDelay = when (delay) {
+                val valid = when (delay) {
                     is Number -> delay.toLong() > 0
                     is JSONArray -> delay.length() == 2 &&
                         delay.opt(0) is Number && delay.opt(1) is Number &&
                         delay.optLong(0) > 0 && delay.optLong(1) >= delay.optLong(0)
                     else -> false
                 }
-                if (!validDelay) errors.add("动画 $modeId 帧 $idx 的 delay 无效")
-                if (frame.optString("verticalAlign", "top") !in listOf("top", "center"))
-                    errors.add("动画 $modeId 帧 $idx verticalAlign 必须为 top 或 center")
-                if (frame.has("flipX") && frame.opt("flipX") !is Boolean)
-                    errors.add("动画 $modeId 帧 $idx flipX 必须为布尔值（true/false）")
-                for (coord in listOf("dx", "dy"))
-                    if (frame.has(coord) && frame.opt(coord) !is Number)
-                        errors.add("动画 $modeId 帧 $idx $coord 必须为数字")
-            }
-            if (mode.has("nextMode") && !mode.isNull("nextMode")) {
-                val nextMode = mode.opt("nextMode")
-                if (nextMode !is String || nextMode !in definedModes) {
-                    errors.add("动画 $modeId 引用未定义的 nextMode")
-                }
+                if (!valid) errors.add("已使用动作 $name 帧 $i 的播放延时无效")
             }
         }
-
-        // 6) 全部功能叶子，包括食物，统一指向已定义的 Mode。
-        for ((path, leaves) in functions) {
-            for (leaf in leaves) {
-                if (leaf !in definedModes) {
-                    errors.add("功能 ${path.joinToString("/")} 引用未定义动作：$leaf")
-                }
-            }
-        }
-
-        // 7) 菜单动作池已并入 Functions。
-        for (path in listOf(listOf("standby", "pool"), listOf("static", "pool"), listOf("menu", "pool"))) {
-            if (functions[path].isNullOrEmpty()) {
-                errors.add("功能 ${path.joinToString("/")} 必须提供非空动作池")
-            }
-        }
-        return ValidationResult(errors.isEmpty(), versionStr, errors)
+        return ValidationResult(errors.isEmpty(), json.optString("version"), errors)
     }
 
-    /** 素材包导入必须完整：检查全部 Mode 帧文件存在且可解码，不设运行时缺帧兜底。 */
+    private fun playbackMode(mode: JSONObject): String {
+        val explicit = mode.optString("loopMode")
+        if (explicit in listOf("off", "timed", "infinite")) return explicit
+        return when {
+            !mode.optBoolean("loop", false) -> "off"
+            mode.optJSONObject("duration") != null -> "timed"
+            else -> "infinite"
+        }
+    }
+
+    /** Only check images needed by mapped functions and active nextMode chains. */
     fun verifyAssets(dest: File, json: JSONObject): List<String> {
         val errors = mutableListOf<String>()
-        val root = dest.canonicalFile
         val modes = json.optJSONObject("modes") ?: return errors
-        val validated = mutableSetOf<String>()
-        modes.keys().forEach { modeId ->
-            val frames = modes.optJSONObject(modeId)?.optJSONArray("frames") ?: return@forEach
+        val functions = runCatching { parseFunctions(json) }.getOrNull() ?: return errors
+        val used = linkedSetOf<String>()
+        for ((_, refs) in functions) for (name in refs) {
+            if (modes.optJSONObject(name) != null) used.add(name)
+        }
+        val pending = java.util.ArrayDeque<String>()
+        used.forEach { pending.add(it) }
+        while (!pending.isEmpty()) {
+            val mode = modes.optJSONObject(pending.removeFirst()) ?: continue
+            if (playbackMode(mode) == "infinite") continue
+            val next = mode.optString("nextMode")
+            if (next.isNotBlank() && next != "null" &&
+                modes.optJSONObject(next) != null && used.add(next)) pending.add(next)
+        }
+
+        val root = dest.canonicalFile
+        val checked = mutableSetOf<String>()
+        for (name in used) {
+            val frames = modes.optJSONObject(name)?.optJSONArray("frames") ?: continue
             for (i in 0 until frames.length()) {
-                val res = frames.optJSONObject(i)?.optString("res", "") ?: ""
-                if (res.isBlank() || !validated.add(res)) continue
+                val res = frames.optJSONObject(i)?.optString("res").orEmpty()
+                if (res.isBlank() || !checked.add(res)) continue
                 val file = File(root, res).canonicalFile
                 if (!file.toPath().startsWith(root.toPath()) || !file.isFile || file.length() <= 0L) {
                     errors.add("缺失或非法图片：$res")
@@ -245,9 +184,8 @@ object RolePackageContract {
                 }
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeFile(file.absolutePath, bounds)
-                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0)
                     errors.add("图片无法解码：$res")
-                }
             }
         }
         return errors
