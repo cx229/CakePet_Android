@@ -149,6 +149,8 @@
                     android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                         <TextView android:text="旋转适应" style="@style/SettingsOptionTitle"/>
+                        <TextView android:text="屏幕旋转时，画布位置的适应方式" style="@style/SettingsOptionNote"
+                            android:layout_width="match_parent" android:layout_height="wrap_content"/>
                     </LinearLayout>
                     <Spinner android:id="@+id/spinner_rotation_mode" android:layout_width="172dp" android:layout_height="48dp"/>
                 </com.cx.cakepet.SettingsRippleRow>
@@ -157,6 +159,8 @@
                     android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
                     <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                         <TextView android:text="横屏活动范围" style="@style/SettingsOptionTitle"/>
+                        <TextView android:text="横屏时，可活动的范围" style="@style/SettingsOptionNote"
+                            android:layout_width="match_parent" android:layout_height="wrap_content"/>
                     </LinearLayout>
                     <Spinner android:id="@+id/spinner_landscape_range_mode" android:layout_width="172dp" android:layout_height="48dp"/>
                 </com.cx.cakepet.SettingsRippleRow>

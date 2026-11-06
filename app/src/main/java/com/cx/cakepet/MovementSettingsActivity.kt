@@ -55,7 +55,7 @@ class MovementSettingsActivity : AppCompatActivity() {
         // 标题下方小字灰色：当前页面所属角色名
         findViewById<android.widget.TextView>(R.id.tv_title_sub).text = RoleStore.resolveDisplayName(this, roleId)
         findViewById<android.widget.TextView>(R.id.tv_forage_bonus_note).text =
-            "加成「${RoleStore.resolveShortName(this, roleId)}」将飞速奔向小鱼干"
+            "「${RoleStore.resolveShortName(this, roleId)}」将飞速奔向小鱼干"
         // 纯黑占位条填充状态栏高度，与标题栏黑底连成整体覆盖状态栏
         val spacer = findViewById<android.view.View>(R.id.status_bar_spacer)
         spacer.layoutParams.height = getStatusBarHeight()

@@ -182,7 +182,12 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     }
                     choiceMap[key]?.value?.group == g -> {
                         val (idx, choice) = choiceMap.getValue(key)
-                        addHabitItem(card, key, choiceRow(choice.label, choice.options, choice.default) { selected ->
+                        addHabitItem(card, key, choiceRow(choice.label, choice.options, choice.default,
+                            when (key) {
+                                "rotationAdaptMode" -> "屏幕旋转时，画布位置的适应方式"
+                                "landscapeRangeMode" -> "横屏时，可活动的范围"
+                                else -> "默认行为"
+                            }) { selected ->
                             if (selected != current.choices[idx].default) {
                                 current = current.copy(choices = current.choices.toMutableList().also {
                                     it[idx] = it[idx].copy(default = selected)
@@ -490,7 +495,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     /** The same dropdown presentation as the already tuned keyboard setting row. */
     private fun choiceRow(
         title: String, options: List<Pair<String, String>>, selectedValue: String,
-        onSelected: (String) -> Unit
+        note: String = "默认行为", onSelected: (String) -> Unit
     ): View {
         fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
         val row = LinearLayout(this).apply {
@@ -508,7 +513,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.cp_title))
         })
         texts.addView(TextView(this).apply {
-            text = "默认行为"
+            text = note
             textSize = 11f
             setTextColor(getColor(R.color.cp_note))
         })
