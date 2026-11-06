@@ -92,9 +92,34 @@ object ImportWatermark {
                 }
             }
         }
-        // Reject ambiguous frames containing several independent corner accents.
-        if (candidates.size != 1) return null
-        return candidates.single()
+        // A text watermark often consists of separate letters. Treat nearby
+        // components within the same corner as one cluster, but never remove
+        // unrelated accents in different corners.
+        if (candidates.isEmpty()) return null
+        val corners = candidates.map { it.corner }.distinct()
+        if (corners.size != 1) return null
+        val x0 = candidates.minOf { it.x0 }
+        val y0 = candidates.minOf { it.y0 }
+        val x1 = candidates.maxOf { it.x1 }
+        val y1 = candidates.maxOf { it.y1 }
+        if (x1 - x0 + 1 > w / 5 || y1 - y0 + 1 > h / 5) return null
+        val near = maxOf(4, minOf(w, h) / 24)
+        // Reject separated unrelated pieces; only combine a single contiguous cluster.
+        val connected = mutableSetOf(0)
+        do {
+            val before = connected.size
+            for (i in candidates.indices) {
+                if (i in connected) continue
+                if (connected.any { j ->
+                    val first = candidates[i]; val second = candidates[j]
+                    first.x0 <= second.x1 + near && first.x1 + near >= second.x0 &&
+                        first.y0 <= second.y1 + near && first.y1 + near >= second.y0
+                }) connected.add(i)
+            }
+        } while (before != connected.size)
+        if (connected.size != candidates.size) return null
+        val allPixels = candidates.flatMap { it.pixels.asIterable() }.toIntArray()
+        return Candidate(corners.single(), allPixels, x0, y0, x1, y1)
     }
 
     /** Returns the original bitmap when there is no confident candidate. */
