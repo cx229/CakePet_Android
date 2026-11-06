@@ -108,11 +108,11 @@ object AppBounds {
             step = 0.01f, default = 0.10f        // 默认 0.10
         ),
         SliderBound(
-            key = "forageSpeed", label = "觅食速度", group = "攀攀攀",
-            hardMin = 0f, hardMax = 3000f,       // 极限上下界 0-3000 px/s
-            baseMin = 0f, baseMax = 300f,        // 默认上下界 0-300 px/s
-            from = 0f, to = 300f,
-            step = 10f, default = 100f           // 默认 100 px/s（仅自动觅食时沿墙奔向食物的速度，与具体动画名称无关）
+            key = "forageMultiplier", label = "觅食位移倍率", group = "攀攀攀",
+            hardMin = 0f, hardMax = 20f,          // 位移倍率 0-20
+            baseMin = 0f, baseMax = 3f,
+            from = 0f, to = 3f,
+            step = 0.05f, default = 1f           // 1x = 按 Mode 原始 dx/dy 执行
         )
     )
     val MOVEMENT_SWITCHES = listOf(
@@ -140,7 +140,7 @@ object AppBounds {
         "reboundEnabled", "bounceVibrate", "rebound", "reboundTop", "reboundBottom", "reboundLeft", "reboundRight",
         "throwEnabled", "throwCoeff",
         "wallClimb",
-        "autoForage", "forageSpeed",
+        "autoForage", "forageMultiplier",
         "leapEnabled",
         "leapProbability"
     )
@@ -440,7 +440,7 @@ object ConfigDefaults {
     val LEAP_ENABLED = false             // 好动飞跃：开启后，攀岩态每次捞新动作按概率直接跳起飞向随机另一面墙
     val LEAP_PROBABILITY = 0.10f          // 飞跃概率（0-1 小数）：概率越高，次次起飞
     val AUTO_FORAGE = true                 // 自动觅食：攀岩走壁子开关，开启且非吸附态时沿墙走去吃最近食物，默认开
-    val FORAGE_SPEED = 100f               // 自动觅食时沿墙走向食物的速度（px/s）；由引擎控制，不依赖动画的帧位移或名称
+    val FORAGE_MULTIPLIER = 1f          // 自动觅食按当前 Mode dx/dy 执行时的位移倍率
     val ALPHA = 1f                        // 整体透明度：0-1 小数（1=完全不透明 100%）；UI 滑块是 0-100 百分比，PetConfig 内换算
     val CLICK_THROUGH = false             // 点击穿透：true 时宠物不拦截触摸（点击会落到底层窗口）
     val FREEZE_DRAGGABLE = true          // 定格图层可拖动：true 时所有定格显示层可点击拖动位置（默认关=纯显示不可点击）
