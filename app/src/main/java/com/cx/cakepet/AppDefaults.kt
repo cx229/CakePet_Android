@@ -112,7 +112,7 @@ object AppBounds {
             hardMin = 0f, hardMax = 3000f,       // 极限上下界 0-3000 px/s
             baseMin = 0f, baseMax = 300f,        // 默认上下界 0-300 px/s
             from = 0f, to = 300f,
-            step = 10f, default = 100f           // 默认 100 px/s（仅自动觅食时沿墙奔向食物的速度，与正常走路无关）
+            step = 10f, default = 100f           // 默认 100 px/s（仅自动觅食时沿墙奔向食物的速度，与具体动画名称无关）
         )
     )
     val MOVEMENT_SWITCHES = listOf(
