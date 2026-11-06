@@ -712,7 +712,7 @@ class PetService : Service() {
                 val v = inst.view
                 val rc = roleConfig(inst.roleId)
                 // 生效条件：攀岩已开(上级移动+攀岩) 且 本开关开 且 当前攀岩态 且 非吸附态（吸附态不喜乱动）。
-                v.forageSpeed = rc.forageSpeed   // 自动觅食速度：按角色配置写入，PetView 沿墙奔向食物用
+                v.forageMultiplier = rc.forageMultiplier   // 自动觅食倍率：放大当前帧 dx/dy，不注入额外导航速度
                 v.autoForage = rc.autoForage     // 自动觅食开关：供 PetView 落地决策判定是否插队进入攀岩态
                 val effForage = v.wallClimb && rc.autoForage && !v.physics.isSnapped &&
                     !v.physics.isThrowing && !v.physics.isDragging
@@ -1212,10 +1212,10 @@ class PetService : Service() {
                 effectiveGravity, c.maxSpeed, c.throwEnabled, c.throwCoeff)
             // 层级门控：移动（总开关）→ 攀岩 → 飞跃。上级关则下级一并失效。
             val effClimb = c.moveEnabled && c.wallClimb          // 攀岩是移动下级：移动关则攀岩关
-            val effLeap  = effClimb && c.leapEnabled             // 飞跃是攀岩下级：攀岩关则飞跃关
+            val effLeap  = effClimb && c.leapEnabled             // 飞跃开关依赖攀岩功能，但起飞不要求角色已处于攀岩状态
             v.useStaticPool = !c.moveEnabled   // 静止池只看"移动"总开关（重力关仅关重力，不进静止池）
             v.wallClimb = effClimb            // 攀岩走壁开关（已被移动总开关门控）
-            v.setLeapParams(effLeap, c.leapProbability)  // 好动飞跃：仅在攀岩态按概率跳起（已被攀岩/移动门控）
+            v.setLeapParams(effLeap, c.leapProbability)  // 好动飞跃：在正常待机动作选择边界按概率起飞
             v.syncClimbState(effClimb)   // 攀岩走壁开启即进攀爬态（平地=贴地墙），好动飞跃方可触发
             if (v.useStaticPool && v.climbWall >= 0) v.restoreBaseGravity()  // 移动关：退出攀爬还原
             v.setPetScale(c.scale)
