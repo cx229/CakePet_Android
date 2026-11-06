@@ -154,6 +154,9 @@ class GlobalSettingsActivity : AppCompatActivity() {
             }
             PAGE_DEBUG -> {
                 findViewById<View>(R.id.system_section_heading).visibility = View.GONE
+                // With prior modules hidden, this is the first visible section.
+                (findViewById<View>(R.id.system_section_container).layoutParams as android.widget.LinearLayout.LayoutParams)
+                    .apply { topMargin = 0 }
                 findViewById<View>(R.id.row_import_watermark).visibility = View.GONE
                 findViewById<View>(R.id.row_import_watermark_level).visibility = View.GONE
                 findViewById<View>(R.id.backup_group).visibility = View.GONE
@@ -162,8 +165,8 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 nextRow.setOnClickListener { openPage(PAGE_ACCESSIBILITY_TEST) }
             }
             else -> {
-                findViewById<View>(R.id.system_section_heading).visibility = View.GONE
-                findViewById<View>(R.id.system_group).visibility = View.GONE
+                // Hide the entire unused module, including its outer margin.
+                findViewById<View>(R.id.system_section_container).visibility = View.GONE
                 findViewById<View>(R.id.row_import_watermark).visibility = View.GONE
                 findViewById<View>(R.id.row_import_watermark_level).visibility = View.GONE
                 findViewById<View>(R.id.backup_group).visibility = View.GONE
