@@ -160,9 +160,9 @@ class MovementSettingsActivity : AppCompatActivity() {
                 pendingLeapProb = null
                 EditSync.setText(leapProbVal, "%.2f".format(c.leapProbability))
             }
-            if (forageSpeedBar.setValueFromConfig(bizToSliderValue(c.forageSpeed, bs["forageSpeed"]!!.from, bs["forageSpeed"]!!.to), pendingForageSpeed)) {
+            if (forageSpeedBar.setValueFromConfig(bizToSliderValue(c.forageMultiplier, bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to), pendingForageSpeed)) {
                 pendingForageSpeed = null
-                EditSync.setText(forageSpeedVal, c.forageSpeed.toInt().toString())
+                EditSync.setText(forageSpeedVal, "%.2f".format(c.forageMultiplier))
             }
             // 程序化回填所有开关用 suppressSwitch 包住：回流 setChecked 不再触发 listener 写盘
             suppressSwitch = true
@@ -283,7 +283,7 @@ class MovementSettingsActivity : AppCompatActivity() {
             onStart = { PetService.instance?.showPetParamGuide(this, "speed") },
             onStop = { PetService.instance?.releaseGuide(this) }) }
         maxSpeedBar.applyBizRange(bs["maxSpeed"]!!.from, bs["maxSpeed"]!!.to, c.maxSpeed,
-            formatter = { it.toInt().toString() }) { s ->
+            formatter = { "%.2f".format(it) }) { s ->
             pendingMaxSpeed = bizToSliderValue(s, bs["maxSpeed"]!!.from, bs["maxSpeed"]!!.to).toInt()
             EditSync.setText(maxSpeedVal, s.toInt().toString())
             lifecycleScope.launch { config.update { it.copy(maxSpeed = s) } }
@@ -371,24 +371,24 @@ class MovementSettingsActivity : AppCompatActivity() {
             leapProbBar.value = bizToSliderValue(v, bs["leapProbability"]!!.from, bs["leapProbability"]!!.to)
             lifecycleScope.launch { config.update { it.copy(leapProbability = v) } }
         }
-        // 觅食速度：攀岩走壁自动觅食时沿墙奔向食物的速度（px/s）
+        // 觅食位移倍率：1=原始帧 dx/dy，0=静止
         forageSpeedBar = findViewById(R.id.foragespeed_bar)!!
         forageSpeedVal = findViewById(R.id.foragespeed_value)!!
         forageSpeedBar.applyBlackStyle()
-        forageSpeedBar.applyBizRange(bs["forageSpeed"]!!.from, bs["forageSpeed"]!!.to, c.forageSpeed,
+        forageSpeedBar.applyBizRange(bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to, c.forageMultiplier,
             formatter = { it.toInt().toString() }) { s ->
-            pendingForageSpeed = bizToSliderValue(s, bs["forageSpeed"]!!.from, bs["forageSpeed"]!!.to).toInt()
-            EditSync.setText(forageSpeedVal, s.toInt().toString())
-            lifecycleScope.launch { config.update { it.copy(forageSpeed = s) } }
+            pendingForageSpeed = bizToSliderValue(s, bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to).toInt()
+            EditSync.setText(forageSpeedVal, "%.2f".format(s))
+            lifecycleScope.launch { config.update { it.copy(forageMultiplier = s) } }
         }
         EditSync.bind(forageSpeedVal,
             parse = { it.toFloatOrNull() },
-            format = { "%.0f".format(it) },
-            clamp = { it.coerceIn(bs["forageSpeed"]!!.from, bs["forageSpeed"]!!.to) },
-            defaultValue = bs["forageSpeed"]!!.default
+            format = { "%.2f".format(it) },
+            clamp = { it.coerceIn(bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to) },
+            defaultValue = bs["forageMultiplier"]!!.default
         ) { v ->
-            forageSpeedBar.value = bizToSliderValue(v, bs["forageSpeed"]!!.from, bs["forageSpeed"]!!.to)
-            lifecycleScope.launch { config.update { it.copy(forageSpeed = v) } }
+            forageSpeedBar.value = bizToSliderValue(v, bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to)
+            lifecycleScope.launch { config.update { it.copy(forageMultiplier = v) } }
         }
     }
 
