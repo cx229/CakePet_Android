@@ -78,7 +78,7 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
 fun parseFunctions(root: JSONObject): Map<List<String>, List<String>> {
     val obj = root.optJSONObject("functions") ?: return emptyMap()
     val out = LinkedHashMap<List<String>, List<String>>()
-    fun walk(node: Any?, path: List<String>) {
+    fun visit(node: Any?, path: List<String>) {
         when (node) {
             is JSONArray -> {
                 val leaves = (0 until node.length())
@@ -90,12 +90,12 @@ fun parseFunctions(root: JSONObject): Map<List<String>, List<String>> {
                 val keys = node.keys()
                 while (keys.hasNext()) {
                     val k = keys.next()
-                    walk(node.opt(k), path + k)
+                    visit(node.opt(k), path + k)
                 }
             }
         }
     }
-    walk(obj, emptyList())
+    visit(obj, emptyList())
     return out
 }
 
