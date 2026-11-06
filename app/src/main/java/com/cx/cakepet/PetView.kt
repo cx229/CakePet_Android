@@ -475,6 +475,8 @@ class PetView @JvmOverloads constructor(
                 insets
             }
         }
+        // 自动动作选择只提供机会：是否飞跃由引擎状态和概率决定。
+        imageManager.onAutomaticModeChoice = { chooseAutomaticLeapMode() }
         // 抛掷结束（触底静止）→ 播放落地蹲下动画，再回常驻静坐（对齐 PC ThrowFallStandFollowMode）
         physics.onThrowEnd = {
             // Preserve the direction actually rendered on landing. Randomizing a fresh
@@ -607,8 +609,6 @@ class PetView @JvmOverloads constructor(
     }
 
     fun tick(dt: Float) {
-        // 同步攀爬态给动画层：决定捞新动作时是否按飞跃概率直接跳起。
-        imageManager.inClimbing = physics.isClimbing
         imageManager.inSnapped = physics.isSnapped
         if (imageManager.forageSelected && forageActive && !physics.isClimbing &&
             !physics.isDragging && !physics.isThrowing && !flying) {
@@ -861,9 +861,12 @@ class PetView @JvmOverloads constructor(
         }
         lastFrameMoveX = 0f
         lastFrameMoveY = 0f
-        // 好动飞跃：跳起(JUMP_UP)激活后，朝目标墙位移；到位落地该墙并切下一动作（攀岩态可能再跳起）。
-        if (!flying && imageManager.isFunctionMode(imageManager.getMode(), "climb", "jump_up")) {
-            startLeapFlight()
+        // 只消费由引擎在自然换动作时授权的飞跃请求。
+        // 不能用当前 Mode 是否映射到 jump_up 反推飞跃行为。
+        val requestedLeapMode = pendingLeapMode
+        pendingLeapMode = null
+        if (requestedLeapMode != null && canStartLeap()) {
+            startLeapFlight(requestedLeapMode)
         }
         if (flying) {
             // 首段延迟初始化：待起跳墙朝向边界刷新后，生成落点自由轴随机并定镜像方向。
@@ -910,11 +913,8 @@ class PetView @JvmOverloads constructor(
                     setClimb(hitWall)
                     // 飞行态标记即刻清除，保证下方捞动作能正常按概率跳起/回待机池。
                     imageManager.isFlying = false
-                    // 关键：本帧 tick 开头已把 inClimbing 同步成 false（飞行中 isClimbing=false），
-                    // 此处 setClimb 刚把 physics.isClimbing 置真，但 imageManager.inClimbing 已不再更新。
-                    // 显式补 true，让下方 pickStandbyMode 的概率门在本帧即生效（p=1 可立刻再跳，而非先做一个普通动作）。
-                    imageManager.inClimbing = true
-                    // 攀岩态可能按飞跃概率再次跳起，否则从池子捞下一动作。
+                    // 落地后依然进行一次自然动作选择；引擎可按概率授权连续飞跃。
+                    // 新飞跃请求会在下一帧启动，避免改变本帧落地物理收口。
                     imageManager.setMode(imageManager.pickStandbyMode(imageManager.getMode()))
                 }
             }
@@ -976,6 +976,7 @@ class PetView @JvmOverloads constructor(
      * 重建 ImageModeManager 内部状态并复位到静坐，再重读基准帧尺寸、同步当前帧。
      */
     fun applySpritePack(pack: SpritePack) {
+        pendingLeapMode = null
         imageManager.setPack(pack)
         val (gw, gh) = imageManager.globalMaxSize()
         baseFrameW = gw
@@ -1638,10 +1639,28 @@ class PetView @JvmOverloads constructor(
     /** 飞跃飞行态：true 时朝 leapTarget 位移，到位后落地该墙并切下一动作 */
     var flying = false
 
-    /** 同步好动飞跃开关与概率给动画层（供 PetService 调用，imageManager 为 private）。 */
+    // 飞跃开关、概率和触发状态都属于 Engine；动画控制器只接收最终选中的 Mode。
+    private var leapEnabled = false
+    private var leapProbability = 0f
+    private var pendingLeapMode: String? = null
+
     fun setLeapParams(enabled: Boolean, probability: Float) {
-        imageManager.leapEnabled = enabled
-        imageManager.leapProbability = probability
+        leapEnabled = enabled
+        leapProbability = probability.coerceIn(0f, 1f)
+        if (!enabled) pendingLeapMode = null
+    }
+
+    private fun canStartLeap(): Boolean =
+        leapEnabled && wallClimb && physics.isClimbing && !flying &&
+            !physics.isDragging && !physics.isThrowing && !physics.isSnapped &&
+            !useStaticPool && !forageActive
+
+    /** 仅在正常动作自然结束时掷骰；动作名称/其他功能映射不会触发飞跃。 */
+    private fun chooseAutomaticLeapMode(): String? {
+        if (!canStartLeap() || kotlin.random.Random.nextFloat() >= leapProbability) return null
+        val chosen = modeOf("climb", "jump_up") ?: return null
+        pendingLeapMode = chosen
+        return chosen
     }
 
     /**
@@ -1738,19 +1757,13 @@ class PetView @JvmOverloads constructor(
     /** 飞跃飞行速度(px/s) */
     private val LEAP_FLY_SPEED = 840f
 
-    // 好动飞跃：跳起(JUMP_UP)激活后，飞向当前墙之外的随机一面墙，到位后继续飞跃池。
+    // 引擎批准飞跃后，从 Functions 获得 Mode 并启动物理飞行。
     // 飞行全程：脚朝向【永远朝手机底部】(gravityDir=0)，不随起跳墙/目标墙变；
     // 镜像只看目标相对原位置的水平方向（目标在右→镜像、在左→不镜像）。落地后进入攀爬态（setClimb）脚朝目标墙。
-    private fun startLeapFlight() {
-        // 起飞动作必须在此统一切换：本函数只负责飞行物理，不含动作切换。
-        // 直接调用方（decideLanding 掷骰命中、落地插队的飞跃分支）若不自切动作，
-        // 会出现"已经在飞(flying=true)却仍播着上一个动作"——表现为飞跃第一次不换动作。
-        // JUMP_UP 是常驻模式（由 pickStandbyMode 产出），飞行期间由 imageManager.isFlying 锁定。
-        // 起跳：模式由 [climb, jump_up] 提供；包未提供该功能则不起跳（跳过，不回退）。
-        val jumpUp = modeOf("climb", "jump_up")
-        if (jumpUp != null && imageManager.getMode() != jumpUp) {
-            imageManager.setMode(jumpUp)
-        }
+    private fun startLeapFlight(jumpUp: String) {
+        // Mode 由 Engine 的飞跃决策在功能映射中选择，不能重新随机选择第二个。
+        if (imageManager.getMode() != jumpUp) imageManager.setMode(jumpUp)
+        imageManager.isFlying = true
         // 起飞瞬间所有紧贴墙：角落会同时贴两面墙，整组记录并排除（不能作目标、也不能作命中墙）。
         val launchTouched = mutableSetOf<Int>().apply {
             if (physics.x <= physics.minX + 0.5f) add(1)   // 左墙
@@ -1793,6 +1806,7 @@ class PetView @JvmOverloads constructor(
 
     /** 强制复位（召回）：清除所有动画并切回静坐 sit_clam */
     fun forceReset() {
+        pendingLeapMode = null
         imageManager.forceReset()
         physics.clearSnap()   // 召回同时退出吸附态
         physics.snapSide = 0
@@ -1821,6 +1835,7 @@ class PetView @JvmOverloads constructor(
      *  与正常落地(setClimb)不同——不进攀爬态，直接退出飞行态、清零物理速度、切 sit_clam，
      *  使“关移动=立刻静止”与滚动态关闭移动的表现一致（而非继续飞到目的地才落地）。 */
     fun stopLeapFlightToIdle() {
+        pendingLeapMode = null
         if (!flying) return
         flying = false
         physics.inLeapFlight = false   // 恢复重力（不依赖“四边重力全关”残留）
