@@ -496,7 +496,9 @@ class PetView @JvmOverloads constructor(
         // 退出由物理落地自然触发 onThrowEnd(播放 JUMP_DOWN 再回常驻)，此处不处理，
         // 避免速度回落（如抛物线顶点）时半空硬切 SIT 的突兀感。
         physics.onTiltRoll = { r ->
-            if (r) enterTiltRoll()
+            // PetPhysics has already entered isThrowing before notifying us.
+            // Do not let the usual "already throwing" guard suppress the first Roll animation.
+            if (r) enterTiltRoll(force = true)
         }
         // 行走状态变化：
         //  - 进入 walk 类模式(speed>0)：用模式速度覆盖水平速度 + 镜像朝向；
@@ -1047,10 +1049,11 @@ class PetView @JvmOverloads constructor(
                 activeDragFunction = dragFunction
             }
             physics.isThrowing && !useStaticPool -> {
-                // 抛起/滚动：静止模式(移动关闭)不进入移动态；关重力仍可 ROLL——物理无重力但按抛掷初速滚动出去
-                // 同样抢占一次性动作，确保翻滚动画生效。
-                if (imageManager.isPlayingForced()) imageManager.cancelForced()
-                if (!imageManager.isFunctionMode(imageManager.getMode(), "touch", "roll")) {
+                // Roll 由物理状态进入事件启动一次；本分支不能按当前 Mode 所属映射反查状态。
+                // 仅当其他一次性交互抢占了播放时，打断它并从 Roll 功能池恢复。
+                // 正常 Roll 及其 nextMode 链由 Controller 自然推进、结束后继续从 touch/roll 抽取。
+                if (imageManager.isPlayingForced()) {
+                    imageManager.cancelForced()
                     modeOf("touch", "roll")?.let { imageManager.setMode(it) }
                 }
             }
@@ -2149,9 +2152,10 @@ class PetView @JvmOverloads constructor(
         if (physics.isDragging || (physics.isThrowing && !force)) return
         physics.beginTiltRoll()
         if (imageManager.isPlayingForced()) imageManager.cancelForced()
-        if (!imageManager.isFunctionMode(imageManager.getMode(), "touch", "roll")) {
-            modeOf("touch", "roll")?.let { imageManager.setMode(it) }
-        }
+        // 每一次真正进入翻滚，都从功能池选取并重新开始一次播放。
+        // 即使此前其他功能正好播放了同一个 Mode，也不能沿用其旧帧或动作链。
+        // 进入之后由 Controller 在链自然结束时继续从 touch/roll 选择，不逐帧重置。
+        modeOf("touch", "roll")?.let { imageManager.setMode(it) }
         // 先切 ROLL（居中对称，旋转外观不变），再改方向：下一帧 onDraw 直接看到 ROLL+新朝向，
         // 不会让旧模式帧先被新旋转角硬转一帧。
         if (dir != null) gravityDir = dir
