@@ -227,30 +227,29 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
         // The title can be direct (sliders) or nested in the text column
         // (switches, colors, and choice rows). Preserve every value control.
+        val root = item as? LinearLayout
         val title = item.findViewById<TextView>(R.id.tv_label) ?: run {
             val first = (item as? ViewGroup)?.getChildAt(0) as? ViewGroup
             first?.getChildAt(0) as? TextView
         }
         val label = title?.text?.toString().orEmpty().ifBlank { key }
-        title?.visibility = View.GONE
-        val wrapper = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(-1, -2)
-        }
-        val heading = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(20), 0, dp(20), 0)
-        }
-        heading.addView(TextView(this).apply {
-            text = label
-            setTextColor(getColor(R.color.cp_title))
-            textSize = 14f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        heading.addView(View(this).apply {
+        // Keep the threshold row itself. For slider rows, replace the existing
+        // title with an inline title/menu row; other rows keep the controls.
+        val titleRow = if (root?.orientation == LinearLayout.VERTICAL &&
+            title != null && title.parent === root) {
+            val index = root.indexOfChild(title)
+            root.removeView(title)
+            LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                title.layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+                addView(title)
+            }.also { root.addView(it, index, LinearLayout.LayoutParams(-1, -2)) }
+        } else null
+        val menuHost = titleRow ?: root ?: run { card.addView(item); return }
+        val separator = View(this).apply {
             setBackgroundColor(getColor(R.color.cp_subtle))
-        }, LinearLayout.LayoutParams(dp(1), dp(24)))
+        }
         val menu = TextView(this).apply {
             text = "⋮"
             textSize = 22f
@@ -301,10 +300,11 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 }
             }
         }
-        heading.addView(menu, LinearLayout.LayoutParams(dp(40), dp(40)))
-        wrapper.addView(heading, LinearLayout.LayoutParams(-1, -2))
-        wrapper.addView(item)
-        card.addView(wrapper)
+        menuHost.addView(separator, LinearLayout.LayoutParams(dp(1), dp(24)).apply {
+            marginStart = dp(4)
+        })
+        menuHost.addView(menu, LinearLayout.LayoutParams(dp(36), dp(36)))
+        card.addView(item)
     }
 
     private fun sliderItem(s: SliderBound, index: Int): View {
