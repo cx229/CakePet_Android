@@ -136,7 +136,6 @@ class PetPhysics {
 
     // Only a completed physical throw may produce a landing event.
     // Ordinary animation movement is handled by PetView's frame displacement.
-    var allowAutoRoll = true
     private var primaryImpact = false
 
     private fun primaryGravitySide(): Int {
@@ -408,7 +407,7 @@ class PetPhysics {
                 // 不在速度回落时硬切，避免半空突兀。
                 val sp = kotlin.math.sqrt(vx * vx + vy * vy)
                 // 冷却期内（刚退出翻滚播 JUMP_DOWN）屏蔽重新进入，避免重力残余速度立刻又触发 ROLL。
-                if (allowAutoRoll && tiltRollCooldown <= 0 && !tiltRolling && sp > tiltRollSpeed) {
+                if (tiltRollCooldown <= 0 && !tiltRolling && !isThrowing && sp > tiltRollSpeed) {
                     tiltRolling = true
                     isThrowing = true
                     onTiltRoll?.invoke(true)
@@ -454,7 +453,7 @@ class PetPhysics {
                                   (gravityTop && y <= minY + 0.5f) ||
                                   (gravityRight && x >= maxX - 0.5f) ||
                                   (gravityLeft && x <= minX + 0.5f)
-                if (allowAutoRoll && !groundedNow && tiltRollCooldown <= 0 && !tiltRolling && !isThrowing) {
+                if (!groundedNow && tiltRollCooldown <= 0 && !tiltRolling && !isThrowing) {
                     val spAir = kotlin.math.sqrt(vx * vx + vy * vy)
                     if (spAir > tiltRollSpeed) {
                         tiltRolling = true
