@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 模块头部：1px 分隔线(90%宽居中) + 模块标题，与设置页各 activity 的模块结构完全一致。
+<!-- 设置页共用的模块标题间距；第一模块由调用方清除顶部 24dp 间距。
      由 BaseThresholdActivity.render() 通过 inflate 复用，避免代码里手抄样式数值。
      注意：根必须是独立 ViewGroup（不能是 <merge>），否则 inflate(..., attachToRoot=false)
      会把根视图等同于 parent，导致"把容器 add 进自己"而崩溃。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:layout_marginTop="24dp">
 
     <!-- 模块标题：与设置页一致（14dp / cp_sub / marginStart=4dp / marginBottom=6dp）。
          说明：阈值页不再绘制模块间分隔线（与设置页统一：模块间用卡片占位间距，选项间用 item_divider）。 -->
