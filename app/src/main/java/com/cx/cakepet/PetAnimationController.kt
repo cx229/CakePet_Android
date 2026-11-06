@@ -126,6 +126,15 @@ class PetAnimationController(private val assets: ImageModeManager) {
         modeOf("static", "sit")?.let { setMode(it) }
     }
 
+    /** Flight completion never discards a playable Mode nextMode chain.
+     * An infinite visual has no natural exit, so it returns to the normal pool.
+     */
+    fun onLeapLanded() {
+        if (clip?.isInfiniteLoop == true) {
+            setMode(pickStandbyMode(getMode()))
+        }
+    }
+
     fun didModeChange(): Boolean = modeChanged.also { modeChanged = false }
 
     /** 每帧只调用通用动画游标，待机池、飞跃等行为仍由宠物控制器决定。 */
