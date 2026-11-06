@@ -244,8 +244,14 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     bodyHtml = "将本项默认值及阈值应用到<b>全部已有角色</b>？",
                     positiveText = "应用"
                 ) {
-                    val count = UserHabits.applyToExisting(this@BaseThresholdActivity, page, key)
-                    Toast.makeText(this@BaseThresholdActivity, "已应用到 $count 个角色", Toast.LENGTH_SHORT).show()
+                    runCatching { UserHabits.applyToExisting(this@BaseThresholdActivity, page, key) }
+                        .onSuccess { count ->
+                            Toast.makeText(this@BaseThresholdActivity, "已应用到 $count 个角色", Toast.LENGTH_SHORT).show()
+                        }
+                        .onFailure { error ->
+                            Toast.makeText(this@BaseThresholdActivity,
+                                "应用失败：${error.message}", Toast.LENGTH_LONG).show()
+                        }
                 }
             }
         }
