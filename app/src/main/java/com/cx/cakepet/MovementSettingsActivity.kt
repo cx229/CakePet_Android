@@ -32,7 +32,7 @@ class MovementSettingsActivity : AppCompatActivity() {
     private var pendingRebound: Int? = null
     private var pendingThrowCoeff: Int? = null
     private var pendingLeapProb: Int? = null
-    private var pendingForageSpeed: Int? = null
+    private var pendingForageMultiplier: Int? = null
     private lateinit var swWallClimb: Switch
     private lateinit var swLeap: Switch
     private lateinit var swAutoForage: Switch
@@ -160,8 +160,8 @@ class MovementSettingsActivity : AppCompatActivity() {
                 pendingLeapProb = null
                 EditSync.setText(leapProbVal, "%.2f".format(c.leapProbability))
             }
-            if (forageSpeedBar.setValueFromConfig(bizToSliderValue(c.forageMultiplier, bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to), pendingForageSpeed)) {
-                pendingForageSpeed = null
+            if (forageSpeedBar.setValueFromConfig(bizToSliderValue(c.forageMultiplier, bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to), pendingForageMultiplier)) {
+                pendingForageMultiplier = null
                 EditSync.setText(forageSpeedVal, "%.2f".format(c.forageMultiplier))
             }
             // 程序化回填所有开关用 suppressSwitch 包住：回流 setChecked 不再触发 listener 写盘
@@ -376,8 +376,8 @@ class MovementSettingsActivity : AppCompatActivity() {
         forageSpeedVal = findViewById(R.id.foragespeed_value)!!
         forageSpeedBar.applyBlackStyle()
         forageSpeedBar.applyBizRange(bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to, c.forageMultiplier,
-            formatter = { it.toInt().toString() }) { s ->
-            pendingForageSpeed = bizToSliderValue(s, bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to).toInt()
+            formatter = { "%.2f".format(it) }) { s ->
+            pendingForageMultiplier = bizToSliderValue(s, bs["forageMultiplier"]!!.from, bs["forageMultiplier"]!!.to).toInt()
             EditSync.setText(forageSpeedVal, "%.2f".format(s))
             lifecycleScope.launch { config.update { it.copy(forageMultiplier = s) } }
         }
