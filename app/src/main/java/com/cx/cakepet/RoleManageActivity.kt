@@ -132,8 +132,7 @@ class RoleManageActivity : AppCompatActivity() {
     }
 
     private fun showRoleOperations(anchor: View, role: RoleDescriptor) {
-        val options = listOf("加入首页", "编辑", "复制", "导出 ZIP") +
-            if (role.source == RoleSource.FILES) listOf("删除") else emptyList()
+        val options = listOf("加入首页", "编辑", "复制", "导出 ZIP", "删除")
         UnifiedOptionMenu.show(anchor, options, setOf("删除")) { choice ->
             when (choice) {
                 "加入首页" -> importToHome(role)
@@ -398,6 +397,15 @@ class RoleManageActivity : AppCompatActivity() {
 
     /** 删除素材包：二次确认（沿用设置页确认弹窗样式）。 */
     private fun confirmDelete(role: RoleDescriptor) {
+        if (role.source == RoleSource.ASSETS) {
+            showConfirmDialog(
+                title = "无法删除",
+                bodyHtml = "预装素材包「${role.displayName}」不可删除。",
+                positiveText = "知道了",
+                showNegative = false
+            ) { }
+            return
+        }
         showConfirmDialog(
             title = "删除角色素材",
             bodyHtml = "确定删除「${role.displayName}」？",
@@ -408,6 +416,7 @@ class RoleManageActivity : AppCompatActivity() {
 
     /** 级联删除：召回激活实例 → 清配置 DataStore → 移实例 → 移素材清单 → 删私有目录。 */
     private fun doDelete(role: RoleDescriptor) {
+        if (role.source != RoleSource.FILES) return
         val home = RoleStore.getHomeRoles(this).filter { it.templateId == role.id }
         home.forEach { PetService.instance?.recall(it.instanceId) }
         home.forEach { iid ->
@@ -527,7 +536,7 @@ class RoleManageActivity : AppCompatActivity() {
             thumb.setOnClickListener { player.triggerPat() }
             player.start()
 
-            // 删除统一置于更多菜单，预装模板不显示删除选项。
+            // 删除统一置于更多菜单，预装模板通过弹窗提示不可删除。
             holder.itemView.setOnClickListener {
                 showRoleOperations(holder.options ?: holder.itemView, role)
             }
