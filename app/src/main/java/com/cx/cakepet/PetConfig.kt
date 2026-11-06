@@ -712,7 +712,6 @@ class PetConfig private constructor(
             }
             b.switches.forEach { sw ->
                 if (onlyKey != null && sw.key != onlyKey) return@forEach
-                if (page == SettingsPage.RANGE && rangeAdaptOnly != null &&
                 nc = when (sw.key) {
                     "snapEnabled" -> nc.copy(snapEnabled = sw.default)
                     "snapTop" -> nc.copy(snapTop = sw.default)
