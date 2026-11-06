@@ -115,6 +115,12 @@ class GlobalSettingsActivity : AppCompatActivity() {
         val nextRow = findViewById<View>(R.id.row_next)
         when (page) {
             PAGE_SETTINGS -> {
+                findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.sw_import_watermark).apply {
+                    isChecked = ImportWatermark.enabled(this@GlobalSettingsActivity)
+                    setOnCheckedChangeListener { _, checked ->
+                        ImportWatermark.setEnabled(this@GlobalSettingsActivity, checked)
+                    }
+                }
                 findViewById<View>(R.id.row_user_habits).setOnClickListener {
                     startActivity(Intent(this, UserHabitsActivity::class.java))
                 }
@@ -130,12 +136,14 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 nextRow.setOnClickListener { openPage(PAGE_DEBUG) }
             }
             PAGE_DEBUG -> {
+                findViewById<View>(R.id.row_import_watermark).visibility = View.GONE
                 findViewById<View>(R.id.backup_group).visibility = View.GONE
                 accessibilityRow.visibility = View.GONE
                 findViewById<TextView>(R.id.tv_next).text = "无障碍点击测试"
                 nextRow.setOnClickListener { openPage(PAGE_ACCESSIBILITY_TEST) }
             }
             else -> {
+                findViewById<View>(R.id.row_import_watermark).visibility = View.GONE
                 findViewById<View>(R.id.backup_group).visibility = View.GONE
                 // 实验尚未实现，按需求保留空白内容区。
                 accessibilityRow.visibility = View.GONE
