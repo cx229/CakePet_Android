@@ -350,7 +350,7 @@ class PetPhysics {
         }
 
         // 攀爬态：贴墙锁位 + 完全不受重力。仅锁“垂直接触轴”并清零其速度，
-        // 平行轴速度由 walk 每帧写入，继续走下方 stepAxis 沿墙移动（与吸附同级的独立状态）。
+        // 平行轴速度由 Engine 在主动导航期间写入，继续走下方 stepAxis 沿墙移动（与吸附同级的独立状态）。
         if (isClimbing) {
             when (climbSide) {
                 0 -> { y = maxY; vy = 0f }
@@ -528,7 +528,7 @@ class PetPhysics {
             remY = 0f
         }
 
-        // Unified throw completion. No other layer may force a WALK or change nextMode.
+        // Unified throw completion. No other layer may force an animation or change nextMode.
         // Weak primary rebound or hard primary impact ends the throw. A hard impact
         // on another wall simply removes velocity; gravity resumes on subsequent steps.
         if (isThrowing && (primaryImpact || isLandedStill())) {
