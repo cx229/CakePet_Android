@@ -110,7 +110,6 @@ data class PetConfigData(
     val visible: Boolean = ConfigDefaults.VISIBLE,      // 宠物显示/隐藏（独立于浮窗总开关）
     val imeAdapt: Boolean = ConfigDefaults.IME_ADAPT,      // 输入法适应：键盘弹出时抬高宠物地面（避免遮挡输入框），默认开
     val imeLiftOffset: Float = ConfigDefaults.IME_LIFT_OFFSET,   // 抬高偏移（px）：对键盘抬高后的宠物地面再额外修正，范围 -800~800，默认 100
-    val imeResetBottomOffset: Boolean = ConfigDefaults.IME_RESET_BOTTOM_OFFSET, // 键盘适应-重置边界：键盘弹出时无视上/下边界偏移，仅用键盘高度+抬高偏移决定活动下边界（默认开）
     val imeHide: Boolean = ConfigDefaults.IME_HIDE, // Legacy keyboard option retained for old saved configs
     val imeMode: String = AppBounds.KEYBOARD_DEFAULT_MODE, // Exclusive mode; "" remains a legacy migration marker
     val thinkingEnabled: Boolean = ConfigDefaults.THINKING_ENABLED, // 碎碎念：屏幕底部居中随机轮播文字
@@ -331,7 +330,6 @@ class PetConfig private constructor(
     private val KEY_VISIBLE = booleanPreferencesKey("visible")
     private val KEY_IME_ADAPT = booleanPreferencesKey("ime_adapt")
     private val KEY_IME_LIFT_OFFSET = floatPreferencesKey("ime_lift_offset")
-    private val KEY_IME_RESET_BOTTOM = booleanPreferencesKey("ime_reset_bottom_offset")
     private val KEY_IME_HIDE = booleanPreferencesKey("ime_hide")
     private val KEY_IME_MODE = androidx.datastore.preferences.core.stringPreferencesKey("ime_mode")
     private val KEY_ALPHA = floatPreferencesKey("alpha")
@@ -439,7 +437,6 @@ class PetConfig private constructor(
             visible = prefs[KEY_VISIBLE] ?: ConfigDefaults.VISIBLE,
             imeAdapt = prefs[KEY_IME_ADAPT] ?: ConfigDefaults.IME_ADAPT,
             imeLiftOffset = (prefs[KEY_IME_LIFT_OFFSET] ?: ConfigDefaults.IME_LIFT_OFFSET).coerceIn(-800f, 800f),
-            imeResetBottomOffset = prefs[KEY_IME_RESET_BOTTOM] ?: ConfigDefaults.IME_RESET_BOTTOM_OFFSET,
             imeHide = prefs[KEY_IME_HIDE] ?: ConfigDefaults.IME_HIDE,
             imeMode = prefs[KEY_IME_MODE] ?: if (
                 prefs[KEY_IME_ADAPT] != null || prefs[KEY_IME_HIDE] != null
@@ -598,7 +595,6 @@ class PetConfig private constructor(
             prefs[KEY_VISIBLE] = updated.visible
             prefs[KEY_IME_ADAPT] = updated.imeAdapt
             prefs[KEY_IME_LIFT_OFFSET] = updated.imeLiftOffset
-            prefs[KEY_IME_RESET_BOTTOM] = updated.imeResetBottomOffset
             prefs[KEY_IME_HIDE] = updated.imeHide
             prefs[KEY_IME_MODE] = updated.imeMode
             prefs[KEY_ALPHA] = updated.alpha
@@ -717,7 +713,6 @@ class PetConfig private constructor(
             b.switches.forEach { sw ->
                 if (onlyKey != null && sw.key != onlyKey) return@forEach
                 if (page == SettingsPage.RANGE && rangeAdaptOnly != null &&
-                    (sw.key == "imeResetBottomOffset") != rangeAdaptOnly) return@forEach
                 nc = when (sw.key) {
                     "snapEnabled" -> nc.copy(snapEnabled = sw.default)
                     "snapTop" -> nc.copy(snapTop = sw.default)
@@ -749,7 +744,6 @@ class PetConfig private constructor(
                     "thinkingBgEnabled" -> nc.copy(thinkingBgEnabled = sw.default)
                     "randomEnabled" -> nc.copy(randomEnabled = sw.default)
                     "imeAdapt" -> nc.copy(imeAdapt = sw.default)
-                    "imeResetBottomOffset" -> nc.copy(imeResetBottomOffset = sw.default)
                     "imeHide" -> nc.copy(imeHide = sw.default)
                     "feedingEnabled" -> nc.copy(feedingEnabled = sw.default)
                     "feedingAutoExpire" -> nc.copy(feedingAutoExpire = sw.default)
