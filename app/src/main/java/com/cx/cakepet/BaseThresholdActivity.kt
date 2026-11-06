@@ -104,7 +104,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     /** Only the active visual page participates in its reset, despite shared legacy RANGE storage. */
     private fun displayedKeys(): Set<String>? = if (page != SettingsPage.RANGE) null else
         if (displayAdaptPage)
-            setOf("imeMode", "imeResetBottomOffset", "imeLiftOffset", "rotationAdaptMode", "landscapeRangeMode")
+            setOf("imeMode", "imeLiftOffset", "rotationAdaptMode", "landscapeRangeMode")
         else setOf("interactionMode", "alpha", "coreHeight", "coreWidth",
             "rangeFullScreen", "offsetTop", "offsetBottom", "offsetLeft", "offsetRight")
 
@@ -185,7 +185,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                         val (idx, choice) = choiceMap.getValue(key)
                         addHabitItem(card, key, choiceRow(choice.label, choice.options, choice.default,
                             when (key) {
-                                "rotationAdaptMode" -> "屏幕旋转时，画布位置的适应方式"
+                                "rotationAdaptMode" -> "默认行为"
                                 "landscapeRangeMode" -> "横屏时，可活动的范围"
                                 else -> "默认行为"
                             }) { selected ->
@@ -767,8 +767,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         "reboundLeft" -> c.copy(reboundLeft = value)
         "reboundRight" -> c.copy(reboundRight = value)
         "imeAdapt" -> c.copy(imeAdapt = value)
-        "imeResetBottomOffset" -> c.copy(imeResetBottomOffset = value)
-        "imeHide" -> c.copy(imeHide = value)
+                "imeHide" -> c.copy(imeHide = value)
         "thinkingEnabled" -> c.copy(thinkingEnabled = value)
         "thinkingFlashIn" -> c.copy(thinkingFlashIn = value)
         "thinkingFlashOut" -> c.copy(thinkingFlashOut = value)
