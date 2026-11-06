@@ -61,15 +61,17 @@
             android:textColor="@color/cp_hint_dark"
             android:gravity="center" />
 
-        <!-- 首页独立加号入口：44dp 高，主符号为普通文字 +，
+        <!-- 首页独立加号入口：内容决定行高，主符号为普通文字 +，
              6sp 副标题恢复；子文本无上下内外边距与额外字体留白。 -->
         <LinearLayout
             android:id="@+id/btn_add_role"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:layout_marginBottom="12dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            android:layout_marginBottom="0dp"
             android:orientation="vertical"
             android:gravity="center"
+            android:minHeight="0dp"
             android:paddingTop="0dp"
             android:paddingBottom="0dp"
             android:background="@drawable/bg_btn_outline"
