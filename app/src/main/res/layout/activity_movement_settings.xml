@@ -465,18 +465,18 @@
                                 android:text="觅食位移倍率" style="@style/SettingsOptionTitle"/>
                             <TextView android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="「酥」飞快奔向小鱼干"
+                                android:text="1 倍为动作原始位移，0 倍不移动"
                                 style="@style/SettingsOptionNote"/>
                         </LinearLayout>
                         <EditText android:id="@+id/foragespeed_value" android:layout_width="72dp"
-                            android:layout_height="wrap_content" android:text="100" android:textSize="16dp"
+                            android:layout_height="wrap_content" android:text="1.00" android:textSize="16dp"
                             android:background="@drawable/edit_bg" android:inputType="numberDecimal"
                             android:imeOptions="actionDone" android:importantForAutofill="no" android:singleLine="true" android:gravity="center" android:layout_marginStart="8dp"/>
                     </LinearLayout>
                     <com.google.android.material.slider.Slider
                         android:id="@+id/foragespeed_bar" android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:valueFrom="0.0" android:valueTo="300.0" android:stepSize="10.0" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
+                        android:valueFrom="0.0" android:valueTo="3.0" android:stepSize="0.05" app:trackHeight="2dp" app:thumbRadius="5dp" android:layout_marginTop="0dp"/>
                 </com.cx.cakepet.SettingsRippleRow>
 
                 <!-- 好动飞跃开关（置于自动觅食之后） -->
