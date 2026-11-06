@@ -62,14 +62,14 @@ data class PetConfigData(
     val throwCoeff: Float = ConfigDefaults.THROW_COEFF,
     // 攀岩走壁：开启后走/蠕动撞墙不调头，转而踏上相邻墙沿屏幕四边周长循环走；默认开。
     val wallClimb: Boolean = ConfigDefaults.WALL_CLIMB,
-    // 好动飞跃：开启后，攀岩态每次从池子捞新动作按 leapProbability 概率直接跳起(JUMP_UP)，飞向随机另一面墙；默认关。
+    // 好动飞跃：开启后，正常动作自然结束时按 leapProbability 概率直接跳起(JUMP_UP)，飞向随机另一面墙；默认关。
     val leapEnabled: Boolean = ConfigDefaults.LEAP_ENABLED,
-    // 飞跃概率（0-1 小数）：仅在攀岩态且 leapEnabled 时生效，概率越高越频繁跳起；默认 0.10。
+    // 飞跃概率（0-1 小数）：在移动与攀岩开关开启且 leapEnabled 时生效，概率越高越频繁跳起；默认 0.10。
     val leapProbability: Float = ConfigDefaults.LEAP_PROBABILITY,
     // 自动觅食：攀岩走壁的子开关（需先开启移动→攀岩走壁）。开启且非吸附态时，攀岩态从动作池选动作前插队优先：
     // 遍历全部食物选直线最近者，沿墙“走”过去吃（吃到=正常投喂变大）；无食物则回落飞跃/选池。默认开。
     val autoForage: Boolean = ConfigDefaults.AUTO_FORAGE,
-    val forageSpeed: Float = ConfigDefaults.FORAGE_SPEED,   // 自动觅食时沿墙走向食物的速度（px/s）
+    val forageMultiplier: Float = ConfigDefaults.FORAGE_MULTIPLIER,   // 自动觅食当前帧位移倍率（1=原始位移）
     // 四边边界偏移（像素）：正=向屏内收缩（宠物离屏边有间距），负=允许超出屏边。
     // 上下范围 -300~1600、默认 140；左右范围 -300~500、默认 0。
     val offsetTop: Float = ConfigDefaults.OFFSET_TOP,
@@ -361,7 +361,7 @@ class PetConfig private constructor(
     private val KEY_LEAP_ENABLED = booleanPreferencesKey("leap_enabled")
     private val KEY_LEAP_PROBABILITY = floatPreferencesKey("leap_probability")
     private val KEY_AUTO_FORAGE = booleanPreferencesKey("auto_forage")
-    private val KEY_FORAGE_SPEED = floatPreferencesKey("forage_speed")
+    private val KEY_FORAGE_MULTIPLIER = floatPreferencesKey("forage_speed")
     private val KEY_PET_COUNT = androidx.datastore.preferences.core.intPreferencesKey("pet_count")
     private val KEY_FORCE_NIGHT_ON = booleanPreferencesKey("force_night_on")
     private val KEY_FORCE_NIGHT_OFF = booleanPreferencesKey("force_night_off")
@@ -406,7 +406,7 @@ class PetConfig private constructor(
             leapEnabled = prefs[KEY_LEAP_ENABLED] ?: ConfigDefaults.LEAP_ENABLED,
             leapProbability = (prefs[KEY_LEAP_PROBABILITY] ?: ConfigDefaults.LEAP_PROBABILITY).coerceIn(0f, 1f),
             autoForage = prefs[KEY_AUTO_FORAGE] ?: ConfigDefaults.AUTO_FORAGE,
-            forageSpeed = prefs[KEY_FORAGE_SPEED] ?: ConfigDefaults.FORAGE_SPEED,
+            forageMultiplier = prefs[KEY_FORAGE_MULTIPLIER] ?: ConfigDefaults.FORAGE_MULTIPLIER,
             offsetTop = (prefs[KEY_OFF_TOP] ?: ConfigDefaults.OFFSET_TOP).coerceIn(-300f, 2100f),
             offsetBottom = (prefs[KEY_OFF_BOTTOM] ?: ConfigDefaults.OFFSET_BOTTOM).coerceIn(-300f, 2100f),
             offsetLeft = (prefs[KEY_OFF_LEFT] ?: ConfigDefaults.OFFSET_LEFT).coerceIn(-300f, 1000f),
@@ -571,7 +571,7 @@ class PetConfig private constructor(
         prefs[KEY_LEAP_ENABLED] = updated.leapEnabled
         prefs[KEY_LEAP_PROBABILITY] = updated.leapProbability
         prefs[KEY_AUTO_FORAGE] = updated.autoForage
-        prefs[KEY_FORAGE_SPEED] = updated.forageSpeed
+        prefs[KEY_FORAGE_MULTIPLIER] = updated.forageMultiplier
         prefs[KEY_OFF_TOP] = updated.offsetTop
             prefs[KEY_OFF_BOTTOM] = updated.offsetBottom
             prefs[KEY_OFF_LEFT] = updated.offsetLeft
@@ -688,7 +688,7 @@ class PetConfig private constructor(
                     "offsetLeft" -> nc.copy(offsetLeft = s.default)
                     "offsetRight" -> nc.copy(offsetRight = s.default)
                     "leapProbability" -> nc.copy(leapProbability = s.default)
-                    "forageSpeed" -> nc.copy(forageSpeed = s.default)
+                    "forageMultiplier" -> nc.copy(forageMultiplier = s.default)
                     "imeLiftOffset" -> nc.copy(imeLiftOffset = s.default)
                     "thinkingTextSize" -> nc.copy(thinkingTextSize = s.default)
                     "thinkingAlpha" -> nc.copy(thinkingAlpha = s.default / 100f)
