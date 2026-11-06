@@ -431,7 +431,6 @@ object ConfigDefaults {
     val SCALE = 1.4f                       // 绘制缩放倍率：1.4 = 原始 140%（与 AppBounds scale 滑块 0.5-3 行程一致）
     val GRAVITY = 3000f                    // 重力加速度，物理引擎数值（越大下落越快）；AppBounds gravity 滑块更宽行程
     val REBOUND_RATIO = 0.7f              // 反弹能量保留比：0=不弹，1=完全弹性碰撞
-    val WALK_SPEED = 200f                 // 走路动画时物理驱动的横向速度（px/s）
     val FOLLOW_SPEED = 400f              // 拖动释放后宠物“追手/回归”的跟随速度（px/s）
     val MAX_SPEED = 7100f
     val MOVE_ENABLED = true             // 移动总开关：false 时「酥」静止（不运动/不掉落）                // 速度上限，防止数值爆炸（px/s）
@@ -441,7 +440,7 @@ object ConfigDefaults {
     val LEAP_ENABLED = false             // 好动飞跃：开启后，攀岩态每次捞新动作按概率直接跳起飞向随机另一面墙
     val LEAP_PROBABILITY = 0.10f          // 飞跃概率（0-1 小数）：概率越高，次次起飞
     val AUTO_FORAGE = true                 // 自动觅食：攀岩走壁子开关，开启且非吸附态时沿墙走去吃最近食物，默认开
-    val FORAGE_SPEED = 100f               // 自动觅食时沿墙走向食物的速度（px/s）；仅用于自动觅食，与正常走动作 walkSpeed 无关，独立可调
+    val FORAGE_SPEED = 100f               // 自动觅食时沿墙走向食物的速度（px/s）；由引擎控制，不依赖动画的帧位移或名称
     val ALPHA = 1f                        // 整体透明度：0-1 小数（1=完全不透明 100%）；UI 滑块是 0-100 百分比，PetConfig 内换算
     val CLICK_THROUGH = false             // 点击穿透：true 时宠物不拦截触摸（点击会落到底层窗口）
     val FREEZE_DRAGGABLE = true          // 定格图层可拖动：true 时所有定格显示层可点击拖动位置（默认关=纯显示不可点击）
