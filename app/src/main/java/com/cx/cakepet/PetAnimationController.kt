@@ -1,7 +1,6 @@
 package com.cx.cakepet
 
 import android.graphics.Bitmap
-import kotlin.random.Random
 
 /** 宠物专用的状态选择及动作生命周期，通用 ImageModeManager 不参与任何角色业务判断。 */
 class PetAnimationController(private val assets: ImageModeManager) {
@@ -31,10 +30,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
     var inSnapped = false
     var isFlying = false
 
-    var walkDir = 1
-    var walkSpeed = 0f
-        private set
-    var onWalkStateChanged: ((speed: Float, dir: Int) -> Unit)? = null
+    /** Engine may choose an initial facing when the normal pool selects a moving clip. */
+    var onStandbyMotionChosen: (() -> Unit)? = null
 
     val globalW: Int get() = assets.globalW
     val globalH: Int get() = assets.globalH
@@ -49,11 +46,6 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun curDy(): Int = clip?.currentDy ?: 0
     fun getMode(): String = clip?.currentModeId ?: ""
     fun isPlayingForced(): Boolean = forced
-    /** A motion clip remains a motion clip even when reached through a forced entrance. */
-    fun isWalk(): Boolean = clip?.let {
-        it.hasFrameMotion && (assets.isFunctionMode(it.currentModeId, "climb", "walk") ||
-            assets.isFunctionMode(it.currentModeId, "touch", "walk"))
-    } == true
     /** Frame impulse is consumed once for initial frame, every advance and loop wrap. */
     fun consumeFrameDisplacement(): Pair<Int, Int>? {
         if (!frameMotionPending) return null
@@ -73,26 +65,17 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun pickStandbyMode(exclude: String): String {
         // Only this natural completion boundary may initiate automatic behaviors.
         forageSelected = false
-        if (forageActive) modeOf("climb", "walk")?.let {
+        if (forageActive) modeOf("climb", "move")?.let {
             forageSelected = true
             return it
         }
         // Behavior decisions (e.g. whether to leap) belong to PetView, not Modes.
         onAutomaticModeChoice?.invoke()?.let { return it }
         val pool = currentPool().filter { it != exclude }
-        return if (pool.isNotEmpty()) pool.random() else getMode()
-    }
-
-    private fun updateWalkState(speed: Float, resetDirection: Boolean = true) {
-        if (speed > 0f) {
-            if (resetDirection) walkDir = if (Random.nextBoolean()) 1 else -1
-            walkSpeed = speed
-        } else {
-            // Do not erase heading through ROLL/JUMP_DOWN: rendering and physics use
-            // the prior direction again once the forced animation finishes.
-            walkSpeed = 0f
-        }
-        if (walkSpeed > 0f) onWalkStateChanged?.invoke(walkSpeed, walkDir)
+        val selected = if (pool.isNotEmpty()) pool.random() else getMode()
+        // Random facing is a standby behavior, not a privilege of any Mode/Functions name.
+        if (assets.createClip(selected)?.hasFrameMotion == true) onStandbyMotionChosen?.invoke()
+        return selected
     }
 
     fun setMode(id: String) {
@@ -103,7 +86,6 @@ class PetAnimationController(private val assets: ImageModeManager) {
         currentName = id
         if (different) modeChanged = true
         frameMotionPending = true
-        updateWalkState(if (isWalk()) next.currentWalkSpeed else 0f)
     }
 
     fun playOnce(id: String, endMode: String? = null) {
@@ -114,9 +96,6 @@ class PetAnimationController(private val assets: ImageModeManager) {
         forcedStart = id
         modeChanged = true
         frameMotionPending = true
-        // A menu interaction may choose a moving function. Movement derives from
-        // its mapped function, not from loop=true or the image resource name.
-        if (isWalk()) updateWalkState(next.currentWalkSpeed)
     }
 
     fun cancelForced() {
@@ -173,14 +152,9 @@ class PetAnimationController(private val assets: ImageModeManager) {
             if (!continuation) currentName = current.currentModeId
             modeChanged = true
             frameMotionPending = true
-            updateWalkState(if (isWalk()) current.currentWalkSpeed else 0f)
         }
         if (step.changed) {
             frameMotionPending = true
-            if (!step.modeChanged && isWalk()) {
-                val newSpeed = current.currentWalkSpeed
-                if (newSpeed != walkSpeed) updateWalkState(newSpeed, resetDirection = false)
-            }
         }
         if (!isFlying && (step.ended || step.timerRequested)) {
             val endMode = if (forced) forcedReturn else null
@@ -192,7 +166,6 @@ class PetAnimationController(private val assets: ImageModeManager) {
                 // Re-enter the same mode without replacing the cursor or resetting heading.
                 current.restart()
                 frameMotionPending = true
-                updateWalkState(if (isWalk()) current.currentWalkSpeed else 0f, resetDirection = false)
             } else {
                 setMode(desired)
             }
