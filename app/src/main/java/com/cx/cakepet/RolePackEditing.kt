@@ -26,6 +26,10 @@ object RolePackEditing {
             else check(dir(ctx, source.rootPath).copyRecursively(target))
             val file = File(target, "modes.jsonc")
             val json = prepareEditable(target, id, displayName.trim())
+            json.put("name", displayName.trim())
+            File(target, "modes.jsonc").let { manifest ->
+                manifest.writeText(CompactJsoncWriter.write(json, manifest.readText()))
+            }
             // A copied template already has a name: the dialog input must win.
             json.put("name", displayName.trim())
             File(target, "modes.jsonc").let { manifest ->
