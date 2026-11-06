@@ -24,7 +24,6 @@ data class PetConfigData(
     val scale: Float = ConfigDefaults.SCALE,          // 大小系数（对应 PC 端 scale）
     val gravity: Float = ConfigDefaults.GRAVITY,       // 重力强度（像素/秒^2，对应 PC gravity）
     val reboundRatio: Float = ConfigDefaults.REBOUND_RATIO,   // 反弹系数（对应 PC rebound_ratio）
-    val walkSpeed: Float = ConfigDefaults.WALK_SPEED,      // 游走速度（对应 PC walk）
     val followSpeed: Float = ConfigDefaults.FOLLOW_SPEED,    // 拖动尾随速度（安卓新增，替代鼠标跟随）
     // 四边重力方向开关（安卓新增需求）
     val gravityTop: Boolean = ConfigDefaults.GRAVITY_TOP,
@@ -273,7 +272,6 @@ class PetConfig private constructor(
     private val KEY_SCALE = floatPreferencesKey("scale")
     private val KEY_GRAVITY = floatPreferencesKey("gravity")
     private val KEY_REBOUND = floatPreferencesKey("rebound_ratio")
-    private val KEY_WALK = floatPreferencesKey("walk_speed")
     private val KEY_FOLLOW = floatPreferencesKey("follow_speed")
     private val KEY_TOP = booleanPreferencesKey("gravity_top")
     private val KEY_BOTTOM = booleanPreferencesKey("gravity_bottom")
@@ -382,7 +380,6 @@ class PetConfig private constructor(
             scale = prefs[KEY_SCALE] ?: ConfigDefaults.SCALE,
             gravity = prefs[KEY_GRAVITY] ?: ConfigDefaults.GRAVITY,
             reboundRatio = prefs[KEY_REBOUND] ?: ConfigDefaults.REBOUND_RATIO,
-            walkSpeed = prefs[KEY_WALK] ?: ConfigDefaults.WALK_SPEED,
             followSpeed = prefs[KEY_FOLLOW] ?: ConfigDefaults.FOLLOW_SPEED,
             gravityTop = prefs[KEY_TOP] ?: ConfigDefaults.GRAVITY_TOP,
             gravityBottom = prefs[KEY_BOTTOM] ?: ConfigDefaults.GRAVITY_BOTTOM,
@@ -549,7 +546,6 @@ class PetConfig private constructor(
             prefs[KEY_SCALE] = updated.scale
             prefs[KEY_GRAVITY] = updated.gravity
             prefs[KEY_REBOUND] = updated.reboundRatio
-            prefs[KEY_WALK] = updated.walkSpeed
             prefs[KEY_FOLLOW] = updated.followSpeed
             prefs[KEY_TOP] = updated.gravityTop
             prefs[KEY_BOTTOM] = updated.gravityBottom
