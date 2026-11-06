@@ -164,6 +164,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 background = getDrawable(R.drawable.card_bg)
                 showDividers = LinearLayout.SHOW_DIVIDER_MIDDLE
                 dividerDrawable = getDrawable(R.drawable.item_divider)
+                dividerPadding = (16 * resources.displayMetrics.density + 0.5f).toInt()
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
                 )
@@ -214,38 +215,31 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     }
                 }
             }
-            // 模块内：首项清上边距、末项清下边距，避免与卡片 padding 叠加（与设置页一致）
-            if (card.childCount > 0) {
-                (card.getChildAt(0).layoutParams as ViewGroup.MarginLayoutParams).topMargin = 0
-                (card.getChildAt(card.childCount - 1).layoutParams as ViewGroup.MarginLayoutParams).bottomMargin = 0
-            }
+            // Per-item spacing is owned by the shared wrapper; no first/last margin patching.
             binding.container.addView(card)
         }
     }
 
-    /** In habits mode, keep the original setting row intact and place its action beside the whole row. */
+    /** One row spacing rule for both threshold and habit pages, with habits adding a side action. */
     private fun addHabitItem(card: LinearLayout, key: String, item: View) {
-        if (!habitMode) {
-            card.addView(item)
-            return
-        }
         fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
-        // Do not move titles or controls inside the original row. In particular, choice
-        // rows must keep the title and Spinner on the same horizontal line.
-        val label = item.findViewById<TextView>(R.id.tv_label)?.text?.toString()
-            ?.ifBlank { key } ?: key
+        // The original item XMLs have incompatible outer margins (some have 12dp bottom).
+        // Replace them with consistent row padding, never stacking margin with card padding.
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(-1, -2)
+            setPadding(dp(if (habitMode) 12 else 20), dp(8),
+                dp(if (habitMode) 0 else 20), dp(8))
         }
-        // The existing item layouts use 20dp horizontal margins. In habits mode,
-        // recover space for the extra action rail without changing their child layout.
-        val previousLp = item.layoutParams as? ViewGroup.MarginLayoutParams
+        if (!habitMode) {
+            row.addView(item, LinearLayout.LayoutParams(-1, -2))
+            card.addView(row, LinearLayout.LayoutParams(-1, -2))
+            return
+        }
+        // Preserve the existing inner control layout, including same-line dropdowns.
+        val label = item.findViewById<TextView>(R.id.tv_label)?.text?.toString()
+            ?.ifBlank { key } ?: key
         row.addView(item, LinearLayout.LayoutParams(0, -2, 1f).apply {
-            topMargin = previousLp?.topMargin ?: 0
-            bottomMargin = previousLp?.bottomMargin ?: 0
-            marginStart = dp(12)
             marginEnd = dp(4)
         })
         val separator = View(this).apply {
@@ -305,7 +299,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             marginStart = dp(3)
         })
         row.addView(menu, LinearLayout.LayoutParams(dp(44), -1))
-        card.addView(row)
+        card.addView(row, LinearLayout.LayoutParams(-1, -2))
     }
 
     private fun sliderItem(s: SliderBound, index: Int): View {
@@ -497,12 +491,13 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(if (habitMode) 12 else 20), dp(8), dp(if (habitMode) 4 else 20), dp(8))
+            setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         texts.addView(TextView(this).apply {
+            id = R.id.tv_label
             text = title
             textSize = 14f
             setTypeface(null, android.graphics.Typeface.BOLD)
