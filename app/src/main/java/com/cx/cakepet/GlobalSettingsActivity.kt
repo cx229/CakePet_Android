@@ -153,6 +153,7 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 nextRow.setOnClickListener { openPage(PAGE_DEBUG) }
             }
             PAGE_DEBUG -> {
+                findViewById<View>(R.id.system_section_heading).visibility = View.GONE
                 findViewById<View>(R.id.row_import_watermark).visibility = View.GONE
                 findViewById<View>(R.id.row_import_watermark_level).visibility = View.GONE
                 findViewById<View>(R.id.backup_group).visibility = View.GONE
@@ -161,6 +162,8 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 nextRow.setOnClickListener { openPage(PAGE_ACCESSIBILITY_TEST) }
             }
             else -> {
+                findViewById<View>(R.id.system_section_heading).visibility = View.GONE
+                findViewById<View>(R.id.system_group).visibility = View.GONE
                 findViewById<View>(R.id.row_import_watermark).visibility = View.GONE
                 findViewById<View>(R.id.row_import_watermark_level).visibility = View.GONE
                 findViewById<View>(R.id.backup_group).visibility = View.GONE
