@@ -39,6 +39,39 @@ class RolePackEditorActivity : AppCompatActivity() {
     private val pageHistory = java.util.ArrayDeque<EditorPage>()
     private var restoringPage = false
     private val openedFunctionFolders = mutableSetOf<String>()
+    // 白酥示例与当前素材包无关；仅在功能卡片出现时读取，按路径缓存。
+    private val templateExamples = mutableMapOf<String, android.graphics.Bitmap?>()
+    private val templateJson: JSONObject? by lazy {
+        runCatching {
+            assets.open("${RoleRegistry.DEFAULT.rootPath}/modes.jsonc")
+                .bufferedReader().use { parseJsonc(it.readText()) }
+        }.getOrNull()
+    }
+    private fun templateFirstFrame(path: List<String>): android.graphics.Bitmap? {
+        val key = path.joinToString("/")
+        if (templateExamples.containsKey(key)) return templateExamples[key]
+        var cursor = templateJson?.optJSONObject("functions")
+        for (segment in path.dropLast(1)) cursor = cursor?.optJSONObject(segment)
+        val options = cursor?.optJSONArray(path.last())
+        val modes = templateJson?.optJSONObject("modes")
+        var bitmap: android.graphics.Bitmap? = null
+        if (options != null && modes != null) {
+            for (index in 0 until options.length()) {
+                val res = modes.optJSONObject(options.optString(index))
+                    ?.optJSONArray("frames")?.optJSONObject(0)?.optString("res").orEmpty()
+                if (res.isBlank() || res.startsWith("/") ||
+                    res.split('/').any { it == ".." }) continue
+                bitmap = runCatching {
+                    assets.open("${RoleRegistry.DEFAULT.rootPath}/$res").use {
+                        BitmapFactory.decodeStream(it)
+                    }
+                }.getOrNull()
+                if (bitmap != null) break
+            }
+        }
+        templateExamples[key] = bitmap
+        return bitmap
+    }
     private var modeId = ""
     private data class ImagePickRequest(val mode: String, val action: String,
                                         val index: Int = -1, val batch: List<Int> = emptyList())
@@ -896,7 +929,10 @@ class RolePackEditorActivity : AppCompatActivity() {
                 elevation = px(3).toFloat()
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { animate(preview, key) }
+                setOnClickListener {
+                    performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                    animate(preview, key)
+                }
             }, FrameLayout.LayoutParams(px(36), px(36), Gravity.END or Gravity.BOTTOM).apply {
                 rightMargin = px(8)
                 bottomMargin = px(8)
@@ -1941,7 +1977,7 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
                              level: Int, immediate: Boolean = false, description: String = "",
-                             click: () -> Unit): LinearLayout {
+                             examplePath: List<String>? = null, click: () -> Unit): LinearLayout {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.card_bg)
@@ -1951,22 +1987,52 @@ class RolePackEditorActivity : AppCompatActivity() {
             if (immediate) setOnClickListener { click() }
             else rippleClick(this) { click() }
         }
-        card.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
-        if (description.isNotBlank()) card.addView(text(description, 12f).apply {
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
+        if (description.isNotBlank()) content.addView(text(description, 12f).apply {
             setPadding(0, px(2), 0, 0)
             setTextColor(getColor(R.color.cp_note))
         })
-        if (subtitle.isNotBlank()) card.addView(text(subtitle, 11f).apply {
+        if (subtitle.isNotBlank()) content.addView(text(subtitle, 11f).apply {
             setPadding(0, px(2), 0, 0)
-            setTextColor(getColor(R.color.cp_note))
+            setTextColor(getColor(if (examplePath == null) R.color.cp_note else R.color.cp_title))
         })
-        val indent = px((level * 12).coerceAtMost(48))
-        val params = LinearLayout.LayoutParams(-1, -2).apply {
-            leftMargin = indent
+        val bitmap = examplePath?.let { templateFirstFrame(it) }
+        if (bitmap == null) card.addView(content)
+        else {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            row.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
+            val example = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(0, 0, 0, 0)
+            }
+            example.addView(ImageView(this).apply {
+                setImageBitmap(bitmap)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                isClickable = false
+                isFocusable = false
+            }, LinearLayout.LayoutParams(px(48), px(48)))
+            example.addView(text("示例", 8f).apply {
+                includeFontPadding = false
+                setLineHeight((8f * resources.displayMetrics.scaledDensity).toInt().coerceAtLeast(1))
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, 0)
+                setTextColor(getColor(R.color.cp_note))
+            }, LinearLayout.LayoutParams(px(48), -2))
+            row.addView(example, LinearLayout.LayoutParams(px(48), -2).apply {
+                leftMargin = px(8)
+            })
+            card.addView(row)
+        }
+        node.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
+            leftMargin = px((level * 12).coerceAtMost(48))
             topMargin = px(4)
             bottomMargin = px(4)
-        }
-        node.addView(card, params)
+        })
         return card
     }
 
@@ -2002,8 +2068,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val selected = (0 until child.length()).map { child.optString(it) }
                         .filter { it.isNotBlank() }
                     functionItem(parent, "▣  " + functionPathName(currentPath) + "   ›",
-                        "动画：" + selected.joinToString("、"), path.size,
-                        description = functionDescription(currentPath)) {
+                        "当前动画：" + selected.joinToString("、"), path.size,
+                        description = functionDescription(currentPath), examplePath = currentPath) {
                         chooseFunctions(currentPath, selected)
                     }
                 }
