@@ -16,7 +16,13 @@ object UserHabits {
 
     /** Human-readable export; defaults are sufficient to reconstruct live values. */
     fun load(ctx: Context): JSONObject = runBlocking {
-        JSONObject().put("bounds", source(ctx).exportSettings())
+        val bounds = source(ctx)
+        // Materialize every default even if the user never edited it. Standalone
+        // JSON and full backups must include a complete, readable habit snapshot.
+        for (page in SettingsPage.entries) {
+            bounds.updateBounds(page, bounds.getBlocking(page))
+        }
+        JSONObject().put("bounds", bounds.exportSettings())
     }
 
     /** Import human-readable default/threshold values without changing characters. */
