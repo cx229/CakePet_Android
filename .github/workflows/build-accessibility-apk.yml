@@ -15,6 +15,21 @@ permissions:
   issues: write
 
 jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify runner can execute commands
+        run: |
+          echo "CI runner reached" | tee smoke.txt
+          uname -a >> smoke.txt
+      - name: Upload runner probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-smoke-probe
+          path: smoke.txt
+          if-no-files-found: error
+          retention-days: 1
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
