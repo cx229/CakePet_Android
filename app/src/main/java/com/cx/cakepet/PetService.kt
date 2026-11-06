@@ -294,6 +294,10 @@ class PetService : Service() {
                     st.feedOverPet = true
                     st.entered = true; st.enterX = e.rawX; st.enterY = e.rawY
                     vibrateLongPress()
+                    // Touching a pet with a held fish offers one opportunity to
+                    // reselect its normal function. The pet engine decides whether
+                    // that selection would be forage; never force a mode here.
+                    findPetAt(e.rawX, e.rawY)?.view?.requestForageLure()
                 } else if (!overPet) {
                     st.feedOverPet = false
                 }

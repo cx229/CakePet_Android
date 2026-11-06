@@ -695,6 +695,14 @@ class PetView @JvmOverloads constructor(
         onPositionChanged?.invoke(physics.x, physics.y)
     }
 
+    // Only a pending touch event; consumed after PetService refreshes forage
+    // candidates and updateAnimByState refreshes engine-owned function routing.
+    private var forageLurePending = false
+
+    fun requestForageLure() {
+        forageLurePending = true
+    }
+
     fun tick(dt: Float) {
         imageManager.inSnapped = physics.isSnapped
         if (imageManager.forageSelected && forageActive && !physics.isClimbing &&
@@ -707,6 +715,12 @@ class PetView @JvmOverloads constructor(
         // Flight is physics state; Mode duration, frames and nextMode remain independent.
         imageManager.isFlying = flying
         updateAnimByState()
+        // Treat the previous animation chain as finished and ask the existing
+        // function chooser again. Physical states retain their own priority.
+        if (forageLurePending) {
+            forageLurePending = false
+            imageManager.tryRestartForageFromNormalChoice()
+        }
         updateForageNavigation()
         // 注意：窗口尺寸 = 统一画布 × scale（恒定），切模式只是换 currentBitmap + 居中重绘，
         // 不触发 WindowManager resize（避免落地连续切模式导致 overlay 重排卡顿）。

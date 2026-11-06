@@ -78,6 +78,32 @@ class PetAnimationController(private val assets: ImageModeManager) {
         return selected
     }
 
+    /** A lure is a fresh normal function choice, not a forced-mode override.
+     * Ignore current Mode, nextMode and forcedReturn: the whole old chain is
+     * considered finished. State-owned functions still take priority.
+     */
+    fun tryRestartForageFromNormalChoice(): Boolean {
+        val foragePath = listOf("climb", "forage", "move")
+        if (!forageActive || useStaticPool) return false
+        if (activeStateFunction != null && activeStateFunction != foragePath) return false
+        // A missing optional function cannot be chosen by normal selection.
+        if (assets.leavesOf(*foragePath.toTypedArray()).isEmpty()) return false
+
+        val next = if (activeStateFunction == foragePath) {
+            activeStateMode()
+        } else {
+            pickStandbyMode(getMode())
+        } ?: return false
+
+        // Commit the choice only after the normal selector confirms forage.
+        forced = false
+        forcedReturn = null
+        forcedStart = null
+        forageSelected = true
+        setMode(next)  // Recreates the clip even when already foraging.
+        return true
+    }
+
     fun setMode(id: String) {
         if (forced) return
         val next = assets.createClip(id) ?: return
