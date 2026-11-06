@@ -223,35 +223,39 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         }
     }
 
-    /** User habits reuse the original threshold item; only the title action changes. */
+    /** In habits mode, keep the original setting row intact and place its action beside the whole row. */
     private fun addHabitItem(card: LinearLayout, key: String, item: View) {
         if (!habitMode) {
             card.addView(item)
             return
         }
         fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
-        // The title can be direct (sliders) or nested in the text column
-        // (switches, colors, and choice rows). Preserve every value control.
-        val root = item as? LinearLayout
-        val title = item.findViewById<TextView>(R.id.tv_label) ?: run {
-            val first = (item as? ViewGroup)?.getChildAt(0) as? ViewGroup
-            first?.getChildAt(0) as? TextView
+        // Do not move titles or controls inside the original row. In particular, choice
+        // rows must keep the title and Spinner on the same horizontal line.
+        val label = item.findViewById<TextView>(R.id.tv_label)?.text?.toString()
+            ?.ifBlank { key } ?: key
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(-1, -2)
         }
-        val label = title?.text?.toString().orEmpty().ifBlank { key }
-        // Keep the threshold row itself. For slider rows, replace the existing
-        // title with an inline title/menu row; other rows keep the controls.
-        val titleRow = if (root?.orientation == LinearLayout.VERTICAL &&
-            title != null && title.parent === root) {
-            val index = root.indexOfChild(title)
-            root.removeView(title)
-            LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                title.layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
-                addView(title)
-            }.also { root.addView(it, index, LinearLayout.LayoutParams(-1, -2)) }
-        } else null
-        val menuHost = titleRow ?: root ?: run { card.addView(item); return }
+        // The existing item layouts use 20dp horizontal margins. In habits mode,
+        // recover space for the extra action rail without changing their child layout.
+        (item.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            lp.marginStart = dp(12)
+            lp.marginEnd = dp(4)
+            item.layoutParams = lp
+        }
+        row.addView(item, LinearLayout.LayoutParams(0, -2, 1f).apply {
+            // Preserve original per-item vertical spacing for grouped cards.
+            val lp = item.layoutParams as? ViewGroup.MarginLayoutParams
+            if (lp != null) {
+                topMargin = lp.topMargin
+                bottomMargin = lp.bottomMargin
+                marginStart = lp.marginStart
+                marginEnd = lp.marginEnd
+            }
+        })
         val separator = View(this).apply {
             setBackgroundColor(getColor(R.color.cp_subtle))
         }
@@ -305,11 +309,11 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 }
             }
         }
-        menuHost.addView(separator, LinearLayout.LayoutParams(dp(1), dp(24)).apply {
-            marginStart = dp(4)
+        row.addView(separator, LinearLayout.LayoutParams(dp(1), -1).apply {
+            marginStart = dp(3)
         })
-        menuHost.addView(menu, LinearLayout.LayoutParams(dp(36), dp(36)))
-        card.addView(item)
+        row.addView(menu, LinearLayout.LayoutParams(dp(44), -1))
+        card.addView(row)
     }
 
     private fun sliderItem(s: SliderBound, index: Int): View {
@@ -501,7 +505,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(20), dp(8), dp(20), dp(8))
+            setPadding(dp(if (habitMode) 12 else 20), dp(8), dp(if (habitMode) 4 else 20), dp(8))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
@@ -523,7 +527,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             options.indexOfFirst { it.second == selectedValue }.coerceAtLeast(0)) { position ->
             onSelected(options[position].second)
         }
-        row.addView(spinner, LinearLayout.LayoutParams(dp(172), dp(48)))
+        row.addView(spinner, LinearLayout.LayoutParams(dp(if (habitMode) 124 else 172), dp(48)))
         return row
     }
 
