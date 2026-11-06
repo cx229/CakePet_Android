@@ -128,7 +128,11 @@ class PetPhysics {
     var suppressBounce = false
 
     // 抛掷结束回调（对应 PC throw_end -> change_next_mode -> 掉落-跟随）
-    var onThrowEnd: (() -> Unit)? = null
+    /** The wall completing a physical roll, when there is a collision. Null for a settled stop. */
+    var onThrowEnd: ((Int?) -> Unit)? = null
+    /** When climbing is enabled, a non-rebounding impact may be caught immediately. */
+    var catchHardImpactForClimb = false
+    private var hardImpactSide: Int? = null
 
     // 边界反弹回调（side：反弹边；speed：反弹前速度绝对值，用于决定振动强度）
     // side 常量：BOUNCE_LEFT/RIGHT/TOP/BOTTOM
@@ -159,7 +163,8 @@ class PetPhysics {
     private fun onHardImpact(side: Int) {
         if (!isThrowing) return
         vx = 0f; vy = 0f; remX = 0f; remY = 0f
-        if (side == primaryGravitySide()) primaryImpact = true
+        if (hardImpactSide == null) hardImpactSide = side
+        if (side == primaryGravitySide() || catchHardImpactForClimb) primaryImpact = true
     }
 
     /** A weak rebound on the primary gravity boundary finishes rolling. */
@@ -221,6 +226,7 @@ class PetPhysics {
         remX = 0f
         remY = 0f
         isThrowing = false
+        hardImpactSide = null
         isDragging = false
         isSnapped = false
         snapSide = 0
@@ -328,6 +334,7 @@ class PetPhysics {
     fun step(interval: Float) {
         if (isDragging) return
         primaryImpact = false
+        hardImpactSide = null
 
         // 吸附态：贴附某边、忽略重力、保持静止。用户未拖拽时持续 clamp 到贴边、清零速度，
         // 不参与重力/抛掷/反弹演化（与“用户手动拉出才解除”的需求一致）。
@@ -536,7 +543,7 @@ class PetPhysics {
             tiltRolling = false
             tiltRollCooldown = tiltRollCooldownMs
             vx = 0f; vy = 0f; remX = 0f; remY = 0f
-            onThrowEnd?.invoke()
+            onThrowEnd?.invoke(hardImpactSide)
         }
     }
 
