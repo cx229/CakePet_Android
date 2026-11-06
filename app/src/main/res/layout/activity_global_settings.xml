@@ -93,6 +93,58 @@
                     android:trackTint="@color/switch_black_selector" />
             </LinearLayout>
 
+            <LinearLayout
+                android:id="@+id/row_import_watermark_level"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg">
+                <TextView
+                    style="@style/SettingsOptionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="去水印强度" />
+                <TextView
+                    style="@style/SettingsOptionNote"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="低：保守　中：标准（默认）　高：更宽松" />
+                <RadioGroup
+                    android:id="@+id/rg_import_watermark_level"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+                    <RadioButton
+                        android:id="@+id/rb_watermark_low"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="低"
+                        android:textColor="@color/cp_title" />
+                    <RadioButton
+                        android:id="@+id/rb_watermark_medium"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="中"
+                        android:textColor="@color/cp_title" />
+                    <RadioButton
+                        android:id="@+id/rb_watermark_high"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="高"
+                        android:textColor="@color/cp_title" />
+                </RadioGroup>
+            </LinearLayout>
+
             <LinearLayout android:id="@+id/row_next"
                 style="@style/SettingsSwitchRow"
                 android:layout_marginTop="12dp"
