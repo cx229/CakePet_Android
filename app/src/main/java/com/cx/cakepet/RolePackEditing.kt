@@ -188,7 +188,7 @@ object RolePackEditing {
 
     /** Import GIF into its own named folder; retain original delays for later insertion. */
     fun gif(ctx: Context, uri: Uri, draft: File, parentPath: String,
-            gifName: String): JSONArray {
+            gifName: String, onWatermarkRemoved: (ImportWatermark.Corner) -> Unit = {}): JSONArray {
         val data = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("无法读取 GIF")
         require(data.size >= 13 && String(data, 0, 3, Charsets.US_ASCII) == "GIF")
         val movie = Movie.decodeByteArray(data, 0, data.size) ?: error("GIF 解码失败")
@@ -225,6 +225,12 @@ object RolePackEditing {
                 manifest.put(JSONObject().put("file", file.name).put("delay", delay))
             } finally { bmp.recycle() }
             time += delay
+        }
+        if (ImportWatermark.enabled(ctx)) {
+            val outputFiles = (1..frames.length()).map { frame ->
+                File(folder, "${frame.toString().padStart(4, '0')}.png")
+            }
+            ImportWatermark.cleanGif(outputFiles)?.let(onWatermarkRemoved)
         }
         // Keep the on-disk folder, manifest, and Mode frame references in lockstep.
         // A missing frame is an import failure, never a silently accepted resource.
