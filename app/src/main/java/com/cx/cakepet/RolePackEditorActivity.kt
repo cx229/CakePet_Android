@@ -88,7 +88,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         var path = ""
         val bmp = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
             ?: error("无法解码图片")
-        val (cleaned, removed) = if (ImportWatermark.enabled(this)) ImportWatermark.clean(bmp)
+        val (cleaned, removed) = if (ImportWatermark.enabled(this)) ImportWatermark.clean(bmp, ImportWatermark.level(this))
             else bmp to null
         try {
             require(bmp.width > 0 && bmp.height > 0 &&
@@ -135,7 +135,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         if (uri != null) attempt {
             val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
                 ?: error("无法解码图片")
-            val (cleaned, removed) = if (ImportWatermark.enabled(this)) ImportWatermark.clean(bitmap)
+            val (cleaned, removed) = if (ImportWatermark.enabled(this)) ImportWatermark.clean(bitmap, ImportWatermark.level(this))
                 else bitmap to null
             try {
                 require(bitmap.width > 0 && bitmap.height > 0 &&
