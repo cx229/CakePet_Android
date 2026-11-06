@@ -123,6 +123,9 @@ class UserHabitsActivity : AppCompatActivity() {
 
     private fun addGroup(container: LinearLayout, label: String, entries: List<Entry>) {
         val header = layoutInflater.inflate(R.layout.include_module_header, container, false)
+        if (container.childCount == 0) {
+            (header.layoutParams as android.view.ViewGroup.MarginLayoutParams).topMargin = 0
+        }
         header.findViewById<TextView>(R.id.tv_module_title).text = label
         container.addView(header)
 
