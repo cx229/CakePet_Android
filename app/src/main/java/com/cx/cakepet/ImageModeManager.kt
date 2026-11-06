@@ -285,7 +285,6 @@ class ImageModeManager(
         val isInfiniteLoop: Boolean get() = def.loopMode == "infinite"
         val currentDx: Int get() = def.frames[frameIndex].dx
         val currentDy: Int get() = def.frames[frameIndex].dy
-        val currentWalkSpeed: Float get() = kotlin.math.abs(currentDx) * 1000f / frameDelay.coerceAtLeast(1L)
         // Movement capability must not depend on the animation's loop policy.
         val hasFrameMotion: Boolean get() = def.frames.any { it.dx != 0 || it.dy != 0 }
         val currentVerticalAlign: String get() = def.frames[frameIndex].verticalAlign
