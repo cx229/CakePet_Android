@@ -208,7 +208,7 @@ object AppBounds {
             hardMin = -4000f, hardMax = 4000f,
             baseMin = -800f, baseMax = 800f,
             from = -800f, to = 800f,
-            step = 1f, default = 100f
+            step = 1f, default = 0f
         )
     )
     val RANGE_CHOICES = listOf(
@@ -229,13 +229,11 @@ object AppBounds {
         "画布·隐藏" to "hide", "画布·点击穿透" to "pass"
     )
     const val KEYBOARD_DEFAULT_MODE = "local"
-    val RANGE_SWITCHES = listOf(
-        SwitchBound("imeResetBottomOffset", "重置边界", "键盘适应", true)
-    )
+    val RANGE_SWITCHES = emptyList<SwitchBound>()
     val RANGE_ORDER = listOf(
-        "interactionMode", "alpha", "coreHeight", "coreWidth",
+        "alpha", "interactionMode", "coreHeight", "coreWidth",
         "rangeFullScreen", "offsetTop", "offsetBottom", "offsetLeft", "offsetRight",
-        "imeMode", "imeResetBottomOffset", "imeLiftOffset", "rotationAdaptMode", "landscapeRangeMode"
+        "imeMode", "imeLiftOffset", "rotationAdaptMode", "landscapeRangeMode"
     )
 
     // ---------------- THINKING 页 ----------------
@@ -477,8 +475,7 @@ object ConfigDefaults {
     val OFFSET_RIGHT = 0f                 // 活动区右侧内缩（px）
     // 输入法适应
     val IME_ADAPT = true                  // 键盘弹起时是否自动上抬宠物，避免被输入法遮挡
-    val IME_LIFT_OFFSET = 100f           // 键盘弹起时上抬的额外偏移（px）
-    val IME_RESET_BOTTOM_OFFSET = true   // 键盘收起后是否把之前底部偏移复位
+    val IME_LIFT_OFFSET = 0f           // 键盘弹起时上抬的额外偏移（px）
     val IME_HIDE = false                 // 键盘时隐藏：键盘弹出时暂时隐藏「酥」且不可点击（不修改 visible 设置），键盘收起恢复
     // 显示/调试开关（含调试页不可改阈值的开关默认值）
     val SHOW_DEBUG = false                // 调试模式总开关（叠加调试信息）
