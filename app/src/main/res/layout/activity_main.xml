@@ -61,14 +61,12 @@
             android:textColor="@color/cp_hint_dark"
             android:gravity="center" />
 
-        <!-- 首页独立加号入口：内容决定行高，主符号为普通文字 +，
-             6sp 副标题恢复；子文本无上下内外边距与额外字体留白。 -->
+        <!-- 首页独立加号入口：保留原有 44dp 按钮高度与外边距；只收紧内部两行文字的视觉间距。 -->
         <LinearLayout
             android:id="@+id/btn_add_role"
             android:layout_width="match_parent"
-            android:layout_height="32dp"
-            android:layout_marginTop="0dp"
-            android:layout_marginBottom="0dp"
+            android:layout_height="44dp"
+            android:layout_marginBottom="12dp"
             android:orientation="vertical"
             android:gravity="center"
             android:minHeight="0dp"
@@ -87,7 +85,8 @@
                 android:layout_marginTop="0dp"
                 android:layout_marginBottom="0dp"
                 android:text="+"
-                android:textSize="18sp"
+                android:translationY="2dp"
+                android:textSize="22sp"
                 android:textStyle="normal"
                 android:textColor="@color/cp_btn_outline_text"/>
             <TextView
@@ -99,6 +98,7 @@
                 android:layout_marginTop="0dp"
                 android:layout_marginBottom="0dp"
                 android:text="创建/导入角色"
+                android:translationY="-3dp"
                 android:textSize="6sp"
                 android:textColor="@color/cp_note"/>
         </LinearLayout>
