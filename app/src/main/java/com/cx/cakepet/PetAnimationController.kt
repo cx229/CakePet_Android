@@ -131,7 +131,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
     /** 每帧只调用通用动画游标，待机池、飞跃等行为仍由宠物控制器决定。 */
     fun nextFrame(dtMs: Long): ImageModeManager.FrameStep {
         val current = clip ?: return ImageModeManager.FrameStep(false)
-        val step = current.advance(dtMs, allowModeSwitch = !isFlying)
+        // Physical flight never pauses a Mode's own frame timer or nextMode chain.
+        val step = current.advance(dtMs)
         if (step.modeChanged) {
             val continuation = forced && forcedStart?.let {
                 assets.isContinuationOf(current.currentModeId, it)
@@ -156,7 +157,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         if (step.changed) {
             frameMotionPending = true
         }
-        if (!isFlying && (step.ended || step.timerRequested)) {
+        if (step.ended || step.timerRequested) {
             val endMode = if (forced) forcedReturn else null
             forced = false
             forcedReturn = null
