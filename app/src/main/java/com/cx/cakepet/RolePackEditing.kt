@@ -230,7 +230,7 @@ object RolePackEditing {
             val outputFiles = (1..frames.length()).map { frame ->
                 File(folder, "${frame.toString().padStart(4, '0')}.png")
             }
-            ImportWatermark.cleanGif(outputFiles)?.let(onWatermarkRemoved)
+            ImportWatermark.cleanGif(outputFiles, ImportWatermark.level(ctx))?.let(onWatermarkRemoved)
         }
         // Keep the on-disk folder, manifest, and Mode frame references in lockstep.
         // A missing frame is an import failure, never a silently accepted resource.
