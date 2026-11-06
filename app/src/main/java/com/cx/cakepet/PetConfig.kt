@@ -667,11 +667,12 @@ class PetConfig private constructor(
 
     // 按阈值页的「用户默认值」恢复：把指定页 bounds 中记录的 default 写回 PetConfig。
     // 这样用户在阈值页设定的默认值，会在各设置页「恢复默认」时生效。
-    suspend fun resetFromBounds(petBounds: PetBounds, page: SettingsPage, rangeAdaptOnly: Boolean? = null) {
+    suspend fun resetFromBounds(petBounds: PetBounds, page: SettingsPage, rangeAdaptOnly: Boolean? = null, onlyKey: String? = null) {
         val b = petBounds.getBlocking(page)
         update { c ->
             var nc = c
             b.sliders.forEach { s ->
+                if (onlyKey != null && s.key != onlyKey) return@forEach
                 if (page == SettingsPage.RANGE && rangeAdaptOnly != null) {
                     val isAdapt = s.key == "imeLiftOffset"
                     if (rangeAdaptOnly != isAdapt) return@forEach
@@ -706,6 +707,7 @@ class PetConfig private constructor(
                 }
             }
             b.duals.forEach { d ->
+                if (onlyKey != null && d.key != onlyKey) return@forEach
                 when (d.key) {
                     "thinkingEmpty" -> nc = nc.copy(thinkingEmptyMin = d.defaultA.toInt(), thinkingEmptyMax = d.defaultB.toInt())
                     "randomPeriod" -> nc = nc.copy(randomPeriodMin = d.defaultA.toInt(), randomPeriodMax = d.defaultB.toInt())
@@ -713,6 +715,7 @@ class PetConfig private constructor(
                 }
             }
             b.switches.forEach { sw ->
+                if (onlyKey != null && sw.key != onlyKey) return@forEach
                 if (page == SettingsPage.RANGE && rangeAdaptOnly != null &&
                     (sw.key == "imeResetBottomOffset") != rangeAdaptOnly) return@forEach
                 nc = when (sw.key) {
@@ -758,13 +761,13 @@ class PetConfig private constructor(
             }
             // Dropdown defaults are independent of current values, including the rotation placeholder.
             if (page == SettingsPage.RANGE) {
-                if (rangeAdaptOnly != false) {
+                if (rangeAdaptOnly != false && (onlyKey == null || onlyKey == "imeMode" || onlyKey == "rotationAdaptMode")) {
                     nc = nc.copy(imeMode = b.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE,
                         rotationAdaptMode = b.choices.firstOrNull {
                             it.key == "rotationAdaptMode"
                         }?.default ?: "stretch")
                 }
-                if (rangeAdaptOnly != true) {
+                if (rangeAdaptOnly != true && (onlyKey == null || onlyKey == "interactionMode" || onlyKey == "rangeFullScreen")) {
                     val choice = b.choices.firstOrNull { it.key == "interactionMode" }?.default
                         ?: "core-transparent"
                     // Never restore an inaccessible window as a live mode.
@@ -778,6 +781,7 @@ class PetConfig private constructor(
                 }
             }
             b.colors.forEach { c ->
+                if (onlyKey != null && c.key != onlyKey) return@forEach
                 nc = when (c.key) {
                     "thinkingBgColor" -> nc.copy(thinkingBgColor = c.default)
                     "thinkingColor" -> nc.copy(thinkingColor = c.default)
@@ -785,7 +789,7 @@ class PetConfig private constructor(
                 }
             }
             // 随机项位掩码：严格以阈值开关默认重建，使「恢复默认」与系统出厂完全一致
-            if (page == SettingsPage.RANDOM) {
+            if (page == SettingsPage.RANDOM && onlyKey == null) {
                 nc = nc.copy(randomItems = AppBounds.randomItemsFromBounds(b))
             }
             nc
