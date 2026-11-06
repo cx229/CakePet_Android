@@ -741,7 +741,7 @@ class PetView @JvmOverloads constructor(
         // current climb surface. Ordinary animation dx/dy is applied by applyFrameMotion.
         // Never use physics reboundRatio to turn around in non-throwing movement.
         // Frame motion is applied once by applyFrameMotion. No background navigation velocity.
-        } else if (imageManager.curDx() != 0 || imageManager.curDy() != 0) {
+        if (imageManager.curDx() != 0 || imageManager.curDy() != 0) {
             // The frame has already moved through applyFrameMotion. Keep gravity intact.
             onPositionChanged?.invoke(physics.x, physics.y)
         } else {
