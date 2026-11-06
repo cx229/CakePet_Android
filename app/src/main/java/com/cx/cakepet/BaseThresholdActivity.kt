@@ -142,18 +142,18 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             if (g !in groupOrder) groupOrder.add(g)
         }
 
-        // 卡片上下 padding：与对应设置页保持一致
-        // 通用页(MAIN)卡片 padding=16dp；其余子页(范围/吸附/碎碎念/随机)卡片 padding=20dp
-        val cardPadV = 16
+        // Settings cards use 8dp top/bottom padding; item-specific spacing remains inside each row.
+        val cardPadV = dp(8)
 
-        var first = true
-        groupOrder.forEach { g ->
+        groupOrder.forEachIndexed { groupIndex, g ->
             // 非首模块前：inflate 复用 include_module_header（仅模块标题，无模块间分隔线），与设置页一致
             val header = LayoutInflater.from(this)
                 .inflate(R.layout.include_module_header, binding.container, false)
             header.findViewById<TextView>(R.id.tv_module_title).text = g
+            if (groupIndex == 0) {
+                (header.layoutParams as ViewGroup.MarginLayoutParams).topMargin = 0
+            }
             binding.container.addView(header)
-            first = false
 
             // 卡片容器：包裹该模块的全部内容，直接复用设置页的 card_bg + padding
             // item 内部用 layout_margin 提供左右内边距（与设置页 item 写法一致），
@@ -166,7 +166,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 dividerDrawable = getDrawable(R.drawable.item_divider)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(16, 0, 16, 0) }
+                )
                 setPadding(0, cardPadV, 0, cardPadV)
             }
             shownOrder.forEach { key ->
