@@ -218,44 +218,91 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         }
     }
 
-    /** Same threshold controls, with one explicit per-item action in habit mode. */
+    /** User habits reuse the original threshold item; only the title action changes. */
     private fun addHabitItem(card: LinearLayout, key: String, item: View) {
         if (!habitMode) {
             card.addView(item)
             return
         }
+        fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
+        // The title can be direct (sliders) or nested in the text column
+        // (switches, colors, and choice rows). Preserve every value control.
+        val title = item.findViewById<TextView>(R.id.tv_label) ?: run {
+            val first = (item as? ViewGroup)?.getChildAt(0) as? ViewGroup
+            first?.getChildAt(0) as? TextView
+        }
+        val label = title?.text?.toString().orEmpty().ifBlank { key }
+        title?.visibility = View.GONE
         val wrapper = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(-1, -2)
         }
-        val action = TextView(this).apply {
-            text = "将本项应用到已有角色"
-            textSize = 10f
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-            setTextColor(getColor(R.color.cp_sub))
-            setPadding(16, 12, 20, 4)
-            minHeight = (32 * resources.displayMetrics.density).toInt()
-            setBackgroundResource(android.R.drawable.list_selector_background)
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(20), 0, dp(20), 0)
+        }
+        heading.addView(TextView(this).apply {
+            text = label
+            setTextColor(getColor(R.color.cp_title))
+            textSize = 14f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(View(this).apply {
+            setBackgroundColor(getColor(R.color.cp_subtle))
+        }, LinearLayout.LayoutParams(dp(1), dp(24)))
+        val menu = TextView(this).apply {
+            text = "⋮"
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setTextColor(getColor(R.color.cp_title))
+            contentDescription = "更多：$label"
             isClickable = true
-            setOnClickListener {
+            isFocusable = true
+            setBackgroundResource(R.drawable.settings_row_ripple)
+            setOnClickListener { anchor ->
                 currentFocus?.clearFocus()
-                showConfirmDialog(
-                    title = "应用用户习惯",
-                    bodyHtml = "将本项默认值及阈值应用到<b>全部已有角色</b>？",
-                    positiveText = "应用"
-                ) {
-                    runCatching { UserHabits.applyToExisting(this@BaseThresholdActivity, page, key) }
-                        .onSuccess { count ->
-                            Toast.makeText(this@BaseThresholdActivity, "已应用到 $count 个角色", Toast.LENGTH_SHORT).show()
+                UnifiedOptionMenu.show(anchor,
+                    listOf("将本项应用到已有角色", "重置本项")) { selected ->
+                    when (selected) {
+                        "将本项应用到已有角色" -> showConfirmDialog(
+                            title = "应用用户习惯",
+                            bodyHtml = "将「$label」的默认值及阈值应用到<b>全部已有角色</b>？",
+                            positiveText = "应用"
+                        ) {
+                            runCatching { UserHabits.applyToExisting(this@BaseThresholdActivity, page, key) }
+                                .onSuccess { count ->
+                                    Toast.makeText(this@BaseThresholdActivity,
+                                        "已应用到 $count 个角色", Toast.LENGTH_SHORT).show()
+                                }
+                                .onFailure { error ->
+                                    Toast.makeText(this@BaseThresholdActivity,
+                                        "应用失败：${error.message}", Toast.LENGTH_LONG).show()
+                                }
                         }
-                        .onFailure { error ->
-                            Toast.makeText(this@BaseThresholdActivity,
-                                "应用失败：${error.message}", Toast.LENGTH_LONG).show()
+                        "重置本项" -> showConfirmDialog(
+                            title = "重置本项",
+                            bodyHtml = "将「$label」恢复为系统初始默认值及阈值？<b>已有角色不受影响</b>。",
+                            positiveText = "重置"
+                        ) {
+                            runCatching {
+                                runBlocking { petBounds.resetSystem(page, setOf(key)) }
+                                current = petBounds.getBlocking(page)
+                                render()
+                            }.onSuccess {
+                                Toast.makeText(this@BaseThresholdActivity,
+                                    "已重置：$label", Toast.LENGTH_SHORT).show()
+                            }.onFailure { error ->
+                                Toast.makeText(this@BaseThresholdActivity,
+                                    "重置失败：${error.message}", Toast.LENGTH_LONG).show()
+                            }
                         }
+                    }
                 }
             }
         }
-        wrapper.addView(action, LinearLayout.LayoutParams(-1, -2))
+        heading.addView(menu, LinearLayout.LayoutParams(dp(40), dp(40)))
+        wrapper.addView(heading, LinearLayout.LayoutParams(-1, -2))
         wrapper.addView(item)
         card.addView(wrapper)
     }
