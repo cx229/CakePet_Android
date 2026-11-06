@@ -665,9 +665,7 @@ class PetService : Service() {
     // 输入法适应开关：关闭后不再因键盘弹出抬高宠物地面（imeAdapt=false 时不生效）。
     private var imeAdaptEnabled = true
     // 抬高偏移（px）：键盘抬高后的宠物地面再额外修正（正=更高）。仅 imeAdapt 生效时叠加。
-    private var imeLiftOffset = 100f
-    // 键盘适应-重置偏移：键盘弹出时无视上/下边界偏移，仅用键盘高度+抬高偏移决定活动下边界
-    private var imeResetBottomOffset = false
+    private var imeLiftOffset = 0f
     // 键盘时隐藏：键盘弹出时暂时隐藏「酥」且不可点击（不修改 visible 设置），键盘收起恢复
     private var imeHideEnabled = false
     // 当前软键盘是否处于弹出态（由 applyImeInset 维护），用于 imeHide 的瞬态显隐
@@ -1966,7 +1964,6 @@ class PetService : Service() {
             boundOffsetRight = selectedOffsets[3]
             imeAdaptEnabled = c.imeAdapt
             imeLiftOffset = c.imeLiftOffset
-            imeResetBottomOffset = c.imeResetBottomOffset
             imeHideEnabled = c.imeHide
             effectiveVisible = c.visible && c.enabled
             showDebug = c.showDebug
@@ -2604,15 +2601,13 @@ class PetService : Service() {
             val rotatedBottomOffset = rotatedBoundOffsets(floatArrayOf(
                 boundOffsetTop, boundOffsetBottom, boundOffsetLeft, boundOffsetRight
             ))[2]
-            val keyboardTop = if (active && mode == "global" && c.imeResetBottomOffset)
-                rawKeyboardTop + rotatedBottomOffset else rawKeyboardTop
+            val keyboardTop = rawKeyboardTop
             val rotatedTopOffset = rotatedBoundOffsets(floatArrayOf(
                 boundOffsetTop, boundOffsetBottom, boundOffsetLeft, boundOffsetRight
             ))[0]
             val stretchTop = vis.top + rotatedTopOffset
             val stretchSourceBottom = vis.bottom - rotatedBottomOffset
-            val stretchTargetBottom = rawKeyboardTop -
-                (if (c.imeResetBottomOffset) 0f else rotatedBottomOffset)
+            val stretchTargetBottom = rawKeyboardTop - rotatedBottomOffset
             val wasLocal = imeLastMode[rid] == "local"
             val closingLocal = kb <= 0f && wasLocal
             val previousTop = imeLastTop[rid]
@@ -2698,7 +2693,7 @@ class PetService : Service() {
         val gluedLeft = Math.abs(lp.x - rect.left) <= EDGE_GLUE_TOL
         val gluedRight = Math.abs((lp.x + lp.width) - rect.right) <= EDGE_GLUE_TOL
         // 角落鱼可能同时贴两边：按「下→上→左→右」取首选，确保底部鱼优先被重钉到底边
-        // （这正是 imeResetBottomOffset 归零下偏移后需要修正的那条边）。
+        // Prefer bottom, then top, left, right when a fish touches multiple edges.
         return when {
             gluedBottom -> 2
             gluedTop -> 1
@@ -2713,8 +2708,7 @@ class PetService : Service() {
 
     /**
      * 把「贴边」的鱼重钉到【新】活动区的对应边（非贴边/随机位鱼保持原平移，不动）。
-     * 用于修正：键盘弹出且 imeResetBottomOffset 开启时，活动区底边因偏移归零而额外下移 rotBottom，
-     * 但已有鱼只按 shiftY 平移 → 所有底部鱼恒定悬空；且悬空后仍在界内，reclampAllFish 不校正。
+     * Keep previously edge-pinned fish aligned when the keyboard changes their activity region.
      */
     private fun repinGluedFish(glued: List<Pair<FishLayer, Int>>, newRect: Rect) {
         for ((fl, edge) in glued) {
@@ -2936,13 +2930,9 @@ class PetService : Service() {
         val imeBottomInset = if (imeActive) maxOf(viewImeInset, globalImeInset) else 0f
         // 抬高偏移：仅在输入法防误触开启且键盘真实弹出时，才在键盘地面之上额外抬高，正=更高、负=更低。
         val lift = if (imeActive) rc.imeLiftOffset else 0f
-        // 键盘适应-重置偏移：键盘弹出时无视“物理”上/下边界偏移（rotTop/rotBottom 归零），
-        // 仅以键盘高度+lift 决定顶起幅度（底座仍落在键盘上方），避免高底部偏移导致键盘弹起时额外位移。
-        val imeResetActive = rc.imeResetBottomOffset && imeActive
-        // Keep the top offset independent of keyboard adaptation. Resetting the
-        // bottom offset must be paired with the same delta in the canvas translation.
+        // Keep user-defined boundary offsets in every keyboard mode.
         val topOff = rotTop
-        val botOff = if (imeResetActive) 0f else rotBottom
+        val botOff = rotBottom
         // 活动范围【基底】(不含键盘)：顶/底按锚点边与用户偏移照常计算。
         val minY0 = vis.top.toFloat() + (if (topIsAnchor) 0f else topInset) + topOff
         val maxY0 = (vis.bottom.toFloat() - (if (botIsAnchor) 0f else botInset) - botOff).coerceAtLeast(minY0)
@@ -2966,7 +2956,7 @@ class PetService : Service() {
         // 统一由 applyFootFixed 在脚固定平移之后做一次钳制（每帧、布局前执行）：窗口紧贴边界、无空隙，且仍防越界。
         view.physics.setBounds(minX - ax, minY - ay, maxX - ax, maxY - ay)
         // 纯偏移吸附边界线（与边界偏移线/吸附环带同几何，不含图片 inset、不随脚朝向变）：
-        // = 屏幕可见区 ± 用户偏移（按旋转重映射后的屏幕边偏移）。imeResetActive 时上下偏移归零（与 setBounds 一致）。
+        // = 屏幕可见区 ± 用户偏移（按旋转重映射后的屏幕边偏移）。
         view.physics.setSnapBounds(
             vis.left.toFloat() + rotLeft,
             vis.top.toFloat() + topOff + shiftY,
@@ -3334,19 +3324,8 @@ class PetService : Service() {
             val botY = vis.bottom - botOff
             empty = rightX <= leftX || botY <= topY
         } else if (hasIme) {
-            // 键盘抬高预览来源：键盘态下真实边界随「重置偏移」开关归零（与 PetView 实际抬高逻辑一致），
-            // 否则预览的“活动范围”与真实运行不一致，表现为偏移线映射错误。
-            // 此处不计算 empty（不参与无范围振动/红框），仅画四边活动范围线。
-            // 键盘适应-重置偏移：重置的是“物理”上/下偏移（状态栏/导航栏），按真实屏幕旋转重映射到屏幕边。
-            val o = boundGuideOverride
-            val src = if (imeResetBottomOffset) {
-                floatArrayOf(0f, 0f,
-                    o?.getOrElse(2) { boundOffsetLeft } ?: boundOffsetLeft,
-                    o?.getOrElse(3) { boundOffsetRight } ?: boundOffsetRight)
-            } else {
-                o ?: floatArrayOf(boundOffsetTop, boundOffsetBottom, boundOffsetLeft, boundOffsetRight)
-            }
-            val rob = rotatedBoundOffsets(src)
+            // Preview uses the same user-defined boundaries as the running pet.
+            val rob = rotatedBoundOffsets(boundGuideOverride)
             val topOff = rob[0]; val botOff = rob[2]; val leftOff = rob[3]; val rightOff = rob[1]
             lines += boundLines(vis, topOff, botOff, leftOff, rightOff)
         }
@@ -3424,10 +3403,9 @@ class PetService : Service() {
             // 与 rotatedBoundOffsets 同源，保证横屏下“改上偏移→移动的那条线备注就是物理顶部偏移（落在屏幕左/右）”，
             // 不再出现“改上偏移却挪动一条被错标成左部的线”。
             val o = boundGuideOverride
-            val imeZero = hasIme && imeResetBottomOffset
-            // 物理四元组 [T,B,L,R]，IME 重置时物理上/下归零（与预览线一致）；旋转后自然落到对应屏幕边。
-            val tV = if (imeZero) 0f else (o?.get(0) ?: boundOffsetTop)
-            val bV = if (imeZero) 0f else (o?.get(1) ?: boundOffsetBottom)
+            // Physical offsets [top,bottom,left,right] remain active for IME previews.
+            val tV = o?.get(0) ?: boundOffsetTop
+            val bV = o?.get(1) ?: boundOffsetBottom
             val lV = o?.get(2) ?: boundOffsetLeft
             val rV = o?.get(3) ?: boundOffsetRight
             val rob = rotatedBoundOffsets(floatArrayOf(tV, bV, lV, rV))
