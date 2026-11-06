@@ -1517,6 +1517,11 @@ class PetView @JvmOverloads constructor(
 
     /** 进入/保持/退出攀爬态：仅维护专用状态位，绝不碰全局重力。
      *  side<0 表示退出；否则置攀爬墙并向物理层/渲染层同步（脚朝该墙的旋转 + 默认不镜像）。 */
+    /** Remap the attached wall when the whole canvas follows the device rotation. */
+    fun remapClimbWallForRotation(side: Int) {
+        if (physics.isClimbing) setClimb(side)
+    }
+
     private fun setClimb(side: Int) {
         // 【绝不在此平移 physics.x/y】：physics.x/y 是【浮窗左上角】真值；锚点(ax,ay)是
         // 【窗口内的派生量】（脚 = 左上角 + 锚点）。换墙只改渲染旋转(climbRotation 转 90°)，

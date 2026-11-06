@@ -21,6 +21,7 @@ class DisplayAdaptActivity : AppCompatActivity() {
     private val previewOwner = Any()
     private lateinit var keyboard: Spinner
     private lateinit var rotation: Spinner
+    private lateinit var landscapeRange: Spinner
     private lateinit var reset: Switch
     private lateinit var liftBar: Slider
     private lateinit var liftInput: EditText
@@ -53,6 +54,7 @@ class DisplayAdaptActivity : AppCompatActivity() {
 
         keyboard = findViewById(R.id.spinner_keyboard_mode)
         rotation = findViewById(R.id.spinner_rotation_mode)
+        landscapeRange = findViewById(R.id.spinner_landscape_range_mode)
         reset = findViewById(R.id.sw_ime_reset_bottom)
         liftBar = findViewById(R.id.ime_lift_bar)
         liftInput = findViewById(R.id.ime_lift_value)
@@ -67,13 +69,21 @@ class DisplayAdaptActivity : AppCompatActivity() {
             }
             updateKeyboardRows()
         }
-        SettingsSpinnerBinder.bind(rotation, listOf("比例拉伸", "固定位置"),
-            if (config.getBlocking().rotationAdaptMode == "fixed") 1 else 0) { position ->
-            val value = if (position == 1) "fixed" else "stretch"
+        val rotateModes = AppBounds.RANGE_CHOICES.first { it.key == "rotationAdaptMode" }.options
+        SettingsSpinnerBinder.bind(rotation, rotateModes.map { it.first },
+            rotateModes.indexOfFirst { it.second == config.getBlocking().rotationAdaptMode }.coerceAtLeast(0)) { position ->
+            val value = rotateModes[position].second
             if (config.getBlocking().rotationAdaptMode != value) {
                 runBlocking { config.update { it.copy(rotationAdaptMode = value) } }
             }
-            // This selector is deliberately a placeholder; no rotation physics changes.
+        }
+        val rangeModes = AppBounds.RANGE_CHOICES.first { it.key == "landscapeRangeMode" }.options
+        SettingsSpinnerBinder.bind(landscapeRange, rangeModes.map { it.first },
+            rangeModes.indexOfFirst { it.second == config.getBlocking().landscapeRangeMode }.coerceAtLeast(0)) { position ->
+            val value = rangeModes[position].second
+            if (config.getBlocking().landscapeRangeMode != value) {
+                runBlocking { config.update { it.copy(landscapeRangeMode = value) } }
+            }
         }
         reset.setOnCheckedChangeListener { _, value ->
             if (config.getBlocking().imeResetBottomOffset != value) {
@@ -82,6 +92,8 @@ class DisplayAdaptActivity : AppCompatActivity() {
         }
         updateKeyboardRows()
     }
+
+    private fun rotateChoices() = AppBounds.RANGE_CHOICES.first { it.key == "rotationAdaptMode" }.options
 
     private fun updateKeyboardRows() {
         val mode = config.getBlocking().keyboardMode()
@@ -96,8 +108,11 @@ class DisplayAdaptActivity : AppCompatActivity() {
         if (!::keyboard.isInitialized) return
         val mode = AppBounds.KEYBOARD_MODES.indexOfFirst { it.second == c.keyboardMode() }.coerceAtLeast(0)
         if (keyboard.selectedItemPosition != mode) keyboard.setSelection(mode)
-        val rot = if (c.rotationAdaptMode == "fixed") 1 else 0
+        val rot = rotateChoices().indexOfFirst { it.second == c.rotationAdaptMode }.coerceAtLeast(0)
         if (rotation.selectedItemPosition != rot) rotation.setSelection(rot)
+        val range = AppBounds.RANGE_CHOICES.first { it.key == "landscapeRangeMode" }
+            .options.indexOfFirst { it.second == c.landscapeRangeMode }.coerceAtLeast(0)
+        if (landscapeRange.selectedItemPosition != range) landscapeRange.setSelection(range)
         reset.isChecked = c.imeResetBottomOffset
         updateKeyboardRows()
 

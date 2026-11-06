@@ -218,8 +218,10 @@ object AppBounds {
                 "核心-不透明" to "core-opaque"), "core-transparent"),
         ChoiceBound("rangeFullScreen", "活动范围", "活动范围",
             listOf("全屏" to "full", "自定义" to "custom"), "custom"),
-        ChoiceBound("rotationAdaptMode", "旋转适应", "旋转适应",
-            listOf("比例拉伸" to "stretch", "固定位置" to "fixed"), "stretch")
+        ChoiceBound("rotationAdaptMode", "旋转适应", "屏幕旋转适应",
+            listOf("画布·跟随屏幕" to "screen", "画布·跟随设备" to "device"), "screen"),
+        ChoiceBound("landscapeRangeMode", "横屏活动范围", "屏幕旋转适应",
+            listOf("全屏" to "full", "跟随竖屏活动范围" to "portrait"), "full")
     )
     val KEYBOARD_MODES = listOf(
         "关闭" to "off", "画布·整体抬高" to "global",
@@ -233,7 +235,7 @@ object AppBounds {
     val RANGE_ORDER = listOf(
         "interactionMode", "alpha", "coreHeight", "coreWidth",
         "rangeFullScreen", "offsetTop", "offsetBottom", "offsetLeft", "offsetRight",
-        "imeMode", "imeResetBottomOffset", "imeLiftOffset", "rotationAdaptMode"
+        "imeMode", "imeResetBottomOffset", "imeLiftOffset", "rotationAdaptMode", "landscapeRangeMode"
     )
 
     // ---------------- THINKING 页 ----------------

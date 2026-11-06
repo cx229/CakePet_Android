@@ -104,7 +104,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     /** Only the active visual page participates in its reset, despite shared legacy RANGE storage. */
     private fun displayedKeys(): Set<String>? = if (page != SettingsPage.RANGE) null else
         if (displayAdaptPage)
-            setOf("imeMode", "imeResetBottomOffset", "imeLiftOffset", "rotationAdaptMode")
+            setOf("imeMode", "imeResetBottomOffset", "imeLiftOffset", "rotationAdaptMode", "landscapeRangeMode")
         else setOf("interactionMode", "alpha", "coreHeight", "coreWidth",
             "rangeFullScreen", "offsetTop", "offsetBottom", "offsetLeft", "offsetRight")
 

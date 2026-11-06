@@ -97,7 +97,8 @@ data class PetConfigData(
     /** Unified user-facing display/input mode; legacy values are migrated on read. */
     val interactionMode: String = "core-transparent",
     val rangeFullScreen: Boolean = false,
-    val rotationAdaptMode: String = "stretch",
+    val rotationAdaptMode: String = "screen",
+    val landscapeRangeMode: String = "full",
     // 核心(脚底盒)命中区尺寸：128 逻辑基数（1X=128），几何计算时 × scaleFactor（宠物大小）转屏幕像素
     val ctrlBoxWidth: Float = ConfigDefaults.CTRL_BOX_WIDTH,      // 宽：脚左右各半
     val ctrlBoxHeight: Float = ConfigDefaults.CTRL_BOX_HEIGHT,    // 高：脚以上
@@ -323,6 +324,7 @@ class PetConfig private constructor(
     private val KEY_INTERACTION_MODE = androidx.datastore.preferences.core.stringPreferencesKey("interaction_mode")
     private val KEY_RANGE_FULLSCREEN = booleanPreferencesKey("range_fullscreen")
     private val KEY_ROTATION_ADAPT_MODE = androidx.datastore.preferences.core.stringPreferencesKey("rotation_adapt_mode")
+    private val KEY_LANDSCAPE_RANGE_MODE = androidx.datastore.preferences.core.stringPreferencesKey("landscape_range_mode")
     private val KEY_CTRL_BOX_W = androidx.datastore.preferences.core.floatPreferencesKey("ctrl_box_w")
     private val KEY_CTRL_BOX_H = androidx.datastore.preferences.core.floatPreferencesKey("ctrl_box_h")
     private val KEY_CTRL_BOX_VO = androidx.datastore.preferences.core.floatPreferencesKey("ctrl_box_vo")
@@ -429,7 +431,8 @@ class PetConfig private constructor(
                 ConfigDefaults.HIT_BOUNDARY else ConfigDefaults.HIT_CORE,
             interactionMode = prefs[KEY_INTERACTION_MODE] ?: if (prefs[KEY_FORCE_OPAQUE] == true) "display-opaque" else "core-transparent",
             rangeFullScreen = prefs[KEY_RANGE_FULLSCREEN] ?: false,
-            rotationAdaptMode = prefs[KEY_ROTATION_ADAPT_MODE] ?: "stretch",
+            rotationAdaptMode = if (prefs[KEY_ROTATION_ADAPT_MODE] == "device") "device" else "screen",
+            landscapeRangeMode = prefs[KEY_LANDSCAPE_RANGE_MODE] ?: "full",
             ctrlBoxWidth = prefs[KEY_CTRL_BOX_W] ?: ConfigDefaults.CTRL_BOX_WIDTH,
             ctrlBoxHeight = prefs[KEY_CTRL_BOX_H] ?: ConfigDefaults.CTRL_BOX_HEIGHT,
             ctrlBoxVOffset = prefs[KEY_CTRL_BOX_VO] ?: ConfigDefaults.CTRL_BOX_VOFFSET,
@@ -588,6 +591,7 @@ class PetConfig private constructor(
             prefs[KEY_INTERACTION_MODE] = updated.interactionMode
             prefs[KEY_RANGE_FULLSCREEN] = updated.rangeFullScreen
             prefs[KEY_ROTATION_ADAPT_MODE] = updated.rotationAdaptMode
+            prefs[KEY_LANDSCAPE_RANGE_MODE] = updated.landscapeRangeMode
             prefs[KEY_CTRL_BOX_W] = updated.ctrlBoxWidth
             prefs[KEY_CTRL_BOX_H] = updated.ctrlBoxHeight
             prefs[KEY_CTRL_BOX_VO] = updated.ctrlBoxVOffset
@@ -765,7 +769,12 @@ class PetConfig private constructor(
                     if (onlyKey == null || onlyKey == "rotationAdaptMode") {
                         nc = nc.copy(rotationAdaptMode = b.choices.firstOrNull {
                             it.key == "rotationAdaptMode"
-                        }?.default ?: "stretch")
+                        }?.default ?: "screen")
+                    }
+                    if (onlyKey == null || onlyKey == "landscapeRangeMode") {
+                        nc = nc.copy(landscapeRangeMode = b.choices.firstOrNull {
+                            it.key == "landscapeRangeMode"
+                        }?.default ?: "full")
                     }
                 }
                 if (rangeAdaptOnly != true) {

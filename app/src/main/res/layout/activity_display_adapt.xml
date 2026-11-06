@@ -138,7 +138,7 @@
 
             </LinearLayout>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="旋转适应" android:textSize="14dp" android:textColor="@color/cp_sub"
+                android:text="屏幕旋转适应" android:textSize="14dp" android:textColor="@color/cp_sub"
                 android:layout_marginStart="4dp" android:layout_marginTop="24dp" android:layout_marginBottom="6dp"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg"
@@ -152,7 +152,14 @@
                     </LinearLayout>
                     <Spinner android:id="@+id/spinner_rotation_mode" android:layout_width="172dp" android:layout_height="48dp"/>
                 </com.cx.cakepet.SettingsRippleRow>
-
+                <com.cx.cakepet.SettingsRippleRow android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:text="横屏活动范围" style="@style/SettingsOptionTitle"/>
+                    </LinearLayout>
+                    <Spinner android:id="@+id/spinner_landscape_range_mode" android:layout_width="172dp" android:layout_height="48dp"/>
+                </com.cx.cakepet.SettingsRippleRow>
             </LinearLayout>
         </LinearLayout>
     </ScrollView>

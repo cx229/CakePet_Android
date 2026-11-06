@@ -12,8 +12,8 @@ android {
         applicationId = "com.cx.cakepet"
         minSdk = 29
         targetSdk = 37
-        versionCode = 126903 // Android upgrade requires monotonically increasing versionCode
-        versionName = "v1.26.11.06.20.46" // v1.YY.MM.DD.hh.mm, Beijing time (UTC+8); update for each APK build
+        versionCode = 126904 // Android upgrade requires monotonically increasing versionCode
+        versionName = "v1.26.11.06.22.01" // v1.YY.MM.DD.hh.mm, Beijing time (UTC+8); update for each APK build
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

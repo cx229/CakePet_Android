@@ -97,7 +97,7 @@ class UserHabitsActivity : AppCompatActivity() {
         addGroup(container, "显示", listOf(
             Entry("主设置", "大小、点击穿透", SettingsPage.MAIN),
             Entry("显示范围", "透明度、点击范围、活动边界", SettingsPage.RANGE, false),
-            Entry("显示适应", "键盘适应、旋转适应", SettingsPage.RANGE, true)
+            Entry("显示适应", "键盘适应、屏幕旋转适应、横屏活动范围", SettingsPage.RANGE, true)
         ))
         addGroup(container, "角色行为", listOf(
             Entry("移动", "运动、抛掷与重力", SettingsPage.MOVEMENT),
