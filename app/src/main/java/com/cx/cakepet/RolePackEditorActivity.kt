@@ -2049,7 +2049,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     lateinit var folderCard: LinearLayout
                     fun refreshFolder() {
                         val opened = fullKey in openedFunctionFolders
-                        (folderCard.getChildAt(0) as TextView).text =
+                        ((folderCard.getChildAt(0) as LinearLayout).getChildAt(0) as TextView).text =
                             (if (opened) "▾ 📂  " else "▸ 📁  ") + displayName
                         if (opened && !populated) {
                             populated = true
