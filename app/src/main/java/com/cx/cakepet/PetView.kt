@@ -853,8 +853,9 @@ class PetView @JvmOverloads constructor(
                     setClimb(hitWall)
                     // 飞行态标记即刻清除，保证下方捞动作能正常按概率跳起/回待机池。
                     imageManager.isFlying = false
-                    // 落地后依然进行一次自然动作选择；引擎可按概率授权连续飞跃。
-                    // 新飞跃请求会在下一帧启动，避免改变本帧落地物理收口。
+                    // Landing immediately interrupts even a long, finite, or infinite
+                    // flight animation chain. The independent landing Mode starts now,
+                    // after the physical state has already attached to the hit wall.
                     imageManager.onLeapLanded()
                 }
             }
@@ -1061,9 +1062,9 @@ class PetView @JvmOverloads constructor(
                 listOf("touch", "lift_up", activeDragFunction ?: "slow")
             physics.isThrowing && !useStaticPool -> listOf("touch", "roll")
             physics.isSnapped -> listOf("snap", "snap_head")
-            flying -> listOf("climb", "jump_up")
+            flying -> listOf("climb", "leap", "leap")
             physics.isClimbing && forageActive && imageManager.forageSelected ->
-                listOf("climb", "move")
+                listOf("climb", "forage", "move")
             else -> null
         }
         imageManager.setActiveStateFunction(activeFunction)
@@ -1598,7 +1599,7 @@ class PetView @JvmOverloads constructor(
     /** 仅在正常动作自然结束时掷骰；动作名称/其他功能映射不会触发飞跃。 */
     private fun chooseAutomaticLeapMode(): String? {
         if (!canStartLeap() || kotlin.random.Random.nextFloat() >= leapProbability) return null
-        val chosen = modeOf("climb", "jump_up") ?: return null
+        val chosen = modeOf("climb", "leap", "leap") ?: return null
         pendingLeapMode = chosen
         return chosen
     }

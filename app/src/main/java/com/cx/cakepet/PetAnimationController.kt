@@ -65,7 +65,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun pickStandbyMode(exclude: String): String {
         // Only this natural completion boundary may initiate automatic behaviors.
         forageSelected = false
-        if (forageActive) modeOf("climb", "move")?.let {
+        if (forageActive) modeOf("climb", "forage", "move")?.let {
             forageSelected = true
             return it
         }
@@ -126,11 +126,16 @@ class PetAnimationController(private val assets: ImageModeManager) {
         modeOf("static", "sit")?.let { setMode(it) }
     }
 
-    /** Flight completion never discards a playable Mode nextMode chain.
-     * An infinite visual has no natural exit, so it returns to the normal pool.
+    /** Physical landing wins over every unfinished flight animation or nextMode chain.
+     * The landing function is an independent one-shot; its own Mode chain then plays
+     * normally. Missing optional mappings fall back to ordinary automatic selection.
      */
     fun onLeapLanded() {
-        if (clip?.isInfiniteLoop == true) {
+        val landing = modeOf("climb", "leap", "landing")
+        if (landing != null) {
+            playOnce(landing)
+        } else {
+            if (forced) cancelForced()
             setMode(pickStandbyMode(getMode()))
         }
     }

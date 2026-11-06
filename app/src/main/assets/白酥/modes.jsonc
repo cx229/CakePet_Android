@@ -74,12 +74,19 @@
       }
     },
     "climb": {
-      "move": [
-        "走路"
-      ],
-      "jump_up": [
-        "跳起"
-      ]
+      "leap": {
+        "leap": [
+          "跳起"
+        ],
+        "landing": [
+          "趴着"
+        ]
+      },
+      "forage": {
+        "move": [
+          "走路"
+        ]
+      }
     },
     "pat_head": {
       "pat_head": [
