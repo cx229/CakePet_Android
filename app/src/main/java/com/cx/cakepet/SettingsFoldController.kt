@@ -10,7 +10,7 @@ import android.widget.TextView
 
 /**
  * A UI-only fold mechanism, deliberately separate from effective feature switches.
- * A switch changes saved config; its adjacent chevron changes only expansion.
+ * A switch changes saved config; tapping the non-control portion of its row toggles expansion.
  *
  * Every row is addressed by its actual container, not by walking blindly to the
  * nearest parent after editing a child. Callers list whole setting rows or cards.
@@ -70,13 +70,19 @@ class SettingsFoldController(private val host: Activity) {
             textSize = 20f
             gravity = Gravity.CENTER
             contentDescription = "展开或收起详细设置"
-            isClickable = true
-            isFocusable = true
-            setPadding(dp(5), 0, dp(5), 0)
-            layoutParams = LinearLayout.LayoutParams(dp(36), dp(44))
+            isClickable = false
+            isFocusable = false
+            setPadding(0, 0, 0, 0)
+            layoutParams = LinearLayout.LayoutParams(dp(18), dp(44))
         }
-        // Keep the toggle and the chevron as two independent touch targets.
-        header.addView(arrow)
+        // Place the chevron before the caption but reclaim its width from the
+        // row start padding. The caption and the switch retain their original X
+        // positions, so sibling rows with no chevron stay perfectly aligned.
+        val arrowWidth = dp(18)
+        val oldStart = header.paddingStart
+        header.setPaddingRelative((oldStart - arrowWidth).coerceAtLeast(0),
+            header.paddingTop, header.paddingEnd, header.paddingBottom)
+        header.addView(arrow, 0)
         val captionGroup = header.getChildAt(0) as? ViewGroup
         val hint = unavailableText?.let { message ->
             TextView(host).apply {
@@ -91,7 +97,10 @@ class SettingsFoldController(private val host: Activity) {
         sections.add(section)
         indent(header, depth)
         if (indentChildren) children.forEach { childId -> row(childId)?.let { indent(it, depth + 1) } }
-        arrow.setOnClickListener {
+        // The parent row handles only unconsumed touches. Switches and other
+        // interactive children consume their own events, preserving controls.
+        header.isClickable = true
+        header.setOnClickListener {
             section.expanded = !section.expanded
             refresh()
         }
