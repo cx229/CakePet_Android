@@ -2145,14 +2145,17 @@ class RolePackEditorActivity : AppCompatActivity() {
                                 leftMargin = px(((depth + 1) * 12).coerceAtMost(60))
                                 topMargin = px(3)
                             })
+                            var restoringCheck = false
                             check.setOnCheckedChangeListener { _, nowChecked ->
+                                if (restoringCheck) return@setOnCheckedChangeListener
                                 if (!nowChecked && checked && leaves.getValue(key).second
                                         .filter { it != modeId }.isEmpty()) {
                                     // Restore without firing another selection callback.
-                                    // Keep the listener: disabling it here made the
-                                    // next tap appear to bypass this restriction.
-                                    // isChecked stays true because selected has not changed.
-                                    check.isChecked = true
+                                    // Restore without dropping this checkbox's listener.
+                                    // Suppress only the programmatic callback.
+                                    restoringCheck = true
+                                    try { check.isChecked = true }
+                                    finally { restoringCheck = false }
                                     warnLastBinding(path)
                                 } else {
                                     if (nowChecked) selected.add(key) else selected.remove(key)
