@@ -63,6 +63,36 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- Import processing is an application-wide preference, enabled by default. -->
+            <LinearLayout
+                android:id="@+id/row_import_watermark"
+                style="@style/SettingsSwitchRow"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_bg"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp">
+                <LinearLayout style="@style/SettingsSwitchTexts">
+                    <TextView
+                        style="@style/SettingsOptionTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="资源导入时去除水印" />
+                    <TextView
+                        style="@style/SettingsOptionNote"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="自动去除图片或 GIF 四角的孤立疑似水印" />
+                </LinearLayout>
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/sw_import_watermark"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:thumbTint="@color/switch_black_selector"
+                    android:trackTint="@color/switch_black_selector" />
+            </LinearLayout>
+
             <LinearLayout android:id="@+id/row_next"
                 style="@style/SettingsSwitchRow"
                 android:layout_marginTop="12dp"
