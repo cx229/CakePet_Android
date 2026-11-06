@@ -94,17 +94,26 @@ class UserHabitsActivity : AppCompatActivity() {
         more.setOnClickListener { menu.show() }
 
         val container = findViewById<LinearLayout>(R.id.container)
+        // Keep the hierarchy and visible entry names aligned with the real settings pages.
         addGroup(container, "显示", listOf(
             Entry("主设置", "大小、点击穿透", SettingsPage.MAIN),
-            Entry("显示范围", "透明度、点击范围、活动边界", SettingsPage.RANGE, false),
-            Entry("显示适应", "键盘适应、屏幕旋转适应、横屏活动范围", SettingsPage.RANGE, true)
+            Entry("显示-交互", "命中模式、透明度、活动范围", SettingsPage.RANGE, false),
+            Entry("显示-适应", "键盘适应、旋转适应", SettingsPage.RANGE, true)
         ))
-        addGroup(container, "角色行为", listOf(
-            Entry("移动", "运动、抛掷与重力", SettingsPage.MOVEMENT),
-            Entry("吸附边缘", "吸附、攀岩", SettingsPage.SNAP),
-            Entry("碎碎念", "文字与气泡", SettingsPage.THINKING),
-            Entry("投食", "投食和觅食", SettingsPage.FEEDING),
-            Entry("随机动作", "随机触发与间隔", SettingsPage.RANDOM)
+        addGroup(container, "动动动", listOf(
+            Entry("移动", "运动、抛掷与重力", SettingsPage.MOVEMENT)
+        ))
+        addGroup(container, "贴边边", listOf(
+            Entry("吸附边缘", "四边吸附、吸附距离", SettingsPage.SNAP)
+        ))
+        addGroup(container, "碎碎念", listOf(
+            Entry("底部消息", "文字与气泡", SettingsPage.THINKING)
+        ))
+        addGroup(container, "吃吃吃", listOf(
+            Entry("投食", "投食与刷新范围", SettingsPage.FEEDING)
+        ))
+        addGroup(container, "变变变", listOf(
+            Entry("随机模式", "随机项、周期", SettingsPage.RANDOM)
         ))
     }
 
@@ -169,7 +178,7 @@ class UserHabitsActivity : AppCompatActivity() {
             card.addView(row, LinearLayout.LayoutParams(-1, -2))
         }
         container.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = dp(16)
+            bottomMargin = 0
         })
     }
 
