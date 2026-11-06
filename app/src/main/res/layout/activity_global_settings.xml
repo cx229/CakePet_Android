@@ -182,16 +182,21 @@
     style="@style/SettingsSwitchRow"
     android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:layout_width="match_parent"
     android:layout_height="wrap_content" android:paddingStart="20dp"
-    android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+    android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp"
+    android:clickable="true" android:focusable="true">
     <LinearLayout style="@style/SettingsSwitchTexts">
     <TextView style="@style/SettingsOptionTitle" android:layout_width="match_parent"
         android:layout_height="wrap_content" android:text="无障碍权限"/>
     <TextView style="@style/SettingsOptionNote" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="查看无障碍服务的开启状态"/>
+        android:layout_height="wrap_content" android:text="查看与管理无障碍权限"/>
 </LinearLayout>
     <TextView android:id="@+id/tv_accessibility_status" android:layout_width="wrap_content"
         android:layout_height="wrap_content" android:text="未开启" android:textSize="14sp"
         android:textColor="@color/cp_note"/>
+    <ImageView android:layout_width="22dp" android:layout_height="22dp"
+        android:layout_marginStart="12dp" android:src="@drawable/ic_chevron_right"
+        app:tint="@color/icon_chevron" android:clickable="false"
+        android:focusable="false" android:contentDescription="前往设置"/>
 </com.cx.cakepet.SettingsRippleRow>
         <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_next"
     style="@style/SettingsSwitchRow"

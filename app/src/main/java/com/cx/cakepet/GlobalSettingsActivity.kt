@@ -148,7 +148,24 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 findViewById<View>(R.id.row_backup_import).setOnClickListener {
                     importBackup.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
                 }
-                // 状态只读；不把系统权限伪装成可由应用切换的开关。
+                // Permission is managed by Android; explain the purpose before opening system settings.
+                accessibilityRow.setOnClickListener {
+                    AlertDialog.Builder(this)
+                        .setTitle("无障碍权限说明")
+                        .setMessage(
+                            "部分设备需要借助无障碍服务显示和操作桌面角色，以改善角色的显示效果与触摸交互。\n\n" +
+                                "你可以在系统设置中开启或关闭该权限。"
+                        )
+                        .setNegativeButton("取消", null)
+                        .setPositiveButton("前往设置") { _, _ ->
+                            try {
+                                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            } catch (e: android.content.ActivityNotFoundException) {
+                                Toast.makeText(this, "无法打开系统无障碍设置", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .show()
+                }
                 findViewById<TextView>(R.id.tv_next).text = "调试"
                 nextRow.setOnClickListener { openPage(PAGE_DEBUG) }
             }
