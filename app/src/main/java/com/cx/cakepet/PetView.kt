@@ -824,8 +824,10 @@ class PetView @JvmOverloads constructor(
                     val dlen = kotlin.math.hypot(ddx, ddy).coerceAtLeast(1e-3f)
                     leapDirX = ddx / dlen
                     leapDirY = ddy / dlen
-                    // 镜像只看目标相对【起飞原位置】的水平方向：目标在右→镜像(flipX=true)、在左→不镜像。
-                    flipX = tx0 > physics.x
+                    // Visual source frames are corrected through renderFlipX (stateFlip XOR
+                    // frame.flipX). For the existing jump sprite, the facing flag must
+                    // be opposite the flight target comparison to match the visible head.
+                    flipX = tx0 < physics.x
                     leapTargetInited = true
                 }
             }

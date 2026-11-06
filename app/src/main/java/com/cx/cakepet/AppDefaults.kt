@@ -108,7 +108,7 @@ object AppBounds {
             step = 0.01f, default = 0.10f        // 默认 0.10
         ),
         SliderBound(
-            key = "forageMultiplier", label = "觅食位移倍率", group = "攀攀攀",
+            key = "forageMultiplier", label = "觅食速度加成", group = "攀攀攀",
             hardMin = 0f, hardMax = 20f,          // 位移倍率 0-20
             baseMin = 0f, baseMax = 3f,
             from = 0f, to = 3f,

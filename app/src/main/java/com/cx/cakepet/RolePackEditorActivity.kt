@@ -1962,7 +1962,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 "standby" -> "待机"
                 "touch" -> "触摸"
                 "snap" -> "吸附"
-                "climb" -> "攀爬"
+                "climb" -> "攀岩"
                 "pat_head" -> "摸头"
                 "feed" -> "投喂"
                 "menu" -> "菜单动画"
@@ -1977,6 +1977,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                 "right_fast" -> "向右快速"
                 "jump_down" -> "落地"
                 "jump_up" -> "跳起"
+                "leap" -> "飞跃"
+                "landing" -> "降落"
+                "forage" -> "觅食"
                 "move" -> "移动"
                 "snap_head" -> "探头"
                 "eat" -> "进食"
@@ -1993,8 +1996,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         "static/sit" -> "进入静止状态时播放的基础动画"
         "static/pool" -> "静止状态下随机选取的候选动画"
         "standby/pool" -> "角色待机时随机选取的候选动画"
-        "touch/roll" -> "触摸角色触发滚动行为时播放"
-        "touch/jump_down" -> "触摸交互后角色落地时播放"
+        "touch/roll" -> "角色抛掷或滚动时播放"
+        "touch/jump_down" -> "角色抛掷或滚动结束时播放"
         "touch/lift_up/slow" -> "缓慢提起角色时播放"
         "touch/lift_up/left_medium" -> "向左中速拖动提起时播放"
         "touch/lift_up/left_fast" -> "向左快速拖动提起时播放"
@@ -2003,14 +2006,15 @@ class RolePackEditorActivity : AppCompatActivity() {
         "snap/snap_head" -> "角色吸附边缘后探头时播放"
         "snap/pat_head/pat_head" -> "角色吸附状态被摸头时播放"
         "snap/feed/eat" -> "角色吸附状态接受投喂时播放"
-        "climb/move" -> "角色沿边缘攀爬移动时播放"
-        "climb/jump_up" -> "角色从攀爬状态跳起时播放"
+        "climb/leap/leap" -> "角色飞跃过程中播放的动画"
+        "climb/leap/landing" -> "角色飞跃后接触墙面时播放"
+        "climb/forage/move" -> "角色奔向食物时播放的动画"
         "pat_head/pat_head" -> "正常状态下摸头互动时播放"
         "feed/eat" -> "角色接受投喂并进食时播放"
         "feed/food" -> "投喂时显示的食物动画"
         "menu/pool" -> "菜单中供手动选择的动画"
         else -> "执行该功能时，从关联动画中选择播放"
-    }
+    }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
     private fun functionFolderDescription(path: List<String>): String = when (path.joinToString("/")) {
         "static" -> "角色静止时的基础动画"
@@ -2020,12 +2024,14 @@ class RolePackEditorActivity : AppCompatActivity() {
         "snap" -> "角色贴边吸附时的动画"
         "snap/pat_head" -> "角色吸附时的摸头动画"
         "snap/feed" -> "角色吸附时的投喂动画"
-        "climb" -> "角色沿边缘移动时的动画"
+        "climb" -> "角色攀爬、飞跃和觅食时的动画"
+        "climb/leap" -> "角色飞跃及降落时的动画"
+        "climb/forage" -> "角色自动寻找食物时的动画"
         "pat_head" -> "角色被摸头时的互动动画"
         "feed" -> "角色接受投喂时的动画"
         "menu" -> "菜单中可手动选择的动画"
         else -> "展开查看该分类下的功能"
-    }
+    }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
                              level: Int, immediate: Boolean = false, description: String = "",
@@ -2093,7 +2099,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         for (key in keys) {
             val currentPath = path + key
             val fullKey = currentPath.joinToString("/")
-            val displayName = functionSegment(currentPath)
+            val displayName = functionPathName(currentPath)
             when (val child = values.opt(key)) {
                 is JSONObject -> {
                     val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

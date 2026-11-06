@@ -54,6 +54,8 @@ class MovementSettingsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_movement_settings)
         // 标题下方小字灰色：当前页面所属角色名
         findViewById<android.widget.TextView>(R.id.tv_title_sub).text = RoleStore.resolveDisplayName(this, roleId)
+        findViewById<android.widget.TextView>(R.id.tv_forage_bonus_note).text =
+            "加成「${RoleStore.resolveShortName(this, roleId)}」将飞速奔向小鱼干"
         // 纯黑占位条填充状态栏高度，与标题栏黑底连成整体覆盖状态栏
         val spacer = findViewById<android.view.View>(R.id.status_bar_spacer)
         spacer.layoutParams.height = getStatusBarHeight()
@@ -371,7 +373,7 @@ class MovementSettingsActivity : AppCompatActivity() {
             leapProbBar.value = bizToSliderValue(v, bs["leapProbability"]!!.from, bs["leapProbability"]!!.to)
             lifecycleScope.launch { config.update { it.copy(leapProbability = v) } }
         }
-        // 觅食位移倍率：1=原始帧 dx/dy，0=静止
+        // 觅食速度加成仍采用原有帧位移倍率，不更改配置含义
         forageSpeedBar = findViewById(R.id.foragespeed_bar)!!
         forageSpeedVal = findViewById(R.id.foragespeed_value)!!
         forageSpeedBar.applyBlackStyle()
