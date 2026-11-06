@@ -111,21 +111,20 @@ object ImportWatermark {
 
     /**
      * On GIF imports, only delete a corner component if its exact pixels remain
-     * effectively unchanged in sampled frames. The same mask is then applied to
+     * effectively unchanged in every frame. The same mask is then applied to
      * every decoded frame. Return null if no confident fixed overlay exists.
      */
     fun cleanGif(frameFiles: List<File>): Corner? {
         if (frameFiles.size < 2) return null
         val first = android.graphics.BitmapFactory.decodeFile(frameFiles.first().path) ?: return null
         val candidate = try { detect(first) } finally { first.recycle() } ?: return null
-        val sampleIndices = listOf(0, frameFiles.size / 2, frameFiles.lastIndex).distinct()
         val reference = android.graphics.BitmapFactory.decodeFile(frameFiles.first().path) ?: return null
         val original = IntArray(candidate.pixels.size) { index ->
             val at = candidate.pixels[index]
             reference.getPixel(at % reference.width, at / reference.width)
         }
         reference.recycle()
-        for (idx in sampleIndices.drop(1)) {
+        for (idx in 1 until frameFiles.size) {
             val sample = android.graphics.BitmapFactory.decodeFile(frameFiles[idx].path) ?: return null
             try {
                 if (sample.width.toLong() * sample.height > 8_000_000L) return null
