@@ -100,19 +100,11 @@ class UserHabitsActivity : AppCompatActivity() {
             Entry("显示-交互", "命中模式、透明度、活动范围", SettingsPage.RANGE, false),
             Entry("显示-适应", "键盘适应、旋转适应", SettingsPage.RANGE, true)
         ))
-        addGroup(container, "动动动", listOf(
-            Entry("移动", "运动、抛掷与重力", SettingsPage.MOVEMENT)
-        ))
-        addGroup(container, "贴边边", listOf(
-            Entry("吸附边缘", "四边吸附、吸附距离", SettingsPage.SNAP)
-        ))
-        addGroup(container, "碎碎念", listOf(
-            Entry("底部消息", "文字与气泡", SettingsPage.THINKING)
-        ))
-        addGroup(container, "吃吃吃", listOf(
-            Entry("投食", "投食与刷新范围", SettingsPage.FEEDING)
-        ))
-        addGroup(container, "变变变", listOf(
+        addGroup(container, "角色行为", listOf(
+            Entry("移动", "运动、抛掷与重力", SettingsPage.MOVEMENT),
+            Entry("吸附边缘", "四边吸附、吸附距离", SettingsPage.SNAP),
+            Entry("底部消息", "文字与气泡", SettingsPage.THINKING),
+            Entry("投食", "投食与刷新范围", SettingsPage.FEEDING),
             Entry("随机模式", "随机项、周期", SettingsPage.RANDOM)
         ))
     }
