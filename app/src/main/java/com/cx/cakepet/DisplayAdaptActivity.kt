@@ -22,7 +22,6 @@ class DisplayAdaptActivity : AppCompatActivity() {
     private lateinit var keyboard: Spinner
     private lateinit var rotation: Spinner
     private lateinit var landscapeRange: Spinner
-    private lateinit var reset: Switch
     private lateinit var liftBar: Slider
     private lateinit var liftInput: EditText
 
@@ -55,7 +54,6 @@ class DisplayAdaptActivity : AppCompatActivity() {
         keyboard = findViewById(R.id.spinner_keyboard_mode)
         rotation = findViewById(R.id.spinner_rotation_mode)
         landscapeRange = findViewById(R.id.spinner_landscape_range_mode)
-        reset = findViewById(R.id.sw_ime_reset_bottom)
         liftBar = findViewById(R.id.ime_lift_bar)
         liftInput = findViewById(R.id.ime_lift_value)
 
@@ -85,11 +83,6 @@ class DisplayAdaptActivity : AppCompatActivity() {
                 runBlocking { config.update { it.copy(landscapeRangeMode = value) } }
             }
         }
-        reset.setOnCheckedChangeListener { _, value ->
-            if (config.getBlocking().imeResetBottomOffset != value) {
-                runBlocking { config.update { it.copy(imeResetBottomOffset = value) } }
-            }
-        }
         updateKeyboardRows()
     }
 
@@ -98,7 +91,6 @@ class DisplayAdaptActivity : AppCompatActivity() {
     private fun updateKeyboardRows() {
         val mode = config.getBlocking().keyboardMode()
         val needsLift = mode == "global" || mode == "local" || mode == "stretch"
-        (reset.parent as View).visibility = if (needsLift) View.VISIBLE else View.GONE
         (liftBar.parent as View).visibility = if (needsLift) View.VISIBLE else View.GONE
     }
 
@@ -113,7 +105,6 @@ class DisplayAdaptActivity : AppCompatActivity() {
         val range = AppBounds.RANGE_CHOICES.first { it.key == "landscapeRangeMode" }
             .options.indexOfFirst { it.second == c.landscapeRangeMode }.coerceAtLeast(0)
         if (landscapeRange.selectedItemPosition != range) landscapeRange.setSelection(range)
-        reset.isChecked = c.imeResetBottomOffset
         updateKeyboardRows()
 
         val b = bounds.getBlocking(SettingsPage.RANGE).sliders.first { it.key == "imeLiftOffset" }
