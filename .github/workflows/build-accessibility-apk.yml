@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - '**'
+  pull_request:
+    branches:
+      - fix/261106-gt-home-fold-author
   workflow_dispatch:
 
 permissions:
