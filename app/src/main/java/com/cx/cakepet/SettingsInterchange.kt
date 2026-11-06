@@ -28,12 +28,8 @@ object SettingsInterchange {
         var applied = 0
         for (section in listOf("config", "bounds")) {
             val obj = data.optJSONObject(section) ?: continue
-            val selected = if (data.optString("source") == "habits") {
-                val keys = UserHabits.enabled(data, section)
-                JSONObject().apply {
-                    for (key in keys) obj.optJSONObject(key)?.let { put(key, it) }
-                }
-            } else obj
+            // User habits are now complete defaults; no opt-in selection.
+            val selected = JSONObject(obj.toString())
             // These are internal material identity and retired visibility keys,
             // not portable user settings for a different character.
             if (section == "config") {
@@ -55,23 +51,12 @@ object SettingsInterchange {
 
     fun importHabits(ctx: Context, data: JSONObject) {
         require(data.optString("type") == "cakepet-settings") { "不是 CakePet 设置文件" }
-        val source = data.optString("source")
-        if (source == "habits") {
-            UserHabits.save(ctx, JSONObject()
-                .put("config", data.optJSONObject("config") ?: JSONObject())
-                .put("bounds", data.optJSONObject("bounds") ?: JSONObject())
-                .put("configEnabled", data.optJSONArray("configEnabled") ?: org.json.JSONArray())
-                .put("boundsEnabled", data.optJSONArray("boundsEnabled") ?: org.json.JSONArray()))
+        val bounds = data.optJSONObject("bounds") ?: JSONObject()
+        if (data.optString("source") == "habits") {
+            UserHabits.save(ctx, JSONObject().put("bounds", bounds))
         } else {
-            // Importing a complete role configuration as a personal preference:
-            // enable all supplied items explicitly; no changes to existing roles.
-            val config = data.optJSONObject("config") ?: JSONObject()
-            val bounds = data.optJSONObject("bounds") ?: JSONObject()
-            UserHabits.save(ctx, JSONObject()
-                .put("config", config)
-                .put("bounds", bounds)
-                .put("configEnabled", org.json.JSONArray(PreferenceCodec.entries(config)))
-                .put("boundsEnabled", org.json.JSONArray(PreferenceCodec.entries(bounds))))
+            // Role bounds are a complete set of defaults in the shared format.
+            UserHabits.save(ctx, JSONObject().put("bounds", bounds))
         }
     }
 }
