@@ -14,6 +14,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
     private var frameMotionPending = true
     /** Active state-owned Functions path. A finished action chain resumes from this pool. */
     private var activeStateFunction: List<String>? = null
+    /** Engine may choose an automatic function at a natural action boundary. */
+    var onAutomaticModeChoice: (() -> String?)? = null
 
     fun setActiveStateFunction(path: List<String>?) {
         activeStateFunction = path
@@ -23,12 +25,9 @@ class PetAnimationController(private val assets: ImageModeManager) {
         activeStateFunction?.let { path -> assets.leavesOf(*path.toTypedArray()).takeIf { it.isNotEmpty() }?.random() }
 
     var useStaticPool = false
-    var leapEnabled = false
     var forageActive = false
     /** Set only when the normal action chooser starts the forage behavior. */
     var forageSelected = false
-    var leapProbability = 0.10f
-    var inClimbing = false
     var inSnapped = false
     var isFlying = false
 
@@ -78,8 +77,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
             forageSelected = true
             return it
         }
-        if (leapEnabled && Random.nextFloat() < leapProbability)
-            modeOf("climb", "jump_up")?.let { return it }
+        // Behavior decisions (e.g. whether to leap) belong to PetView, not Modes.
+        onAutomaticModeChoice?.invoke()?.let { return it }
         val pool = currentPool().filter { it != exclude }
         return if (pool.isNotEmpty()) pool.random() else getMode()
     }
