@@ -82,8 +82,8 @@ class SettingsFoldController(private val host: Activity) {
         val oldStart = header.paddingStart
         header.setPaddingRelative((oldStart - arrowWidth).coerceAtLeast(0),
             header.paddingTop, header.paddingEnd, header.paddingBottom)
-        header.addView(arrow, 0)
         val captionGroup = header.getChildAt(0) as? ViewGroup
+        header.addView(arrow, 0)
         val hint = unavailableText?.let { message ->
             TextView(host).apply {
                 text = message
