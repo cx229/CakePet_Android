@@ -39,7 +39,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private val pageHistory = java.util.ArrayDeque<EditorPage>()
     private var restoringPage = false
     private val openedFunctionFolders = mutableSetOf<String>()
-    // 白酥示例与当前素材包无关；仅在功能卡片出现时读取，按路径缓存。
+    // 仅缓存当前功能页的白酥静态图片；链路计算始终读取最新 modes JSON。
     private val templateExamples = mutableMapOf<String, android.graphics.Bitmap?>()
     private val templateJson: JSONObject? by lazy {
         runCatching {
@@ -47,25 +47,78 @@ class RolePackEditorActivity : AppCompatActivity() {
                 .bufferedReader().use { parseJsonc(it.readText()) }
         }.getOrNull()
     }
-    private fun templateFirstFrame(path: List<String>): android.graphics.Bitmap? {
+
+    /**
+     * 按运行时语义展开 nextMode：无限循环是 →∞，nextMode 回到已访问动作是 →◎。
+     * timed 的后续仍然可达；infinite 的 nextMode 属于未启用属性，不追踪。
+     * 无缓存，以免重命名、循环选项及后继关系修改后展示旧内容。
+     */
+    private fun modeChain(start: String, modes: JSONObject): List<String> {
+        val route = mutableListOf<String>()
+        val visited = mutableSetOf<String>()
+        var current = start
+        while (current.isNotBlank()) {
+            if (!visited.add(current)) {
+                route.add(current)
+                route.add("◎")
+                break
+            }
+            route.add(current)
+            val mode = modes.optJSONObject(current) ?: break
+            val configured = mode.optString("loopMode")
+            val kind = if (configured in listOf("off", "timed", "infinite")) configured
+                else if (!mode.optBoolean("loop", false)) "off"
+                else if (mode.optJSONObject("duration") != null) "timed" else "infinite"
+            if (kind == "infinite") {
+                route.add("∞")
+                break
+            }
+            val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+            if (next.isEmpty()) break
+            current = next
+        }
+        return route
+    }
+
+    private fun modeChainText(start: String, modes: JSONObject): String =
+        "<" + modeChain(start, modes).joinToString("→") + ">"
+
+    /** 白酥模板的相同功能路径，随机选链路及链路中的动作，最后随机选一帧。 */
+    private fun templateRandomFrame(path: List<String>): android.graphics.Bitmap? {
         val key = path.joinToString("/")
         if (templateExamples.containsKey(key)) return templateExamples[key]
         var cursor = templateJson?.optJSONObject("functions")
         for (segment in path.dropLast(1)) cursor = cursor?.optJSONObject(segment)
-        val options = cursor?.optJSONArray(path.last())
+        val candidates = cursor?.optJSONArray(path.last())
         val modes = templateJson?.optJSONObject("modes")
+        val sourcePaths = mutableListOf<List<String>>()
+        if (candidates != null && modes != null) {
+            for (i in 0 until candidates.length()) {
+                val chain = modeChain(candidates.optString(i), modes)
+                val valid = chain.distinct().filter { modes.optJSONObject(it) != null }
+                if (valid.isNotEmpty()) sourcePaths.add(valid)
+            }
+        }
         var bitmap: android.graphics.Bitmap? = null
-        if (options != null && modes != null) {
-            for (index in 0 until options.length()) {
-                val res = modes.optJSONObject(options.optString(index))
-                    ?.optJSONArray("frames")?.optJSONObject(0)?.optString("res").orEmpty()
-                if (res.isBlank() || res.startsWith("/") ||
-                    res.split('/').any { it == ".." }) continue
-                bitmap = runCatching {
-                    assets.open("${RoleRegistry.DEFAULT.rootPath}/$res").use {
-                        BitmapFactory.decodeStream(it)
+        // 随机链路后随机动作、随机帧；有损坏帧时继续寻找其他有效资源。
+        for (chain in sourcePaths.shuffled()) {
+            if (bitmap != null) break
+            for (modeId in chain.shuffled()) {
+                val frames = modes?.optJSONObject(modeId)?.optJSONArray("frames") ?: continue
+                val names = (0 until frames.length()).mapNotNull { index ->
+                    frames.optJSONObject(index)?.optString("res")?.takeIf { res ->
+                        res.isNotBlank() && !res.startsWith("/") &&
+                            !res.contains('\\') && res.split('/').none { it == ".." }
                     }
-                }.getOrNull()
+                }
+                for (res in names.shuffled()) {
+                    bitmap = runCatching {
+                        assets.open("${RoleRegistry.DEFAULT.rootPath}/$res").use {
+                            BitmapFactory.decodeStream(it)
+                        }
+                    }.getOrNull()
+                    if (bitmap != null) break
+                }
                 if (bitmap != null) break
             }
         }
@@ -1997,7 +2050,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             setPadding(0, px(2), 0, 0)
             setTextColor(getColor(if (examplePath == null) R.color.cp_note else R.color.cp_title))
         })
-        val bitmap = examplePath?.let { templateFirstFrame(it) }
+        val bitmap = examplePath?.let { templateRandomFrame(it) }
         if (bitmap == null) card.addView(content)
         else {
             val row = LinearLayout(this).apply {
@@ -2068,7 +2121,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val selected = (0 until child.length()).map { child.optString(it) }
                         .filter { it.isNotBlank() }
                     functionItem(parent, "▣  " + functionPathName(currentPath) + "   ›",
-                        "当前动画：" + selected.joinToString("、"), path.size,
+                        "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) }, path.size,
                         description = functionDescription(currentPath), examplePath = currentPath) {
                         chooseFunctions(currentPath, selected)
                     }
@@ -2078,6 +2131,8 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun functions() {
+        // 每次重新加载功能页，都重新抽取示例；折叠/展开已存在的卡片不换。
+        templateExamples.clear()
         section("功能映射", "functions")
         panel.addView(text("决定角色在不同情况下播放的动画。\n点击文件夹展开，点击功能卡片编辑。", 12f).apply {
             setPadding(px(4), 0, px(4), px(6))
