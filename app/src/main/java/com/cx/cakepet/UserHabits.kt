@@ -2,82 +2,76 @@ package com.cx.cakepet
 
 import android.content.Context
 import kotlinx.coroutines.runBlocking
-import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 
 /**
- * Personal defaults for newly CREATED role instances, not a live global override.
- * Disabled fields retain their values; no material ZIP/asset file is modified.
+ * Independent personal-default threshold store. Editing a habit never changes
+ * an existing character. New instances receive all defaults at creation time;
+ * applying a card to existing characters is always a separate confirmed action.
  */
 object UserHabits {
-    private fun file(ctx: Context) = File(ctx.filesDir, "user_habits.json")
+    const val ROLE_ID = "__cakepet_user_habits__"
 
-    fun load(ctx: Context): JSONObject =
-        runCatching { JSONObject(file(ctx).readText(Charsets.UTF_8)) }
-            .getOrElse { JSONObject().put("config", JSONObject()).put("bounds", JSONObject())
-                .put("configEnabled", JSONArray()).put("boundsEnabled", JSONArray()) }
+    private fun source(ctx: Context) = PetBounds.forRole(ctx, ROLE_ID)
 
+    /** Human-readable export; defaults are sufficient to reconstruct live values. */
+    fun load(ctx: Context): JSONObject = runBlocking {
+        JSONObject().put("bounds", source(ctx).exportSettings())
+    }
+
+    /** Import human-readable default/threshold values without changing characters. */
     fun save(ctx: Context, data: JSONObject) {
-        val target = file(ctx)
-        val tmp = File(target.parentFile, target.name + ".tmp")
-        tmp.writeText(data.toString(2), Charsets.UTF_8)
-        check(tmp.renameTo(target)) { "保存用户习惯失败" }
+        val raw = data.optJSONObject("bounds") ?: return
+        runBlocking { source(ctx).importSettings(raw, replace = true) }
     }
 
-    fun enabled(doc: JSONObject, section: String): Set<String> {
-        val arr = doc.optJSONArray(section + "Enabled") ?: return emptySet()
-        return (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }.toSet()
+    private fun merged(current: PageBounds, habit: PageBounds, key: String?): PageBounds {
+        fun use(name: String) = key == null || key == name
+        return current.copy(
+            sliders = current.sliders.map { old ->
+                habit.sliders.firstOrNull { use(old.key) && it.key == old.key } ?: old
+            },
+            duals = current.duals.map { old ->
+                habit.duals.firstOrNull { use(old.key) && it.key == old.key } ?: old
+            },
+            switches = current.switches.map { old ->
+                habit.switches.firstOrNull { use(old.key) && it.key == old.key } ?: old
+            },
+            colors = current.colors.map { old ->
+                habit.colors.firstOrNull { use(old.key) && it.key == old.key } ?: old
+            },
+            choices = current.choices.map { old ->
+                habit.choices.firstOrNull { use(old.key) && it.key == old.key } ?: old
+            },
+            keyboardModeDefault = if (use("imeMode")) habit.keyboardModeDefault
+                ?: current.keyboardModeDefault else current.keyboardModeDefault
+        )
     }
 
-    fun setEnabled(doc: JSONObject, section: String, key: String, enabled: Boolean) {
-        val selected = enabled(doc, section).toMutableSet()
-        if (enabled) selected.add(key) else selected.remove(key)
-        doc.put(section + "Enabled", JSONArray(selected.sorted()))
-    }
-
-    /**
-     * Explicit, user-confirmed one-off application of personal values to
-     * already existing roles. Does not change the inheritance policy.
-     * section/key null means all currently enabled personal settings.
-     */
-    fun applyToExisting(ctx: Context, section: String? = null, key: String? = null): Int {
-        val doc = load(ctx)
-        val instances = RoleStore.getHomeRoles(ctx)
-        runBlocking {
-            for (instance in instances) {
-                for (part in listOf("config", "bounds")) {
-                    if (section != null && section != part) continue
-                    val stored = doc.optJSONObject(part) ?: continue
-                    val keys = if (key != null) listOf(key) else enabled(doc, part).toList()
-                    val picked = JSONObject()
-                    for (name in keys) {
-                        if (part == "config" && name in setOf("sprite_pack", "use_new_sprite", "visible")) continue
-                        stored.optJSONObject(name)?.let { picked.put(name, it) }
-                    }
-                    if (picked.length() == 0) continue
-                    if (part == "config") PetConfig.forRole(ctx, instance.instanceId).importSettings(picked)
-                    else PetBounds.forRole(ctx, instance.instanceId).importSettings(picked)
-                }
-            }
-        }
-        return instances.size
-    }
-
-    /** Runs once after adding a role to home, not when recalling or summoning it. */
+    /** Called once when the home instance is created, not on every summon. */
     fun applyToNewRole(ctx: Context, roleId: String) {
-        val doc = load(ctx)
+        apply(ctx, listOf(roleId), null, null)
+    }
+
+    /** A single card changes its own defaults, thresholds AND live value. */
+    fun applyToExisting(ctx: Context, page: SettingsPage? = null, key: String? = null): Int {
+        val roles = RoleStore.getHomeRoles(ctx).map { it.instanceId }
+        apply(ctx, roles, page, key)
+        return roles.size
+    }
+
+    private fun apply(ctx: Context, roles: List<String>, page: SettingsPage?, key: String?) {
+        val habit = source(ctx)
         runBlocking {
-            for (section in listOf("config", "bounds")) {
-                val stored = doc.optJSONObject(section) ?: continue
-                val selected = JSONObject()
-                for (key in enabled(doc, section)) {
-                    if (section == "config" && key in setOf("sprite_pack", "use_new_sprite", "visible")) continue
-                    stored.optJSONObject(key)?.let { selected.put(key, it) }
+            for (id in roles) {
+                val target = PetBounds.forRole(ctx, id)
+                val config = PetConfig.forRole(ctx, id)
+                for (p in SettingsPage.entries) {
+                    if (page != null && page != p) continue
+                    val merged = merged(target.getBlocking(p), habit.getBlocking(p), key)
+                    target.updateBounds(p, merged)
+                    config.resetFromBounds(target, p, onlyKey = key)
                 }
-                if (selected.length() == 0) continue
-                if (section == "config") PetConfig.forRole(ctx, roleId).importSettings(selected)
-                else PetBounds.forRole(ctx, roleId).importSettings(selected)
             }
         }
     }
