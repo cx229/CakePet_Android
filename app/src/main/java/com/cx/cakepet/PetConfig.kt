@@ -754,6 +754,7 @@ class PetConfig private constructor(
                     "feedingEnabled" -> nc.copy(feedingEnabled = sw.default)
                     "feedingAutoExpire" -> nc.copy(feedingAutoExpire = sw.default)
                     "feedingFullScreen" -> nc.copy(feedingFullScreen = sw.default)
+                    "feedingEdgeRefresh" -> nc.copy(feedingEdgeRefresh = sw.default)
                     "feedingBorderShow" -> nc.copy(feedingBorderShow = sw.default)
                     "feedGrowEnabled" -> nc.copy(feedGrowEnabled = sw.default)
                     else -> nc
