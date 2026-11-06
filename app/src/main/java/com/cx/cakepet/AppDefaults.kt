@@ -288,14 +288,14 @@ object AppBounds {
     )
     val THINKING_COLORS = listOf(
         ColorBound("thinkingBgColor", "背景颜色", "背景", THINKING_PRESET_COLORS, 0xFFFFFFFF.toInt()),
-        ColorBound("thinkingColor", "文字颜色", "显示", THINKING_PRESET_COLORS, ConfigDefaults.THINKING_COLOR)
+        ColorBound("thinkingColor", "颜色", "显示", THINKING_PRESET_COLORS, ConfigDefaults.THINKING_COLOR)
     )
     val THINKING_ORDER = listOf(
         "thinkingEnabled",
         "thinkingTextSize", "thinkingAlpha", "thinkingOffset", "thinkingEmpty",
+        "thinkingColor",
         "thinkingFlashIn", "thinkingFlashOut",
-        "thinkingBgEnabled", "thinkingBgAlpha", "thinkingBgColor",
-        "thinkingColor"
+        "thinkingBgEnabled", "thinkingBgAlpha", "thinkingBgColor"
     )
 
     // ---------------- RANDOM 页 ----------------
@@ -339,7 +339,7 @@ object AppBounds {
     val RANDOM_SWITCHES = listOf(
         SwitchBound("randomEnabled", "随机模式", "随机模式", false)
     ) + RANDOM_ITEM_SPECS.map { SwitchBound(it.key, it.label, "随机项", it.defaultOn) }
-    val RANDOM_ORDER = listOf("randomEnabled", "randomPeriod") + RANDOM_ITEM_SPECS.map { it.key }
+    val RANDOM_ORDER = listOf("randomEnabled") + RANDOM_ITEM_SPECS.map { it.key } + "randomPeriod"
     /** 由阈值开关默认值重建 randomItems 位掩码（系统出厂 / 用户默认均走此函数，保证唯一真相源）。 */
     fun randomItemsFromBounds(b: PageBounds): Int {
         var mask = 0
