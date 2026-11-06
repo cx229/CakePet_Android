@@ -46,13 +46,13 @@ jobs:
         run: bash ./gradlew --no-daemon assembleDebug
 
       - name: Name GitHub test APK
-        run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/CakePet-v1.26.11.06.10.38-gt.apk
+        run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/CakePet-v1.26.11.06.11.06-gt.apk
 
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CakePet-v1.26.11.06.10.38-gt-apk
+          name: CakePet-v1.26.11.06.11.06-gt-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
