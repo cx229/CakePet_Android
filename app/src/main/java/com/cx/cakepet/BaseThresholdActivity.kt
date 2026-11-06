@@ -143,7 +143,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         }
 
         // Settings cards use 8dp top/bottom padding; item-specific spacing remains inside each row.
-        val cardPadV = dp(8)
+        val cardPadV = (8 * resources.displayMetrics.density + 0.5f).toInt()
 
         groupOrder.forEachIndexed { groupIndex, g ->
             // 非首模块前：inflate 复用 include_module_header（仅模块标题，无模块间分隔线），与设置页一致
