@@ -704,7 +704,7 @@ class PetService : Service() {
                 physAccumulator -= PHYS_STEP_MS
             }
             // Local lift is an event-based alignment, not a periodic physics correction.
-            // Do not re-snap a walking / climbing pet each 200ms into a fake fall.
+            // Do not re-snap a moving / climbing pet each 200ms into a fake fall.
 
             // 自动觅食驱动（攀岩走壁子开关）：在动画推进前计算每只宠物的觅食状态，
             // 选最近食物/沿墙走/吃到投喂。优先级高于飞跃但不拦截（无食物则回落飞跃/选池）。
@@ -2073,7 +2073,7 @@ class PetService : Service() {
     private val TILT_GAIN = 2.5f
     // 体感下根据传感器重力向量量化“脚朝向”的阈值：
     //   TILT_DIR_RATIO：左右分量占主导的比例（>0.6 即左右比上下大 50% 才算“远大于”），
-    //     用于决定临时把宠物旋转到脚朝左/右（影响 sit/walk/蠕动/扒鱼等姿态与位移方向）。
+    //     用于决定临时把宠物旋转到脚朝左/右（影响 静止及其他普通动画等姿态与位移方向）。
     //   TILT_DIR_MIN_TOTAL：左右+上下分量合成加速度低于此值（平放/近水平）时不切方向，
     //     保持当前朝向，避免传感器噪声在边界反复横跳。按当前 k 缩放，与重力强度联动。
     private val TILT_DIR_RATIO = 0.6f
@@ -2140,7 +2140,7 @@ class PetService : Service() {
                     Log.d("CakePetTilt", "sensor gx=$gx gy=$gy rot=$cachedRotation sx=$sx sy=$sy -> tiltGx=${petView.physics.tiltGx} tiltGy=${petView.physics.tiltGy}")
                 }
                 // 由重力向量量化“脚朝向”：左右分量远大于上下时脚朝左右，上分量主导时脚朝上，
-                // 其余（下主导/平衡/平放）脚朝下。旋转会同步影响渲染姿态与 walk/蠕动/扒鱼位移方向，
+                // 其余（下主导/平衡/平放）脚朝下。旋转会同步影响渲染姿态与 普通动画位移方向，
                 // 并在切换时重算边界（窗口为正方形，旋转后尺寸不变，仅锚点偏移随 rotateOffset 变化）。
                 updateTiltGravityDir()
             } catch (e: Throwable) {
@@ -2468,7 +2468,7 @@ class PetService : Service() {
     /**
      * 体感下根据当前重力向量（tiltGx/tiltGy）量化宠物“脚朝向” gravityDir：
      *   - 左右分量远大于上下（|tiltGx| 占比 > TILT_DIR_RATIO）：脚朝左右（gx>0 右 / gx<0 左），
-     *     临时旋转宠物，使其脚指向屏幕左右，并影响 walk/蠕动/扒鱼等位移方向。
+     *     临时旋转宠物，使其脚指向屏幕左右，并影响 普通动画等位移方向。
      *   - 否则若上分量主导（tiltGy < 0）：脚朝上（手机倒扣/上倾）。
      *   - 其余（下主导 / 平衡 / 平放）：脚朝下（默认）。
      * 带滞回：仅当方向真变化且合成加速度足够大时才切换并重算边界，避免传感器噪声抖动。
@@ -2795,7 +2795,7 @@ class PetService : Service() {
         val (ax, ay) = view.getBaseAnchorScaled()
         // 旋转/脚朝向必须与实际渲染严格同源（stateRotation: flying>isClimbing>isSnapped>重力）。
         // 之前只特判了吸附态，漏掉攀爬态——攀爬渲染用 climbRotation/climbSide（图被旋 90/270°、脚朝侧墙），
-        // 边界却按重力直立算，导致“哪条边是锚点边”错位：左右墙向下 walk 时图底越出下边界才换墙。
+        // 边界却按重力直立算，导致“哪条边是锚点边”错位：左右墙向下沿墙移动 时图底越出下边界才换墙。
         val rotDeg = when {
             view.physics.isSnapped -> view.snapRotation
             view.physics.isClimbing -> view.climbRotation
