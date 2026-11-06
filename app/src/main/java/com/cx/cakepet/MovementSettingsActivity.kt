@@ -119,7 +119,7 @@ class MovementSettingsActivity : AppCompatActivity() {
         val folds = SettingsFoldController(this).apply {
             add(R.id.sw_move_enabled,
                 listOf(R.id.maxspeed_bar, R.id.group_movement_details),
-                indentChildren = false)
+                indentChildren = true)
             add(R.id.sw_gravity_enabled,
                 listOf(R.id.sw_tilt_gravity, R.id.gravity_bar, R.id.group_gravity_directions),
                 dependency = { it.moveEnabled }, unavailableText = "移动总开关已关闭，此功能暂不生效")
