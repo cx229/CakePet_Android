@@ -34,11 +34,10 @@ object RolePackageContract {
         listOf("touch", "lift_up", "right_medium"),// 提起：中速向右
         listOf("touch", "lift_up", "right_fast"),  // 提起：快速向右
         listOf("touch", "jump_down"),            // 触摸：落地（跳下）
-        listOf("touch", "walk"),                 // 触摸：走
         listOf("snap", "snap_head"),             // 吸附：探头
         listOf("snap", "pat_head", "pat_head"),  // 吸附：探头摸头
         listOf("snap", "feed", "eat"),           // 吸附：探头投食
-        listOf("climb", "walk"),                 // 攀岩：走
+        listOf("climb", "move"),                 // 攀岩：移动
         listOf("climb", "jump_up"),              // 攀岩：跳起
         listOf("pat_head", "pat_head"),          // 摸头：摸头
         listOf("feed", "eat"),                   // 投食：吃鱼动作（模式）
