@@ -2149,7 +2149,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                                 if (!nowChecked && checked && leaves.getValue(key).second
                                         .filter { it != modeId }.isEmpty()) {
                                     // Restore without firing another selection callback.
-                                    check.setOnCheckedChangeListener(null)
+                                    // Keep the listener: disabling it here made the
+                                    // next tap appear to bypass this restriction.
+                                    // isChecked stays true because selected has not changed.
                                     check.isChecked = true
                                     warnLastBinding(path)
                                 } else {
