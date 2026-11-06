@@ -116,7 +116,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
-                android:text="    芝麻酥促销(半江离)、Shimeji(kilkakon)"
+                android:text="    芝麻酥促销(_半江离)、Shimeji(kilkakon)"
                 android:textSize="16dp" />
 
             <!-- ===== 夜间模式强制开关 ===== -->
