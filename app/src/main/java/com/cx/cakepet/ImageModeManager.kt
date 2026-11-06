@@ -33,7 +33,7 @@ data class SpritePack(
     val name: String = "",             // 资源包中文名（modes.jsonc 指定，v1.0 必填），仅展示用
     val shortName: String = "",         // 资源包默认简称（modes.jsonc 指定，v1.0 必填）：每个角色各自定义，不全局写死
     // v1.02：所有功能路径均映射到通用 Mode ID；Mode 可用于角色、食物及其他动画。
-    // 键为【功能路径】（如 [climb, walk]、[snap, pat_head, pat_head]），层数不限；
+    // 键为【功能路径】（如 [climb, move]、[snap, pat_head, pat_head]），层数不限；
     // 值为候选列表（当前多为单元素，为将来"同一功能多个动作"预留）。
     val functions: Map<List<String>, List<String>> = emptyMap(),
     // 模式名 → 是否循环（modes 里每项的 loop）。循环类（走/蠕动等）须用 setMode 常驻，
@@ -64,11 +64,11 @@ class ImageModeManager(
         val delay: () -> Long,          // 该帧停留时长(ms)
         val anchorX: Int = -1,          // 图片像素锚点 X（<0 表示用图宽/2 居中）
         // 图片像素锚点 Y（距【底】边，左下角原点，Y 向上）。
-        // 合法范围 [-128, 128]：0=贴底，128=贴顶，负数=脚在图底下方（图外，如 walk/wriggle 的脚实际在地面以下）。
+        // 合法范围 [-128, 128]：0=贴底，128=贴顶，负数=脚在图底下方（图外，如 不同姿态动画 的脚实际在地面以下）。
         // null 表示未设置：回退贴底 0（脚贴地）。锚点完全由逐帧 anchorX/anchorY 决定，不假设“图底中心”。
         val anchorY: Int? = null,
         // 帧位移偏移(px)，对齐 PC 的 QPoint(x,0) offset：每帧把该偏移累加到锚点坐标，
-        // 实现“拉鱼/扒鱼”这类【帧驱动】位移（区别于物理速度驱动的 walk/roll）。
+        // 实现“拉鱼/扒鱼”这类【帧驱动】位移（区别于引擎主动导航或抛掷的连续速度）。
         // 单循环：一次性动画播完即停，不反弹（对齐 PC PullFishMode 第6~9帧的 offset）。
         val dx: Int = 0,
         val dy: Int = 0,
@@ -460,7 +460,7 @@ class ImageModeManager(
 
     /**
      * 所有模式所有帧的全局最大【原始】尺寸（真实像素，未 padding）。用于固定统一画布尺寸，
-     * 保证任何动画帧（Roll/Walk/探头/落地等）都能完整显示且窗口尺寸恒定 → 不重排。
+     * 保证任何动画帧（滚动、探头、落地和其他动画等）都能完整显示且窗口尺寸恒定 → 不重排。
      * 用 rawBitmapSize（仅取边界）而非 loadBitmap，避免初始化期引用尚未赋值的 globalW/globalH。
      */
     fun globalMaxSize(): Pair<Int, Int> {
@@ -482,7 +482,7 @@ class ImageModeManager(
      * 对外输入约定（方便美术/新增动作直接按图确认地面点）：
      *   - anchorX：距图片【左】边的像素（<0 表示水平居中 = 图宽/2）
      *   - anchorY：距图片【底】边的像素（左下角原点，Y 向上）。null = 未设置（贴底 = 0）；
-     *     可为负值（脚在图底下方，如 walk/wriggle），转换器照常计算 rawH - anchorY，不截断。
+     *     可为负值（脚在图底下方，如 不同姿态动画），转换器照常计算 rawH - anchorY，不截断。
      * 背景：原 PC 锚点是“距顶 + 贴底 padding 偏移”的复合值，难直观。现改为按 PNG 左下角
      * 直接填地面点，转换器在内部还原为旧版等价坐标，保证渲染/边界效果【与改动前完全一致】。
      *
