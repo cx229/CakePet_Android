@@ -39,7 +39,11 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     protected abstract val pageTitleText: String
 
     protected lateinit var binding: ActivityThresholdSettingsBinding
-    protected val roleId by lazy { intent?.getStringExtra("role_id") ?: RoleRegistry.DEFAULT.id }
+    protected val habitMode: Boolean get() = intent.getBooleanExtra("user_habit_mode", false)
+    protected val roleId by lazy {
+        if (habitMode) UserHabits.ROLE_ID
+        else intent?.getStringExtra("role_id") ?: RoleRegistry.DEFAULT.id
+    }
     protected lateinit var petBounds: PetBounds
     protected lateinit var petConfig: PetConfig
     protected var current: PageBounds = PageBounds()
@@ -56,9 +60,10 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         binding.statusBarSpacer.layoutParams.height = getStatusBarHeight()
         binding.statusBarSpacer.requestLayout()
 
-        binding.tvTitle.text = "$pageTitleText · 阈值/默认"
+        binding.tvTitle.text = if (habitMode) "$pageTitleText · 用户习惯"
+            else "$pageTitleText · 阈值/默认"
         // 标题下方小字灰色：当前页面所属角色名（与设置页一致）
-        binding.tvTitleSub.text = RoleStore.resolveDisplayName(this, roleId)
+        binding.tvTitleSub.text = if (habitMode) "新建角色时自动采用" else RoleStore.resolveDisplayName(this, roleId)
         // 离开前先让持有焦点的输入框失焦 → 触发 onLostFocus 把挂起的默认值/边界编辑落盘，
         // 否则直接返回时编辑值未提交，子页读到的仍是旧值（"改了不生效/需重载"）。
         binding.ivBack.setOnClickListener { leave() }
@@ -79,6 +84,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 R.id.item_reset_system to { resetSystem() }
             )
         )
+        btnMore.visibility = if (habitMode) View.GONE else View.VISIBLE
         btnMore.setOnClickListener { moreMenu.show() }
 
         current = petBounds.getBlocking(page)
@@ -166,7 +172,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             shownOrder.forEach { key ->
                 when {
                     key == "imeMode" && current.keyboardModeDefault != null && g == "键盘适应" -> {
-                        card.addView(choiceRow("键盘适应", AppBounds.KEYBOARD_MODES,
+                        addHabitItem(card, "imeMode", choiceRow("键盘适应", AppBounds.KEYBOARD_MODES,
                             current.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE) { selected ->
                             if (selected != current.keyboardModeDefault) {
                                 current = current.copy(keyboardModeDefault = selected)
@@ -176,7 +182,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     }
                     choiceMap[key]?.value?.group == g -> {
                         val (idx, choice) = choiceMap.getValue(key)
-                        card.addView(choiceRow(choice.label, choice.options, choice.default) { selected ->
+                        addHabitItem(card, key, choiceRow(choice.label, choice.options, choice.default) { selected ->
                             if (selected != current.choices[idx].default) {
                                 current = current.copy(choices = current.choices.toMutableList().also {
                                     it[idx] = it[idx].copy(default = selected)
@@ -187,19 +193,19 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     }
                     sliderMap[key]?.value?.group == g -> {
                         val (idx, s) = sliderMap.getValue(key)
-                        card.addView(sliderItem(s, idx))
+                        addHabitItem(card, key, sliderItem(s, idx))
                     }
                     dualMap[key]?.value?.group == g -> {
                         val (idx, d) = dualMap.getValue(key)
-                        card.addView(dualItem(d, idx))
+                        addHabitItem(card, key, dualItem(d, idx))
                     }
                     switchMap[key]?.value?.group == g -> {
                         val (idx, sw) = switchMap.getValue(key)
-                        card.addView(switchItem(sw, idx))
+                        addHabitItem(card, key, switchItem(sw, idx))
                     }
                     colorMap[key]?.value?.group == g -> {
                         val (idx, c) = colorMap.getValue(key)
-                        card.addView(colorItem(c, idx))
+                        addHabitItem(card, key, colorItem(c, idx))
                     }
                 }
             }
@@ -210,6 +216,42 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             }
             binding.container.addView(card)
         }
+    }
+
+    /** Same threshold controls, with one explicit per-item action in habit mode. */
+    private fun addHabitItem(card: LinearLayout, key: String, item: View) {
+        if (!habitMode) {
+            card.addView(item)
+            return
+        }
+        val wrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(-1, -2)
+        }
+        val action = TextView(this).apply {
+            text = "将本项应用到已有角色"
+            textSize = 10f
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            setTextColor(getColor(R.color.cp_sub))
+            setPadding(16, 12, 20, 4)
+            minHeight = (32 * resources.displayMetrics.density).toInt()
+            setBackgroundResource(android.R.drawable.list_selector_background)
+            isClickable = true
+            setOnClickListener {
+                currentFocus?.clearFocus()
+                showConfirmDialog(
+                    title = "应用用户习惯",
+                    bodyHtml = "将本项默认值及阈值应用到<b>全部已有角色</b>？",
+                    positiveText = "应用"
+                ) {
+                    val count = UserHabits.applyToExisting(this@BaseThresholdActivity, page, key)
+                    Toast.makeText(this@BaseThresholdActivity, "已应用到 $count 个角色", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        wrapper.addView(action, LinearLayout.LayoutParams(-1, -2))
+        wrapper.addView(item)
+        card.addView(wrapper)
     }
 
     private fun sliderItem(s: SliderBound, index: Int): View {
@@ -494,7 +536,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     protected fun commitOne() {
         current = normalizeBounds(current)
         runBlocking { petBounds.updateBounds(page, current) }
-        runBlocking { coerceConfigToBounds(page) }
+        if (!habitMode) runBlocking { coerceConfigToBounds(page) }
     }
 
     /**
