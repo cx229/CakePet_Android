@@ -454,7 +454,7 @@
                         android:layout_height="wrap_content" android:thumbTint="@color/switch_black_selector" android:trackTint="@color/switch_black_selector"/>
                 </com.cx.cakepet.SettingsRippleRow>
 
-                <!-- 觅食速度：攀岩走壁自动觅食时沿墙奔向食物的速度（px/s） -->
+                <!-- 觅食位移倍率：1 倍为素材帧原始位移，0 倍不移动 -->
                 <com.cx.cakepet.SettingsRippleRow android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -462,7 +462,7 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="觅食速度" style="@style/SettingsOptionTitle"/>
+                                android:text="觅食位移倍率" style="@style/SettingsOptionTitle"/>
                             <TextView android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="「酥」飞快奔向小鱼干"
