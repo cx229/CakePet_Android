@@ -578,7 +578,7 @@ class PetView @JvmOverloads constructor(
      * 与物理步进完全解耦（对齐 PC：img_move_by_offset 由物理速度驱动，set_image 仅算左上角）。
      */
     /** Apply a frame's dx/dy exactly once; physics rebound belongs only to throws. */
-    /** Only active food navigation owns continuous along-wall velocity. */
+    /** Navigation owns the route; each Mode still owns its own dx/dy frame impulses. */
     private fun isForageNavigationDriving(): Boolean =
         physics.isClimbing && forageActive && imageManager.forageSelected &&
             !imageManager.isPlayingForced() && !physics.isDragging && !physics.isThrowing &&
@@ -699,7 +699,9 @@ class PetView @JvmOverloads constructor(
         imageManager.inSnapped = physics.isSnapped
         if (imageManager.forageSelected && forageActive && !physics.isClimbing &&
             !physics.isDragging && !physics.isThrowing && !flying) {
-            val wall = landingWall()
+            // Reattach only after genuine physical contact, not when merely near a wall
+            // (a small outward dy must be allowed to separate from the surface).
+            val wall = landingWall(0f)
             if (wall >= 0) setClimb(wall)
         }
         // Flight is physics state; Mode duration, frames and nextMode remain independent.
@@ -737,10 +739,8 @@ class PetView @JvmOverloads constructor(
                 applyFrameMotion()
             }
         }
-        // Engine-controlled food navigation writes a continuous velocity along the
-        // current climb surface. Ordinary animation dx/dy is applied by applyFrameMotion.
-        // Never use physics reboundRatio to turn around in non-throwing movement.
-        // Frame motion is applied once by applyFrameMotion. No background navigation velocity.
+        // All movement comes from the current frame or normal physics; forage
+        // supplies route direction and bounds only, never a background speed.
         if (imageManager.curDx() != 0 || imageManager.curDy() != 0) {
             // The frame has already moved through applyFrameMotion. Keep gravity intact.
             onPositionChanged?.invoke(physics.x, physics.y)
@@ -1487,9 +1487,8 @@ class PetView @JvmOverloads constructor(
     var climbWall = -1
 
     // 落地时根据物理位置判定所贴的墙（0底/1左/2右/3顶）；未贴墙返回 -1。
-    private fun landingWall(): Int {
+    private fun landingWall(tol: Float = 4f): Int {
         val p = physics
-        val tol = 4f
         return when {
             p.y >= p.maxY - tol -> 0
             p.x <= p.minX + tol -> 1
@@ -1608,19 +1607,12 @@ class PetView @JvmOverloads constructor(
      * 自动觅食每帧同步：active=已锁定有效食物且攀岩非吸附；tx/ty=食物中心屏幕坐标。
      * PetService 负责选食物/吃食物，这里只接收目标让 tick 沿墙走向它（不在此判断食物逻辑）。
      */
-    private fun stopForageVelocity() {
-        if (!imageManager.forageSelected || physics.isDragging || physics.isThrowing) return
-        val side = if (physics.isClimbing) physics.climbSide else gravityDir
-        if (side == 0 || side == 3) physics.vx = 0f else physics.vy = 0f
-    }
-
     fun setForage(active: Boolean, tx: Float, ty: Float) {
         forageActive = active
         forageTargetX = tx
         forageTargetY = ty
         imageManager.forageActive = active
         if (!active) {
-            stopForageVelocity()
             imageManager.forageSelected = false
         }
         if (!active) { forageChosenX = Float.NaN; forageChosenY = Float.NaN }
@@ -1634,7 +1626,6 @@ class PetView @JvmOverloads constructor(
         forageActive = active
         imageManager.forageActive = active
         if (!active) {
-            stopForageVelocity()
             imageManager.forageSelected = false
         }
         forageCandX = xs
