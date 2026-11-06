@@ -2,6 +2,8 @@ package com.cx.cakepet
 
 import android.app.AlertDialog
 import android.graphics.BitmapFactory
+import android.content.Intent
+import com.google.android.material.snackbar.Snackbar
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -56,6 +58,17 @@ class RolePackEditorActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var animation: Runnable? = null
 
+    private fun showWatermarkNotice(corner: ImportWatermark.Corner?) {
+        if (corner == null || isFinishing) return
+        Snackbar.make(findViewById(android.R.id.content),
+            "检测到${corner.label}疑似水印并已去除", Snackbar.LENGTH_LONG)
+            .setAction("设置") {
+                startActivity(Intent(this, GlobalSettingsActivity::class.java))
+            }
+            .setActionTextColor(getColor(android.R.color.holo_blue_light))
+            .show()
+    }
+
     private fun pickedFileName(uri: Uri): String {
         val cursor = contentResolver.query(uri,
             arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
@@ -75,6 +88,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         var path = ""
         val bmp = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
             ?: error("无法解码图片")
+        val (cleaned, removed) = if (ImportWatermark.enabled(this)) ImportWatermark.clean(bmp)
+            else bmp to null
         try {
             require(bmp.width > 0 && bmp.height > 0 &&
                 bmp.width.toLong() * bmp.height <= 8_000_000) { "图片尺寸过大" }
@@ -84,10 +99,14 @@ class RolePackEditorActivity : AppCompatActivity() {
                 parent.mkdirs()
                 val file = File(parent, RolePackEditing.uniqueName(parent,
                     pickedFileName(uri).substringBeforeLast('.'), ".png"))
-                file.outputStream().use { check(bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+                file.outputStream().use { check(cleaned.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
                 path = file.canonicalFile.relativeTo(work.canonicalFile).invariantSeparatorsPath
             }
-        } finally { bmp.recycle() }
+        } finally {
+            if (cleaned !== bmp) cleaned.recycle()
+            bmp.recycle()
+        }
+        showWatermarkNotice(removed)
         return path
     }
 
@@ -116,6 +135,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         if (uri != null) attempt {
             val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
                 ?: error("无法解码图片")
+            val (cleaned, removed) = if (ImportWatermark.enabled(this)) ImportWatermark.clean(bitmap)
+                else bitmap to null
             try {
                 require(bitmap.width > 0 && bitmap.height > 0 &&
                     bitmap.width.toLong() * bitmap.height <= 8_000_000) { "图片尺寸过大" }
@@ -133,19 +154,26 @@ class RolePackEditorActivity : AppCompatActivity() {
                         else -> android.graphics.Bitmap.CompressFormat.PNG
                     }
                     dest.outputStream().use {
-                        check(bitmap.compress(format, 100, it)) { "图片写入失败" }
+                        check(cleaned.compress(format, 100, it)) { "图片写入失败" }
                     }
                 }
-            } finally { bitmap.recycle() }
+            } finally {
+                if (cleaned !== bitmap) cleaned.recycle()
+                bitmap.recycle()
+            }
             images()
+            showWatermarkNotice(removed)
         }
     }
     private val gifPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) attempt {
             val mode = uploadMode
             var paths = emptyList<String>()
+            var removed: ImportWatermark.Corner? = null
             resourceChange { work, json ->
-                val imported = RolePackEditing.gif(this, uri, work, uploadFolder, pickedFileName(uri))
+                val imported = RolePackEditing.gif(this, uri, work, uploadFolder, pickedFileName(uri)) { corner ->
+                    removed = corner
+                }
                 require(imported.length() > 0) { "GIF 没有可用帧" }
                 paths = (0 until imported.length()).map { imported.getJSONObject(it).getString("res") }
                 // Diagnose missing images before updating any Mode references or committing the pack.
@@ -170,6 +198,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     images()
                 }
             }
+            showWatermarkNotice(removed)
         }
     }
 
