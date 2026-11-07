@@ -2970,13 +2970,14 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
-    /** Autosave valid text with debounce, and flush before closing or navigating. */
+    /** A Function folder can own thinking without owning an animation pool. */
     private fun functionHasAnimationPool(path: List<String>): Boolean {
         var node: Any? = root.optJSONObject("functions")
         for (part in path) node = (node as? JSONObject)?.opt(part)
         return node is JSONArray || (node is JSONObject && node.optJSONArray("modes") != null)
     }
 
+    /** Autosave valid text with debounce, and flush before closing or navigating. */
     private fun thinkingDetails(id: String?) {
         var activeId = id
         var lastSaved = id?.let(::thinkingBody).orEmpty()
@@ -3100,7 +3101,7 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun chooseThinkingGroups(id: String, onSaved: (() -> Unit)? = null) {
         editor("选择碎碎念组", compact = true) { box ->
-            val known = allThinkingGroups().toMutableList()
+            val known = allThinkingGroups().filter { it != "全部" }.toMutableList()
             val checked = thinkingGroups(id).toMutableSet()
             val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             fun redraw() {
