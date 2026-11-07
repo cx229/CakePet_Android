@@ -46,7 +46,9 @@ class RolePackEditorActivity : AppCompatActivity() {
     private val detailDialogs = mutableListOf<android.app.Dialog>()
     private var suspendedDetails: List<android.app.Dialog> = emptyList()
     private var suspendedDetailOrigin: String? = null
-    private fun openModeFromDetail(key: String) {
+    private fun openModeFromDetail(key: String) = modeDetails(key)
+
+    private fun openModeEditorFromDetail(key: String) {
         val visible = detailDialogs.filter { it.isShowing }
         if (visible.isNotEmpty()) {
             suspendedDetails = visible.toList()
@@ -582,7 +584,8 @@ class RolePackEditorActivity : AppCompatActivity() {
      */
     private fun editor(title: String, compact: Boolean = false, readOnly: Boolean = false,
                        extraAction: (() -> Unit)? = null, confirmLabel: String = "保存",
-                       create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
+                        readOnlyActionLabel: String = "重命名",
+                        create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
         val frame = layoutInflater.inflate(R.layout.dialog_rename_role, null)
         frame.findViewById<TextView>(R.id.tv_title).text = title
         val card = (frame as android.view.ViewGroup).getChildAt(0) as android.view.ViewGroup
@@ -606,7 +609,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         frame.findViewById<TextView>(R.id.btn_positive).apply {
             if (readOnly && extraAction == null) visibility = View.GONE
-            text = if (readOnly) "重命名" else confirmLabel
+            text = if (readOnly) readOnlyActionLabel else confirmLabel
             setOnClickListener {
                 if (readOnly) {
                     extraAction?.invoke()
@@ -899,7 +902,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
                 content.addView(label, LinearLayout.LayoutParams(0, -2, 1f))
                 card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
-                rippleClick(card) { showMode(key) }
+                rippleClick(card) { modeDetails(key) }
                 card.addView(text("⋮", 24f).apply {
                     gravity = Gravity.CENTER
                     isClickable = true
@@ -2297,7 +2300,7 @@ class RolePackEditorActivity : AppCompatActivity() {
      * Reverse editor for Functions: a Mode may belong to multiple function pools.
      * The actual source of truth remains functions.jsonc; no duplicated Mode-side binding.
      */
-    private fun bindModeToFunctions(modeId: String) {
+    private fun bindModeToFunctions(modeId: String, onSaved: () -> Unit = {}) {
         val functionsRoot = root.getJSONObject("functions")
         val leaves = linkedMapOf<String, Pair<List<String>, List<String>>>()
         fun collect(node: JSONObject, parent: List<String>) {
@@ -2481,6 +2484,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     }
                 }
                 dialog.dismiss()
+                onSaved()
             }
         }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = px(5) })
         body.addView(actions)
@@ -3305,7 +3309,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         return result
     }
 
-    private fun thinkingConfigDialog(modeId: String? = null, functionPath: List<String>? = null) {
+    private fun thinkingConfigDialog(modeId: String? = null, functionPath: List<String>? = null,
+                                     onSaved: () -> Unit = {}) {
         val target = if (modeId != null) root.getJSONObject("modes").getJSONObject(modeId)
             else {
                 val path = requireNotNull(functionPath)
@@ -3401,6 +3406,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     }
                     obj.put("thinking", JSONObject().put("policy", policy).put("pool", pool))
                 }
+                onSaved()
                 if (detailDialogs.none { it.isShowing }) {
                     if (modeId != null && screen == "mode") showMode(modeId)
                     else if (modeId == null && screen == "functions") functions()
