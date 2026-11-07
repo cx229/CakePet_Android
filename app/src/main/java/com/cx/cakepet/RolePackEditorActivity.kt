@@ -1084,6 +1084,194 @@ class RolePackEditorActivity : AppCompatActivity() {
             save
         }
     }
+
+    /** Lightweight overview; child editors commit independently. */
+    private fun modeDetails(initialKey: String) {
+        if (root.optJSONObject("modes")?.has(initialKey) != true) return
+        var currentKey = initialKey
+        lateinit var redraw: () -> Unit
+        val dialog = editor(initialKey, compact = true, readOnly = true,
+            readOnlyActionLabel = "编辑动画 · ${root.getJSONObject("modes").getJSONObject(initialKey).getJSONArray("frames").length()}帧",
+            extraAction = { openModeEditorFromDetail(currentKey) }) { form ->
+            redraw = {
+                form.removeAllViews()
+                val mode = root.optJSONObject("modes")?.optJSONObject(currentKey)
+                if (mode != null) {
+                    val loop = playbackKind(mode)
+                    val duration = mode.optJSONObject("duration")
+                    val summary = when (loop) {
+                        "timed" -> "定时 · ${duration?.optLong("min", 3000) ?: 3000}–${duration?.optLong("max", 4000) ?: 4000}ms"
+                        "infinite" -> "无限循环"
+                        else -> "不循环"
+                    }
+                    val playbackCard = detailSection()
+                    playbackCard.addView(detailSectionHeader("循环播放", summary) {
+                        playbackSettings(currentKey) { redraw() }
+                    })
+                    if (loop != "infinite") {
+                        val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+                        playbackCard.addView(detailSectionHeader("后续动画",
+                            next.ifBlank { "无（由控制器决定）" }) {
+                            chooseModes(single = true, initial = listOfNotNull(next.takeIf { it.isNotEmpty() })) { selected ->
+                                val nextId = selected.firstOrNull().orEmpty()
+                                change { json ->
+                                    json.getJSONObject("modes").getJSONObject(currentKey).put("nextMode",
+                                        if (nextId.isEmpty()) JSONObject.NULL else nextId)
+                                }
+                                redraw()
+                            }
+                        })
+                    }
+                    addDetailSection(form, playbackCard)
+                    var count = 0
+                    fun countBindings(node: JSONObject) {
+                        node.keys().forEach { key ->
+                            when (val value = node.opt(key)) {
+                                is JSONArray -> if ((0 until value.length()).any { value.optString(it) == currentKey }) count++
+                                is JSONObject -> if (value.has("modes")) {
+                                    val choices = value.optJSONArray("modes")
+                                    if (choices != null && (0 until choices.length()).any {
+                                        choices.optString(it) == currentKey
+                                    }) count++
+                                } else if (key != "thinking") countBindings(value)
+                            }
+                        }
+                    }
+                    countBindings(root.getJSONObject("functions"))
+                    val functionCard = detailSection()
+                    functionCard.addView(detailSectionHeader("绑定功能", "${count} 个") {
+                        bindModeToFunctions(currentKey) { redraw() }
+                    })
+                    addDetailSection(form, functionCard)
+                    val thinking = mode.optJSONObject("thinking")
+                    val policy = thinking?.optString("policy", "inherit") ?: "inherit"
+                    val thinkingSummary = when (policy) {
+                        "off" -> "不播放"
+                        "hold" -> "持续 · ${thinkingPoolJson(thinking).size} 条"
+                        "cycle" -> "轮播 · ${thinkingPoolJson(thinking).size} 条"
+                        else -> "继承"
+                    }
+                    val thinkingCard = detailSection()
+                    thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
+                        thinkingConfigDialog(modeId = currentKey) { redraw() }
+                    })
+                    addDetailSection(form, thinkingCard)
+                }
+            }
+            redraw()
+            ({ })
+        }
+        val heading = dialog.findViewById<TextView>(R.id.tv_title)
+        fun refreshHeading() {
+            val label = android.text.SpannableString("$currentKey  ✎")
+            label.setSpan(android.text.style.UnderlineSpan(), 0, currentKey.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            heading.text = label
+            heading.setOnClickListener {
+                renameMode(currentKey) { renamed ->
+                    currentKey = renamed
+                    refreshHeading()
+                    redraw()
+                    dialog.findViewById<TextView>(R.id.btn_positive).text =
+                        "编辑动画 · ${root.getJSONObject("modes").getJSONObject(renamed).getJSONArray("frames").length()}帧"
+                    if (screen == "modes") modes()
+                }
+            }
+        }
+        refreshHeading()
+    }
+
+    private fun renameMode(key: String, onRenamed: (String) -> Unit) {
+        editor("重命名动画", compact = true) { form ->
+            val name = entry(form, "动画名称", key, compact = true)
+            ({
+                val renamed = name.text.toString().trim()
+                validId(renamed)
+                require(renamed == key || !root.getJSONObject("modes").has(renamed)) { "动画名称已存在" }
+                if (renamed != key) change { json ->
+                    val modes = json.getJSONObject("modes")
+                    val item = modes.getJSONObject(key)
+                    modes.remove(key)
+                    modes.put(renamed, item)
+                    modes.keys().forEach { other ->
+                        if (modes.getJSONObject(other).optString("nextMode") == key)
+                            modes.getJSONObject(other).put("nextMode", renamed)
+                    }
+                    substitute(json.getJSONObject("functions"), key, renamed)
+                }
+                onRenamed(renamed)
+            })
+        }
+    }
+
+    /** Playback-only entry, retaining the former attributes() loop semantics. */
+    private fun playbackSettings(key: String, onSaved: () -> Unit) {
+        val current = root.getJSONObject("modes").getJSONObject(key)
+        editor("循环播放", compact = true) { form ->
+            val options = listOf("不循环", "定时循环", "无限循环")
+            val spinner = Spinner(this)
+            SettingsSpinnerBinder.bind(spinner, options,
+                when (playbackKind(current)) { "timed" -> 1; "infinite" -> 2; else -> 0 }) { }
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            row.addView(text("循环播放", 14f), LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(spinner, LinearLayout.LayoutParams(0, px(48), 1f))
+            form.addView(row)
+            val timedFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val timerRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val previous = current.optJSONObject("duration")
+            val min = entry(timerRow, "最短（ms）",
+                (previous?.optLong("min", 3000) ?: 3000).toString(), compact = true)
+            val max = entry(timerRow, "最长（ms）",
+                (previous?.optLong("max", 4000) ?: 4000).toString(), compact = true)
+            (min.parent as View).layoutParams =
+                LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
+            (max.parent as View).layoutParams =
+                LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
+            timedFields.addView(timerRow)
+            val finish = Switch(this).apply {
+                text = "循环结束时完整播放一轮"
+                isChecked = current.optBoolean("finishCycle", true)
+            }
+            timedFields.addView(finish)
+            form.addView(timedFields)
+            fun refreshFields() {
+                timedFields.visibility = if (spinner.selectedItemPosition == 1) View.VISIBLE else View.GONE
+            }
+            spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?,
+                    position: Int, id: Long) { refreshFields() }
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+            }
+            refreshFields()
+            ({
+                val kind = when (spinner.selectedItemPosition) {
+                    1 -> "timed"
+                    2 -> "infinite"
+                    else -> "off"
+                }
+                val newDuration = if (kind == "timed") {
+                    val lo = min.text.toString().toLong()
+                    val hi = max.text.toString().toLong()
+                    require(lo > 0 && hi >= lo) { "时长必须为正数，最长不得小于最短" }
+                    JSONObject().put("min", lo).put("max", hi)
+                } else null
+                change { json ->
+                    val mode = json.getJSONObject("modes").getJSONObject(key)
+                    mode.put("loopMode", kind)
+                    mode.put("loop", kind != "off")
+                    if (newDuration != null) {
+                        mode.put("duration", newDuration)
+                        mode.put("finishCycle", finish.isChecked)
+                    }
+                }
+                onSaved()
+            })
+        }
+    }
+
     private fun showMode(key: String) {
         modeId = key
         bulkSelected.clear()
