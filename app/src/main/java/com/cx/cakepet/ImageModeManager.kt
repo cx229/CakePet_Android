@@ -349,7 +349,7 @@ class ImageModeManager(
                         val sameMode = next == def.name
                         if (next != null && switchTo(next)) {
                             changed = true
-                            modeChanged = !sameMode
+                            modeChanged = true
                         } else {
                             timeTarget = Long.MAX_VALUE
                             timerRequested = true
