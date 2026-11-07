@@ -6,6 +6,7 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.WindowManager
@@ -29,95 +30,10 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
     }
 
     companion object {
-        // 文本池（碎碎念），含每条显示时长参数
-        private data class TrayMsgMeta(val text: String, val base_ms: Long = 0, val random_ms: Long)
-
-        private val MSG_POOL = listOf(
-            TrayMsgMeta(text = "你盯着屏幕，而我盯着你，谁又在盯着我们呢？", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "存在大于本质，但小鱼干先大于一切", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "我是谁？我从哪里来？要到哪里去？", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "喵生三大事：吃饭，睡觉", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "如果桌面是无限的，它的尽头在哪里？", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "今天想通了一个道理，有些道理是想不通的", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "（此处应有哲学）", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "我刚刚想到了一个绝妙的计划，但现在已经忘了", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "我决定把今天剩下的时间都用来发呆，这是经过深思熟虑的", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "你忙你的，我……我也忙我的", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "为什么圆的总是比方的更值得拍？", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "闭上眼睛的时候，耳朵就变得特别忙", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "我决定什么都不决定", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "等。等。等。等到了。什么？", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "我刚才觉得自己是一个球，滚来滚去的那种", base_ms = 500, random_ms = 3500),
-            TrayMsgMeta(text = "zzzZZZ...", base_ms = 500, random_ms = 5500),
-            TrayMsgMeta(text = "喵？！？", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "喵！", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "哦呜~ 哦呜~", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "哦呜~", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "咕噜咕咕噜...", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "呼噜……呼噜……", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "嗯？", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "……哦。", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "咕。", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "喵呜。", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "哈——", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "咔。", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "......", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "……", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "嗯。", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "哦。", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "……？", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "呼。", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "唔。", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "……啊。", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "(✘_✘)", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "(=°Д°=)", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "(◦`~´◦)", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "(=^‥^=)", base_ms = 1000, random_ms = 3500),
-            TrayMsgMeta(text = "(⋟﹏⋞)", base_ms = 1000, random_ms = 3500),
-
-            TrayMsgMeta(text = "人有五名，代价有三，你是其中之一", base_ms = 1500, random_ms = 3500),
-            TrayMsgMeta(text = "人有五名，代价有三，你不是其中之一", base_ms = 1500, random_ms = 3500),
-            TrayMsgMeta(text = "此番美景，我虽求而不得，却能，邀诸位共赏", base_ms = 1500, random_ms = 3500),
-            TrayMsgMeta(text = "彼岸……葬送！", base_ms = 1500, random_ms = 3500),
-            TrayMsgMeta(text = "「刃」的存在，唯有挥剑的刹那，才能消失片刻", base_ms = 1500, random_ms = 3500),
-            TrayMsgMeta(text = "千冶成刃", base_ms = 1500, random_ms = 3500),
-            TrayMsgMeta(text = "……不胖……不胖……", base_ms = 1500, random_ms = 3500),
-            TrayMsgMeta(text = "我会一直看着你", base_ms = 1500, random_ms = 3500),
-            TrayMsgMeta(text = "我有驾驶证", base_ms = 1500, random_ms = 3500),
-
-        )
-
-        /** 随机取一条碎碎念文本（供定格浮窗的备注默认内容使用）。 */
-        fun randomMutter(): String = MSG_POOL[Random.nextInt(MSG_POOL.size)].text
-
-        // 文字默认样式（未读取到配置时的兜底值，实际由 applyStyle() 覆盖）
         private const val DEFAULT_TEXT_SIZE_DP = 10f
         private const val DEFAULT_TEXT_COLOR = 0xFF333333.toInt()
-
-        // 空白时长边界（秒）：与设置页 RangeSlider 的 1-60s 保持一致，防止脏数据导致随机区间非法
         private const val EMPTY_LIMIT_MIN_S = 1
         private const val EMPTY_LIMIT_MAX_S = 60
-
-        // 启动后第一条固定文案（程序打开/碎碎念打开时）
-        private const val FIRST_TEXT = "喵？！？"
-        private const val FIRST_SHOW_MS = 2000L
-
-        // 设置页调整样式时的预览文案（不进轮播池，仅用于即时查看字号/颜色/透明度/偏移效果）
-
-        // 摸头（双击）文案：随机显示一条，1-3s 后继续轮播池
-        private val PAT_MSGS = listOf("喵喵喵", "喵" ,"喵！","喵？！？",
-            "~o( =∩ω∩= )m","(=^‥^=)",
-            "（｀へ´）","（▼へ▼メ）","(╬◣д◢)")
-        private const val PAT_MIN_MS = 1000L
-        private const val PAT_MAX_MS = 3000L
-
-        // 提起（拖拽中）文案：持续显示同一条，直到 clearLift()
-        private val LIFT_MSGS = listOf("喵？...", "喵？喵？喵？", "喵？！？")
-
-        // 落地（拖拽结束/被放下）文案：随机一条，1-3s 后进入空白再继续轮播池
-        private val LAND_MSGS = listOf("喵？.....", "咕噜咕噜....", "(⋟﹏⋞)", "(✘_✘)")
-        private const val LAND_MIN_MS = 1000L
-        private const val LAND_MAX_MS = 2000L
     }
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -209,31 +125,142 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
         materializing = false
     }
 
+    // One per-role timeline. A null ID is the empty/rest phase.
+    private var phaseId: String? = null
+    private var phaseStartedAt = SystemClock.uptimeMillis()
+    private var phaseTargetMs = 0L
+    private var effectiveThinking = ThinkingConfig()
+    private var thinkingTexts: Map<String, String> = emptyMap()
+    private var firstPackApplied = false
+    private var transitionSerial = 0L
+
     private val rotateRunnable = object : Runnable {
         override fun run() {
-            // 预览态下忽略轮播：避免预览文字被正常文案覆盖
             if (!enabled || previewActive || overrideActive) return
-            if (dissolving) {
-                // 退场特效进行中：不再自我排程，等 dissolve 末帧自行结束（会复位 dissolving 并继续轮播）
-                return
+            advanceWhenDue()
+        }
+    }
+
+    private fun elapsedPhase(): Long =
+        (SystemClock.uptimeMillis() - phaseStartedAt).coerceAtLeast(0L)
+
+    private fun resetPhase(id: String?, target: Long) {
+        phaseId = id
+        phaseStartedAt = SystemClock.uptimeMillis()
+        phaseTargetMs = target.coerceAtLeast(0L)
+    }
+
+    private fun enterRest() {
+        if (phaseId == null) {
+            advanceWhenDue()
+            return
+        }
+        resetPhase(null, nextEmptyMs())
+        showingText = false
+        transitionSerial++
+        stopLoop()
+        val serial = transitionSerial
+        dissolveThenClear {
+            if (serial != transitionSerial) return@dissolveThenClear
+            textView.text = ""
+            textView.visibility = android.view.View.INVISIBLE
+        }
+        advanceWhenDue()
+    }
+
+    private fun enterText(id: String) {
+        val content = thinkingTexts[id] ?: run { enterRest(); return }
+        resetPhase(id, effectiveThinking.sampleDuration())
+        showingText = true
+        transitionSerial++
+        stopLoop()
+        val serial = transitionSerial
+        materializeThenShow(content) {
+            if (serial == transitionSerial) advanceWhenDue()
+        }
+        advanceWhenDue()
+    }
+
+    private fun enterRandomText() {
+        val options = effectiveThinking.pool.filter { thinkingTexts[it]?.isNotBlank() == true }
+        if (options.isEmpty()) {
+            // Empty material pools are silent; never fall back to another role's text.
+            resetPhase(null, nextEmptyMs())
+            showingText = false
+            textView.text = ""
+            textView.visibility = android.view.View.INVISIBLE
+            return
+        }
+        enterText(options.random())
+    }
+
+    private fun advanceWhenDue() {
+        pendingRunnable?.let { handler.removeCallbacks(it) }
+        pendingRunnable = null
+        if (!enabled || previewActive || overrideActive) return
+        val locked = (effectiveThinking.policy == "hold" && phaseId != null) ||
+            (effectiveThinking.policy == "off" && phaseId == null)
+        if (locked) return
+        val remaining = phaseTargetMs - elapsedPhase()
+        if (remaining > 0L) {
+            pendingRunnable = rotateRunnable
+            handler.postDelayed(rotateRunnable, remaining)
+        } else if (phaseId == null) {
+            enterRandomText()
+        } else {
+            enterRest()
+        }
+    }
+
+    /**
+     * Apply the effective thinking policy when an actual Mode is entered.
+     * No Function transition history and no second timer are needed.
+     */
+    fun applyModeThinking(config: ThinkingConfig, catalog: Map<String, String>) {
+        thinkingTexts = catalog
+        effectiveThinking = config
+        if (!enabled || previewActive) return
+        when (config.policy) {
+            "off" -> {
+                if (phaseId != null) enterRest() else advanceWhenDue()
             }
-            if (materializing) {
-                // 显形特效进行中：不再自我排程，等 materialize 末帧自行结束（会复位 materializing 并继续）
-                return
-            }
-            if (showingText) {
-                // 当前这一条已显示足够久 -> 播放退场特效后进入空状态（持续随机 2-60s），再指定下一条有文字
-                showingText = false
-                dissolveThenClear {
-                    textView.visibility = android.view.View.INVISIBLE
-                    scheduleNext(nextEmptyMs())
+            "hold" -> {
+                val candidates = config.pool.filter { thinkingTexts[it]?.isNotBlank() == true }
+                if (candidates.isEmpty()) {
+                    // A missing pool cannot hold a text.
+                    effectiveThinking = config.copy(policy = "off")
+                    if (phaseId != null) enterRest() else advanceWhenDue()
+                } else {
+                    val selected = candidates.random()
+                    if (phaseId != selected) enterText(selected)
+                    else advanceWhenDue() // same ID retains its full elapsed time
                 }
-            } else {
-                // 空状态结束 -> 指定一条有文字的（一定非空）
-                showRandomText()
+            }
+            else -> {
+                if (phaseId != null) {
+                    if (phaseId !in config.pool || thinkingTexts[phaseId].isNullOrBlank()) {
+                        // An unavailable ID has an effective [0,0] duration.
+                        phaseTargetMs = 0L
+                    } else if (phaseTargetMs < config.minMs || phaseTargetMs > config.maxMs) {
+                        phaseTargetMs = config.sampleDuration()
+                    }
+                }
+                if (!firstPackApplied) {
+                    firstPackApplied = true
+                    // Existing app startup speaks immediately, but entering later Modes doesn't.
+                    if (phaseId == null && config.pool.isNotEmpty()) {
+                        enterRandomText()
+                        return
+                    }
+                }
+                advanceWhenDue()
             }
         }
     }
+
+    /** A shared text resource can also supply the frozen-window caption. */
+    fun samplePackText(): String =
+        effectiveThinking.pool.mapNotNull { thinkingTexts[it] }.randomOrNull() ?: ""
 
     init {
         textView = android.widget.TextView(context).apply {
@@ -258,29 +285,7 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
         reposition()
     }
 
-    private fun showRandomText() {
-        val meta = MSG_POOL[Random.nextInt(MSG_POOL.size)]
-        showingText = true
-        // 空白→有文字：先播显形特效（噪点凝聚/黑框退散等），定格后进入显示计时
-        materializeThenShow(meta.text) {
-            val showMs = meta.base_ms + Random.nextLong(0, meta.random_ms + 1)
-            scheduleNext(showMs)
-        }
-    }
-
-    // 首次启动：显示固定的第一条（喵？！？），直接出现（避免每次开设置页重放显形）
-    private fun startFirst() {
-        showingText = true
-        textView.text = FIRST_TEXT
-        textView.visibility = android.view.View.VISIBLE
-        scheduleNext(FIRST_SHOW_MS)
-    }
-
-    // 显示一条外部指定的文本（覆盖态使用），先播显形特效，不进入轮播计时。
-    private fun showOverrideText(text: String) {
-        showingText = true
-        materializeThenShow(text) { }
-    }
+    private fun showRandomText() = enterRandomText()
 
     private fun reposition() {
         // 紧贴屏幕底部，水平居中；仅受 offsetY（碎碎念偏移）影响 Y。
@@ -624,144 +629,24 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
     }
 
     fun setEnabled(on: Boolean) {
-        // 同值不重启：已启用又来一次 true（如其他配置项变更触发的 observer），
-        // 仅刷新 enabled 标志，不重置轮播，避免“一条条显示”被重新触发。
-        if (on == enabled) {
-            enabled = on
-            return
-        }
+        if (on == enabled) return
         enabled = on
         overrideActive = false
-        // 关闭碎碎念时一并退出预览态，避免预览文案残留在屏幕上
-        if (!on) {
-            previewActive = false
-        } else if (previewActive) {
-            // 重新启用时若仍处预览态（设置页未退出），继续保持预览显示
-            textView.text = previewText()
-            textView.visibility = android.view.View.VISIBLE
-            return
-        }
+        previewActive = false
+        transitionSerial++
+        stopLoop()
         if (on) {
-            // 启动轮播：首条固定“喵？！？”，之后进入空白再继续轮播池
+            resetPhase(null, nextEmptyMs())
+            firstPackApplied = false
             showingText = false
-            textView.visibility = android.view.View.INVISIBLE
             textView.text = ""
-            startFirst()
+            textView.visibility = android.view.View.INVISIBLE
+            advanceWhenDue()
         } else {
-            stopLoop()
-            if (showingText || overrideActive) {
-                showingText = false
-                overrideActive = false
-                dissolveThenClear {
-                    textView.visibility = android.view.View.INVISIBLE
-                }
-            } else {
-                textView.text = ""
-                textView.visibility = android.view.View.INVISIBLE
-            }
+            showingText = false
+            textView.text = ""
+            textView.visibility = android.view.View.INVISIBLE
         }
-    }
-
-    /**
-     * 覆盖结束后：进入一轮空状态（2-15s 随机），再继续轮播池的有文字。
-     * 即“摸头/提起”文案之后也必定是空白，再出现下一条。
-     */
-    private fun resumeAfterEmpty() {
-        showingText = false
-        textView.text = ""
-        textView.visibility = android.view.View.INVISIBLE
-        scheduleNext(nextEmptyMs()) // scheduleNext 内部注册 rotateRunnable（空状态结束 -> 有文字）
-    }
-
-    /**
-     * 一次性覆盖：显示 texts 中随机一条，持续随机 [minMs, maxMs]，之后直接继续轮播池的有文字。
-     * 用于“摸头”等短暂事件——摸头结束后下一个一定是文字（不先空白）。
-     */
-    fun showMomentary(texts: List<String>, minMs: Long, maxMs: Long) {
-        if (!enabled || previewActive) return   // 预览期间让位，保持预览文案不被覆盖
-        stopLoop()
-        overrideActive = true
-        showOverrideText(texts[Random.nextInt(texts.size)])
-        val dur = minMs + Random.nextLong(0, maxMs - minMs + 1)
-        handler.postDelayed({
-            overrideActive = false
-            if (!enabled) return@postDelayed
-            dissolveThenClear {
-                if (enabled) showRandomText()
-            }
-        }, dur)
-    }
-
-    /**
-     * 持续覆盖：显示 texts 中随机一条并保持，直到 clearOverride() 被调用才继续轮播池。
-     * 用于“提起”（拖拽中）等持续事件——整个提起期间都显示同一类文案。
-     */
-    fun showHeld(texts: List<String>) {
-        if (!enabled || previewActive) return   // 预览期间不接管文案
-        stopLoop()
-        overrideActive = true
-        showOverrideText(texts[Random.nextInt(texts.size)])
-    }
-
-    /** 结束持续覆盖：先播放退场特效，再进入空白继续轮播池 */
-    fun clearOverride() {
-        if (!overrideActive) return
-        overrideActive = false
-        if (enabled) {
-            if (showingText || (textView.text?.isNotEmpty() == true)) {
-                showingText = false
-                dissolveThenClear { if (enabled) resumeAfterEmpty() }
-            } else {
-                resumeAfterEmpty()
-            }
-        }
-    }
-
-    /** 摸头（双击）：随机显示一条摸头文案，持续随机 1-3s 后继续轮播池 */
-    fun showPat() {
-        showMomentary(PAT_MSGS, PAT_MIN_MS, PAT_MAX_MS)
-    }
-
-    /** 提起（拖拽中）：持续显示一条提起文案，直到 clearLift() */
-    fun showLift() {
-        showHeld(LIFT_MSGS)
-    }
-
-    /** 结束提起：进入空白再继续轮播池 */
-    fun clearLift() {
-        clearOverride()
-    }
-
-    /** 落地（拖拽结束/被放下）：先结束提起态，随机显示一条落地文案 1-3s，之后进入空白再继续轮播池 */
-    fun showLand() {
-        if (!enabled || previewActive) return
-        stopLoop()
-        overrideActive = true
-        showOverrideText(LAND_MSGS[Random.nextInt(LAND_MSGS.size)])
-        val dur = LAND_MIN_MS + Random.nextLong(0, LAND_MAX_MS - LAND_MIN_MS + 1)
-        handler.postDelayed({
-            overrideActive = false
-            if (!enabled) return@postDelayed
-            dissolveThenClear {
-                if (enabled) resumeAfterEmpty()   // 落地文案后先空白，再继续轮播池
-            }
-        }, dur)
-    }
-
-    /** 随机模式触发时：显示“变变变”，持续 2s+(0~3s) 后播放退场特效并继续轮播池。 */
-    fun showRandomTrigger() {
-        if (!enabled || previewActive) return
-        stopLoop()
-        overrideActive = true
-        showOverrideText("变变变")
-        val dur = 2000L + Random.nextLong(0, 3000L)
-        handler.postDelayed({
-            overrideActive = false
-            if (!enabled) return@postDelayed
-            dissolveThenClear {
-                if (enabled) showRandomText()   // 变变变之后直接接下一条轮播文案
-            }
-        }, dur)
     }
 
     fun setOffsetY(offset: Float) {
@@ -854,7 +739,11 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
     fun requestEmptyReset() {
         if (!enabled || previewActive || overrideActive || dissolving || materializing) return
         if (showingText) return
-        scheduleNext(nextEmptyMs())
+        if (phaseId == null) {
+            phaseTargetMs = nextEmptyMs()
+            phaseStartedAt = SystemClock.uptimeMillis()
+            advanceWhenDue()
+        }
     }
 
     /**
@@ -881,7 +770,8 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
             showingText = false
             textView.text = ""
             textView.visibility = android.view.View.INVISIBLE
-            resumeAfterEmpty()
+            resetPhase(null, nextEmptyMs())
+            advanceWhenDue()
         } else {
             textView.text = ""
             textView.visibility = android.view.View.INVISIBLE
@@ -904,6 +794,7 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
     }
 
     fun destroy() {
+        transitionSerial++
         stopLoop()
         try {
             windowManager.removeView(textView)
