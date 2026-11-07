@@ -2447,21 +2447,20 @@ class RolePackEditorActivity : AppCompatActivity() {
     /** Only the UI is translated. Engine function path keys remain the canonical English API. */
     private fun functionSegment(path: List<String>): String {
         return when (path.joinToString("/")) {
-            "snap/pat_head/pat_head", "pat_head/pat_head" -> "摸头动画"
-            "snap/feed/eat" -> "吸附进食"
-            "feed/eat" -> "吃鱼动画"
-            "feed/food" -> "食物动画"
+            "pat_head/pat_head", "snap/pat_head/pat_head" -> "摸头"
+            "feed/eat", "snap/feed/eat" -> "吃"
+            "feed/food" -> "食物"
+            "standby/pool" -> "待机池"
+            "standby/static_pool" -> "静止待机池"
             else -> when (path.last()) {
-                "static" -> "静止"
                 "standby" -> "待机"
-                "touch" -> "触摸"
+                "touch" -> "抛掷"
                 "snap" -> "吸附"
                 "climb" -> "攀岩"
-                "pat_head" -> "摸头"
-                "feed" -> "投喂"
+                "pat_head" -> if (path.size == 1) "摸摸头" else "摸头"
+                "feed" -> "投食"
                 "menu" -> "菜单动画"
                 "pool" -> "动画池"
-                "sit" -> "静坐"
                 "roll" -> "滚动"
                 "lift_up" -> "提起"
                 "slow" -> "慢速"
@@ -2476,8 +2475,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                 "forage" -> "觅食"
                 "move" -> "移动"
                 "snap_head" -> "探头"
-                "eat" -> "进食"
-                "food" -> "食物动画"
+                "eat" -> "吃"
+                "food" -> "食物"
                 else -> path.last()
             }
         }
@@ -2487,9 +2486,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         path.indices.joinToString("/") { functionSegment(path.take(it + 1)) }
 
     private fun functionDescription(path: List<String>): String = when (path.joinToString("/")) {
-        "static/sit" -> "进入静止状态时播放的基础动画"
-        "static/pool" -> "静止状态下随机选取的候选动画"
-        "standby/pool" -> "角色待机时随机选取的候选动画"
+        "standby/pool" -> "角色正常待机、初始进入或归位时的候选动画"
+        "standby/static_pool" -> "移动功能关闭时随机选取的待机动画"
         "touch/roll" -> "角色抛掷或滚动时播放"
         "touch/jump_down" -> "角色抛掷或滚动结束时播放"
         "touch/lift_up/slow" -> "缓慢提起角色时播放"
@@ -2511,9 +2509,8 @@ class RolePackEditorActivity : AppCompatActivity() {
     }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
     private fun functionFolderDescription(path: List<String>): String = when (path.joinToString("/")) {
-        "static" -> "角色静止时的基础动画"
-        "standby" -> "角色待机时的候选动画"
-        "touch" -> "角色触摸与拖动时的动画"
+        "standby" -> "角色正常待机和关闭移动时使用的动画池"
+        "touch" -> "角色提起、滚动和落地时的动画"
         "touch/lift_up" -> "角色被提起时的动画"
         "snap" -> "角色贴边吸附时的动画"
         "snap/pat_head" -> "角色吸附时的摸头动画"
@@ -2606,7 +2603,17 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun functionTree(parent: LinearLayout, values: JSONObject, path: List<String>) {
-        val keys = values.keys().asSequence().filter { it != "thinking" && it != "modes" }.toList()
+        val keys = values.keys().asSequence()
+            .filter { it != "thinking" && it != "modes" && it != "note" && it != "usage" }
+            .toList().let { existing ->
+                val priority = when (path.joinToString("/")) {
+                    "touch" -> listOf("lift_up", "roll", "jump_down")
+                    "feed" -> listOf("food", "eat")
+                    "standby" -> listOf("pool", "static_pool")
+                    else -> emptyList()
+                }
+                priority.filter { it in existing } + existing.filter { it !in priority }
+            }
         for (key in keys) {
             val currentPath = path + key
             val fullKey = currentPath.joinToString("/")

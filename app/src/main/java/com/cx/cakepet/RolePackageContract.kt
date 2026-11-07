@@ -24,9 +24,8 @@ object RolePackageContract {
      * 所有叶子都是 Mode ID 候选列表。
      */
     val REQUIRED_FUNCTION_PATHS = listOf(
-        listOf("static", "sit"),                 // 静止：静坐
-        listOf("static", "pool"),                // 静止动作池
-        listOf("standby", "pool"),               // 待机动作池
+        listOf("standby", "pool"),               // 普通待机池
+        listOf("standby", "static_pool"),        // 移动关闭时的静止待机池
         listOf("touch", "roll"),                 // 触摸：滚动
         listOf("touch", "lift_up", "slow"),        // 提起：慢速
         listOf("touch", "lift_up", "left_medium"), // 提起：中速向左

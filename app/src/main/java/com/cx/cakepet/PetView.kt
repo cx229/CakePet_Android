@@ -976,11 +976,10 @@ class PetView @JvmOverloads constructor(
             val isLiftUp = imageManager.isDragMode(m)
             val isSnapHead = imageManager.isFunctionMode(m, "snap", "snap_head")
             val isSnapPat = imageManager.isFunctionMode(m, "snap", "pat_head", "pat_head")
-            val mSit = modeOf("static", "sit")
-            if (mSit != null &&
-                (isRoll || isLiftUp || isSnapHead || isSnapPat) &&
+            if ((isRoll || isLiftUp || isSnapHead || isSnapPat ||
+                    (!physics.isClimbing && !imageManager.isStandbyMode(m))) &&
                 !imageManager.isPlayingForced()) {
-                imageManager.setMode(mSit)
+                imageManager.forceReset()
             }
         }
         // Snap controls its mapped idle playback policy, not a separate animation definition.
@@ -1073,7 +1072,7 @@ class PetView @JvmOverloads constructor(
             // 仅对“物理动作残留”的 LIFT_UP 做兜底复位（提起态不应在空闲时停留）。
             else -> {
                 if (imageManager.isDragMode() && !imageManager.isPlayingForced()) {
-                    modeOf("static", "sit")?.let { imageManager.setMode(it) }
+                    imageManager.forceReset()
                 }
             }
         }
@@ -2080,7 +2079,7 @@ class PetView @JvmOverloads constructor(
                 } else {
                     // 纯点击/短按（非拖拽、非长按）：若因历史原因停在 LIFT_UP，复位避免卡死
                     if (imageManager.isDragMode() && !imageManager.isPlayingForced()) {
-                        modeOf("static", "sit")?.let { imageManager.setMode(it) }
+                        imageManager.forceReset()
                     }
                     onTap?.invoke()        // 轻点置顶本宠，多宠物时让被压住的宠物下次可被点中
                 }

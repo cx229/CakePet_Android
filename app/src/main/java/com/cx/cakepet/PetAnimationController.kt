@@ -4,13 +4,14 @@ import android.graphics.Bitmap
 
 /** 宠物专用的状态选择及动作生命周期，通用 ImageModeManager 不参与任何角色业务判断。 */
 class PetAnimationController(private val assets: ImageModeManager) {
-    private var currentName = assets.modeOf("static", "sit") ?: ""
+    private var currentName = assets.leavesOf("standby", "pool").randomOrNull()
+        ?: assets.leavesOf("standby", "static_pool").randomOrNull() ?: ""
     private var clip: ImageModeManager.ModeClip? = assets.createClip(currentName)
     private var forced = false
     private var forcedReturn: String? = null
     private var forcedStart: String? = null
     private var modeChanged = false
-    private var thinkingFunctionPath: List<String> = listOf("static", "sit")
+    private var thinkingFunctionPath: List<String> = listOf("standby", "pool")
     private val pendingFunctionForMode = mutableMapOf<String, List<String>>()
     private var frameMotionPending = true
     /** Active state-owned Functions path. A finished action chain resumes from this pool. */
@@ -67,8 +68,19 @@ class PetAnimationController(private val assets: ImageModeManager) {
         listOf("slow", "left_medium", "left_fast", "right_medium", "right_fast")
             .any { isFunctionMode(name, "touch", "lift_up", it) }
 
-    private fun currentPool(): List<String> =
-        if (useStaticPool) leavesOf("static", "pool") else leavesOf("standby", "pool")
+    private fun standbyPath(): List<String> =
+        if (useStaticPool) listOf("standby", "static_pool") else listOf("standby", "pool")
+    private fun currentPool(): List<String> = leavesOf(*standbyPath().toTypedArray())
+    /** Reset/initialization selects a standby candidate, never a hard-coded default animation. */
+    private fun selectInitialStandby(): String? {
+        val primary = currentPool()
+        val available = if (primary.isNotEmpty()) primary else
+            leavesOf("standby", if (useStaticPool) "pool" else "static_pool")
+        val selected = available.randomOrNull() ?: return null
+        pendingFunctionForMode[selected] = if (primary.isNotEmpty()) standbyPath() else
+            listOf("standby", if (useStaticPool) "pool" else "static_pool")
+        return selected
+    }
     fun isStandbyMode(name: String = getMode()): Boolean = currentPool().any { assets.isContinuationOf(name, it) }
     fun pickStandbyMode(exclude: String): String {
         // Only this natural completion boundary may initiate automatic behaviors.
@@ -82,7 +94,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         val pool = currentPool().filter { it != exclude }
         val selected = if (pool.isNotEmpty()) pool.random() else getMode()
         // Random facing is a standby behavior, not a privilege of any Mode/Functions name.
-        pendingFunctionForMode[selected] = if (useStaticPool) listOf("static", "pool") else listOf("standby", "pool")
+        pendingFunctionForMode[selected] = standbyPath()
         if (assets.createClip(selected)?.hasFrameMotion == true) onStandbyMotionChosen?.invoke()
         return selected
     }
@@ -148,7 +160,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         forced = false
         forcedReturn = null
         forcedStart = null
-        modeOf("static", "sit")?.let { setMode(it) }
+        selectInitialStandby()?.let { setMode(it) }
     }
 
     fun setPack(pack: SpritePack) {
@@ -160,8 +172,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
         currentName = ""
         activeStateFunction = null
         pendingFunctionForMode.clear()
-        thinkingFunctionPath = listOf("static", "sit")
-        modeOf("static", "sit")?.let { setMode(it) }
+        thinkingFunctionPath = standbyPath()
+        selectInitialStandby()?.let { setMode(it) }
     }
 
     /** Physical landing wins over every unfinished flight animation or nextMode chain.
