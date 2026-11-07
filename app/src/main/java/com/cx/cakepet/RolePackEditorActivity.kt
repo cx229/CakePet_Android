@@ -1442,7 +1442,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         frameHeader.addView(text("支持长按拖动排序", 11f).apply {
             setTextColor(getColor(R.color.cp_note))
         })
-        panel.addView(frameHeader, LinearLayout.LayoutParams(-1, -2))
+        val frameSection = detailSection()
+        frameSection.addView(frameHeader, LinearLayout.LayoutParams(-1, -2))
         val frameActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         frameActions.addView(button("＋ 添加帧") {
             val last = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").length() - 1
@@ -1456,9 +1457,13 @@ class RolePackEditorActivity : AppCompatActivity() {
                 positiveText = "继续"
             ) { startUpload(true, action = "overwrite", mode = key) }
         }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
-        panel.addView(frameActions, LinearLayout.LayoutParams(-1, px(44)).apply {
-            topMargin = px(6)
-            bottomMargin = px(8)
+        frameSection.addView(frameActions, LinearLayout.LayoutParams(-1, px(44)).apply {
+            topMargin = px(8)
+            bottomMargin = px(5)
+        })
+        panel.addView(frameSection, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = px(9)
+            bottomMargin = px(3)
         })
         val order = (0 until frames.length()).toMutableList()
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
@@ -1482,6 +1487,30 @@ class RolePackEditorActivity : AppCompatActivity() {
             setPadding(px(16), 0, px(16), px(120))
         }
         activeFrameRecycler = recycler
+        // Draw a single subtle section surface behind visible frame rows.
+        // Keep the existing ViewHolders, drag helper, and one RecyclerView unchanged.
+        recycler.addItemDecoration(object : RecyclerView.ItemDecoration() {
+            private val surface = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = px(12).toFloat()
+                setColor(getColor(R.color.cp_card_bg))
+                setStroke(px(1), getColor(R.color.cp_divider))
+            }
+            override fun onDraw(canvas: android.graphics.Canvas, parent: RecyclerView,
+                                state: RecyclerView.State) {
+                var top = Int.MAX_VALUE
+                var bottom = Int.MIN_VALUE
+                for (i in 0 until parent.childCount) {
+                    val child = parent.getChildAt(i)
+                    if (parent.getChildAdapterPosition(child) <= 0) continue
+                    top = minOf(top, child.top)
+                    bottom = maxOf(bottom, child.bottom)
+                }
+                if (top == Int.MAX_VALUE) return
+                surface.setBounds(px(11), maxOf(0, top - px(3)),
+                    parent.width - px(11), minOf(parent.height, bottom + px(5)))
+                surface.draw(canvas)
+            }
+        })
         val adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             override fun getItemCount(): Int = order.size + 1
             override fun getItemViewType(position: Int): Int =
