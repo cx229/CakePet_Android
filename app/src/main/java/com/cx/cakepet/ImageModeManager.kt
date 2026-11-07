@@ -38,7 +38,8 @@ data class SpritePack(
     val functions: Map<List<String>, List<String>> = emptyMap(),
     // 模式名 → 是否循环（modes 里每项的 loop）。循环类（走/蠕动等）须用 setMode 常驻，
     // 一次性类用 playOnce；由素材包声明，代码不写死哪些动作该常驻。
-    val modeLoops: Map<String, Boolean> = emptyMap()
+    val modeLoops: Map<String, Boolean> = emptyMap(),
+    val thinking: PackThinking = PackThinking()
 )
 
 
