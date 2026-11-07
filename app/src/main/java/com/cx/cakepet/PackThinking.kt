@@ -117,3 +117,46 @@ data class PackThinking(
         }
     }
 }
+
+/** Upgrade imported thinking data in place; exported/current packs always carry explicit timing. */
+fun normalizeThinkingPack(root: JSONObject) {
+    val catalog = root.optJSONObject("thinkings") ?: JSONObject().also { root.put("thinkings", it) }
+    for (id in catalog.keys().asSequence().toList()) {
+        when (val raw = catalog.opt(id)) {
+            is String -> catalog.put(id, JSONObject().put("text", raw).put("groups", JSONArray()))
+            is JSONObject -> if (raw.optJSONArray("groups") == null) raw.put("groups", JSONArray())
+        }
+    }
+    fun normalize(config: JSONObject) {
+        val min = config.optLong("min", DEFAULT_THINKING_MIN_MS).coerceAtLeast(0)
+        val max = config.optLong("max", DEFAULT_THINKING_MAX_MS).coerceAtLeast(min)
+        val pool = config.opt("pool")
+        val result = JSONObject()
+        val ids = when (pool) {
+            is JSONObject -> pool.keys().asSequence().toList()
+            is JSONArray -> (0 until pool.length()).map { pool.optString(it) }.filter { it.isNotBlank() }
+            else -> emptyList()
+        }
+        for (id in ids.distinct()) {
+            val obj = (pool as? JSONObject)?.optJSONObject(id)
+            val lo = obj?.optLong("min", min)?.coerceAtLeast(0) ?: min
+            val hi = obj?.optLong("max", max)?.coerceAtLeast(lo) ?: max
+            result.put(id, JSONObject().put("min", lo).put("max", hi))
+        }
+        config.put("pool", result)
+        config.remove("min")
+        config.remove("max")
+    }
+    fun functions(node: JSONObject) {
+        node.optJSONObject("thinking")?.let(::normalize)
+        for (key in node.keys().asSequence().toList()) {
+            if (key == "thinking" || key == "modes") continue
+            node.optJSONObject(key)?.let(::functions)
+        }
+    }
+    root.optJSONObject("functions")?.let(::functions)
+    root.optJSONObject("modes")?.let { modes ->
+        for (key in modes.keys().asSequence().toList())
+            modes.optJSONObject(key)?.optJSONObject("thinking")?.let(::normalize)
+    }
+}
