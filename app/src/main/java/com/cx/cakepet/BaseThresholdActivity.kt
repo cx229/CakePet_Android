@@ -417,9 +417,12 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         row.addView(menu, LinearLayout.LayoutParams(dp(44), -1))
         }
         if (isFoldable(key)) {
+            // The title's own padding is part of its semantic indentation.
+            // View coordinates alone point to the unindented TextView box and
+            // incorrectly pin every chevron to the card's left edge.
             val arrow = TextView(this).apply {
                 text = if (foldExpanded[key] == false) "▸" else "▾"
-                textSize = 18f
+                textSize = if (habitMode) 15f else 18f
                 gravity = Gravity.CENTER
                 setTextColor(getColor(R.color.cp_title))
             }
@@ -430,9 +433,12 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 val titleXY = IntArray(2)
                 row.getLocationInWindow(rowXY)
                 title.getLocationInWindow(titleXY)
-                val width = dp(18)
+                // Account for both the parent layout padding and the title's
+                // own padding. The chevron ends exactly where its title begins.
+                val titleTextX = titleXY[0] - rowXY[0] + title.paddingStart
+                val width = dp(if (habitMode) 12 else 18)
                 val height = dp(36)
-                val xPos = (titleXY[0] - rowXY[0] - width).coerceAtLeast(0)
+                val xPos = (titleTextX - width).coerceAtLeast(0)
                 val yPos = (titleXY[1] - rowXY[1] + (title.height - height) / 2)
                     .coerceIn(0, (row.height - height).coerceAtLeast(0))
                 arrow.layout(xPos, yPos, xPos + width, yPos + height)
