@@ -93,6 +93,9 @@ class PetView @JvmOverloads constructor(
     // 回调
     var onLongPress: (() -> Unit)? = null
     var onDoubleTap: (() -> Unit)? = null
+    var onThinkingModeEntered: ((ThinkingConfig, Map<String, String>) -> Unit)? = null
+    fun currentThinkingConfiguration(): Pair<ThinkingConfig, Map<String, String>> =
+        imageManager.currentThinkingConfig()
     var onPositionChanged: ((x: Float, y: Float) -> Unit)? = null
     var onDragStateChanged: ((dragging: Boolean) -> Unit)? = null
     // 轻点/长按命中本宠物（非拖拽）回调：用于多宠物置顶，使被压住的宠物下次可被点中
@@ -734,6 +737,8 @@ class PetView @JvmOverloads constructor(
         frameAccumulator += dt
         // 模式切换的当帧：强制立即推一帧，让 提起/滚动 首帧即时显示，不被节流延迟。
         if (modeChanged) {
+            val (thinking, texts) = imageManager.currentThinkingConfig()
+            onThinkingModeEntered?.invoke(thinking, texts)
             frameAccumulator = 0f
             // syncCurrentBitmap() 内部已写入锚点快照、并按“锚点是否变化”原子重发浮窗位置
             // （与位图同帧），故切模式导致的锚点变化会立即反映到窗口位置，无需此处再发。
@@ -935,6 +940,8 @@ class PetView @JvmOverloads constructor(
     fun applySpritePack(pack: SpritePack) {
         pendingLeapMode = null
         imageManager.setPack(pack)
+        val (thinking, texts) = imageManager.currentThinkingConfig()
+        onThinkingModeEntered?.invoke(thinking, texts)
         val (gw, gh) = imageManager.globalMaxSize()
         baseFrameW = gw
         baseFrameH = gh
