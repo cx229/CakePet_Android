@@ -220,6 +220,8 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
         thinkingTexts = catalog
         effectiveThinking = config
         if (!enabled || previewActive) return
+        val firstApplication = !firstPackApplied
+        firstPackApplied = true
         when (config.policy) {
             "off" -> {
                 if (phaseId != null) enterRest() else advanceWhenDue()
@@ -246,13 +248,10 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                         phaseTargetMs = config.sampleDuration()
                     }
                 }
-                if (!firstPackApplied) {
-                    firstPackApplied = true
-                    // Existing app startup speaks immediately, but entering later Modes doesn't.
-                    if (phaseId == null && config.pool.isNotEmpty()) {
-                        enterRandomText()
-                        return
-                    }
+                // Preserve the original immediate first utterance when initially enabled.
+                if (firstApplication && phaseId == null && config.pool.isNotEmpty()) {
+                    enterRandomText()
+                    return
                 }
                 advanceWhenDue()
             }
@@ -654,11 +653,18 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
         stopLoop()
         if (on) {
             resetPhase(null, nextEmptyMs())
-            firstPackApplied = false
+            val hasLoadedPack = thinkingTexts.isNotEmpty()
+            firstPackApplied = hasLoadedPack
             showingText = false
             textView.text = ""
             textView.visibility = android.view.View.INVISIBLE
-            advanceWhenDue()
+            when {
+                hasLoadedPack && effectiveThinking.policy == "hold" &&
+                    effectiveThinking.pool.isNotEmpty() -> enterRandomText()
+                hasLoadedPack && effectiveThinking.policy == "cycle" &&
+                    effectiveThinking.pool.isNotEmpty() -> enterRandomText()
+                else -> advanceWhenDue()
+            }
         } else {
             showingText = false
             textView.text = ""
