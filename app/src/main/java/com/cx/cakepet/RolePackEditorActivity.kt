@@ -581,7 +581,8 @@ class RolePackEditorActivity : AppCompatActivity() {
      * Only the variable body area is replaced by this editor's form.
      */
     private fun editor(title: String, compact: Boolean = false, readOnly: Boolean = false,
-                       extraAction: (() -> Unit)? = null, create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
+                       extraAction: (() -> Unit)? = null, confirmLabel: String = "保存",
+                       create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
         val frame = layoutInflater.inflate(R.layout.dialog_rename_role, null)
         frame.findViewById<TextView>(R.id.tv_title).text = title
         val card = (frame as android.view.ViewGroup).getChildAt(0) as android.view.ViewGroup
@@ -605,7 +606,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         frame.findViewById<TextView>(R.id.btn_positive).apply {
             if (readOnly && extraAction == null) visibility = View.GONE
-            text = if (readOnly) "重命名" else "保存"
+            text = if (readOnly) "重命名" else confirmLabel
             setOnClickListener {
                 if (readOnly) {
                     extraAction?.invoke()
@@ -3034,7 +3035,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                             setOf("删除")) { action ->
                             when (action) {
                                 "详情 / 编辑" -> thinkingDetails(id)
-                                "选择碎碎念组" -> chooseThinkingGroups(id)
+                                "选择碎碎念组" -> thinkingDetails(id)
                                 "删除" -> confirmThinkingDelete(id)
                             }
                         }
@@ -3069,38 +3070,10 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     /** Autosave valid text with debounce, and flush before closing or navigating. */
     private fun thinkingDetails(id: String?) {
-        var activeId = id
-        var lastSaved = id?.let(::thinkingBody).orEmpty()
-        val debounce = Handler(Looper.getMainLooper())
-        var pending: Runnable? = null
-        var popup: android.app.Dialog? = null
-        var needsRefresh = false
-        lateinit var field: EditText
-
-        fun persist() {
-            pending?.let { debounce.removeCallbacks(it) }
-            pending = null
-            val value = field.text.toString().trim()
-            if (value.isBlank() || value == lastSaved) return
-            attempt {
-                val key = activeId ?: "t_" + UUID.randomUUID().toString().replace("-", "").take(12)
-                change(silent = true) { json ->
-                    val texts = json.optJSONObject("thinkings") ?: JSONObject().also {
-                        json.put("thinkings", it)
-                    }
-                    val item = texts.optJSONObject(key) ?: JSONObject()
-                    item.put("text", value)
-                    if (item.optJSONArray("groups") == null) item.put("groups", JSONArray())
-                    texts.put(key, item)
-                }
-                activeId = key
-                lastSaved = value
-                needsRefresh = true
-            }
-        }
-
-        popup = editor(if (id == null) "新建碎碎念" else "碎碎念详情",
-            compact = true, readOnly = true) { box ->
+        // The body and group membership share one local draft until Save is pressed.
+        val originalText = id?.let(::thinkingBody).orEmpty()
+        val draftGroups = id?.let(::thinkingGroups)?.toMutableList() ?: mutableListOf()
+        editor(if (id == null) "新建碎碎念" else "碎碎念详情", compact = true) { box ->
             box.addView(text("编辑角色的底部消息文本", 12f).apply {
                 gravity = Gravity.CENTER
                 setTextColor(getColor(R.color.cp_note))
@@ -3108,8 +3081,8 @@ class RolePackEditorActivity : AppCompatActivity() {
             }, LinearLayout.LayoutParams(-1, -2))
             val textCard = detailSection()
             textCard.addView(text("文本内容", 15f))
-            field = EditText(this).apply {
-                setText(lastSaved)
+            val field = EditText(this).apply {
+                setText(originalText)
                 hint = "输入碎碎念文本"
                 minLines = 3
                 maxLines = 8
@@ -3118,22 +3091,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 setPadding(px(10), px(10), px(10), px(10))
             }
             textCard.addView(field, LinearLayout.LayoutParams(-1, -2))
-            textCard.addView(text("自动保存", 11f).apply {
-                setTextColor(getColor(R.color.cp_note))
-                setPadding(px(2), px(4), 0, 0)
-            })
             addDetailSection(box, textCard)
-            field.addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                    pending?.let { debounce.removeCallbacks(it) }
-                    val runnable = Runnable { persist() }
-                    pending = runnable
-                    debounce.postDelayed(runnable, 650L)
-                }
-                override fun afterTextChanged(s: android.text.Editable?) {}
-            })
-            field.setOnFocusChangeListener { _, focused -> if (!focused) persist() }
 
             val groupCard = detailSection()
             val groupInfo = text("", 12f).apply {
@@ -3141,21 +3099,16 @@ class RolePackEditorActivity : AppCompatActivity() {
                 gravity = Gravity.END
             }
             fun refreshGroups() {
-                val groups = activeId?.let(::thinkingGroups).orEmpty()
-                groupInfo.text = groups.ifEmpty { listOf("未分组") }.joinToString("、")
+                groupInfo.text = draftGroups.ifEmpty { listOf("未分组") }.joinToString("、")
             }
             refreshGroups()
             val groupHeader = detailSectionHeader("所属分组", "") {
-                persist()
-                val current = activeId
-                if (current == null) {
-                    Toast.makeText(this, "请先输入文本", Toast.LENGTH_SHORT).show()
-                } else chooseThinkingGroups(current) {
+                chooseThinkingGroups(draftGroups) { selected ->
+                    draftGroups.clear()
+                    draftGroups.addAll(selected)
                     refreshGroups()
-                    needsRefresh = true
                 }
             }
-            // Replace the header's placeholder value with the live group summary.
             groupHeader.removeViewAt(1)
             val groupValue = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -3186,7 +3139,6 @@ class RolePackEditorActivity : AppCompatActivity() {
                     setPadding(0, 0, 0, 0)
                 }, LinearLayout.LayoutParams(px(22), -2))
                 rippleClick(row) {
-                    persist()
                     val functionPath = reference.functionPath
                     if (functionPath != null) functionDetails(functionPath, functionAnimationsAt(functionPath))
                     else reference.modeId?.let { openModeFromDetail(it) }
@@ -3197,34 +3149,44 @@ class RolePackEditorActivity : AppCompatActivity() {
                 })
             }
             addDetailSection(box, referencesCard)
-            ({ })
-        }
-        popup?.setOnDismissListener {
-            persist()
-            popup?.let { detailDialogs.remove(it) }
-            if (needsRefresh && screen == "thinkings") thinkingResources()
+            ({
+                val content = field.text.toString().trim()
+                require(content.isNotBlank()) { "文本内容不能为空" }
+                val currentGroups = draftGroups.distinct()
+                // Merge this entry only; preserve independent changes made to
+                // Function/Mode data while this detail dialog was open.
+                change { json ->
+                    val texts = json.optJSONObject("thinkings") ?: JSONObject().also {
+                        json.put("thinkings", it)
+                    }
+                    val key = id ?: "t_" + UUID.randomUUID().toString().replace("-", "").take(12)
+                    val item = texts.optJSONObject(key) ?: JSONObject()
+                    item.put("text", content)
+                    item.put("groups", JSONArray().apply { currentGroups.forEach { put(it) } })
+                    texts.put(key, item)
+                }
+                if (screen == "thinkings") thinkingResources()
+            })
         }
     }
 
-    private fun chooseThinkingGroups(id: String, onSaved: (() -> Unit)? = null) {
-        editor("选择碎碎念组", compact = true) { box ->
-            val known = allThinkingGroups().filter { it != "全部" }.toMutableList()
-            val checked = thinkingGroups(id).toMutableSet()
+    /** Confirm updates only the caller's draft, not the material pack. */
+    private fun chooseThinkingGroups(initialGroups: List<String>, onConfirm: (List<String>) -> Unit) {
+        editor("选择碎碎念组", compact = true, confirmLabel = "确认") { box ->
+            val known = (allThinkingGroups() + initialGroups)
+                .filter { it != "全部" && it != "未分组" }.distinct()
+            val checked = initialGroups.toMutableSet()
             val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            fun redraw() {
-                choices.removeAllViews()
-                known.distinct().forEach { group ->
-                    choices.addView(CheckBox(this).apply {
-                        text = group
-                        isChecked = group in checked
-                        setOnCheckedChangeListener { _, on ->
-                            if (on) checked.add(group) else checked.remove(group)
-                        }
-                    })
-                }
+            known.forEach { group ->
+                choices.addView(CheckBox(this).apply {
+                    text = group
+                    isChecked = group in checked
+                    setOnCheckedChangeListener { _, on ->
+                        if (on) checked.add(group) else checked.remove(group)
+                    }
+                })
             }
             box.addView(choices)
-            redraw()
             val input = entry(box, "新分组名称（可选）", "", compact = true)
             ({
                 val name = input.text.toString().trim()
@@ -3233,14 +3195,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                         name.none { it == '/' || it == '\\' || it == '\n' || it == '\r' }) { "分组名称不合法" }
                     checked.add(name)
                 }
-                change { json ->
-                    val item = json.getJSONObject("thinkings")
-                    val old = item.opt(id)
-                    val obj = item.optJSONObject(id) ?: JSONObject().put("text", old as? String ?: "")
-                    obj.put("groups", JSONArray().apply { checked.forEach { put(it) } })
-                    item.put(id, obj)
-                }
-                if (onSaved != null) onSaved() else thinkingResources()
+                onConfirm(checked.toList())
             })
         }
     }
