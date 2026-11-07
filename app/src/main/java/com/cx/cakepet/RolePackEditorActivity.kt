@@ -1282,6 +1282,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                 isChecked = current.optBoolean("finishCycle", true)
             }
             timedFields.addView(finish)
+            // Keep the expanded timed-loop controls visually grouped with their dropdown.
+            timedFields.setPadding(px(8), px(10), px(8), px(12))
             form.addView(timedFields)
 
             // Keep nextMode and loop settings in a single playback dialog.
@@ -1312,10 +1314,18 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             nextRow.addView(nextChoice, LinearLayout.LayoutParams(0, px(44), 1f))
+            val nextDivider = View(this).apply {
+                setBackgroundColor(getColor(R.color.cp_divider))
+            }
+            form.addView(nextDivider, LinearLayout.LayoutParams(-1, px(1)).apply {
+                topMargin = px(9)
+                bottomMargin = px(7)
+            })
             form.addView(nextRow)
             fun refreshFields() {
                 timedFields.visibility = if (spinner.selectedItemPosition == 1) View.VISIBLE else View.GONE
                 nextRow.visibility = if (spinner.selectedItemPosition == 2) View.GONE else View.VISIBLE
+                nextDivider.visibility = nextRow.visibility
             }
             spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?,
@@ -1442,7 +1452,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         frameHeader.addView(text("支持长按拖动排序", 11f).apply {
             setTextColor(getColor(R.color.cp_note))
         })
-        val frameSection = detailSection()
+        // Frame title/actions and frame rows share one surface, drawn by the RecyclerView decoration.
+        val frameSection = detailSection().apply { background = null }
         frameSection.addView(frameHeader, LinearLayout.LayoutParams(-1, -2))
         val frameActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         frameActions.addView(button("＋ 添加帧") {
@@ -1463,7 +1474,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
         panel.addView(frameSection, LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = px(9)
-            bottomMargin = px(3)
+            bottomMargin = 0
         })
         val order = (0 until frames.length()).toMutableList()
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
@@ -1471,7 +1482,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         // frames. No nested scrolling or wrap-content RecyclerView measurement.
         val pageHeader = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(px(16), px(16), px(16), px(8))
+            setPadding(px(16), px(16), px(16), 0)
             layoutParams = RecyclerView.LayoutParams(-1, -2)
         }
         while (panel.childCount > 0) {
@@ -1487,8 +1498,8 @@ class RolePackEditorActivity : AppCompatActivity() {
             setPadding(px(16), 0, px(16), px(120))
         }
         activeFrameRecycler = recycler
-        // Draw a single subtle section surface behind visible frame rows.
-        // Keep the existing ViewHolders, drag helper, and one RecyclerView unchanged.
+        // Draw ONE section surface behind the frame toolbar AND frame rows.
+        // The list stays a single RecyclerView; no nested scrolling or card-width hacks.
         recycler.addItemDecoration(object : RecyclerView.ItemDecoration() {
             private val surface = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = px(12).toFloat()
@@ -1499,15 +1510,26 @@ class RolePackEditorActivity : AppCompatActivity() {
                                 state: RecyclerView.State) {
                 var top = Int.MAX_VALUE
                 var bottom = Int.MIN_VALUE
+                var headerVisible = false
                 for (i in 0 until parent.childCount) {
                     val child = parent.getChildAt(i)
-                    if (parent.getChildAdapterPosition(child) <= 0) continue
-                    top = minOf(top, child.top)
-                    bottom = maxOf(bottom, child.bottom)
+                    if (parent.getChildAdapterPosition(child) == 0) {
+                        // Include only the frame toolbar, not the preview and other cards.
+                        top = minOf(top, child.top + frameSection.top + px(16))
+                        headerVisible = true
+                    } else if (parent.getChildAdapterPosition(child) > 0) {
+                        top = minOf(top, child.top)
+                        bottom = maxOf(bottom, child.bottom)
+                    }
                 }
                 if (top == Int.MAX_VALUE) return
-                surface.setBounds(px(11), maxOf(0, top - px(3)),
-                    parent.width - px(11), minOf(parent.height, bottom + px(5)))
+                if (bottom == Int.MIN_VALUE) {
+                    val header = parent.getChildAt(0)
+                    if (!headerVisible || parent.getChildAdapterPosition(header) != 0) return
+                    bottom = header.bottom
+                }
+                surface.setBounds(px(16), maxOf(0, top - px(2)),
+                    parent.width - px(16), minOf(parent.height, bottom + px(8)))
                 surface.draw(canvas)
             }
         })
@@ -3685,15 +3707,11 @@ class RolePackEditorActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            strategyRow.addView(text("播放方式", 15f).apply {
-                setPadding(px(2), px(4), px(2), px(4))
-            }, LinearLayout.LayoutParams(0, -2, 1f))
-            val spinner = Spinner(this).apply {
-                adapter = ArrayAdapter(this@RolePackEditorActivity,
-                    android.R.layout.simple_spinner_dropdown_item, variants)
-                setSelection(codes.indexOf(old?.optString("policy", if (modeId != null) "inherit" else "cycle")).coerceAtLeast(0))
-            }
-            strategyRow.addView(spinner, LinearLayout.LayoutParams(px(124), px(44)))
+            strategyRow.addView(text("播放方式", 14f), LinearLayout.LayoutParams(0, -2, 1f))
+            val spinner = Spinner(this)
+            SettingsSpinnerBinder.bind(spinner, variants,
+                codes.indexOf(old?.optString("policy", if (modeId != null) "inherit" else "cycle")).coerceAtLeast(0)) { }
+            strategyRow.addView(spinner, LinearLayout.LayoutParams(0, px(48), 1f))
             strategyCard.addView(strategyRow)
             addDetailSection(box, strategyCard)
             val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -3807,27 +3825,70 @@ class RolePackEditorActivity : AppCompatActivity() {
                         selectionSurface(this)
                         setPadding(px(7), px(4), px(6), px(4))
                     }
-                    row.addView(CheckBox(this).apply {
+                    val itemText = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                    }
+                    itemText.addView(CheckBox(this).apply {
                         text = thinkingBody(id)
+                        textSize = 12f
                         isChecked = id in chosen
                         setOnCheckedChangeListener { _, enabled ->
                             if (enabled) chosen.putIfAbsent(id, DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS)
                             else chosen.remove(id)
                             redraw()
                         }
-                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    }, LinearLayout.LayoutParams(-1, -2))
+                    val range = chosen[id] ?: (DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS)
+                    itemText.addView(text("持续时间：${range.first}–${range.second}ms", 10f).apply {
+                        setTextColor(getColor(R.color.cp_note))
+                        setPadding(px(36), 0, 0, px(4))
+                    })
+                    row.addView(itemText, LinearLayout.LayoutParams(0, -2, 1f))
                     row.addView(text("⋮", 23f).apply {
                         gravity = Gravity.CENTER
                         setOnClickListener {
                             if (id !in chosen) chosen[id] = DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS
-                            editor("显示时长 · " + thinkingBody(id), compact = true) { box ->
+                            editor("碎碎念设置", compact = true) { box ->
+                                val textCard = detailSection()
+                                textCard.addView(text("文本内容", 15f))
+                                val field = EditText(this@RolePackEditorActivity).apply {
+                                    setText(thinkingBody(id))
+                                    hint = "输入碎碎念文本"
+                                    minLines = 3
+                                    maxLines = 8
+                                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                                    setBackgroundResource(R.drawable.bg_input)
+                                    setPadding(px(10), px(10), px(10), px(10))
+                                }
+                                textCard.addView(field, LinearLayout.LayoutParams(-1, -2))
+                                textCard.addView(text("将影响全部引用位置（${thinkingUses(id).size}次引用）", 10f).apply {
+                                    setTextColor(getColor(R.color.cp_note))
+                                    setPadding(0, px(3), 0, 0)
+                                })
+                                addDetailSection(box, textCard)
                                 val time = chosen[id]!!
-                                val minField = entry(box, "min（毫秒）", time.first.toString(), compact = true)
-                                val maxField = entry(box, "max（毫秒）", time.second.toString(), compact = true)
+                                val timeCard = detailSection()
+                                timeCard.addView(text("持续时间", 15f))
+                                val rangeRow = LinearLayout(this@RolePackEditorActivity).apply {
+                                    orientation = LinearLayout.HORIZONTAL
+                                }
+                                val minField = entry(rangeRow, "Min（毫秒）", time.first.toString(), compact = true)
+                                val maxField = entry(rangeRow, "Max（毫秒）", time.second.toString(), compact = true)
+                                (minField.parent as View).layoutParams =
+                                    LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
+                                (maxField.parent as View).layoutParams =
+                                    LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
+                                timeCard.addView(rangeRow)
+                                addDetailSection(box, timeCard)
                                 ({
+                                    val updatedText = field.text.toString().trim()
+                                    require(updatedText.isNotBlank()) { "文本内容不能为空" }
                                     val lo = minField.text.toString().toLong()
                                     val hi = maxField.text.toString().toLong()
-                                    require(lo >= 0 && hi >= lo) { "要求 0 ≤ min ≤ max" }
+                                    require(lo >= 0 && hi >= lo) { "要求 0 ≤ Min ≤ Max" }
+                                    if (updatedText != thinkingBody(id)) change { json ->
+                                        json.getJSONObject("thinkings").getJSONObject(id).put("text", updatedText)
+                                    }
                                     chosen[id] = lo to hi
                                     redraw()
                                 })
