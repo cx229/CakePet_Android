@@ -9,6 +9,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ClickableSpan
+import android.text.method.LinkMovementMethod
+import android.text.TextPaint
 import android.view.Gravity
 import android.view.View
 import android.text.TextUtils
@@ -82,6 +87,42 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun modeChainText(start: String, modes: JSONObject): String =
         "<" + modeChain(start, modes).joinToString("→") + ">"
+
+    /**
+     * Keep the existing chain syntax, and make each actual Mode name a link.
+     * The infinity/loop symbols, arrows, brackets and labels remain plain text.
+     * Span callbacks navigate using real Mode keys, not displayed text.
+     */
+    private fun linkedModeChains(
+        starts: List<String>, modes: JSONObject, label: String, size: Float,
+        onModeClick: (String) -> Unit
+    ): TextView {
+        val richText = SpannableStringBuilder(label)
+        starts.forEachIndexed { chainIndex, first ->
+            if (chainIndex > 0) richText.append("，")
+            richText.append("<")
+            modeChain(first, modes).forEachIndexed { index, segment ->
+                if (index > 0) richText.append("→")
+                val begin = richText.length
+                richText.append(segment)
+                if (modes.optJSONObject(segment) != null) {
+                    richText.setSpan(object : ClickableSpan() {
+                        override fun onClick(widget: View) { onModeClick(segment) }
+                        override fun updateDrawState(ds: TextPaint) {
+                            ds.color = getColor(android.R.color.holo_blue_dark)
+                            ds.isUnderlineText = true
+                        }
+                    }, begin, richText.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
+            richText.append(">")
+        }
+        return text("", size).apply {
+            setText(richText, TextView.BufferType.SPANNABLE)
+            movementMethod = LinkMovementMethod.getInstance()
+            highlightColor = android.graphics.Color.TRANSPARENT
+        }
+    }
 
     /** 白酥模板的相同功能路径，随机选链路及链路中的动作，最后随机选一帧。 */
     private fun templateRandomFrame(path: List<String>): android.graphics.Bitmap? {
@@ -2063,10 +2104,20 @@ class RolePackEditorActivity : AppCompatActivity() {
             setPadding(0, px(2), 0, 0)
             setTextColor(getColor(R.color.cp_note))
         })
-        if (subtitle.isNotBlank()) content.addView(text(subtitle, 11f).apply {
-            setPadding(0, px(2), 0, 0)
-            setTextColor(getColor(if (examplePath == null) R.color.cp_note else R.color.cp_title))
-        })
+        if (subtitle.isNotBlank()) {
+            val subtitleView = if (examplePath != null) {
+                val functionPath = examplePath
+                val animationNames = functionAnimationsAt(functionPath)
+                linkedModeChains(animationNames, root.getJSONObject("modes"), "当前动画：", 11f) {
+                    showMode(it)
+                }
+            } else text(subtitle, 11f)
+            subtitleView.apply {
+                setPadding(0, px(2), 0, 0)
+                setTextColor(getColor(if (examplePath == null) R.color.cp_note else R.color.cp_title))
+            }
+            content.addView(subtitleView)
+        }
         val bitmap = examplePath?.let { templateRandomFrame(it) }
         if (bitmap != null) {
             val example = LinearLayout(this).apply {
@@ -3208,7 +3259,10 @@ class RolePackEditorActivity : AppCompatActivity() {
             box.addView(animationHeader, LinearLayout.LayoutParams(-1, px(48)))
             val animations = root.getJSONObject("modes")
             selected.forEach { start ->
-                box.addView(text(modeChainText(start, animations), 13f).apply {
+                box.addView(linkedModeChains(listOf(start), animations, "", 13f) { target ->
+                    popup?.dismiss()
+                    showMode(target)
+                }.apply {
                     setBackgroundResource(R.drawable.card_bg)
                     setPadding(px(12), px(10), px(12), px(10))
                 }, LinearLayout.LayoutParams(-1, -2).apply {
