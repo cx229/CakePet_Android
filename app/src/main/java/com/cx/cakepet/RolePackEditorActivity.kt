@@ -44,17 +44,15 @@ class RolePackEditorActivity : AppCompatActivity() {
     private val pageHistory = java.util.ArrayDeque<EditorPage>()
     private var restoringPage = false
     private val detailDialogs = mutableListOf<android.app.Dialog>()
-    private var suspendedDetails: List<android.app.Dialog> = emptyList()
-    private var suspendedDetailOrigin: String? = null
     private fun openModeFromDetail(key: String) = modeDetails(key)
 
+    /** Enter a real page from nested detail dialogs.
+     * Dismiss the whole detail stack rather than hide it: Dialog.hide() retains
+     * windows and leaves stale popups when returning through multiple sources.
+     * Page history still returns to the originating resource/function list.
+     */
     private fun openModeEditorFromDetail(key: String) {
-        val visible = detailDialogs.filter { it.isShowing }
-        if (visible.isNotEmpty()) {
-            suspendedDetails = visible.toList()
-            suspendedDetailOrigin = screen
-            visible.asReversed().forEach { it.hide() }
-        }
+        detailDialogs.toList().asReversed().forEach { it.dismiss() }
         showMode(key)
     }
     private val openedFunctionFolders = mutableSetOf<String>()
@@ -421,14 +419,6 @@ class RolePackEditorActivity : AppCompatActivity() {
                     ?.scrollToPositionWithOffset(0, -previous.scrollY)
             }
         } else scroll.post { scroll.scrollTo(0, previous.scrollY) }
-        if (screen == suspendedDetailOrigin) {
-            val toRestore = suspendedDetails
-            suspendedDetails = emptyList()
-            suspendedDetailOrigin = null
-            scroll.post {
-                if (!isFinishing && !isDestroyed) toRestore.forEach { it.show() }
-            }
-        }
     }
     private fun getStatusBarHeight(): Int {
         val resId = resources.getIdentifier("status_bar_height", "dimen", "android")
@@ -963,9 +953,10 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun showModeOptions(anchor: View, key: String) {
-        UnifiedOptionMenu.show(anchor, listOf("复制动画", "动画组", "删除动画"),
+        UnifiedOptionMenu.show(anchor, listOf("详情 / 编辑", "复制动画", "动画组", "删除动画"),
             setOf("删除动画")) { choice ->
             when (choice) {
+                "详情 / 编辑" -> modeDetails(key)
                 "复制动画" -> copyMode(key)
                 "动画组" -> editModeGroups(key)
                 "删除动画" -> deleteMode(key)
@@ -2565,7 +2556,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val functionPath = examplePath
                 val animationNames = functionAnimationsAt(functionPath)
                 linkedModeChains(animationNames, root.getJSONObject("modes"), "当前动画：", 10f) {
-                    showMode(it)
+                    openModeFromDetail(it)
                 }
             } else text(subtitle, 10f)
             subtitleView.apply {

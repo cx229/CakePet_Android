@@ -99,7 +99,7 @@
                 android:layout_marginBottom="0dp"
                 android:text="创建/导入角色"
                 android:translationY="-3dp"
-                android:textSize="6sp"
+                android:textSize="8sp"
                 android:textColor="@color/cp_note"/>
         </LinearLayout>
 
