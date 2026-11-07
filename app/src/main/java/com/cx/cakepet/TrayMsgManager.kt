@@ -237,8 +237,9 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                 }
             }
             else -> {
-                if (phaseId != null) {
-                    if (phaseId !in config.pool || thinkingTexts[phaseId].isNullOrBlank()) {
+                val activeId = phaseId
+                if (activeId != null) {
+                    if (activeId !in config.pool || thinkingTexts[activeId].isNullOrBlank()) {
                         // An unavailable ID has an effective [0,0] duration.
                         phaseTargetMs = 0L
                     } else if (phaseTargetMs < config.minMs || phaseTargetMs > config.maxMs) {
