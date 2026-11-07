@@ -1254,8 +1254,39 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             timedFields.addView(finish)
             form.addView(timedFields)
+
+            // Keep nextMode and loop settings in a single playback dialog.
+            // Infinite looping hides this field but must not erase its stored value.
+            var nextModeId = current.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+            val nextRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, px(6), 0, px(4))
+            }
+            nextRow.addView(text("后续动画", 14f), LinearLayout.LayoutParams(0, -2, 1f))
+            val nextChoice = text("", 13f).apply {
+                setBackgroundResource(R.drawable.bg_input)
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                isSingleLine = true
+                ellipsize = TextUtils.TruncateAt.END
+                setPadding(px(9), 0, px(9), 0)
+            }
+            fun redrawNext() {
+                nextChoice.text = if (nextModeId.isEmpty()) "自动（由系统决定）  ▾" else "$nextModeId  ▾"
+            }
+            redrawNext()
+            nextChoice.setOnClickListener {
+                chooseModes(single = true,
+                    initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { selected ->
+                    nextModeId = selected.firstOrNull().orEmpty()
+                    redrawNext()
+                }
+            }
+            nextRow.addView(nextChoice, LinearLayout.LayoutParams(0, px(44), 1f))
+            form.addView(nextRow)
             fun refreshFields() {
                 timedFields.visibility = if (spinner.selectedItemPosition == 1) View.VISIBLE else View.GONE
+                nextRow.visibility = if (spinner.selectedItemPosition == 2) View.GONE else View.VISIBLE
             }
             spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?,
@@ -1279,6 +1310,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val mode = json.getJSONObject("modes").getJSONObject(key)
                     mode.put("loopMode", kind)
                     mode.put("loop", kind != "off")
+                    mode.put("nextMode", if (nextModeId.isEmpty()) JSONObject.NULL else nextModeId)
                     if (newDuration != null) {
                         mode.put("duration", newDuration)
                         mode.put("finishCycle", finish.isChecked)
