@@ -3079,11 +3079,10 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun thinkingConfigDialog(modeId: String? = null, functionPath: List<String>? = null) {
         val target = if (modeId != null) root.getJSONObject("modes").getJSONObject(modeId)
             else {
+                val path = requireNotNull(functionPath)
                 var at = root.getJSONObject("functions")
-                functionPath.orEmpty().forEach { key ->
-                    at = at.optJSONObject(key) ?: return@forEach
-                }
-                at
+                path.dropLast(1).forEach { key -> at = at.getJSONObject(key) }
+                at.optJSONObject(path.last()) ?: JSONObject()
             }
         val old = target.optJSONObject("thinking")
         val selected = thinkingPoolJson(old)
