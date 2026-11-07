@@ -648,7 +648,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         menuCard("功能映射", "决定了「$roleName」在何时会触发什么动作动画", android.R.drawable.ic_menu_manage) { functions() }
         menuCard("动作动画", "制定了「$roleName」有什么动作动画", android.R.drawable.ic_media_play) { modes() }
         menuCard("图片资源", "列举了「$roleName」所用的图片", android.R.drawable.ic_menu_gallery) { images() }
-        menuCard("碎碎念文本", "管理文本内容与碎碎念组", android.R.drawable.ic_dialog_email) { thinkingResources() }
+        menuCard("碎碎念文本", "影响了「$roleName」的思考内容", android.R.drawable.ic_dialog_email) { thinkingResources() }
     }
     private fun info() {
         editor("基本信息", compact = true) { box ->
@@ -704,7 +704,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         })
         action("＋ 新建动画") { newMode() }
         val grouped = linkedMapOf<String, MutableList<String>>()
-        knownGroups().forEach { grouped[it] = mutableListOf() }
+        grouped["全部"] = ids().toMutableList()
+        knownGroups().filter { it != "全部" }.forEach { grouped[it] = mutableListOf() }
         ids().forEach { key ->
             val groups = modeGroups(key)
             if (groups.isEmpty()) grouped.getOrPut("未分组") { mutableListOf() }.add(key)
@@ -722,12 +723,12 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             val heading = text("", 16f)
             header.addView(heading, LinearLayout.LayoutParams(0, -2, 1f))
-            header.addView(text("+", 23f).apply {
+            if (group != "全部") header.addView(text("+", 23f).apply {
                 gravity = Gravity.CENTER
                 isClickable = true
                 setOnClickListener { newMode(group.takeUnless { it == "未分组" }) }
             }, LinearLayout.LayoutParams(px(38), px(44)))
-            if (group != "未分组") header.addView(text("⋮", 23f).apply {
+            if (group != "未分组" && group != "全部") header.addView(text("⋮", 23f).apply {
                 gravity = Gravity.CENTER
                 isClickable = true
                 setOnClickListener { anchor -> showModeGroupOptions(anchor, group) }
@@ -2861,8 +2862,12 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun allThinkingIds(): List<String> =
         thinkingObject().keys().asSequence().toList().filter { thinkingBody(it).isNotBlank() }.sorted()
 
-    private fun thinkingUses(id: String): List<String> {
-        val uses = mutableListOf<String>()
+    private data class ThinkingReference(val functionPath: List<String>? = null, val modeId: String? = null) {
+        fun label(functionName: (List<String>) -> String): String =
+            if (functionPath != null) "功能 · ${functionName(functionPath)}" else "动画 · ${modeId.orEmpty()}"
+    }
+    private fun thinkingUses(id: String): List<ThinkingReference> {
+        val uses = mutableListOf<ThinkingReference>()
         fun check(node: JSONObject, path: List<String>) {
             val pool = node.optJSONObject("thinking")?.opt("pool")
             val referenced = when (pool) {
@@ -2870,7 +2875,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 is JSONArray -> jsonStrings(pool).contains(id)
                 else -> false
             }
-            if (referenced) uses += "功能 · " + path.joinToString(" / ")
+            if (referenced) uses += ThinkingReference(functionPath = path)
             val keys = node.keys().asSequence().toList()
             keys.filter { it != "thinking" && it != "modes" }.forEach { key ->
                 node.optJSONObject(key)?.let { check(it, path + key) }
@@ -2881,7 +2886,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             modes.keys().asSequence().toList().forEach { key ->
                 val pool = modes.optJSONObject(key)?.optJSONObject("thinking")?.opt("pool")
                 if ((pool is JSONObject && pool.has(id)) ||
-                    (pool is JSONArray && id in jsonStrings(pool))) uses += "动作 · $key"
+                    (pool is JSONArray && id in jsonStrings(pool))) uses += ThinkingReference(modeId = key)
             }
         }
         return uses
@@ -2889,12 +2894,13 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun thinkingResources() {
         section("碎碎念文本", "thinkings")
-        panel.addView(text("按组管理文本。点击文本编辑正文并查看直接引用；分组属于文本本身。", 12f).apply {
+        panel.addView(text("管理角色的底部消息文本。\n点击“+”创建文本；点击“文本卡片”进行编辑。", 12f).apply {
             setTextColor(getColor(R.color.cp_note))
         })
         action("＋ 新建碎碎念") { thinkingDetails(null) }
         val grouped = linkedMapOf<String, MutableList<String>>()
-        allThinkingGroups().forEach { grouped[it] = mutableListOf() }
+        grouped["全部"] = allThinkingIds().toMutableList()
+        allThinkingGroups().filter { it != "全部" }.forEach { grouped[it] = mutableListOf() }
         allThinkingIds().forEach { id ->
             val groups = thinkingGroups(id)
             if (groups.isEmpty()) grouped.getOrPut("未分组") { mutableListOf() }.add(id)
@@ -2920,10 +2926,17 @@ class RolePackEditorActivity : AppCompatActivity() {
                     rippleCard(this)
                     setPadding(px(12), px(4), px(6), px(4))
                 }
-                row.addView(text(thinkingBody(id), 14f).apply {
+                val textContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                textContainer.addView(text(thinkingBody(id), 14f).apply {
                     maxLines = 5
                     ellipsize = TextUtils.TruncateAt.END
-                }, LinearLayout.LayoutParams(0, -2, 1f))
+                })
+                val references = thinkingUses(id).size
+                textContainer.addView(text(if (references == 0) "未被引用" else "${references}次引用", 11f).apply {
+                    setTextColor(getColor(R.color.cp_note))
+                    setPadding(0, px(2), 0, 0)
+                })
+                row.addView(textContainer, LinearLayout.LayoutParams(0, -2, 1f))
                 row.addView(text("⋮", 23f).apply {
                     gravity = Gravity.CENTER
                     setOnClickListener { view ->
@@ -3030,7 +3043,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         val uses = thinkingUses(id)
         if (uses.isNotEmpty()) {
             AlertDialog.Builder(this).setTitle("无法删除：仍被引用")
-                .setMessage(uses.joinToString("\n"))
+                .setMessage(uses.joinToString("\n") { it.label(::functionPathName) })
                 .setPositiveButton("我知道了", null).show()
             return
         }
