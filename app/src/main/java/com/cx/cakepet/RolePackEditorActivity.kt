@@ -1102,16 +1102,16 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val summary = when (loop) {
                         "timed" -> "定时 · ${duration?.optLong("min", 3000) ?: 3000}–${duration?.optLong("max", 4000) ?: 4000}ms"
                         "infinite" -> "无限循环"
-                        else -> "不循环"
+                        else -> "播放一次"
                     }
                     val playbackCard = detailSection()
-                    playbackCard.addView(detailSectionHeader("循环播放", summary) {
+                    playbackCard.addView(detailSectionHeader("播放方式", summary) {
                         playbackSettings(currentKey) { redraw() }
                     })
                     if (loop != "infinite") {
                         val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
                         playbackCard.addView(detailSectionHeader("后续动画",
-                            next.ifBlank { "无（由控制器决定）" }) {
+                            next.ifBlank { "自动（由系统决定）" }) {
                             chooseModes(single = true, initial = listOfNotNull(next.takeIf { it.isNotEmpty() })) { selected ->
                                 val nextId = selected.firstOrNull().orEmpty()
                                 change { json ->
@@ -1149,7 +1149,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                         "off" -> "不播放"
                         "hold" -> "持续 · ${thinkingPoolJson(thinking).size} 条"
                         "cycle" -> "轮播 · ${thinkingPoolJson(thinking).size} 条"
-                        else -> "继承"
+                        else -> "跟随功能"
                     }
                     val thinkingCard = detailSection()
                     thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
@@ -1207,8 +1207,8 @@ class RolePackEditorActivity : AppCompatActivity() {
     /** Playback-only entry, retaining the former attributes() loop semantics. */
     private fun playbackSettings(key: String, onSaved: () -> Unit) {
         val current = root.getJSONObject("modes").getJSONObject(key)
-        editor("循环播放", compact = true) { form ->
-            val options = listOf("不循环", "定时循环", "无限循环")
+        editor("播放方式", compact = true) { form ->
+            val options = listOf("播放一次", "定时循环", "无限循环")
             val spinner = Spinner(this)
             SettingsSpinnerBinder.bind(spinner, options,
                 when (playbackKind(current)) { "timed" -> 1; "infinite" -> 2; else -> 0 }) { }
@@ -1216,15 +1216,15 @@ class RolePackEditorActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            row.addView(text("循环播放", 14f), LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(text("播放方式", 14f), LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(spinner, LinearLayout.LayoutParams(0, px(48), 1f))
             form.addView(row)
             val timedFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val timerRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             val previous = current.optJSONObject("duration")
-            val min = entry(timerRow, "最短（ms）",
+            val min = entry(timerRow, "最短时长（ms）",
                 (previous?.optLong("min", 3000) ?: 3000).toString(), compact = true)
-            val max = entry(timerRow, "最长（ms）",
+            val max = entry(timerRow, "最长时长（ms）",
                 (previous?.optLong("max", 4000) ?: 4000).toString(), compact = true)
             (min.parent as View).layoutParams =
                 LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
@@ -1232,7 +1232,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
             timedFields.addView(timerRow)
             val finish = Switch(this).apply {
-                text = "循环结束时完整播放一轮"
+                text = "结束前播完当前一轮"
                 isChecked = current.optBoolean("finishCycle", true)
             }
             timedFields.addView(finish)
@@ -1594,7 +1594,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             (name.parent as? LinearLayout)?.let { field ->
                 (field.getChildAt(0) as? TextView)?.setTextColor(android.graphics.Color.BLACK)
             }
-            val playbackModes = listOf("关闭", "定时循环", "无限循环")
+            val playbackModes = listOf("播放一次", "定时循环", "无限循环")
             val previous = mode.optJSONObject("duration")
             val playback = Spinner(this)
             val initialPosition = when (playbackKind(mode)) {
@@ -1608,7 +1608,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, px(12), 0, px(8))
             }
-            playbackRow.addView(text("循环播放", 14f).apply {
+            playbackRow.addView(text("播放方式", 14f).apply {
                 setTextColor(android.graphics.Color.BLACK)
                 setPadding(0, 0, px(12), 0)
             })
@@ -1621,9 +1621,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            val min = entry(rangeRow, "最短（ms）",
+            val min = entry(rangeRow, "最短时长（ms）",
                 previous?.optLong("min", 3000)?.toString() ?: "3000", compact = true)
-            val max = entry(rangeRow, "最长（ms）",
+            val max = entry(rangeRow, "最长时长（ms）",
                 previous?.optLong("max", 4000)?.toString() ?: "4000", compact = true)
             (min.parent as? View)?.layoutParams =
                 LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
@@ -1631,7 +1631,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
             timedFields.addView(rangeRow)
             val finish = Switch(this).apply {
-                text = "循环结束时完整播放一轮"
+                text = "结束前播完当前一轮"
                 isChecked = mode.optBoolean("finishCycle", true)
             }
             timedFields.addView(finish)
@@ -1646,11 +1646,11 @@ class RolePackEditorActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, px(8), 0, px(8))
             }
-            nextFields.addView(text("播放结束后的动画", 14f).apply {
+            nextFields.addView(text("后续动画", 14f).apply {
                 setPadding(0, 0, px(12), 0)
             }, LinearLayout.LayoutParams(0, -2, 1f))
             val nextChoice = TextView(this).apply {
-                text = if (nextModeId.isEmpty()) "无（由控制器决定）  ▾" else "$nextModeId  ▾"
+                text = if (nextModeId.isEmpty()) "自动（由系统决定）  ▾" else "$nextModeId  ▾"
                 textSize = 13f
                 setSingleLine(true)
                 ellipsize = TextUtils.TruncateAt.END
@@ -1664,7 +1664,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     chooseModes(single = true,
                         initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
                         nextModeId = chosen.firstOrNull().orEmpty()
-                        text = if (nextModeId.isEmpty()) "无（由控制器决定）  ▾" else "$nextModeId  ▾"
+                        text = if (nextModeId.isEmpty()) "自动（由系统决定）  ▾" else "$nextModeId  ▾"
                     }
                 }
             }
@@ -2720,7 +2720,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             listing.removeAllViews()
             selectionInfo.text = "已选 ${selected.size} 个动画"
             if (single) {
-                listing.addView(text("○  无（由控制器决定）", 15f).apply {
+                listing.addView(text("○  自动（由系统决定）", 15f).apply {
                     setBackgroundResource(R.drawable.card_bg)
                     isClickable = true
                     setOnClickListener { selected.clear(); redraw() }
@@ -3508,7 +3508,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
         val old = target.optJSONObject("thinking")
         val selected = thinkingPoolJson(old)
-        val variants = if (modeId != null) listOf("继承", "轮播", "持续", "不播放")
+        val variants = if (modeId != null) listOf("跟随功能", "轮播", "持续", "不播放")
             else listOf("轮播", "持续", "不播放")
         val codes = if (modeId != null) listOf("inherit", "cycle", "hold", "off")
             else listOf("cycle", "hold", "off")
@@ -3523,7 +3523,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            strategyRow.addView(text("播放策略", 15f).apply {
+            strategyRow.addView(text("播放方式", 15f).apply {
                 setPadding(px(2), px(4), px(2), px(4))
             }, LinearLayout.LayoutParams(0, -2, 1f))
             val spinner = Spinner(this).apply {
@@ -3540,7 +3540,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 content.removeAllViews()
                 val policy = codes[spinner.selectedItemPosition.coerceIn(codes.indices)]
                 if (policy == "inherit" || policy == "off") {
-                    content.addView(text(if (policy == "inherit") "使用所属功能的碎碎念配置"
+                    content.addView(text(if (policy == "inherit") "使用当前功能的碎碎念设置"
                         else "保持休息状态，不选择新文本", 12f).apply {
                         gravity = Gravity.CENTER
                         setTextColor(getColor(R.color.cp_note))
