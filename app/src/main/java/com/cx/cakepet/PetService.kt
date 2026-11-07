@@ -373,7 +373,7 @@ class PetService : Service() {
         }
         if (draggable) iv.setOnTouchListener(freezeDragListener)
         try { windowManager.addView(iv, lp) } catch (_: Exception) { snap.bmp.recycle(); return }
-        val layer = FreezeLayer(iv, lp, snap.time, TrayMsgManager.randomMutter(), roleId = roleId)
+        val layer = FreezeLayer(iv, lp, snap.time, thinkingPetMsg(roleId)?.samplePackText().orEmpty(), roleId = roleId)
         freezeLayers.add(layer)
         // 显示定格边框开关开启时，叠加红色真实窗口边框（调试用，不拦截交互）
         if (rc.freezeBorderShow) setFreezeBorder(layer, true)
@@ -989,6 +989,7 @@ class PetService : Service() {
             height = WindowManager.LayoutParams.WRAP_CONTENT
         }
         val petMsg = TrayMsgManager(this, roleId)
+        view.onThinkingModeEntered = { config, texts -> petMsg.applyModeThinking(config, texts) }
 
         view.onLongPress = { showMenu(view) }
         // 交互前先切到本实例所属角色（长按不拖动也会触发，确保菜单/双击等都落在正确角色配置上）。
@@ -1007,10 +1008,6 @@ class PetService : Service() {
                 view.modeOf("snap", "pat_head", "pat_head")?.let { view.playOnce(it) }
             } else {
                 view.modeOf("pat_head", "pat_head")?.let { view.playOnce(it) }
-            }
-            // 摸头（双击）：碎碎念显示摸头文案，1-3s 后继续轮播池
-            if (thinkingOn(pets.firstOrNull { it.view === view }?.roleId)) {
-                petMsg.showPat()
             }
         }
         view.onSizeChanged = { recalcBounds() }
@@ -1053,25 +1050,11 @@ class PetService : Service() {
                 }
             }
         }
-        // 提起（拖拽）开始/结束：驱动本实例碎碎念“提起”持续文案。
-        // 注：原“多宠物拖动置顶”已移除——removeView+addView 会重建 Surface 导致卡顿，
-        // 流畅度优先级高于层级问题；显示层跟手已由 onPositionChanged 同步处理。
-        view.onDragStateChanged = { dragging ->
-            if (thinkingOn(pets.firstOrNull { it.view === view }?.roleId)) {
-                if (dragging) {
-                    petMsg.showLift()
-                } else {
-                    petMsg.clearLift()
-                }
-            }
-        }
+        // 角色碎碎念由当前 Mode 配置驱动；拖动不再单独覆盖文字。
         // 轻点/长按（非拖拽）命中本宠物：原用于把本宠窗组置顶，使被压住宠物可被点中。
         // 已移除置顶——removeView+addView 重建 Surface 卡顿，优先级低于流畅度；层级问题牺牲。
         view.onTap = {}
-        // 真正落地（拖拽/抛掷触底，进入 JUMP_DOWN 动画那一刻）：显示落地文案，之后先空白再轮播
-        view.onLand = {
-            if (thinkingOn(pets.firstOrNull { it.view === view }?.roleId)) petMsg.showLand()
-        }
+        // 落地文字同样由落地 Mode 的 thinking 策略管理。
 
         // 关键：addView 之前先把浮窗位置算到底部中心，避免先出现在左上角(0,0)再闪回底部。
         // 多个实例在水平方向轻微错开，避免初始完全重叠（各自物理独立，会自行散开）。
