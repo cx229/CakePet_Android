@@ -1264,14 +1264,13 @@ class PetService : Service() {
     private fun fishFrame(layer: FishLayer): Bitmap? {
         val clip = layer.animation ?: return layer.crop
         return modeAssetsForRole(layer.roleId).modeVisual(layer.modeId, alphaTrimThreshold = 8)
-            ?.frames?.get(clip.currentResName)
+            ?.frames?.get(clip.currentVisualKey)
     }
 
     private fun tickFishModes(dtMs: Long) {
         for (layer in fishLayers) {
             if (layer.animation?.advance(dtMs)?.changed == true) {
                 fishFrame(layer)?.let { layer.iv.setImageBitmap(it) }
-                layer.iv.scaleX = if (layer.animation?.currentFlipX == true) -1f else 1f
             }
         }
     }
@@ -1308,7 +1307,6 @@ class PetService : Service() {
             layer.animation = manager.createClip(selected)
             layer.crop = visual.first
             layer.iv.setImageBitmap(fishFrame(layer))
-            layer.iv.scaleX = if (layer.animation?.currentFlipX == true) -1f else 1f
             val c = roleConfig(layer.roleId)
             val (w, h) = fishDisplaySize(visual.first, c)
             layer.lp.width = w
@@ -1545,8 +1543,7 @@ class PetService : Service() {
         val crop = visual.first
         val (wpx, hpx) = fishDisplaySize(crop, c)
         val iv = ImageView(this).apply {
-            setImageBitmap(visual.frames[clip.currentResName])
-            scaleX = if (clip.currentFlipX) -1f else 1f
+            setImageBitmap(visual.frames[clip.currentVisualKey])
             scaleType = ImageView.ScaleType.FIT_XY
             imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
         }

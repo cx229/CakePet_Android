@@ -232,9 +232,10 @@ class ImageModeManager(
         while (next != null && visited.add(next)) {
             val def = modes[next] ?: break
             for (frame in def.frames) {
-                if (frame.resName !in frames) {
+                val visualKey = frame.resName + "|" + frame.verticalAlign + "|" + frame.transform
+                if (visualKey !in frames) {
                     loadBitmap(frame.resName, frame.verticalAlign, frame.transform)?.let {
-                        frames[frame.resName + "|" + frame.verticalAlign + "|" + frame.transform] = it
+                        frames[visualKey] = it
                     }
                 }
             }
@@ -291,6 +292,9 @@ class ImageModeManager(
         val hasFrameMotion: Boolean get() = def.frames.any { it.dx != 0 || it.dy != 0 }
         val currentVerticalAlign: String get() = def.frames[frameIndex].verticalAlign
         val currentTransform: String get() = def.frames[frameIndex].transform
+        /** Unique visual reference: one PNG may be used with multiple frame transformations. */
+        val currentVisualKey: String get() =
+            currentResName + "|" + currentVerticalAlign + "|" + currentTransform
         val currentAnchorX: Int get() = def.frames[frameIndex].anchorX
         val currentAnchorY: Int? get() = def.frames[frameIndex].anchorY
         fun currentBitmap(): Bitmap? = loadBitmap(currentResName, currentVerticalAlign, currentTransform)
