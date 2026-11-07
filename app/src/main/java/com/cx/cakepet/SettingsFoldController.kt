@@ -29,7 +29,6 @@ class SettingsFoldController(private val host: Activity) {
 
     private val sections = mutableListOf<Section>()
     private val paddings = java.util.IdentityHashMap<View, Int>()
-    private val margins = java.util.IdentityHashMap<View, Int>()
     private var config: PetConfigData? = null
 
     private fun dp(value: Int) = (host.resources.displayMetrics.density * value).toInt()
@@ -40,18 +39,11 @@ class SettingsFoldController(private val host: Activity) {
     }
 
     private fun indent(view: View, depth: Int) {
-        // An identified whole section is indented by its card border, not by
-        // pushing content inside a full-width card. Ordinary rows use padding.
-        val params = view.layoutParams as? ViewGroup.MarginLayoutParams
-        if (view.id != View.NO_ID && view is ViewGroup && params != null) {
-            val original = margins.getOrPut(view) { params.marginStart }
-            params.marginStart = original + dp(depth * 10)
-            view.layoutParams = params
-        } else {
-            val original = paddings.getOrPut(view) { view.paddingLeft }
-            view.setPadding(original + dp(depth * 10),
-                view.paddingTop, view.paddingRight, view.paddingBottom)
-        }
+        // Indentation belongs to the content, never to the outer card boundary.
+        // In particular, four-direction switch groups must keep their full card width.
+        val original = paddings.getOrPut(view) { view.paddingStart }
+        view.setPaddingRelative(original + dp(depth * 10),
+            view.paddingTop, view.paddingEnd, view.paddingBottom)
     }
 
     fun add(
@@ -75,15 +67,19 @@ class SettingsFoldController(private val host: Activity) {
             setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(dp(18), dp(44))
         }
-        // Place the chevron before the caption but reclaim its width from the
-        // row start padding. The caption and the switch retain their original X
-        // positions, so sibling rows with no chevron stay perfectly aligned.
-        val arrowWidth = dp(18)
-        val oldStart = header.paddingStart
-        header.setPaddingRelative((oldStart - arrowWidth).coerceAtLeast(0),
-            header.paddingTop, header.paddingEnd, header.paddingBottom)
+        // The title X position is fixed by the row's semantic depth. The fold
+        // chevron lives in the left padding strip as an overlay, not as a child:
+        // its presence must never shift the title, note, switch, or row width.
         val captionGroup = header.getChildAt(0) as? ViewGroup
-        header.addView(arrow, 0)
+        header.overlay.add(arrow)
+        header.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+            val titleStart = view.paddingStart
+            val arrowWidth = dp(18)
+            val arrowHeight = dp(44)
+            val x = (titleStart - arrowWidth).coerceAtLeast(0)
+            val y = (view.height - arrowHeight) / 2
+            arrow.layout(x, y, x + arrowWidth, y + arrowHeight)
+        }
         val hint = unavailableText?.let { message ->
             TextView(host).apply {
                 text = message
