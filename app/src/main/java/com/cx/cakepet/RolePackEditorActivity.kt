@@ -2598,7 +2598,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     if (node.optJSONObject(path.last()) != null) node.getJSONObject(path.last()).put("modes", JSONArray(selected))
                     else node.put(path.last(), JSONArray(selected))
                 }
-                functions()
+                if (detailDialogs.none { it.isShowing }) functions()
             }
         }
     }
@@ -3294,7 +3294,6 @@ class RolePackEditorActivity : AppCompatActivity() {
             animationsCard.addView(detailSectionHeader(
                 "当前动画", "动画链 ${selected.size} 个",
                 if (functionHasAnimationPool(path)) ({
-                    popup?.dismiss()
                     chooseFunctions(path, selected)
                 }) else null
             ))
