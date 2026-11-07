@@ -2004,8 +2004,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                         val row = LinearLayout(this).apply {
                             orientation = LinearLayout.HORIZONTAL
                             gravity = Gravity.CENTER_VERTICAL
-                            setBackgroundResource(R.drawable.card_bg)
-                            setPadding(px(4 + depth * 10), px(3), px(3), px(3))
+                            selectionSurface(this, isFolder = file.isDirectory)
+                            setPadding(px(6 + depth * 10), px(3), px(6), px(3))
                         }
                         if (file.isDirectory) {
                             val descendants = file.walkTopDown().filter(::isImage)
@@ -2039,7 +2039,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                                 }
                             }, LinearLayout.LayoutParams(px(40), px(46)))
                             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
-                                bottomMargin = px(4)
+                                bottomMargin = px(5)
                             })
                             if (path in expanded) visit(file, depth + 1)
                         } else {
@@ -2062,7 +2062,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                                 setOnClickListener { toggle(path !in selected) }
                             }, LinearLayout.LayoutParams(0, -2, 1f))
                             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
-                                bottomMargin = px(4)
+                                bottomMargin = px(5)
                             })
                         }
                     }
@@ -3171,8 +3171,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val row = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    setBackgroundResource(R.drawable.card_bg)
-                    rippleCard(this)
+                    selectionSurface(this, isFolder = file.isDirectory)
                     setPadding(px(8), px(4), px(4), px(4))
                 }
                 val main = LinearLayout(this).apply {
@@ -3765,16 +3764,19 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             for ((group, ids) in grouped) {
                 list.addView(text((if (group in opened) "▾ 📂 " else "▸ 📁 ") + "$group（${ids.size}）", 15f).apply {
-                    setBackgroundResource(R.drawable.card_bg)
+                    selectionSurface(this, isFolder = true)
+                    setPadding(px(12), px(6), px(8), px(6))
                     setOnClickListener {
                         if (!opened.add(group)) opened.remove(group)
                         redraw()
                     }
-                })
+                }, selectionRowParams())
                 if (group in opened) for (id in ids) {
                     val row = LinearLayout(this).apply {
                         orientation = LinearLayout.HORIZONTAL
                         gravity = Gravity.CENTER_VERTICAL
+                        selectionSurface(this)
+                        setPadding(px(7), px(4), px(6), px(4))
                     }
                     row.addView(CheckBox(this).apply {
                         text = thinkingBody(id)
@@ -3803,7 +3805,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                             }
                         }
                     }, LinearLayout.LayoutParams(px(44), px(46)))
-                    list.addView(row)
+                    list.addView(row, selectionRowParams(1))
                 }
             }
         }
