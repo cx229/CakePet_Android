@@ -2240,7 +2240,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             selectionInfo.text = "已绑定 ${selected.size} 个功能"
 
             fun drawNode(node: JSONObject, parent: List<String>, depth: Int) {
-                node.keys().asSequence().toList().forEach { segment ->
+                node.keys().asSequence().filter { it != "thinking" && it != "modes" }.toList().forEach { segment ->
                     val path = parent + segment
                     val key = path.joinToString("/")
                     when (val child = node.opt(segment)) {
@@ -3080,7 +3080,9 @@ class RolePackEditorActivity : AppCompatActivity() {
         val target = if (modeId != null) root.getJSONObject("modes").getJSONObject(modeId)
             else {
                 var at = root.getJSONObject("functions")
-                functionPath.orEmpty().forEach { at = at.optJSONObject(it) ?: return@forEach }
+                functionPath.orEmpty().forEach { key ->
+                    at = at.optJSONObject(key) ?: return@forEach
+                }
                 at
             }
         val old = target.optJSONObject("thinking")
