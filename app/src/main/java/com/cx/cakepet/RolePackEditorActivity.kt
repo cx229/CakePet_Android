@@ -2960,10 +2960,51 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     private val expandedThinkingGroups = mutableSetOf<String>()
 
+    private fun functionAnimationsAt(path: List<String>): List<String> {
+        var node: Any? = root.optJSONObject("functions")
+        for (part in path) node = (node as? JSONObject)?.opt(part)
+        return when (node) {
+            is JSONArray -> jsonStrings(node)
+            is JSONObject -> jsonStrings(node.optJSONArray("modes"))
+            else -> emptyList()
+        }
+    }
+
+    /** Autosave valid text with debounce, and flush before closing or navigating. */
     private fun thinkingDetails(id: String?) {
-        editor(if (id == null) "新建碎碎念" else "碎碎念详情", compact = true) { box ->
-            val field = EditText(this).apply {
-                setText(if (id == null) "" else thinkingBody(id))
+        var activeId = id
+        var lastSaved = id?.let(::thinkingBody).orEmpty()
+        val debounce = Handler(Looper.getMainLooper())
+        var pending: Runnable? = null
+        var popup: android.app.Dialog? = null
+        lateinit var field: EditText
+
+        fun persist() {
+            pending?.let { debounce.removeCallbacks(it) }
+            pending = null
+            val value = field.text.toString().trim()
+            if (value.isBlank() || value == lastSaved) return
+            attempt {
+                val key = activeId ?: "t_" + UUID.randomUUID().toString().replace("-", "").take(12)
+                change { json ->
+                    val texts = json.optJSONObject("thinkings") ?: JSONObject().also {
+                        json.put("thinkings", it)
+                    }
+                    val item = texts.optJSONObject(key) ?: JSONObject()
+                    item.put("text", value)
+                    if (item.optJSONArray("groups") == null) item.put("groups", JSONArray())
+                    texts.put(key, item)
+                }
+                activeId = key
+                lastSaved = value
+            }
+        }
+
+        popup = editor(if (id == null) "新建碎碎念" else "碎碎念详情",
+            compact = true, readOnly = true) { box ->
+            box.addView(text("文本内容", 13f))
+            field = EditText(this).apply {
+                setText(lastSaved)
                 hint = "输入碎碎念文本"
                 minLines = 3
                 maxLines = 8
@@ -2971,36 +3012,87 @@ class RolePackEditorActivity : AppCompatActivity() {
                 setBackgroundResource(R.drawable.bg_input)
                 setPadding(px(10), px(10), px(10), px(10))
             }
-            box.addView(text("文本内容", 13f))
             box.addView(field, LinearLayout.LayoutParams(-1, -2))
-            if (id != null) {
-                val groups = thinkingGroups(id)
-                box.addView(text("所属分组：" + groups.ifEmpty { listOf("未分组") }.joinToString("、"), 12f))
-                box.addView(text("直接引用位置", 14f))
-                val uses = thinkingUses(id)
-                if (uses.isEmpty()) box.addView(text("暂无引用", 12f))
-                else uses.forEach { box.addView(text(it, 12f)) }
-            }
-            ({
-                val content = field.text.toString().trim()
-                require(content.isNotBlank()) { "文本内容不能为空" }
-                change { json ->
-                    val texts = json.optJSONObject("thinkings") ?: JSONObject().also { json.put("thinkings", it) }
-                    val key = id ?: "t_" + UUID.randomUUID().toString().replace("-", "").take(12)
-                    val obj = texts.optJSONObject(key) ?: JSONObject().apply {
-                        if (id != null && texts.opt(key) is String)
-                            put("groups", JSONArray())
-                    }
-                    obj.put("text", content)
-                    if (obj.optJSONArray("groups") == null) obj.put("groups", JSONArray())
-                    texts.put(key, obj)
+            field.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    pending?.let { debounce.removeCallbacks(it) }
+                    val runnable = Runnable { persist() }
+                    pending = runnable
+                    debounce.postDelayed(runnable, 650L)
                 }
-                thinkingResources()
+                override fun afterTextChanged(s: android.text.Editable?) {}
             })
+            field.setOnFocusChangeListener { _, focused -> if (!focused) persist() }
+
+            val groupsRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, px(10), 0, px(6))
+            }
+            val groupInfo = text("", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            }
+            fun refreshGroups() {
+                val groups = activeId?.let(::thinkingGroups).orEmpty()
+                groupInfo.text = "所属分组：" + groups.ifEmpty { listOf("未分组") }.joinToString("、")
+            }
+            refreshGroups()
+            groupsRow.addView(groupInfo, LinearLayout.LayoutParams(0, -2, 1f))
+            groupsRow.addView(button("修改") {
+                persist()
+                val current = activeId
+                if (current == null) {
+                    Toast.makeText(this, "请先输入文本", Toast.LENGTH_SHORT).show()
+                } else {
+                    chooseThinkingGroups(current) { refreshGroups() }
+                }
+            })
+            box.addView(groupsRow, LinearLayout.LayoutParams(-1, -2))
+
+            box.addView(text("被引用位置", 14f).apply {
+                setPadding(px(2), px(10), 0, px(6))
+            })
+            val refs = id?.let(::thinkingUses).orEmpty()
+            if (refs.isEmpty()) box.addView(text("未被引用", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(14), 0, 0, px(6))
+            })
+            refs.forEach { reference ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setBackgroundResource(R.drawable.card_bg)
+                    rippleCard(this)
+                    setPadding(px(10), px(5), px(7), px(5))
+                }
+                row.addView(text(reference.label(::functionPathName), 12f),
+                    LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text("›", 20f).apply {
+                    gravity = Gravity.CENTER
+                    setTextColor(getColor(R.color.cp_note))
+                }, LinearLayout.LayoutParams(px(24), -2))
+                rippleClick(row) {
+                    persist()
+                    popup?.dismiss()
+                    val functionPath = reference.functionPath
+                    if (functionPath != null) functionDetails(functionPath, functionAnimationsAt(functionPath))
+                    else reference.modeId?.let(::showMode)
+                }
+                box.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                    leftMargin = px(14)
+                    bottomMargin = px(5)
+                })
+            }
+            ({ })
+        }
+        popup.setOnDismissListener {
+            persist()
+            thinkingResources()
         }
     }
 
-    private fun chooseThinkingGroups(id: String) {
+    private fun chooseThinkingGroups(id: String, onSaved: (() -> Unit)? = null) {
         editor("选择碎碎念组", compact = true) { box ->
             val known = allThinkingGroups().toMutableList()
             val checked = thinkingGroups(id).toMutableSet()
@@ -3034,7 +3126,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     obj.put("groups", JSONArray().apply { checked.forEach { put(it) } })
                     item.put(id, obj)
                 }
-                thinkingResources()
+                if (onSaved != null) onSaved() else thinkingResources()
             })
         }
     }
