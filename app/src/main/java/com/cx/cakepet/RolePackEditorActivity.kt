@@ -89,7 +89,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         if (templateExamples.containsKey(key)) return templateExamples[key]
         var cursor = templateJson?.optJSONObject("functions")
         for (segment in path.dropLast(1)) cursor = cursor?.optJSONObject(segment)
-        val candidates = cursor?.optJSONArray(path.last())
+        val candidates = cursor?.optJSONArray(path.last()) ?: cursor?.optJSONObject(path.last())?.optJSONArray("modes")
         val modes = templateJson?.optJSONObject("modes")
         val sourcePaths = mutableListOf<List<String>>()
         if (candidates != null && modes != null) {
@@ -344,6 +344,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 "modes" -> modes()
                 "functions" -> functions()
                 "images" -> images()
+                "thinkings" -> thinkingResources()
                 else -> home()
             }
         } finally {
@@ -641,6 +642,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         menuCard("功能映射", "决定了「$roleName」在何时会触发什么动作动画", android.R.drawable.ic_menu_manage) { functions() }
         menuCard("动作动画", "制定了「$roleName」有什么动作动画", android.R.drawable.ic_media_play) { modes() }
         menuCard("图片资源", "列举了「$roleName」所用的图片", android.R.drawable.ic_menu_gallery) { images() }
+        menuCard("碎碎念文本", "管理文本内容与碎碎念组", android.R.drawable.ic_dialog_email) { thinkingResources() }
     }
     private fun info() {
         editor("基本信息", compact = true) { box ->
@@ -995,6 +997,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         animate(preview, key)
         action("编辑动画属性") { attributes(key) }
         action("绑定到功能") { bindModeToFunctions(key) }
+        action("编辑碎碎念") { thinkingConfigDialog(modeId = key) }
         panel.addView(button("导入 GIF 并覆盖") {
             showConfirmDialog(
                 title = "GIF 覆盖动画",
@@ -2095,13 +2098,20 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun functionTree(parent: LinearLayout, values: JSONObject, path: List<String>) {
-        val keys = values.keys().asSequence().filter { it != "thinking" }.toList()
+        val keys = values.keys().asSequence().filter { it != "thinking" && it != "modes" }.toList()
         for (key in keys) {
             val currentPath = path + key
             val fullKey = currentPath.joinToString("/")
             val displayName = functionPathName(currentPath)
             when (val child = values.opt(key)) {
-                is JSONObject -> {
+                is JSONObject -> if (child.has("modes")) {
+                    val selected = jsonStrings(child.optJSONArray("modes"))
+                    functionItem(parent, "▣  " + functionPathName(currentPath) + "   ›",
+                        "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) }, path.size,
+                        description = functionDescription(currentPath), examplePath = currentPath) {
+                        functionDetails(currentPath, selected)
+                    }
+                } else {
                     val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
                     var populated = false
                     lateinit var folderCard: LinearLayout
@@ -2119,6 +2129,16 @@ class RolePackEditorActivity : AppCompatActivity() {
                         if (!openedFunctionFolders.add(fullKey)) openedFunctionFolders.remove(fullKey)
                         refreshFolder()
                     }
+                    val controls = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.END
+                    }
+                    controls.addView(text("⋮  碎碎念设置", 12f).apply {
+                        setTextColor(getColor(R.color.cp_note))
+                        isClickable = true
+                        setOnClickListener { thinkingConfigDialog(functionPath = currentPath) }
+                    })
+                    parent.addView(controls, LinearLayout.LayoutParams(-1, -2))
                     parent.addView(children, LinearLayout.LayoutParams(-1, -2))
                     refreshFolder()
                 }
@@ -2128,7 +2148,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     functionItem(parent, "▣  " + functionPathName(currentPath) + "   ›",
                         "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) }, path.size,
                         description = functionDescription(currentPath), examplePath = currentPath) {
-                        chooseFunctions(currentPath, selected)
+                        functionDetails(currentPath, selected)
                     }
                 }
             }
@@ -2154,10 +2174,12 @@ class RolePackEditorActivity : AppCompatActivity() {
         val functionsRoot = root.getJSONObject("functions")
         val leaves = linkedMapOf<String, Pair<List<String>, List<String>>>()
         fun collect(node: JSONObject, parent: List<String>) {
-            node.keys().asSequence().filter { it != "thinking" }.toList().forEach { segment ->
+            node.keys().asSequence().filter { it != "thinking" && it != "modes" }.toList().forEach { segment ->
                 val path = parent + segment
                 when (val value = node.opt(segment)) {
-                    is JSONObject -> collect(value, path)
+                    is JSONObject -> if (value.has("modes")) {
+                        leaves[path.joinToString("/")] = path to jsonStrings(value.optJSONArray("modes"))
+                    } else collect(value, path)
                     is JSONArray -> leaves[path.joinToString("/")] = path to
                         (0 until value.length()).map { value.optString(it) }.filter { it.isNotBlank() }
                 }
@@ -2222,7 +2244,17 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val path = parent + segment
                     val key = path.joinToString("/")
                     when (val child = node.opt(segment)) {
-                        is JSONObject -> {
+                        is JSONObject -> if (child.has("modes")) {
+                            val checked = key in selected
+                            val row = CheckBox(this).apply {
+                                text = functionSegment(path)
+                                isChecked = checked
+                                setOnCheckedChangeListener { _, checkedNow ->
+                                    if (checkedNow) selected.add(key) else selected.remove(key)
+                                }
+                            }
+                            listing.addView(row)
+                        } else {
                             val descendantPaths = leaves.keys.filter { it.startsWith("$key/") }
                             val open = key in expanded
                             val folder = LinearLayout(this).apply {
@@ -2309,7 +2341,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                         val (path, _) = pair
                         var node = functions
                         path.dropLast(1).forEach { node = node.getJSONObject(it) }
-                        val original = node.getJSONArray(path.last())
+                        val original = node.optJSONArray(path.last()) ?: node.getJSONObject(path.last()).getJSONArray("modes")
                         val oldModes = (0 until original.length()).map { original.optString(it) }
                             .filter { it.isNotBlank() }
                         val updated = oldModes.filter { it != modeId }.toMutableList()
@@ -2317,7 +2349,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                         require(oldModes.isEmpty() || updated.isNotEmpty()) {
                             "功能「${functionPathName(path)}」至少需要保留一个动画"
                         }
-                        node.put(path.last(), JSONArray().apply { updated.distinct().forEach { put(it) } })
+                        if (node.optJSONObject(path.last()) != null) node.getJSONObject(path.last()).put("modes", JSONArray().apply { updated.distinct().forEach { put(it) } })
+                        else node.put(path.last(), JSONArray().apply { updated.distinct().forEach { put(it) } })
                     }
                 }
                 dialog.dismiss()
@@ -2440,7 +2473,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                 change { json ->
                     var node = json.getJSONObject("functions")
                     path.dropLast(1).forEach { node = node.getJSONObject(it) }
-                    node.put(path.last(), JSONArray(selected))
+                    if (node.optJSONObject(path.last()) != null) node.getJSONObject(path.last()).put("modes", JSONArray(selected))
+                    else node.put(path.last(), JSONArray(selected))
                 }
                 functions()
             }
