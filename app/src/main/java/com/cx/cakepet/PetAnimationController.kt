@@ -10,6 +10,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
     private var forcedReturn: String? = null
     private var forcedStart: String? = null
     private var modeChanged = false
+    private var thinkingFunctionPath: List<String> = listOf("static", "sit")
+    private val pendingFunctionForMode = mutableMapOf<String, List<String>>()
     private var frameMotionPending = true
     /** Active state-owned Functions path. A finished action chain resumes from this pool. */
     private var activeStateFunction: List<String>? = null
@@ -53,7 +55,13 @@ class PetAnimationController(private val assets: ImageModeManager) {
         return curDx() to curDy()
     }
     fun leavesOf(vararg path: String): List<String> = assets.leavesOf(*path)
-    fun modeOf(vararg path: String): String? = assets.modeOf(*path)
+    fun modeOf(vararg path: String): String? = assets.modeOf(*path)?.also {
+        pendingFunctionForMode[it] = path.toList()
+    }
+    fun currentThinkingConfig(): Pair<ThinkingConfig, Map<String, String>> {
+        val catalog = assets.currentPack.thinking
+        return catalog.resolve(getMode(), thinkingFunctionPath) to catalog.texts
+    }
     fun isFunctionMode(name: String, vararg path: String): Boolean = assets.isFunctionMode(name, *path)
     fun isDragMode(name: String = getMode()): Boolean =
         listOf("slow", "left_medium", "left_fast", "right_medium", "right_fast")
@@ -74,6 +82,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         val pool = currentPool().filter { it != exclude }
         val selected = if (pool.isNotEmpty()) pool.random() else getMode()
         // Random facing is a standby behavior, not a privilege of any Mode/Functions name.
+        pendingFunctionForMode[selected] = if (useStaticPool) listOf("static", "pool") else listOf("standby", "pool")
         if (assets.createClip(selected)?.hasFrameMotion == true) onStandbyMotionChosen?.invoke()
         return selected
     }
@@ -109,6 +118,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
         val next = assets.createClip(id) ?: return
         val different = getMode() != id
         clip = next
+        thinkingFunctionPath = pendingFunctionForMode.remove(id) ?: activeStateFunction ?: thinkingFunctionPath
         currentName = id
         if (different) modeChanged = true
         frameMotionPending = true
@@ -117,6 +127,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun playOnce(id: String, endMode: String? = null) {
         val next = assets.createClip(id) ?: return
         clip = next
+        thinkingFunctionPath = pendingFunctionForMode.remove(id) ?: thinkingFunctionPath
         forced = true
         forcedReturn = endMode
         forcedStart = id
@@ -149,6 +160,8 @@ class PetAnimationController(private val assets: ImageModeManager) {
         forcedStart = null
         currentName = ""
         activeStateFunction = null
+        pendingFunctionForMode.clear()
+        thinkingFunctionPath = listOf("static", "sit")
         modeOf("static", "sit")?.let { setMode(it) }
     }
 
