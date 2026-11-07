@@ -43,6 +43,18 @@ class RolePackEditorActivity : AppCompatActivity() {
     private data class EditorPage(val name: String, val mode: String, val scrollY: Int)
     private val pageHistory = java.util.ArrayDeque<EditorPage>()
     private var restoringPage = false
+    private val detailDialogs = mutableListOf<android.app.Dialog>()
+    private var suspendedDetails: List<android.app.Dialog> = emptyList()
+    private var suspendedDetailOrigin: String? = null
+    private fun openModeFromDetail(key: String) {
+        val visible = detailDialogs.filter { it.isShowing }
+        if (visible.isNotEmpty()) {
+            suspendedDetails = visible.toList()
+            suspendedDetailOrigin = screen
+            visible.asReversed().forEach { it.hide() }
+        }
+        showMode(key)
+    }
     private val openedFunctionFolders = mutableSetOf<String>()
     // 仅缓存当前功能页的白酥静态图片；链路计算始终读取最新 modes JSON。
     private val templateExamples = mutableMapOf<String, android.graphics.Bitmap?>()
@@ -397,6 +409,14 @@ class RolePackEditorActivity : AppCompatActivity() {
                     ?.scrollToPositionWithOffset(0, -previous.scrollY)
             }
         } else scroll.post { scroll.scrollTo(0, previous.scrollY) }
+        if (screen == suspendedDetailOrigin) {
+            val toRestore = suspendedDetails
+            suspendedDetails = emptyList()
+            suspendedDetailOrigin = null
+            scroll.post {
+                if (!isFinishing && !isDestroyed) toRestore.forEach { it.show() }
+            }
+        }
     }
     private fun getStatusBarHeight(): Int {
         val resId = resources.getIdentifier("status_bar_height", "dimen", "android")
@@ -600,6 +620,10 @@ class RolePackEditorActivity : AppCompatActivity() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
         dialog.window?.setLayout(-1, -2)
+        if (readOnly) {
+            detailDialogs.add(dialog)
+            dialog.setOnDismissListener { detailDialogs.remove(dialog) }
+        }
         // Keep save/cancel fixed while the form scrolls with keyboard and
         // conditional fields (such as timed playback) independently.
         fun resizeForm() {
@@ -2237,15 +2261,6 @@ class RolePackEditorActivity : AppCompatActivity() {
                         if (!openedFunctionFolders.add(fullKey)) openedFunctionFolders.remove(fullKey)
                         refreshFolder()
                     }
-                    // The folder still expands normally. Only a folder owning a direct
-                    // thinking policy exposes its Function detail through a compact menu icon.
-                    if (child.optJSONObject("thinking") != null) {
-                        folderCard.addView(text("⋮", 23f).apply {
-                            gravity = Gravity.CENTER
-                            isClickable = true
-                            setOnClickListener { functionDetails(currentPath, emptyList()) }
-                        }, LinearLayout.LayoutParams(px(38), px(44)))
-                    }
                     parent.addView(children, LinearLayout.LayoutParams(-1, -2))
                     refreshFolder()
                 }
@@ -2761,7 +2776,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     setTextColor(getColor(R.color.cp_note))
                     setPadding(0, 0, 0, 0)
                 }, LinearLayout.LayoutParams(px(22), -2))
-                rippleClick(row) { popup?.dismiss(); showMode(mode) }
+                rippleClick(row) { openModeFromDetail(mode) }
                 references.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
                     leftMargin = px(8)
                     topMargin = px(4)
@@ -2950,7 +2965,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 is JSONArray -> jsonStrings(pool).contains(id)
                 else -> false
             }
-            if (referenced) uses += ThinkingReference(functionPath = path)
+            if (referenced && node.optJSONArray("modes") != null) uses += ThinkingReference(functionPath = path)
             val keys = node.keys().asSequence().toList()
             keys.filter { it != "thinking" && it != "modes" }.forEach { key ->
                 node.optJSONObject(key)?.let { check(it, path + key) }
@@ -3059,7 +3074,6 @@ class RolePackEditorActivity : AppCompatActivity() {
         val debounce = Handler(Looper.getMainLooper())
         var pending: Runnable? = null
         var popup: android.app.Dialog? = null
-        var navigatingAway = false
         var needsRefresh = false
         lateinit var field: EditText
 
@@ -3173,11 +3187,9 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }, LinearLayout.LayoutParams(px(22), -2))
                 rippleClick(row) {
                     persist()
-                    navigatingAway = true
-                    popup?.dismiss()
                     val functionPath = reference.functionPath
                     if (functionPath != null) functionDetails(functionPath, functionAnimationsAt(functionPath))
-                    else reference.modeId?.let(::showMode)
+                    else reference.modeId?.let { openModeFromDetail(it) }
                 }
                 referencesCard.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
                     leftMargin = px(8)
@@ -3189,7 +3201,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         popup?.setOnDismissListener {
             persist()
-            if (!navigatingAway && needsRefresh && screen == "thinkings") thinkingResources()
+            popup?.let { detailDialogs.remove(it) }
+            if (needsRefresh && screen == "thinkings") thinkingResources()
         }
     }
 
@@ -3257,8 +3270,7 @@ class RolePackEditorActivity : AppCompatActivity() {
      */
     private fun functionDetails(path: List<String>, selected: List<String>) {
         val all = PackThinking.parse(root).functions
-        val effective = (path.size downTo 1).asSequence()
-            .mapNotNull { all[path.take(it)] }.firstOrNull() ?: ThinkingConfig()
+        val effective = all[path] ?: ThinkingConfig()
         val thinkingSummary = when (effective.policy) {
             "off" -> "不播放"
             "hold" -> "持续 · ${effective.pool.size} 条"
@@ -3274,7 +3286,6 @@ class RolePackEditorActivity : AppCompatActivity() {
 
             val thinkingCard = detailSection()
             thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
-                popup?.dismiss()
                 thinkingConfigDialog(functionPath = path)
             })
             addDetailSection(box, thinkingCard)
@@ -3292,8 +3303,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val row = detailListRow()
                 row.addView(detailNumber(index))
                 row.addView(linkedModeChains(listOf(start), animations, "", 13f) { target ->
-                    popup?.dismiss()
-                    showMode(target)
+                    openModeFromDetail(target)
                 }.apply { setPadding(0, px(2), 0, px(2)) },
                     LinearLayout.LayoutParams(0, -2, 1f))
                 animationsCard.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
@@ -3407,7 +3417,10 @@ class RolePackEditorActivity : AppCompatActivity() {
                     }
                     obj.put("thinking", JSONObject().put("policy", policy).put("pool", pool))
                 }
-                if (modeId != null) showMode(modeId) else functions()
+                if (detailDialogs.none { it.isShowing }) {
+                    if (modeId != null && screen == "mode") showMode(modeId)
+                    else if (modeId == null && screen == "functions") functions()
+                }
             })
         }
     }
