@@ -42,7 +42,6 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun currentBitmapSize(): Pair<Int, Int> = assets.currentBitmapSize()
     fun currentBitmap(): Bitmap? = clip?.currentBitmap()
     fun currentAnchor(): Pair<Int, Int> = clip?.currentAnchor() ?: (80 to 160)
-    fun currentFrameFlipX(): Boolean = clip?.currentFlipX ?: false
     fun previewFrame(res: String): Bitmap? = assets.previewFrame(res)
     fun currentResName(): String? = clip?.currentResName
     fun curDx(): Int = clip?.currentDx ?: 0

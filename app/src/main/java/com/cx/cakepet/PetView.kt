@@ -35,7 +35,6 @@ class PetView @JvmOverloads constructor(
     )
     private var currentBitmap: Bitmap? = null
     // Snapshot frame-local source correction together with its bitmap and anchor.
-    private var currentFrameAssetFlipX = false
 
     // ===== v1.01 契约：对外只暴露【功能寻址】，不暴露具体模式名，也不暴露内部 manager =====
 
@@ -183,12 +182,8 @@ class PetView @JvmOverloads constructor(
             else -> flipX
         }
 
-    /** Visual flip = per-frame source correction XOR runtime facing direction.
-     *  Keep stateFlip separate: dx/dy and forage direction are movement semantics,
-     *  not a property of the original PNG orientation.
-     */
-    private val renderFlipX: Boolean
-        get() = stateFlip != currentFrameAssetFlipX
+    /** Runtime movement direction; per-frame transformations are already baked into the bitmap. */
+    private val renderFlipX: Boolean get() = stateFlip
 
     // 记录正在生效的拖动条件，避免每帧重新选择动作和重置动画帧。
     private var activeDragFunction: String? = null
@@ -451,7 +446,6 @@ class PetView @JvmOverloads constructor(
 
     init {
         currentBitmap = imageManager.currentBitmap()
-        currentFrameAssetFlipX = imageManager.currentFrameFlipX()
         val (fw, fh) = imageManager.currentBitmapSize()
         val (fax, fay) = imageManager.currentAnchor()
         lastFrameW = fw
@@ -843,9 +837,8 @@ class PetView @JvmOverloads constructor(
                     val dlen = kotlin.math.hypot(ddx, ddy).coerceAtLeast(1e-3f)
                     leapDirX = ddx / dlen
                     leapDirY = ddy / dlen
-                    // Visual source frames are corrected through renderFlipX (stateFlip XOR
-                    // frame.flipX). For the existing jump sprite, the facing flag must
-                    // be opposite the flight target comparison to match the visible head.
+                    // Frame source transformations are handled before runtime facing.
+                    // Keep the established leap movement direction unchanged.
                     flipX = tx0 < physics.x
                     leapTargetInited = true
                 }
@@ -892,7 +885,6 @@ class PetView @JvmOverloads constructor(
         val (fw, fh) = imageManager.currentBitmapSize()
         val (fax, fay) = imageManager.currentAnchor()
         currentBitmap = imageManager.currentBitmap()
-        currentFrameAssetFlipX = imageManager.currentFrameFlipX()
         lastFrameW = fw
         lastFrameH = fh
         lastAnchorX = fax

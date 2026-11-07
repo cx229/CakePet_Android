@@ -73,9 +73,8 @@ class ImageModeManager(
         // 单循环：一次性动画播完即停，不反弹（对齐 PC PullFishMode 第6~9帧的 offset）。
         val dx: Int = 0,
         val dy: Int = 0,
-        val verticalAlign: String = "top",
-        // Source-frame orientation correction; independent of runtime movement direction.
-        val flipX: Boolean = false
+        val verticalAlign: String = "bottom",
+        val transform: String = "none"
     )
 
     /** 帧推进结果：changed=是否换帧。动画只管切图，绝不控制位置（位移由物理循环负责）。 */
@@ -192,9 +191,9 @@ class ImageModeManager(
                 val anchorY = if (f.has("anchorY")) f.getInt("anchorY") else null
                 val dx = if (f.has("dx")) f.getInt("dx") else 0
                 val dy = if (f.has("dy")) f.getInt("dy") else 0
-                val align = f.optString("verticalAlign", "top")
+                val align = f.optString("verticalAlign", "bottom")
                 frames.add(Frame(res, delay, anchorX, anchorY, dx, dy, align,
-                    f.optBoolean("flipX", false)))
+                    f.optString("transform", "none")))
             }
             registerMode(ImageModeDef(name, frames, loop, loopMode, durationMin,
                 durationMax, finishCycle, nextModeName))
@@ -234,7 +233,9 @@ class ImageModeManager(
             val def = modes[next] ?: break
             for (frame in def.frames) {
                 if (frame.resName !in frames) {
-                    loadBitmap(frame.resName, frame.verticalAlign)?.let { frames[frame.resName] = it }
+                    loadBitmap(frame.resName, frame.verticalAlign, frame.transform)?.let {
+                        frames[frame.resName + "|" + frame.verticalAlign + "|" + frame.transform] = it
+                    }
                 }
             }
             next = def.nextModeName
@@ -289,11 +290,12 @@ class ImageModeManager(
         // Movement capability must not depend on the animation's loop policy.
         val hasFrameMotion: Boolean get() = def.frames.any { it.dx != 0 || it.dy != 0 }
         val currentVerticalAlign: String get() = def.frames[frameIndex].verticalAlign
-        val currentFlipX: Boolean get() = def.frames[frameIndex].flipX
+        val currentTransform: String get() = def.frames[frameIndex].transform
         val currentAnchorX: Int get() = def.frames[frameIndex].anchorX
         val currentAnchorY: Int? get() = def.frames[frameIndex].anchorY
-        fun currentBitmap(): Bitmap? = loadBitmap(currentResName, currentVerticalAlign)
-        fun currentAnchor(): Pair<Int, Int> = frameAnchor(currentResName, currentAnchorX, currentAnchorY, currentVerticalAlign)
+        fun currentBitmap(): Bitmap? = loadBitmap(currentResName, currentVerticalAlign, currentTransform)
+        fun currentAnchor(): Pair<Int, Int> = frameAnchor(currentResName,
+            currentAnchorX, currentAnchorY, currentVerticalAlign, currentTransform)
 
         private fun sampleTimeTarget(): Long {
             val min = def.durationMin ?: return Long.MAX_VALUE
@@ -426,7 +428,12 @@ class ImageModeManager(
     // 取原图尺寸（用于锚点/ padding 计算）。缓存避免重复解码头。
     // 新包：返回「保比例下采样」后的真实内容尺寸（最长边 = decodeTarget，如 1000×500 → 128×64），
     // 而非原始的 1000×1000 也非方块 128×128（否则非正方形图锚点会算到错误处/脚落到透明区导致错位）。
-    private fun rawBitmapSize(resName: String): Pair<Int, Int> {
+    private fun rawBitmapSize(resName: String, transform: String = "none"): Pair<Int, Int> {
+        val size = sourceBitmapSize(resName)
+        return if (transform == "rotate90" || transform == "rotate270") size.second to size.first else size
+    }
+
+    private fun sourceBitmapSize(resName: String): Pair<Int, Int> {
         rawSizeCache[resName]?.let { return it }
         val path = currentPack.resolve(resName)
         if (path == null) {
@@ -469,7 +476,7 @@ class ImageModeManager(
         var mh = 0
         for (def in modes.values) {
             for (f in def.frames) {
-                val (bw, bh) = rawBitmapSize(f.resName)
+                val (bw, bh) = rawBitmapSize(f.resName, f.transform)
                 if (bw > mw) mw = bw
                 if (bh > mh) mh = bh
             }
@@ -500,24 +507,26 @@ class ImageModeManager(
     /** 根据当前帧的图片和声明锚点计算画布锚点，不涉及任何对象物理状态。 */
 
     /** Unpadded picture rectangle in the same logical canvas coordinates as frameAnchor(). */
-    fun previewContentBounds(resName: String, alignment: String = "top"): android.graphics.RectF {
-        val (w, h) = rawBitmapSize(resName)
-        val (left, top) = fillOffset(resName, w, h,
+    fun previewContentBounds(resName: String, alignment: String = "bottom",
+                             transform: String = "none"): android.graphics.RectF {
+        val (w, h) = rawBitmapSize(resName, transform)
+        val (left, top) = fillOffset(w, h,
             currentPack.anchorRes, currentPack.anchorRes, alignment)
         return android.graphics.RectF(left.toFloat(), top.toFloat(),
             (left + w).toFloat(), (top + h).toFloat())
     }
 
-    fun frameAnchor(resName: String, anchorX: Int, anchorY: Int?, alignment: String = "top"): Pair<Int, Int> {
+    fun frameAnchor(resName: String, anchorX: Int, anchorY: Int?,
+                    alignment: String = "bottom", transform: String = "none"): Pair<Int, Int> {
         val (w, _) = currentBitmapSize()
-        val (_, rawH) = rawBitmapSize(resName)
+        val (_, rawH) = rawBitmapSize(resName, transform)
         val axRaw = if (anchorX >= 0) anchorX else w / 2
         val ayRaw = rawH - (anchorY ?: 0)
-        val (padX, padY) = padOf(resName, alignment)
+        val (padX, padY) = padOf(resName, alignment, transform)
         return (axRaw + padX) to (ayRaw + padY)
     }
 
-    private val bitmapCache = mutableMapOf<Pair<String, String>, Bitmap?>()
+    private val bitmapCache = mutableMapOf<Triple<String, String, String>, Bitmap?>()
 
     /**
      * 统一画布尺寸（全局最大帧）。所有帧加载后都被居中 padding 到此尺寸，
@@ -534,18 +543,37 @@ class ImageModeManager(
         globalH = h
     }
 
-    /** 图片的垂直填充由 Mode.verticalAlign 显式指定，默认 top。 */
-    private fun fillOffset(resName: String, bw: Int, bh: Int, canvasW: Int = globalW, canvasH: Int = globalH, alignment: String = "top"): Pair<Int, Int> {
+    /** Vertical alignment runs after orientation correction, before animation. */
+    private fun fillOffset(bw: Int, bh: Int, canvasW: Int = globalW,
+                           canvasH: Int = globalH, alignment: String = "bottom"): Pair<Int, Int> {
         if (bw <= 0 || bh <= 0) return 0 to 0
-        val padX = ((canvasW - bw).coerceAtLeast(0)) / 2
-        val padY = if (alignment == "center") (canvasH - bh) / 2 else 0
-        return padX to padY
+        val x = (canvasW - bw).coerceAtLeast(0) / 2
+        val freeY = (canvasH - bh).coerceAtLeast(0)
+        val y = when (alignment) {
+            "top" -> 0
+            "center" -> freeY / 2
+            else -> freeY
+        }
+        return x to y
     }
 
-    /** 每帧相对统一画布的偏移（px），供锚点补偿使用。直接复用 fillOffset（单一规则来源）。 */
-    private fun padOf(resName: String, alignment: String): Pair<Int, Int> {
-        val (bw, bh) = rawBitmapSize(resName)
-        return fillOffset(resName, bw, bh, alignment = alignment)
+    private fun padOf(resName: String, alignment: String, transform: String): Pair<Int, Int> {
+        val (w, h) = rawBitmapSize(resName, transform)
+        return fillOffset(w, h, alignment = alignment)
+    }
+
+    private fun transformBitmap(bitmap: Bitmap, transform: String): Bitmap {
+        if (transform == "none") return bitmap
+        val matrix = android.graphics.Matrix()
+        when (transform) {
+            "flipX" -> matrix.setScale(-1f, 1f)
+            "flipY" -> matrix.setScale(1f, -1f)
+            "rotate90" -> matrix.setRotate(90f)
+            "rotate180" -> matrix.setRotate(180f)
+            "rotate270" -> matrix.setRotate(270f)
+            else -> return bitmap
+        }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
     /** 按当前资源包打开任意资源流；ASSETS 走 assets.open，FILES 走 filesDir/roles/<base>/...。 */
@@ -556,42 +584,30 @@ class ImageModeManager(
         }
     } catch (_: Exception) { null }
 
-    // 解析并缓存单帧位图。解码产物 pad 进「解码画布」(decodeTarget 边长；旧包=逻辑画布 globalW×globalH)，
-    // 居中绘制（水平居中，垂直置顶、底部补透明）。
-    // 新包：按 decodeTarget=256 保比例下采样（最长边 → 256，如 1000×500 → 256×128）作 2x 超采样源，
-    // pad 进 256×256 解码画布；逻辑/锚点空间仍是 anchorRes=128，渲染时再把 256 位图缩进 128 逻辑矩形（见 PetView）。
-    private fun loadBitmap(resName: String, alignment: String = "top"): Bitmap? {
-        val cacheKey = resName to alignment
-        bitmapCache[cacheKey]?.let { return it }
+    /** Decode source PNG, transform it, then align inside a transparent canvas. */
+    private fun loadBitmap(resName: String, alignment: String = "bottom",
+                           transform: String = "none"): Bitmap? {
+        val key = Triple(resName, alignment, transform)
+        bitmapCache[key]?.let { return it }
         val path = currentPack.resolve(resName) ?: return null
-        val src = try {
-            if (currentPack.decodeTarget > 0) {
-                decodeAssetScaled(path, currentPack.decodeTarget)
-            } else {
-                val istr = openPackStream(path)
-                BitmapFactory.decodeStream(istr)
-            }
-        } catch (_: Exception) {
-            null
-        } ?: return null
-        // 解码画布：新包用 decodeTarget(256) 超采样画布；旧包用逻辑画布 globalW×globalH(128)。
-        // 解码产物与该画布同尺寸则直接复用，否则经 fillOffset 填充（roll 居中，其余顶部对齐、底部补透明）。
-        // 非 roll 图片置顶、透明补在下方 → 矩形框底不是地面基线（脚在画布内、下方为透明），
-        // 浮窗定位改由 currentAnchor 的 fay（脚距顶）驱动，与填充规则共用 fillOffset 永不错位。
-        // ROLL 例外：roll 为球状对称图，按【居中】填充使图中心恰好落在画布中心，旋转时图绕自身中心自转、视觉静止。
+        val decoded = try {
+            if (currentPack.decodeTarget > 0) decodeAssetScaled(path, currentPack.decodeTarget)
+            else openPackStream(path)?.use { BitmapFactory.decodeStream(it) }
+        } catch (_: Exception) { null } ?: return null
+        val transformed = transformBitmap(decoded, transform)
+        if (transformed !== decoded) decoded.recycle()
         val canvasRes = if (currentPack.decodeTarget > 0) currentPack.decodeTarget else globalW
-        val bmp = if (src.width == canvasRes && src.height == canvasRes) {
-            src
+        val bitmap = if (transformed.width == canvasRes && transformed.height == canvasRes) {
+            transformed
         } else {
-            val (padX, padY) = fillOffset(resName, src.width, src.height, canvasRes, canvasRes, alignment)
+            val (x, y) = fillOffset(transformed.width, transformed.height, canvasRes, canvasRes, alignment)
             val out = Bitmap.createBitmap(canvasRes, canvasRes, Bitmap.Config.ARGB_8888)
-            val c = android.graphics.Canvas(out)
-            c.drawBitmap(src, padX.toFloat(), padY.toFloat(), null)
-            src.recycle()
+            android.graphics.Canvas(out).drawBitmap(transformed, x.toFloat(), y.toFloat(), null)
+            transformed.recycle()
             out
         }
-        bitmapCache[cacheKey] = bmp
-        return bmp
+        bitmapCache[key] = bitmap
+        return bitmap
     }
 
     /**

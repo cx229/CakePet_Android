@@ -890,8 +890,10 @@ class RolePackEditorActivity : AppCompatActivity() {
                 content.addView(ImageView(this).apply {
                     scaleType = ImageView.ScaleType.FIT_CENTER
                     setBackgroundResource(R.drawable.bg_thumb_border)
-                    setImageBitmap(thumbnails.getOrPut(source) { thumb(File(draft, source)) })
-                    scaleX = if (frames.optJSONObject(0)?.optBoolean("flipX", false) == true) -1f else 1f
+                    val transform = frames.optJSONObject(0)?.optString("transform", "none") ?: "none"
+                    setImageBitmap(thumbnails.getOrPut(source + "|" + transform) {
+                        thumb(File(draft, source))?.let { transformedThumb(it, transform) }
+                    })
                 }, LinearLayout.LayoutParams(px(54), px(54)))
                 val label = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
@@ -1639,7 +1641,10 @@ class RolePackEditorActivity : AppCompatActivity() {
                 val y = coord("anchorY")
                 val dx = coord("dx")
                 val dy = coord("dy")
-                frameInfo.text = delayText + (if (frame.optBoolean("flipX", false)) "  左右镜像" else "")
+                val selectedTransform = frame.optString("transform", "none")
+                val transformLabel = frameTransforms.firstOrNull { it.second == selectedTransform }?.first
+                    .orEmpty().takeUnless { it == "关闭" }.orEmpty()
+                frameInfo.text = delayText + if (transformLabel.isBlank()) "" else "  $transformLabel"
                 val coords = mutableListOf<String>()
                 if (x != "-" || y != "-") coords.add("XY($x,$y)")
                 if (dx != "-" || dy != "-") coords.add("dxy($dx,$dy)")
@@ -1648,8 +1653,11 @@ class RolePackEditorActivity : AppCompatActivity() {
                     visibility = if (coords.isEmpty()) View.GONE else View.VISIBLE
                 }
                 (labels.getChildAt(2) as TextView).text = source
-                image.setImageBitmap(thumbs.getOrPut(source) { thumb(File(draft, source)) })
-                image.scaleX = if (frame.optBoolean("flipX", false)) -1f else 1f
+                val transform = frame.optString("transform", "none")
+                image.setImageBitmap(thumbs.getOrPut(source + "|" + transform) {
+                    thumb(File(draft, source))?.let { transformedThumb(it, transform) }
+                })
+                image.scaleX = 1f
                 val at = holder.bindingAdapterPosition - 1
                 select.setOnCheckedChangeListener(null)
                 select.isChecked = at in bulkSelected
@@ -1732,10 +1740,10 @@ class RolePackEditorActivity : AppCompatActivity() {
         val tick = object : Runnable {
             override fun run() {
                 if (screen != "mode" || modeId != key) return
-                view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName, clip.currentVerticalAlign),
+                view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName, clip.currentVerticalAlign, clip.currentTransform),
                     clip.currentAnchor(), clip.currentDx, clip.currentDy, manager.currentPack.anchorRes,
                     clip.currentModeId, manager.currentPack.modeLoops[clip.currentModeId] == true,
-                    clip.currentFrameIndex, clip.currentFlipX)
+                    clip.currentFrameIndex, false)
                 val step = clip.advance(50, allowModeSwitch = true)
                 if (!step.ended && !step.timerRequested) handler.postDelayed(this, 50)
             }
@@ -2244,79 +2252,156 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
+    private val frameTransforms = listOf(
+        "关闭" to "none", "左右镜像" to "flipX", "上下镜像" to "flipY",
+        "顺时针旋转 90°" to "rotate90", "旋转 180°" to "rotate180",
+        "顺时针旋转 270°" to "rotate270"
+    )
+    private val frameAlignments = listOf(
+        "顶部对齐" to "top", "居中对齐" to "center", "底部对齐" to "bottom"
+    )
+
+    private fun frameGroup(box: LinearLayout, title: String, note: String = ""): LinearLayout {
+        val group = detailSection()
+        group.addView(text(title, 15f).apply { setPadding(0, 0, 0, px(6)) })
+        if (note.isNotBlank()) group.addView(text(note, 11f).apply {
+            setTextColor(getColor(R.color.cp_note))
+            setPadding(0, 0, 0, px(7))
+        })
+        addDetailSection(box, group)
+        return group
+    }
+    private fun frameFields(box: LinearLayout, a: String, av: String, b: String, bv: String,
+                            ah: String = "", bh: String = ""): Pair<EditText, EditText> {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val left = entry(row, a, av, compact = true)
+        val right = entry(row, b, bv, compact = true)
+        (left.parent as View).layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
+        (right.parent as View).layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
+        left.hint = ah; right.hint = bh
+        box.addView(row)
+        return left to right
+    }
+    private fun frameSelect(box: LinearLayout, title: String,
+                            choices: List<Pair<String, String>>, selected: String,
+                            onChoose: (String) -> Unit = {}): Spinner {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        row.addView(text(title, 13f), LinearLayout.LayoutParams(0, -2, 1f))
+        val dropdown = Spinner(this)
+        SettingsSpinnerBinder.bind(dropdown, choices.map { it.first },
+            choices.indexOfFirst { it.second == selected }.coerceAtLeast(0)) {
+            onChoose(choices[it].second)
+        }
+        row.addView(dropdown, LinearLayout.LayoutParams(0, px(46), 1f))
+        box.addView(row)
+        return dropdown
+    }
+    private fun delayRange(f: JSONObject): Pair<String, String> = when (val raw = f.opt("delay")) {
+        is JSONArray -> raw.optLong(0, 120).toString() to raw.optLong(1, 120).toString()
+        is Number -> raw.toLong().toString() to raw.toLong().toString()
+        else -> "120" to "120"
+    }
+    private fun makeDelay(min: EditText, max: EditText): Any {
+        val lo = min.text.toString().trim().toLongOrNull()
+        val hi = max.text.toString().trim().toLongOrNull()
+        require(lo != null && hi != null && lo > 0 && hi >= lo) {
+            "播放时间必须为正整数，最长时间不能小于最短时间"
+        }
+        return if (lo == hi) lo else JSONArray().put(lo).put(hi)
+    }
+    private fun putOptionalInt(frame: JSONObject, name: String, input: EditText) {
+        val value = input.text.toString().trim()
+        if (value.isEmpty()) frame.remove(name)
+        else frame.put(name, value.toIntOrNull() ?: throw IllegalArgumentException("$name 请输入整数"))
+    }
+    private fun transformedThumb(source: android.graphics.Bitmap, transform: String): android.graphics.Bitmap {
+        if (transform == "none") return source
+        val matrix = android.graphics.Matrix()
+        when (transform) {
+            "flipX" -> matrix.setScale(-1f, 1f)
+            "flipY" -> matrix.setScale(1f, -1f)
+            "rotate90" -> matrix.setRotate(90f)
+            "rotate180" -> matrix.setRotate(180f)
+            "rotate270" -> matrix.setRotate(270f)
+            else -> return source
+        }
+        return android.graphics.Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+    }
+
     private fun editBulkFrameProperties(key: String) {
         val frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
         val indices = bulkSelected.sorted()
         if (indices.isEmpty()) return
-        editor("批量编辑帧属性") { box ->
-            val changed = mutableSetOf<String>()
-            fun initial(name: String): String {
-                for (index in indices) {
-                    val field = frames.getJSONObject(index)
-                    val raw = if (name == "delay") {
-                        when (val delay = field.opt("delay")) {
-                            is JSONArray -> "${delay.optLong(0)},${delay.optLong(1)}"
-                            else -> delay?.toString().orEmpty()
-                        }
-                    } else if (name == "verticalAlign") field.optString(name, "top")
-                    else optional(field, name)
-                    if (raw.isNotBlank()) return raw
-                }
-                return ""
-            }
-            val fields = linkedMapOf<String, EditText>()
-            for (name in listOf("delay", "anchorX", "anchorY", "dx", "dy", "verticalAlign")) {
-                val field = entry(box, name, initial(name))
-                fields[name] = field
-                field.addTextChangedListener(object : android.text.TextWatcher {
+        editor("批量编辑帧属性", compact = true) { box ->
+            val first = frames.getJSONObject(indices.first())
+            val touched = mutableSetOf<String>()
+            fun watch(input: EditText, name: String) {
+                input.addTextChangedListener(object : android.text.TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-                    override fun afterTextChanged(s: android.text.Editable?) { changed.add(name) }
+                    override fun afterTextChanged(s: android.text.Editable?) { touched.add(name) }
                 })
             }
-            // Explicit opt-in to bulk change; opening the dialog never resets mixed values.
-            val flipSelection = Switch(this).apply {
-                text = "左右镜像（仅勾选修改此项后批量覆盖）"
-                isChecked = frames.getJSONObject(indices.first()).optBoolean("flipX", false)
+            val time = frameGroup(box, "播放时间", "单位毫秒，相同为固定时长，不同则随机取值。")
+            val range = delayRange(first)
+            val (min, max) = frameFields(time, "最短时间", range.first, "最长时间", range.second)
+            watch(min, "delay"); watch(max, "delay")
+            val move = frameGroup(box, "帧位移", "播放这一帧时产生的位移，可填写负数。")
+            val (dx, dy) = frameFields(move, "水平 X", optional(first, "dx"), "垂直 Y", optional(first, "dy"), "0", "0")
+            watch(dx, "dx"); watch(dy, "dy")
+            val anchor = frameGroup(box, "锚点位置", "用于图片对齐；水平距左侧、垂直距底边。")
+            val (ax, ay) = frameFields(anchor, "水平 X", optional(first, "anchorX"),
+                "垂直 Y", optional(first, "anchorY"), "自动居中", "图片底边")
+            watch(ax, "anchorX"); watch(ay, "anchorY")
+            val image = frameGroup(box, "图片处理", "只修改你实际调整过的选项。")
+            var transformValue = first.optString("transform", "none")
+            var alignValue = first.optString("verticalAlign", "bottom")
+            frameSelect(image, "图片变换", frameTransforms, transformValue) { value ->
+                if (value != transformValue) touched.add("transform")
+                transformValue = value
             }
-            var flipTouched = false
-            flipSelection.setOnCheckedChangeListener { _, _ -> flipTouched = true }
-            box.addView(flipSelection)
-            val save: () -> Unit = {
-                val edits = changed.associateWith { name ->
-                    val raw = fields.getValue(name).text.toString().trim()
-                    if (name == "delay") {
-                        val nums = raw.split(",").map { it.trim().toLong() }
-                        require(nums.size in 1..2 && nums[0] > 0 &&
-                            (nums.size == 1 || nums[1] >= nums[0])) { "delay 不合法" }
-                        if (nums.size == 1) nums[0] else JSONArray().put(nums[0]).put(nums[1])
-                    } else if (name == "verticalAlign") {
-                        require(raw in listOf("top", "center")) { "填充方式必须为 top 或 center" }
-                        raw
-                    } else if (raw.isEmpty()) JSONObject.NULL else raw.toDouble()
-                }
-                if (edits.isNotEmpty() || flipTouched) {
-                    change { json ->
-                        val current = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
-                        indices.forEach { index ->
-                            val frame = current.getJSONObject(index)
-                            edits.forEach { (name, value) ->
-                                if (value === JSONObject.NULL) frame.remove(name) else frame.put(name, value)
+            frameSelect(image, "垂直对齐", frameAlignments, alignValue) { value ->
+                if (value != alignValue) touched.add("verticalAlign")
+                alignValue = value
+            }
+            ({
+                if (touched.isNotEmpty()) {
+                    val delay = if ("delay" in touched) makeDelay(min, max) else null
+                    val numeric = mapOf("dx" to dx, "dy" to dy, "anchorX" to ax, "anchorY" to ay)
+                        .filterKeys { it in touched }
+                        .mapValues { (_, input) ->
+                            input.text.toString().trim().let { str ->
+                                if (str.isEmpty()) null else str.toIntOrNull()
+                                    ?: throw IllegalArgumentException("位移与锚点必须是整数")
                             }
-                            if (flipTouched) {
-                                if (flipSelection.isChecked) frame.put("flipX", true)
-                                else frame.remove("flipX")
+                        }
+                    change { json ->
+                        val target = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+                        indices.forEach { index ->
+                            val frame = target.getJSONObject(index)
+                            if (delay != null) frame.put("delay", delay)
+                            numeric.forEach { (name, value) ->
+                                if (value == null) frame.remove(name) else frame.put(name, value)
+                            }
+                            if ("transform" in touched) {
+                                if (transformValue == "none") frame.remove("transform")
+                                else frame.put("transform", transformValue)
+                            }
+                            if ("verticalAlign" in touched) {
+                                if (alignValue == "bottom") frame.remove("verticalAlign")
+                                else frame.put("verticalAlign", alignValue)
                             }
                         }
                     }
                 }
                 bulkSelected.clear()
                 showMode(key)
-            }
-            save
+            })
         }
     }
-
     private fun showFrameOptions(anchor: View, key: String, index: Int) {
         UnifiedOptionMenu.show(anchor,
             listOf("编辑", "替换", "在上方插入", "在下方插入", "删除"), setOf("删除")) { choice ->
@@ -2346,41 +2431,38 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun editFrame(key: String, index: Int) {
-        val f = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
-        editor("帧参数") { box ->
-            val delay = entry(box, "delay (毫秒或 min,max)", when(val d = f.opt("delay")) {
-                is JSONArray -> "${d.optLong(0)},${d.optLong(1)}"
-                else -> d.toString()
-            })
-            val anchorX = entry(box, "anchorX（空=默认）", optional(f, "anchorX"))
-            val anchorY = entry(box, "anchorY（空=默认）", optional(f, "anchorY"))
-            val dx = entry(box, "dx（空=默认）", optional(f, "dx"))
-            val dy = entry(box, "dy（空=默认）", optional(f, "dy"))
-            val align = entry(box, "垂直填充 verticalAlign（top/center）",
-                f.optString("verticalAlign", "top"))
-            val flip = Switch(this).apply {
-                text = "左右镜像（默认关闭）"
-                isChecked = f.optBoolean("flipX", false)
-            }
-            box.addView(flip)
-            val save: () -> Unit = {
-                val delays = delay.text.toString().split(",").map { it.trim().toLong() }
-                require(delays.size in 1..2 && delays[0] > 0 && (delays.size == 1 || delays[1] >= delays[0]))
+        val frame = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
+        editor("编辑第 $index 帧", compact = true) { box ->
+            val time = frameGroup(box, "播放时间", "单位毫秒，相同为固定时长，不同则随机取值。")
+            val range = delayRange(frame)
+            val (min, max) = frameFields(time, "最短时间", range.first, "最长时间", range.second)
+            val move = frameGroup(box, "帧位移", "播放这一帧时产生的位移，可填写负数。")
+            val (dx, dy) = frameFields(move, "水平 X", optional(frame, "dx"),
+                "垂直 Y", optional(frame, "dy"), "0", "0")
+            val anchor = frameGroup(box, "锚点位置", "用于图片对齐；水平距左侧、垂直距底边。")
+            val (ax, ay) = frameFields(anchor, "水平 X", optional(frame, "anchorX"),
+                "垂直 Y", optional(frame, "anchorY"), "自动居中", "图片底边")
+            val image = frameGroup(box, "图片处理")
+            val transform = frameSelect(image, "图片变换", frameTransforms, frame.optString("transform", "none"))
+            val align = frameSelect(image, "垂直对齐", frameAlignments, frame.optString("verticalAlign", "bottom"))
+            ({
+                val delay = makeDelay(min, max)
                 change { json ->
-                    val frame = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
-                    frame.put("delay", if (delays.size == 1) delays[0] else JSONArray().put(delays[0]).put(delays[1]))
-                    val alignment = align.text.toString().trim()
-                    require(alignment in listOf("top", "center")) { "填充方式必须为 top 或 center" }
-                    frame.put("verticalAlign", alignment)
-                    if (flip.isChecked) frame.put("flipX", true) else frame.remove("flipX")
-                    listOf("anchorX" to anchorX, "anchorY" to anchorY, "dx" to dx, "dy" to dy).forEach { (name, input) ->
-                        if (input.text.isBlank()) frame.remove(name)
-                        else frame.put(name, input.text.toString().toDouble())
-                    }
+                    val current = json.getJSONObject("modes").getJSONObject(key)
+                        .getJSONArray("frames").getJSONObject(index)
+                    current.put("delay", delay)
+                    putOptionalInt(current, "dx", dx); putOptionalInt(current, "dy", dy)
+                    putOptionalInt(current, "anchorX", ax); putOptionalInt(current, "anchorY", ay)
+                    val transformation = frameTransforms[transform.selectedItemPosition].second
+                    val alignment = frameAlignments[align.selectedItemPosition].second
+                    if (transformation == "none") current.remove("transform")
+                    else current.put("transform", transformation)
+                    if (alignment == "bottom") current.remove("verticalAlign")
+                    else current.put("verticalAlign", alignment)
+                    current.remove("flipX")
                 }
                 showMode(key)
-            }
-            save
+            })
         }
     }
     private fun optional(obj: JSONObject, key: String) = if (obj.isNull(key)) "" else obj.optString(key)
