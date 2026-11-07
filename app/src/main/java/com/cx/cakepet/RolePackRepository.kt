@@ -88,10 +88,14 @@ fun parseFunctions(root: JSONObject): Map<List<String>, List<String>> {
                 if (leaves.isNotEmpty()) out[path] = leaves
             }
             is JSONObject -> {
+                node.optJSONArray("modes")?.let { arr ->
+                    val leaves = (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }
+                    if (leaves.isNotEmpty()) out[path] = leaves
+                }
                 val keys = node.keys()
                 while (keys.hasNext()) {
                     val k = keys.next()
-                    if (k != "thinking") visit(node.opt(k), path + k)
+                    if (k != "thinking" && k != "modes") visit(node.opt(k), path + k)
                 }
             }
         }
