@@ -126,15 +126,15 @@ class UserHabitsActivity : AppCompatActivity() {
             setBackgroundResource(R.drawable.card_bg)
             showDividers = LinearLayout.SHOW_DIVIDER_MIDDLE
             dividerDrawable = getDrawable(R.drawable.item_divider)
+            dividerPadding = dp(16)
             setPadding(0, dp(8), 0, dp(8))
         }
         for (entry in entries) {
-            val row = LinearLayout(this).apply {
+            val row = SettingsRippleRow(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(20), dp(10), dp(20), dp(10))
                 minimumHeight = dp(60)
-                background = getDrawable(R.drawable.settings_row_ripple)
                 isClickable = true
                 isFocusable = true
                 setOnClickListener {
