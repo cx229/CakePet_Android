@@ -317,20 +317,34 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
         // The original item XMLs have incompatible outer margins (some have 12dp bottom).
         // Replace them with consistent row padding, never stacking margin with card padding.
-        val row = LinearLayout(this).apply {
+        val row = SettingsRippleRow(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(if (habitMode) 12 else 20), dp(8),
                 dp(if (habitMode) 0 else 20), dp(8))
         }
+        // Match the original settings row's full-width ripple; the nested
+        // control must not add a second foreground ripple.
+        item.foreground = null
+        val titleView = item.findViewById<TextView>(R.id.tv_label)
+        val depth = depthFor(key)
+        if (depth > 0 && titleView != null) {
+            val inset = dp(depth * 10)
+            val titleParent = titleView.parent as? LinearLayout
+            if (titleParent != null && titleParent.childCount > 1 &&
+                titleParent.getChildAt(0) === titleView) {
+                // Dropdown subtitles share the title's indentation.
+                titleParent.setPaddingRelative(titleParent.paddingStart + inset,
+                    titleParent.paddingTop, titleParent.paddingEnd, titleParent.paddingBottom)
+            } else {
+                titleView.setPaddingRelative(titleView.paddingStart + inset,
+                    titleView.paddingTop, titleView.paddingEnd, titleView.paddingBottom)
+            }
+        }
+        val label = titleView?.text?.toString()?.ifBlank { key } ?: key
         if (!habitMode) {
             row.addView(item, LinearLayout.LayoutParams(-1, -2))
-            card.addView(row, LinearLayout.LayoutParams(-1, -2))
-            return
-        }
-        // Preserve the existing inner control layout, including same-line dropdowns.
-        val label = item.findViewById<TextView>(R.id.tv_label)?.text?.toString()
-            ?.ifBlank { key } ?: key
+        } else {
         row.addView(item, LinearLayout.LayoutParams(0, -2, 1f).apply {
             marginEnd = dp(4)
         })
@@ -391,6 +405,36 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             marginStart = dp(3)
         })
         row.addView(menu, LinearLayout.LayoutParams(dp(44), -1))
+        }
+        if (isFoldable(key)) {
+            val arrow = TextView(this).apply {
+                text = if (foldExpanded[key] == false) "▸" else "▾"
+                textSize = 18f
+                gravity = Gravity.CENTER
+                setTextColor(getColor(R.color.cp_title))
+            }
+            row.overlay.add(arrow)
+            row.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                val title = titleView ?: return@addOnLayoutChangeListener
+                val rowXY = IntArray(2)
+                val titleXY = IntArray(2)
+                row.getLocationInWindow(rowXY)
+                title.getLocationInWindow(titleXY)
+                val width = dp(18)
+                val height = dp(36)
+                val xPos = (titleXY[0] - rowXY[0] - width).coerceAtLeast(0)
+                val yPos = (titleXY[1] - rowXY[1] + (title.height - height) / 2)
+                    .coerceIn(0, (row.height - height).coerceAtLeast(0))
+                arrow.layout(xPos, yPos, xPos + width, yPos + height)
+            }
+            row.setOnClickListener {
+                val previous = foldExpanded[key] != false
+                foldExpanded[key] = !previous
+                arrow.text = if (previous) "▸" else "▾"
+                refreshFolds()
+            }
+        }
+        foldRows[key] = row
         card.addView(row, LinearLayout.LayoutParams(-1, -2))
     }
 
