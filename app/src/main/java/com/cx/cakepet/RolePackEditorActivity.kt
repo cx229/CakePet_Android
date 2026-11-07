@@ -374,6 +374,16 @@ class RolePackEditorActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.iv_back).setOnClickListener { navigateBack() }
         titleText = findViewById(R.id.tv_title)
         subtitleText = findViewById(R.id.tv_title_sub)
+        findViewById<TextView>(R.id.tv_mode_more).setOnClickListener { anchor ->
+            if (screen != "mode") return@setOnClickListener
+            val current = modeId
+            UnifiedOptionMenu.show(anchor, listOf("重命名", "动画组")) { choice ->
+                when (choice) {
+                    "重命名" -> renameMode(current) { renamed -> showMode(renamed) }
+                    "动画组" -> editModeGroups(current) { /* Stay on current editor. */ }
+                }
+            }
+        }
         scroll = findViewById(R.id.editor_scroll)
         panel = findViewById(R.id.editor_content)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -553,6 +563,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         screen = dest
         panel.removeAllViews()
         titleText.text = title
+        findViewById<View>(R.id.tv_mode_more).visibility =
+            if (dest == "mode") View.VISIBLE else View.GONE
         subtitleText.text = root.optString("name")
         if (pageChanged && !restoringPage) {
             scroll.clearFocus()
@@ -942,7 +954,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
-    private fun editModeGroups(key: String) {
+    private fun editModeGroups(key: String, onSaved: () -> Unit = { modes() }) {
         editor("$key · 动画组") { box ->
             val groups = knownGroups().toMutableList()
             val selected = modeGroups(key).toMutableSet()
@@ -997,7 +1009,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     groups.filter { it in selected }.forEach { arr.put(it) }
                     json.getJSONObject("modes").getJSONObject(key).put("groups", arr)
                 }
-                modes()
+                onSaved()
             }
             save
         }
@@ -1085,6 +1097,34 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
+    /** Count Functions leaves containing the animation, reading the canonical map. */
+    private fun modeBindingCount(modeKey: String): Int {
+        var count = 0
+        fun visit(node: JSONObject) {
+            node.keys().forEach { key ->
+                when (val value = node.opt(key)) {
+                    is JSONArray -> if ((0 until value.length()).any { value.optString(it) == modeKey }) count++
+                    is JSONObject -> if (value.has("modes")) {
+                        val choices = value.optJSONArray("modes")
+                        if (choices != null && (0 until choices.length()).any { choices.optString(it) == modeKey }) count++
+                    } else if (key != "thinking") visit(value)
+                }
+            }
+        }
+        visit(root.getJSONObject("functions"))
+        return count
+    }
+
+    private fun modeThinkingSummary(mode: JSONObject): String {
+        val thinking = mode.optJSONObject("thinking")
+        return when (thinking?.optString("policy", "inherit") ?: "inherit") {
+            "off" -> "不播放"
+            "hold" -> "持续 · ${thinkingPoolJson(thinking).size} 条"
+            "cycle" -> "轮播 · ${thinkingPoolJson(thinking).size} 条"
+            else -> "跟随功能"
+        }
+    }
+
     /** Lightweight overview; child editors commit independently. */
     private fun modeDetails(initialKey: String) {
         if (root.optJSONObject("modes")?.has(initialKey) != true) return
@@ -1123,36 +1163,13 @@ class RolePackEditorActivity : AppCompatActivity() {
                         })
                     }
                     addDetailSection(form, playbackCard)
-                    var count = 0
-                    fun countBindings(node: JSONObject) {
-                        node.keys().forEach { key ->
-                            when (val value = node.opt(key)) {
-                                is JSONArray -> if ((0 until value.length()).any { value.optString(it) == currentKey }) count++
-                                is JSONObject -> if (value.has("modes")) {
-                                    val choices = value.optJSONArray("modes")
-                                    if (choices != null && (0 until choices.length()).any {
-                                        choices.optString(it) == currentKey
-                                    }) count++
-                                } else if (key != "thinking") countBindings(value)
-                            }
-                        }
-                    }
-                    countBindings(root.getJSONObject("functions"))
                     val functionCard = detailSection()
-                    functionCard.addView(detailSectionHeader("绑定功能", "${count} 个") {
+                    functionCard.addView(detailSectionHeader("绑定功能", "${modeBindingCount(currentKey)} 个") {
                         bindModeToFunctions(currentKey) { redraw() }
                     })
                     addDetailSection(form, functionCard)
-                    val thinking = mode.optJSONObject("thinking")
-                    val policy = thinking?.optString("policy", "inherit") ?: "inherit"
-                    val thinkingSummary = when (policy) {
-                        "off" -> "不播放"
-                        "hold" -> "持续 · ${thinkingPoolJson(thinking).size} 条"
-                        "cycle" -> "轮播 · ${thinkingPoolJson(thinking).size} 条"
-                        else -> "跟随功能"
-                    }
                     val thinkingCard = detailSection()
-                    thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
+                    thinkingCard.addView(detailSectionHeader("碎碎念配置", modeThinkingSummary(mode)) {
                         thinkingConfigDialog(modeId = currentKey) { redraw() }
                     })
                     addDetailSection(form, thinkingCard)
@@ -1306,18 +1323,52 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         panel.addView(previewContainer, LinearLayout.LayoutParams(-1, -2))
         animate(preview, key)
-        action("编辑动画属性") { attributes(key) }
-        action("绑定到功能") { bindModeToFunctions(key) }
-        action("编辑碎碎念") { thinkingConfigDialog(modeId = key) }
-        panel.addView(button("导入 GIF 并覆盖") {
-            showConfirmDialog(
-                title = "GIF 覆盖动画",
-                bodyHtml = "使用 GIF 全部帧替换此动画现有帧？",
-                subText = "原有帧属性会被替换；GIF 时间延迟会被保留",
-                positiveText = "继续"
-            ) { startUpload(true, action = "overwrite", mode = key) }
-        }, LinearLayout.LayoutParams(-1, px(44)).apply {
-            topMargin = px(8)
+        // Mode-level controls remain visible, but don't dominate the frame editor.
+        val mode = root.getJSONObject("modes").getJSONObject(key)
+        val playbackCard = detailSection()
+        val playbackSummary = when (playbackKind(mode)) {
+            "infinite" -> "无限循环"
+            "timed" -> "定时循环"
+            else -> "播放一次"
+        }
+        playbackCard.addView(detailSectionHeader("播放设置", playbackSummary) {
+            playbackSettings(key) { showMode(key) }
+        })
+        panel.addView(playbackCard, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(10) })
+
+        val associations = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun compactSetting(title: String, summary: String, click: () -> Unit): LinearLayout =
+            detailSection().apply {
+                val titleRow = LinearLayout(this@RolePackEditorActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                titleRow.addView(text(title, 14f).apply {
+                    setPadding(0, 0, 0, 0)
+                    isSingleLine = true
+                    ellipsize = TextUtils.TruncateAt.END
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                titleRow.addView(text("›", 19f).apply {
+                    setPadding(0, 0, 0, 0)
+                    setTextColor(getColor(R.color.cp_note))
+                })
+                addView(titleRow)
+                addView(text(summary, 11f).apply {
+                    setPadding(0, px(3), 0, 0)
+                    setTextColor(getColor(R.color.cp_note))
+                    isSingleLine = true
+                    ellipsize = TextUtils.TruncateAt.END
+                })
+                rippleClick(this) { click() }
+            }
+        associations.addView(compactSetting("绑定功能", "已绑定 ${modeBindingCount(key)} 个") {
+            bindModeToFunctions(key) { showMode(key) }
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) })
+        associations.addView(compactSetting("碎碎念配置", modeThinkingSummary(mode)) {
+            thinkingConfigDialog(modeId = key) { showMode(key) }
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) })
+        panel.addView(associations, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = px(9)
             bottomMargin = px(8)
         })
         val frames = m.getJSONArray("frames")
@@ -1331,6 +1382,23 @@ class RolePackEditorActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.cp_note))
         })
         panel.addView(frameHeader, LinearLayout.LayoutParams(-1, -2))
+        val frameActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        frameActions.addView(button("＋ 添加帧") {
+            val last = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").length() - 1
+            showImageChooser(ImagePickRequest(key, "after", last))
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+        frameActions.addView(button("GIF 覆盖") {
+            showConfirmDialog(
+                title = "GIF 覆盖动画",
+                bodyHtml = "使用 GIF 全部帧替换此动画现有帧？",
+                subText = "原有帧属性会被替换；GIF 时间延迟会被保留",
+                positiveText = "继续"
+            ) { startUpload(true, action = "overwrite", mode = key) }
+        }, LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        panel.addView(frameActions, LinearLayout.LayoutParams(-1, px(44)).apply {
+            topMargin = px(6)
+            bottomMargin = px(8)
+        })
         val order = (0 until frames.length()).toMutableList()
         val thumbs = mutableMapOf<String, android.graphics.Bitmap?>()
         // The page's ONE RecyclerView scrolls both header controls and all
