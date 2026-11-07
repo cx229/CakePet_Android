@@ -116,11 +116,10 @@ class PetAnimationController(private val assets: ImageModeManager) {
     fun setMode(id: String) {
         if (forced) return
         val next = assets.createClip(id) ?: return
-        val different = getMode() != id
         clip = next
         thinkingFunctionPath = pendingFunctionForMode.remove(id) ?: activeStateFunction ?: thinkingFunctionPath
         currentName = id
-        if (different) modeChanged = true
+        modeChanged = true
         frameMotionPending = true
     }
 
@@ -219,6 +218,7 @@ class PetAnimationController(private val assets: ImageModeManager) {
             if (desired == current.currentModeId) {
                 // Re-enter the same mode without replacing the cursor or resetting heading.
                 current.restart()
+                modeChanged = true
                 frameMotionPending = true
             } else {
                 setMode(desired)
