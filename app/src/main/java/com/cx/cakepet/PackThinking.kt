@@ -4,18 +4,30 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.random.Random
 
-/** Material-pack thinking data. IDs are opaque and only unique within a pack. */
-data class ThinkingConfig(
-    val policy: String = "cycle",
-    val pool: List<String> = emptyList(),
-    val minMs: Long = 500L,
-    val maxMs: Long = 4000L
-) {
-    fun sampleDuration(): Long {
-        val lo = minMs.coerceAtLeast(0L)
+/** A duration belongs to one Function/Mode -> text reference, not the text resource. */
+data class ThinkingDuration(val minMs: Long = DEFAULT_THINKING_MIN_MS,
+                            val maxMs: Long = DEFAULT_THINKING_MAX_MS) {
+    fun sample(): Long {
+        val lo = minMs.coerceAtLeast(0)
         val hi = maxMs.coerceAtLeast(lo)
         return if (hi == lo) lo else Random.nextLong(lo, hi + 1)
     }
+}
+
+const val DEFAULT_THINKING_MIN_MS = 500L
+const val DEFAULT_THINKING_MAX_MS = 4000L
+
+/** Function/Mode policy and concrete per-ID timing values. */
+data class ThinkingConfig(
+    val policy: String = "cycle",
+    val pool: List<String> = emptyList(),
+    val minMs: Long = DEFAULT_THINKING_MIN_MS,
+    val maxMs: Long = DEFAULT_THINKING_MAX_MS,
+    val durations: Map<String, ThinkingDuration> = emptyMap()
+) {
+    fun durationFor(id: String): ThinkingDuration =
+        durations[id] ?: ThinkingDuration(minMs, maxMs)
+    fun sampleDuration(id: String): Long = durationFor(id).sample()
 }
 
 data class PackThinking(
@@ -26,7 +38,6 @@ data class PackThinking(
     fun resolve(modeId: String, functionPath: List<String>): ThinkingConfig {
         val mode = modes[modeId]
         if (mode != null && mode.policy != "inherit") return mode
-        // Function metadata may be placed at a common parent of several function paths.
         for (length in functionPath.size downTo 1) {
             functions[functionPath.take(length)]?.let { return it }
         }
@@ -34,19 +45,37 @@ data class PackThinking(
     }
 
     companion object {
-        private fun ids(arr: JSONArray?): List<String> =
-            if (arr == null) emptyList()
-            else (0 until arr.length()).mapNotNull { i ->
-                arr.optString(i).takeIf { it.isNotBlank() }
-            }.distinct()
-
         private fun config(obj: JSONObject, default: String): ThinkingConfig {
             val policy = obj.optString("policy", default).takeIf {
-                it == "cycle" || it == "hold" || it == "off" || (default == "inherit" && it == "inherit")
+                it in listOf("cycle", "hold", "off") || (default == "inherit" && it == "inherit")
             } ?: default
-            return ThinkingConfig(policy, ids(obj.optJSONArray("pool")),
-                obj.optLong("min", 500L).coerceAtLeast(0L),
-                obj.optLong("max", 4000L).coerceAtLeast(0L))
+            val min = obj.optLong("min", DEFAULT_THINKING_MIN_MS).coerceAtLeast(0)
+            val max = obj.optLong("max", DEFAULT_THINKING_MAX_MS).coerceAtLeast(min)
+            val ids = mutableListOf<String>()
+            val times = linkedMapOf<String, ThinkingDuration>()
+            when (val pool = obj.opt("pool")) {
+                is JSONObject -> {
+                    val it = pool.keys()
+                    while (it.hasNext()) {
+                        val id = it.next()
+                        if (id.isBlank()) continue
+                        ids.add(id)
+                        val duration = pool.optJSONObject(id)
+                        times[id] = ThinkingDuration(
+                            duration?.optLong("min", min)?.coerceAtLeast(0) ?: min,
+                            duration?.optLong("max", max)?.coerceAtLeast(0) ?: max
+                        ).let { if (it.maxMs < it.minMs) it.copy(maxMs = it.minMs) else it }
+                    }
+                }
+                is JSONArray -> for (i in 0 until pool.length()) {
+                    val id = pool.optString(i)
+                    if (id.isNotBlank() && id !in ids) {
+                        ids.add(id)
+                        times[id] = ThinkingDuration(min, max)
+                    }
+                }
+            }
+            return ThinkingConfig(policy, ids, min, max, times)
         }
 
         fun parse(root: JSONObject): PackThinking {
@@ -55,7 +84,12 @@ data class PackThinking(
                 val it = obj.keys()
                 while (it.hasNext()) {
                     val id = it.next()
-                    val value = obj.optString(id)
+                    val raw = obj.opt(id)
+                    val value = when (raw) {
+                        is JSONObject -> raw.optString("text")
+                        is String -> raw
+                        else -> ""
+                    }
                     if (value.isNotBlank()) strings[id] = value
                 }
             }
