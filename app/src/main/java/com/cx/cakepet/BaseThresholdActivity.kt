@@ -239,6 +239,16 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
             if (groupIndex == 0) {
                 (header.layoutParams as ViewGroup.MarginLayoutParams).topMargin = 0
             }
+            // Module-level indentation follows the parent settings page.
+            // Movement/feeding subsections are visually under their master;
+            // the setting rows use their own independent title-depth rule.
+            val moduleIndent = if (groupIndex > 0 &&
+                page in setOf(SettingsPage.MOVEMENT, SettingsPage.FEEDING, SettingsPage.THINKING,
+                    SettingsPage.RANDOM)) (10 * resources.displayMetrics.density + .5f).toInt()
+                else 0
+            if (moduleIndent > 0) {
+                (header.layoutParams as ViewGroup.MarginLayoutParams).marginStart = moduleIndent
+            }
             binding.container.addView(header)
 
             // 卡片容器：包裹该模块的全部内容，直接复用设置页的 card_bg + padding
@@ -253,7 +263,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 dividerPadding = (16 * resources.displayMetrics.density + 0.5f).toInt()
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                )
+                ).apply { marginStart = moduleIndent }
                 setPadding(0, cardPadV, 0, cardPadV)
             }
             val moduleKeys = mutableListOf<String>()
@@ -331,7 +341,7 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         if (depth > 0 && titleView != null) {
             val inset = dp(depth * 10)
             val titleParent = titleView.parent as? LinearLayout
-            if (titleParent != null && titleParent.childCount > 1 &&
+            if (titleParent != null && titleParent !== item && titleParent.childCount > 1 &&
                 titleParent.getChildAt(0) === titleView) {
                 // Dropdown subtitles share the title's indentation.
                 titleParent.setPaddingRelative(titleParent.paddingStart + inset,
@@ -427,12 +437,16 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                     .coerceIn(0, (row.height - height).coerceAtLeast(0))
                 arrow.layout(xPos, yPos, xPos + width, yPos + height)
             }
-            row.setOnClickListener {
+            val toggleFold = {
                 val previous = foldExpanded[key] != false
                 foldExpanded[key] = !previous
                 arrow.text = if (previous) "▸" else "▾"
                 refreshFolds()
             }
+            row.setOnClickListener { toggleFold() }
+            // Switch rows are themselves clickable (SettingsSwitchRow style),
+            // so the row alone would not receive a tap on the caption.
+            item.setOnClickListener { toggleFold() }
         }
         foldRows[key] = row
         card.addView(row, LinearLayout.LayoutParams(-1, -2))
