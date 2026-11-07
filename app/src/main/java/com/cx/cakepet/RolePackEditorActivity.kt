@@ -2095,7 +2095,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun functionTree(parent: LinearLayout, values: JSONObject, path: List<String>) {
-        val keys = values.keys().asSequence().toList()
+        val keys = values.keys().asSequence().filter { it != "thinking" }.toList()
         for (key in keys) {
             val currentPath = path + key
             val fullKey = currentPath.joinToString("/")
@@ -2154,7 +2154,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         val functionsRoot = root.getJSONObject("functions")
         val leaves = linkedMapOf<String, Pair<List<String>, List<String>>>()
         fun collect(node: JSONObject, parent: List<String>) {
-            node.keys().asSequence().toList().forEach { segment ->
+            node.keys().asSequence().filter { it != "thinking" }.toList().forEach { segment ->
                 val path = parent + segment
                 when (val value = node.opt(segment)) {
                     is JSONObject -> collect(value, path)
