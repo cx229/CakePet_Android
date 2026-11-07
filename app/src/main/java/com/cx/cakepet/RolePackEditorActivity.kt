@@ -519,7 +519,8 @@ class RolePackEditorActivity : AppCompatActivity() {
      * Material buttons), not a programmatic approximation of its appearance.
      * Only the variable body area is replaced by this editor's form.
      */
-    private fun editor(title: String, compact: Boolean = false, create: (LinearLayout) -> (() -> Unit)) {
+    private fun editor(title: String, compact: Boolean = false, readOnly: Boolean = false,
+                       create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
         val frame = layoutInflater.inflate(R.layout.dialog_rename_role, null)
         frame.findViewById<TextView>(R.id.tv_title).text = title
         val card = (frame as android.view.ViewGroup).getChildAt(0) as android.view.ViewGroup
@@ -536,8 +537,12 @@ class RolePackEditorActivity : AppCompatActivity() {
             topMargin = px(if (compact) 12 else 20)
         })
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        frame.findViewById<View>(R.id.btn_negative).setOnClickListener { dialog.dismiss() }
+        frame.findViewById<TextView>(R.id.btn_negative).apply {
+            if (readOnly) text = "关闭"
+            setOnClickListener { dialog.dismiss() }
+        }
         frame.findViewById<TextView>(R.id.btn_positive).apply {
+            if (readOnly) visibility = View.GONE
             text = "保存"
             setOnClickListener {
                 runCatching(save).onSuccess { dialog.dismiss() }
@@ -569,6 +574,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             viewport.post { resizeForm() }
         }
         viewport.post { resizeForm() }
+        return dialog
     }
     private fun optionsDialog(title: String, items: List<String>, choose: (Int) -> Unit) {
         val frame = android.widget.FrameLayout(this).apply {
@@ -2040,7 +2046,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                              level: Int, immediate: Boolean = false, description: String = "",
                              examplePath: List<String>? = null, click: () -> Unit): LinearLayout {
         val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             setBackgroundResource(R.drawable.card_bg)
             rippleCard(this)
             setPadding(px(12), px(7), px(12), px(7))
@@ -2048,6 +2055,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             if (immediate) setOnClickListener { click() }
             else rippleClick(this) { click() }
         }
+        // Keep the original order and typography: title, description, current animation chains.
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
         if (description.isNotBlank()) content.addView(text(description, 12f).apply {
@@ -2059,17 +2067,10 @@ class RolePackEditorActivity : AppCompatActivity() {
             setTextColor(getColor(if (examplePath == null) R.color.cp_note else R.color.cp_title))
         })
         val bitmap = examplePath?.let { templateRandomFrame(it) }
-        if (bitmap == null) card.addView(content)
-        else {
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            row.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
+        if (bitmap != null) {
             val example = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(0, 0, 0, 0)
             }
             example.addView(ImageView(this).apply {
                 setImageBitmap(bitmap)
@@ -2084,10 +2085,18 @@ class RolePackEditorActivity : AppCompatActivity() {
                 setPadding(0, 0, 0, 0)
                 setTextColor(getColor(R.color.cp_note))
             }, LinearLayout.LayoutParams(px(48), -2))
-            row.addView(example, LinearLayout.LayoutParams(px(48), -2).apply {
-                leftMargin = px(8)
+            card.addView(example, LinearLayout.LayoutParams(px(48), -2).apply {
+                rightMargin = px(8)
             })
-            card.addView(row)
+        }
+        card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
+        if (examplePath != null) {
+            card.addView(text("⋮", 23f).apply {
+                gravity = Gravity.CENTER
+                setTextColor(getColor(R.color.cp_title))
+                isClickable = true
+                setOnClickListener { click() }
+            }, LinearLayout.LayoutParams(px(38), px(48)))
         }
         node.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
             leftMargin = px((level * 12).coerceAtMost(48))
@@ -3036,16 +3045,69 @@ class RolePackEditorActivity : AppCompatActivity() {
             }.show()
     }
 
-    /** Function details are a stable landing page for its animation and thinking editors. */
+    /**
+     * Only direct Function data is shown. Display paths use the existing Chinese mapping,
+     * while selection and saving continue to use the canonical internal keys.
+     */
     private fun functionDetails(path: List<String>, selected: List<String>) {
-        AlertDialog.Builder(this).setTitle("功能详情 · " + functionPathName(path))
-            .setMessage(functionDescription(path) + "\n\n当前动画：" + selected.joinToString("、"))
-            .setItems(arrayOf("选择动作动画", "配置碎碎念")) { _, which ->
-                when (which) {
-                    0 -> chooseFunctions(path, selected)
-                    1 -> thinkingConfigDialog(functionPath = path)
-                }
-            }.setNegativeButton("关闭", null).show()
+        val all = PackThinking.parse(root).functions
+        val effective = (path.size downTo 1).asSequence()
+            .mapNotNull { all[path.take(it)] }.firstOrNull() ?: ThinkingConfig()
+        val thinkingSummary = when (effective.policy) {
+            "off" -> "不播放"
+            "hold" -> "持续 · ${effective.pool.size} 条"
+            else -> "轮播 · ${effective.pool.size} 条"
+        }
+        var popup: android.app.Dialog? = null
+        popup = editor(functionPathName(path), compact = true, readOnly = true) { box ->
+            box.addView(text(functionDescription(path), 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(2), 0, px(2), px(12))
+            })
+            val thinkingRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundResource(R.drawable.card_bg)
+                rippleCard(this)
+                setPadding(px(12), px(6), px(12), px(6))
+            }
+            thinkingRow.addView(text("碎碎念配置", 15f),
+                LinearLayout.LayoutParams(0, -2, 1f))
+            thinkingRow.addView(text("$thinkingSummary  ›", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            })
+            rippleClick(thinkingRow) {
+                popup?.dismiss()
+                thinkingConfigDialog(functionPath = path)
+            }
+            box.addView(thinkingRow, LinearLayout.LayoutParams(-1, px(52)).apply {
+                bottomMargin = px(12)
+            })
+            val animationHeader = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            animationHeader.addView(text("当前动画", 15f),
+                LinearLayout.LayoutParams(0, -2, 1f))
+            animationHeader.addView(button("修改") {
+                popup?.dismiss()
+                chooseFunctions(path, selected)
+            })
+            box.addView(animationHeader, LinearLayout.LayoutParams(-1, px(48)))
+            val animations = root.getJSONObject("modes")
+            selected.forEach { start ->
+                box.addView(text(modeChainText(start, animations), 13f).apply {
+                    setBackgroundResource(R.drawable.card_bg)
+                    setPadding(px(12), px(10), px(12), px(10))
+                }, LinearLayout.LayoutParams(-1, -2).apply {
+                    bottomMargin = px(5)
+                })
+            }
+            if (selected.isEmpty()) box.addView(text("暂无关联动画", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            })
+            ({ })
+        }
     }
 
     private fun functionNode(json: JSONObject, path: List<String>): JSONObject {
