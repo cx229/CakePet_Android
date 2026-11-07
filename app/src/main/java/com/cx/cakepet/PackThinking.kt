@@ -38,10 +38,9 @@ data class PackThinking(
     fun resolve(modeId: String, functionPath: List<String>): ThinkingConfig {
         val mode = modes[modeId]
         if (mode != null && mode.policy != "inherit") return mode
-        for (length in functionPath.size downTo 1) {
-            functions[functionPath.take(length)]?.let { return it }
-        }
-        return ThinkingConfig()
+        // A Function's thinking is defined by its concrete leaf only.
+        // A Mode may still inherit that leaf's configuration.
+        return functions[functionPath] ?: ThinkingConfig()
     }
 
     companion object {
@@ -95,11 +94,15 @@ data class PackThinking(
             }
             val functions = linkedMapOf<List<String>, ThinkingConfig>()
             fun visit(node: JSONObject, path: List<String>) {
-                node.optJSONObject("thinking")?.let { functions[path] = config(it, "cycle") }
+                if (node.optJSONArray("modes") != null) {
+                    node.optJSONObject("thinking")?.let { functions[path] = config(it, "cycle") }
+                    return
+                }
                 val it = node.keys()
                 while (it.hasNext()) {
                     val key = it.next()
-                    if (key != "thinking") node.optJSONObject(key)?.let { child -> visit(child, path + key) }
+                    if (key != "thinking" && key != "modes")
+                        node.optJSONObject(key)?.let { child -> visit(child, path + key) }
                 }
             }
             root.optJSONObject("functions")?.let { visit(it, emptyList()) }
