@@ -561,7 +561,7 @@ class RolePackEditorActivity : AppCompatActivity() {
      * Only the variable body area is replaced by this editor's form.
      */
     private fun editor(title: String, compact: Boolean = false, readOnly: Boolean = false,
-                       create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
+                       extraAction: (() -> Unit)? = null, create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
         val frame = layoutInflater.inflate(R.layout.dialog_rename_role, null)
         frame.findViewById<TextView>(R.id.tv_title).text = title
         val card = (frame as android.view.ViewGroup).getChildAt(0) as android.view.ViewGroup
@@ -578,14 +578,19 @@ class RolePackEditorActivity : AppCompatActivity() {
             topMargin = px(if (compact) 12 else 20)
         })
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        if (readOnly) (frame.findViewById<View>(R.id.btn_negative).parent as? LinearLayout)?.gravity = Gravity.END
         frame.findViewById<TextView>(R.id.btn_negative).apply {
             if (readOnly) text = "关闭"
             setOnClickListener { dialog.dismiss() }
         }
         frame.findViewById<TextView>(R.id.btn_positive).apply {
-            if (readOnly) visibility = View.GONE
-            text = "保存"
+            if (readOnly && extraAction == null) visibility = View.GONE
+            text = if (readOnly) "重命名" else "保存"
             setOnClickListener {
+                if (readOnly) {
+                    extraAction?.invoke()
+                    return@setOnClickListener
+                }
                 runCatching(save).onSuccess { dialog.dismiss() }
                     .onFailure { Toast.makeText(this@RolePackEditorActivity,
                         it.message ?: "输入错误", Toast.LENGTH_LONG).show() }
@@ -617,6 +622,48 @@ class RolePackEditorActivity : AppCompatActivity() {
         viewport.post { resizeForm() }
         return dialog
     }
+
+    /** Shared detail-dialog visual language; retains the existing XML dialog shell. */
+    private fun detailSection(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = px(12).toFloat()
+            setColor(getColor(R.color.cp_card_bg))
+            setStroke(px(1), getColor(R.color.cp_divider))
+        }
+        setPadding(px(10), px(9), px(10), px(9))
+    }
+    private fun detailListRow(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = px(8).toFloat()
+            setColor(getColor(R.color.cp_bg))
+        }
+        setPadding(px(8), px(2), px(8), px(2))
+    }
+    private fun detailSectionHeader(title: String, info: String, click: (() -> Unit)? = null): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, px(2), 0, px(2))
+            addView(text(title, 15f).apply { setPadding(px(2), px(4), px(2), px(4)) },
+                LinearLayout.LayoutParams(0, -2, 1f))
+            addView(text(if (click != null) "$info  ›" else info, 12f).apply {
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(3), px(4), px(2), px(4))
+            })
+            if (click != null) rippleClick(this) { click() }
+        }
+    private fun detailNumber(index: Int): TextView = text("${index + 1}.", 12f).apply {
+        setTextColor(getColor(R.color.cp_note))
+        setPadding(0, px(3), px(4), px(3))
+    }
+    private fun addDetailSection(form: LinearLayout, section: LinearLayout) {
+        form.addView(section, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(9) })
+    }
+
     private fun optionsDialog(title: String, items: List<String>, choose: (Int) -> Unit) {
         val frame = android.widget.FrameLayout(this).apply {
             setPadding(px(24), 0, px(24), 0)
@@ -2190,16 +2237,15 @@ class RolePackEditorActivity : AppCompatActivity() {
                         if (!openedFunctionFolders.add(fullKey)) openedFunctionFolders.remove(fullKey)
                         refreshFolder()
                     }
-                    val controls = LinearLayout(this).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        gravity = Gravity.END
+                    // The folder still expands normally. Only a folder owning a direct
+                    // thinking policy exposes its Function detail through a compact menu icon.
+                    if (child.optJSONObject("thinking") != null) {
+                        folderCard.addView(text("⋮", 23f).apply {
+                            gravity = Gravity.CENTER
+                            isClickable = true
+                            setOnClickListener { functionDetails(currentPath, emptyList()) }
+                        }, LinearLayout.LayoutParams(px(38), px(44)))
                     }
-                    controls.addView(text("⋮  碎碎念设置", 12f).apply {
-                        setTextColor(getColor(R.color.cp_note))
-                        isClickable = true
-                        setOnClickListener { thinkingConfigDialog(functionPath = currentPath) }
-                    })
-                    parent.addView(controls, LinearLayout.LayoutParams(-1, -2))
                     parent.addView(children, LinearLayout.LayoutParams(-1, -2))
                     refreshFolder()
                 }
@@ -2675,76 +2721,54 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     private fun imageDetails(relative: String) {
         val uses = imageUses()[relative].orEmpty()
-        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        val frame = FrameLayout(this).apply { setPadding(px(24), 0, px(24), 0) }
-        val card = com.google.android.material.card.MaterialCardView(this).apply {
-            radius = px(28).toFloat()
-            cardElevation = px(6).toFloat()
-            setCardBackgroundColor(getColor(R.color.cp_card_bg))
-        }
-        frame.addView(card, FrameLayout.LayoutParams(-1, -2))
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(16), px(16), px(16), px(16))
-        }
-        card.addView(body)
-        body.addView(text(File(relative).name, 18f).apply {
-            gravity = Gravity.CENTER
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        })
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(ImageView(this).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setBackgroundResource(R.drawable.bg_thumb_border)
-            setImageBitmap(thumb(File(draft, relative), 400))
-        }, LinearLayout.LayoutParams(-1, px(200)))
-        content.addView(text(relative, 12f))
-        content.addView(text(if (uses.isEmpty()) "未使用"
-            else "被 ${uses.map { it.first }.distinct().size} 个动画 / ${uses.size} 帧引用", 13f))
-        uses.forEach { (mode, index) ->
-            content.addView(text("$mode / 帧 $index  ›", 14f).apply {
-                isClickable = true
-                setOnClickListener {
-                    dialog.dismiss()
-                    showMode(mode)
-                }
+        var popup: android.app.Dialog? = null
+        popup = editor("图片详情", compact = true, readOnly = true, extraAction = {
+            popup?.dismiss()
+            renameDialog(relative, false)
+        }) { box ->
+            box.addView(text(File(relative).name, 12f).apply {
+                gravity = Gravity.CENTER
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(2), 0, px(2), px(10))
+            }, LinearLayout.LayoutParams(-1, -2))
+            val previewCard = detailSection()
+            previewCard.addView(ImageView(this).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setBackgroundResource(R.drawable.bg_thumb_border)
+                setImageBitmap(thumb(File(draft, relative), 400))
+            }, LinearLayout.LayoutParams(-1, px(200)))
+            previewCard.addView(text(relative, 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(2), px(6), px(2), px(2))
             })
-        }
-        // Let short image details take their actual height, rather than guessing
-        // from the number of references. Long details scroll independently while
-        // the title and action buttons remain visible.
-        val detailsScroll = ScrollView(this).apply {
-            isFillViewport = false
-            addView(content, FrameLayout.LayoutParams(-1, -2))
-        }
-        body.addView(detailsScroll, LinearLayout.LayoutParams(-1, -2))
-        actionPairForDialog(body, "关闭", { dialog.dismiss() },
-            "重命名", { dialog.dismiss(); renameDialog(relative, false) })
-        dialog.setContentView(frame)
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.show()
-        dialog.window?.setLayout(-1, -2)
-        detailsScroll.post {
-            if (!dialog.isShowing) return@post
-            val visibleFrame = android.graphics.Rect()
-            dialog.window?.decorView?.getWindowVisibleDisplayFrame(visibleFrame)
-            val screenHeight = visibleFrame.height().takeIf { it > 0 }
-                ?: resources.displayMetrics.heightPixels
-            // Keep headroom for system bars, navigation, card shadow and IME.
-            val maxDialogHeight = (screenHeight * 0.85f).toInt()
-            val fixedHeight = body.paddingTop + body.paddingBottom +
-                body.getChildAt(0).measuredHeight + body.getChildAt(2).measuredHeight
-            val contentWidth = detailsScroll.width.coerceAtLeast(1)
-            content.measure(
-                View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            )
-            val desired = minOf(content.measuredHeight,
-                (maxDialogHeight - fixedHeight).coerceAtLeast(px(120)))
-            if (detailsScroll.layoutParams.height != desired) {
-                detailsScroll.layoutParams = detailsScroll.layoutParams.apply { height = desired }
-                dialog.window?.setLayout(-1, -2)
+            addDetailSection(box, previewCard)
+
+            val references = detailSection()
+            val summary = if (uses.isEmpty()) "未使用"
+                else "${uses.map { it.first }.distinct().size} 个动画 · ${uses.size} 帧"
+            references.addView(detailSectionHeader("被引用位置", summary))
+            if (uses.isEmpty()) references.addView(text("未使用", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            })
+            uses.forEachIndexed { number, (mode, index) ->
+                val row = detailListRow()
+                row.addView(detailNumber(number))
+                row.addView(text("动画 · $mode / 第 ${index + 1} 帧", 12f).apply {
+                    setPadding(0, px(3), 0, px(3))
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text("›", 18f).apply {
+                    gravity = Gravity.CENTER
+                    setTextColor(getColor(R.color.cp_note))
+                    setPadding(0, 0, 0, 0)
+                }, LinearLayout.LayoutParams(px(22), -2))
+                rippleClick(row) { popup?.dismiss(); showMode(mode) }
+                references.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                    leftMargin = px(8)
+                    topMargin = px(4)
+                })
             }
+            addDetailSection(box, references)
+            ({ })
         }
     }
 
@@ -3035,6 +3059,8 @@ class RolePackEditorActivity : AppCompatActivity() {
         val debounce = Handler(Looper.getMainLooper())
         var pending: Runnable? = null
         var popup: android.app.Dialog? = null
+        var navigatingAway = false
+        var needsRefresh = false
         lateinit var field: EditText
 
         fun persist() {
@@ -3055,12 +3081,19 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }
                 activeId = key
                 lastSaved = value
+                needsRefresh = true
             }
         }
 
         popup = editor(if (id == null) "新建碎碎念" else "碎碎念详情",
             compact = true, readOnly = true) { box ->
-            box.addView(text("文本内容", 13f))
+            box.addView(text("编辑角色的底部消息文本", 12f).apply {
+                gravity = Gravity.CENTER
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(0, 0, 0, px(10))
+            }, LinearLayout.LayoutParams(-1, -2))
+            val textCard = detailSection()
+            textCard.addView(text("文本内容", 15f))
             field = EditText(this).apply {
                 setText(lastSaved)
                 hint = "输入碎碎念文本"
@@ -3070,7 +3103,12 @@ class RolePackEditorActivity : AppCompatActivity() {
                 setBackgroundResource(R.drawable.bg_input)
                 setPadding(px(10), px(10), px(10), px(10))
             }
-            box.addView(field, LinearLayout.LayoutParams(-1, -2))
+            textCard.addView(field, LinearLayout.LayoutParams(-1, -2))
+            textCard.addView(text("自动保存", 11f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(2), px(4), 0, 0)
+            })
+            addDetailSection(box, textCard)
             field.addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -3083,70 +3121,75 @@ class RolePackEditorActivity : AppCompatActivity() {
             })
             field.setOnFocusChangeListener { _, focused -> if (!focused) persist() }
 
-            val groupsRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, px(10), 0, px(6))
-            }
+            val groupCard = detailSection()
             val groupInfo = text("", 12f).apply {
                 setTextColor(getColor(R.color.cp_note))
+                gravity = Gravity.END
             }
             fun refreshGroups() {
                 val groups = activeId?.let(::thinkingGroups).orEmpty()
-                groupInfo.text = "所属分组：" + groups.ifEmpty { listOf("未分组") }.joinToString("、")
+                groupInfo.text = groups.ifEmpty { listOf("未分组") }.joinToString("、")
             }
             refreshGroups()
-            groupsRow.addView(groupInfo, LinearLayout.LayoutParams(0, -2, 1f))
-            groupsRow.addView(button("修改") {
+            val groupHeader = detailSectionHeader("所属分组", "") {
                 persist()
                 val current = activeId
                 if (current == null) {
                     Toast.makeText(this, "请先输入文本", Toast.LENGTH_SHORT).show()
-                } else {
-                    chooseThinkingGroups(current) { refreshGroups() }
+                } else chooseThinkingGroups(current) {
+                    refreshGroups()
+                    needsRefresh = true
                 }
-            })
-            box.addView(groupsRow, LinearLayout.LayoutParams(-1, -2))
-
-            box.addView(text("被引用位置", 14f).apply {
-                setPadding(px(2), px(10), 0, px(6))
-            })
-            val refs = id?.let(::thinkingUses).orEmpty()
-            if (refs.isEmpty()) box.addView(text("未被引用", 12f).apply {
+            }
+            // Replace the header's placeholder value with the live group summary.
+            groupHeader.removeViewAt(1)
+            val groupValue = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            groupValue.addView(groupInfo, LinearLayout.LayoutParams(0, -2, 1f))
+            groupValue.addView(text("›", 17f).apply {
                 setTextColor(getColor(R.color.cp_note))
-                setPadding(px(14), 0, 0, px(6))
+                setPadding(px(4), 0, 0, 0)
             })
-            refs.forEach { reference ->
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    setBackgroundResource(R.drawable.card_bg)
-                    rippleCard(this)
-                    setPadding(px(10), px(5), px(7), px(5))
-                }
-                row.addView(text(reference.label(::functionPathName), 12f),
-                    LinearLayout.LayoutParams(0, -2, 1f))
-                row.addView(text("›", 20f).apply {
+            groupHeader.addView(groupValue)
+            groupCard.addView(groupHeader)
+            addDetailSection(box, groupCard)
+
+            val referencesCard = detailSection()
+            val refs = id?.let(::thinkingUses).orEmpty()
+            referencesCard.addView(detailSectionHeader("被引用位置",
+                if (refs.isEmpty()) "未被引用" else "${refs.size} 次引用"))
+            refs.forEachIndexed { index, reference ->
+                val row = detailListRow()
+                row.addView(detailNumber(index))
+                row.addView(text(reference.label(::functionPathName), 12f).apply {
+                    setPadding(0, px(3), 0, px(3))
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text("›", 18f).apply {
                     gravity = Gravity.CENTER
                     setTextColor(getColor(R.color.cp_note))
-                }, LinearLayout.LayoutParams(px(24), -2))
+                    setPadding(0, 0, 0, 0)
+                }, LinearLayout.LayoutParams(px(22), -2))
                 rippleClick(row) {
                     persist()
+                    navigatingAway = true
                     popup?.dismiss()
                     val functionPath = reference.functionPath
                     if (functionPath != null) functionDetails(functionPath, functionAnimationsAt(functionPath))
                     else reference.modeId?.let(::showMode)
                 }
-                box.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
-                    leftMargin = px(14)
-                    bottomMargin = px(5)
+                referencesCard.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                    leftMargin = px(8)
+                    topMargin = px(4)
                 })
             }
+            addDetailSection(box, referencesCard)
             ({ })
         }
         popup?.setOnDismissListener {
             persist()
-            thinkingResources()
+            if (!navigatingAway && needsRefresh && screen == "thinkings") thinkingResources()
         }
     }
 
@@ -3224,54 +3267,44 @@ class RolePackEditorActivity : AppCompatActivity() {
         var popup: android.app.Dialog? = null
         popup = editor(functionPathName(path), compact = true, readOnly = true) { box ->
             box.addView(text(functionDescription(path), 12f).apply {
+                gravity = Gravity.CENTER
                 setTextColor(getColor(R.color.cp_note))
                 setPadding(px(2), 0, px(2), px(12))
-            })
-            val thinkingRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setBackgroundResource(R.drawable.card_bg)
-                rippleCard(this)
-                setPadding(px(12), px(6), px(12), px(6))
-            }
-            thinkingRow.addView(text("碎碎念配置", 15f),
-                LinearLayout.LayoutParams(0, -2, 1f))
-            thinkingRow.addView(text("$thinkingSummary  ›", 12f).apply {
-                setTextColor(getColor(R.color.cp_note))
-            })
-            rippleClick(thinkingRow) {
+            }, LinearLayout.LayoutParams(-1, -2))
+
+            val thinkingCard = detailSection()
+            thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
                 popup?.dismiss()
                 thinkingConfigDialog(functionPath = path)
-            }
-            box.addView(thinkingRow, LinearLayout.LayoutParams(-1, px(52)).apply {
-                bottomMargin = px(12)
             })
-            val animationHeader = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            animationHeader.addView(text("当前动画", 15f),
-                LinearLayout.LayoutParams(0, -2, 1f))
-            if (functionHasAnimationPool(path)) animationHeader.addView(button("修改") {
-                popup?.dismiss()
-                chooseFunctions(path, selected)
-            })
-            box.addView(animationHeader, LinearLayout.LayoutParams(-1, px(48)))
+            addDetailSection(box, thinkingCard)
+
+            val animationsCard = detailSection()
+            animationsCard.addView(detailSectionHeader(
+                "当前动画", "动画链 ${selected.size} 个",
+                if (functionHasAnimationPool(path)) ({
+                    popup?.dismiss()
+                    chooseFunctions(path, selected)
+                }) else null
+            ))
             val animations = root.getJSONObject("modes")
-            selected.forEach { start ->
-                box.addView(linkedModeChains(listOf(start), animations, "", 13f) { target ->
+            selected.forEachIndexed { index, start ->
+                val row = detailListRow()
+                row.addView(detailNumber(index))
+                row.addView(linkedModeChains(listOf(start), animations, "", 13f) { target ->
                     popup?.dismiss()
                     showMode(target)
-                }.apply {
-                    setBackgroundResource(R.drawable.card_bg)
-                    setPadding(px(12), px(10), px(12), px(10))
-                }, LinearLayout.LayoutParams(-1, -2).apply {
-                    bottomMargin = px(5)
+                }.apply { setPadding(0, px(2), 0, px(2)) },
+                    LinearLayout.LayoutParams(0, -2, 1f))
+                animationsCard.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                    leftMargin = px(8)
+                    topMargin = px(4)
                 })
             }
-            if (selected.isEmpty()) box.addView(text("暂无关联动画", 12f).apply {
+            if (selected.isEmpty()) animationsCard.addView(text("暂无关联动画", 12f).apply {
                 setTextColor(getColor(R.color.cp_note))
             })
+            addDetailSection(box, animationsCard)
             ({ })
         }
     }
