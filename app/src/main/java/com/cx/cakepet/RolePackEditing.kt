@@ -156,7 +156,7 @@ object RolePackEditing {
                     if (normalized.optJSONObject("modes") == null) normalized.put("modes", JSONObject())
                     normalizeThinkingPack(normalized)
                     zip.putNextEntry(ZipEntry("modes.jsonc"))
-                    zip.write(CompactJsoncWriter.write(normalized, if (original.isBlank()) "" else original).toByteArray(Charsets.UTF_8))
+                    zip.write(CompactJsoncWriter.writeExport(normalized, original).toByteArray(Charsets.UTF_8))
                     zip.closeEntry()
                     if (root.isDirectory) root.walkTopDown().filter { it.isFile && it != config }.forEach { file ->
                         zip.putNextEntry(ZipEntry(file.relativeTo(root).invariantSeparatorsPath))
@@ -171,7 +171,10 @@ object RolePackEditing {
         val children = ctx.assets.list(path).orEmpty()
         if (children.isEmpty()) {
             zip.putNextEntry(ZipEntry(relative))
-            ctx.assets.open(path).use { it.copyTo(zip) }
+            if (relative == "modes.jsonc") {
+                val source = ctx.assets.open(path).bufferedReader(Charsets.UTF_8).use { it.readText() }
+                zip.write(CompactJsoncWriter.writeExport(parseJsonc(source), source).toByteArray(Charsets.UTF_8))
+            } else ctx.assets.open(path).use { it.copyTo(zip) }
             zip.closeEntry()
         } else children.forEach { zipAssets(ctx, "$path/$it",
             if (relative.isEmpty()) it else "$relative/$it", zip) }

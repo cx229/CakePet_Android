@@ -8,9 +8,13 @@
   ],
   "decodeTarget": 256,
   "anchorRes": 128,
+  "note": "白酥是内置示例素材包，包含功能映射、动作动画和碎碎念。",
+  "usage": "供 AI 和开发者参考：仅修改需要的功能路径与动画。note、usage 是可选的说明属性，不参与播放。frames 中的 res 为包内图片路径；delay 和 duration 均使用毫秒；dx/dy 表示逐帧位移。功能映射引用的动画名称必须存在于 modes。",
   "functions": {
     "standby": {
       "pool": {
+        "note": "待机时可选择的动画池。",
+        "usage": "修改 modes 数组中的动画名称即可调整待机候选动作；无需修改图片帧。",
         "modes": [
           "静坐",
           "炸毛",
@@ -230,6 +234,7 @@
     },
     "static": {
       "sit": {
+        "note": "静止时的基础静坐动作。",
         "modes": [
           "静坐"
         ],
@@ -741,6 +746,7 @@
   },
   "modes": {
     "食物": {
+      "note": "投喂时显示的食物动画，不是角色自身的动作。",
       "loop": true,
       "loopMode": "infinite",
       "nextMode": null,
@@ -761,6 +767,7 @@
       }
     },
     "静坐": {
+      "note": "普通待机静坐动作。duration 控制定时循环范围，frames 控制帧顺序。",
       "loop": true,
       "loopMode": "timed",
       "nextMode": null,
@@ -1350,6 +1357,7 @@
       ]
     },
     "走路": {
+      "note": "行走动作；位移由逐帧 dx/dy 定义，delay 定义帧持续时间。",
       "loop": true,
       "loopMode": "timed",
       "nextMode": null,
