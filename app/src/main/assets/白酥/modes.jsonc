@@ -1,233 +1,72 @@
 {
-  "version": "1.02",
+  "version": "1.10",
   "id": "baiasu",
   "name": "白酥",
   "shortName": "酥",
-  "authors": [
-    "兰源"
-  ],
+  "authors": ["兰源"],
   "decodeTarget": 256,
   "anchorRes": 128,
-  "note": "白酥是内置示例素材包，包含功能映射、动作动画和碎碎念。",
-  "usage": "供 AI 和开发者参考：仅修改需要的功能路径与动画。note、usage 是可选的说明属性，不参与播放。frames 中的 res 为包内图片路径；delay 和 duration 均使用毫秒；dx/dy 表示逐帧位移。功能映射引用的动画名称必须存在于 modes。",
+  "note": "白酥：CakePet 通用模板角色。配置包含功能映射、动作帧和碎碎念，不需要修改 Android 引擎即可调整已有行为。",
+  "usage": "配置说明（适用于本素材包）：functions 的功能路径将行为映射到 modes 中的动作名称；frames 按顺序播放，res 是包内相对路径，delay 单位 ms，可写整数或 [min,max]；loopMode 为 off/timed/infinite，timed 使用 duration.min/max（ms）；nextMode 是动作结束后衔接的动作，未直接绑定功能的后续动作也不能随意删除；dx/dy 控制逐帧位移，verticalAlign 控制帧垂直对齐；thinking 的 policy/pool 配置碎碎念策略及各引用时长。note/usage 仅作说明，不参与运行。修改前确认被引用的动作名称和图片路径；帧编号从 0 开始。",
   "functions": {
     "standby": {
       "pool": {
-        "note": "待机时可选择的动画池。",
-        "usage": "修改 modes 数组中的动画名称即可调整待机候选动作；无需修改图片帧。",
-        "modes": [
-          "静坐",
-          "炸毛",
-          "蠕动",
-          "摇头",
-          "趴着",
-          "美白",
-          "走路",
-          "扒鱼"
-        ],
+        "note": "普通待机的候选动作池。",
+        "usage": "编辑 modes 数组来选择待机动画；thinking.pool 配置碎碎念 ID 及对应 min/max 播放时长。",
+        "modes": ["静坐","炸毛","蠕动","摇头","趴着","美白","走路","扒鱼"],
         "thinking": {
           "policy": "cycle",
           "pool": {
-            "t001": {
-              "min": 500,
-              "max": 4000
-            },
-            "t002": {
-              "min": 500,
-              "max": 4000
-            },
-            "t003": {
-              "min": 500,
-              "max": 4000
-            },
-            "t004": {
-              "min": 500,
-              "max": 4000
-            },
-            "t005": {
-              "min": 500,
-              "max": 4000
-            },
-            "t006": {
-              "min": 500,
-              "max": 4000
-            },
-            "t007": {
-              "min": 500,
-              "max": 4000
-            },
-            "t008": {
-              "min": 500,
-              "max": 4000
-            },
-            "t009": {
-              "min": 500,
-              "max": 4000
-            },
-            "t010": {
-              "min": 500,
-              "max": 4000
-            },
-            "t011": {
-              "min": 500,
-              "max": 4000
-            },
-            "t012": {
-              "min": 500,
-              "max": 4000
-            },
-            "t013": {
-              "min": 500,
-              "max": 4000
-            },
-            "t014": {
-              "min": 500,
-              "max": 4000
-            },
-            "t015": {
-              "min": 500,
-              "max": 4000
-            },
-            "t016": {
-              "min": 500,
-              "max": 6000
-            },
-            "t017": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t018": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t019": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t020": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t021": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t022": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t023": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t024": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t025": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t026": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t027": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t028": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t029": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t030": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t031": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t032": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t033": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t034": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t035": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t036": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t037": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t038": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t039": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t040": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t041": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t042": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t043": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t044": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t045": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t046": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t047": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t048": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t049": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t050": {
-              "min": 1500,
-              "max": 5000
-            }
+            "t001": {"min": 500, "max": 4000},
+            "t002": {"min": 500, "max": 4000},
+            "t003": {"min": 500, "max": 4000},
+            "t004": {"min": 500, "max": 4000},
+            "t005": {"min": 500, "max": 4000},
+            "t006": {"min": 500, "max": 4000},
+            "t007": {"min": 500, "max": 4000},
+            "t008": {"min": 500, "max": 4000},
+            "t009": {"min": 500, "max": 4000},
+            "t010": {"min": 500, "max": 4000},
+            "t011": {"min": 500, "max": 4000},
+            "t012": {"min": 500, "max": 4000},
+            "t013": {"min": 500, "max": 4000},
+            "t014": {"min": 500, "max": 4000},
+            "t015": {"min": 500, "max": 4000},
+            "t016": {"min": 500, "max": 6000},
+            "t017": {"min": 1000, "max": 4500},
+            "t018": {"min": 1000, "max": 4500},
+            "t019": {"min": 1000, "max": 4500},
+            "t020": {"min": 1000, "max": 4500},
+            "t021": {"min": 1000, "max": 4500},
+            "t022": {"min": 1000, "max": 4500},
+            "t023": {"min": 1000, "max": 4500},
+            "t024": {"min": 1000, "max": 4500},
+            "t025": {"min": 1000, "max": 4500},
+            "t026": {"min": 1000, "max": 4500},
+            "t027": {"min": 1000, "max": 4500},
+            "t028": {"min": 1000, "max": 4500},
+            "t029": {"min": 1000, "max": 4500},
+            "t030": {"min": 1000, "max": 4500},
+            "t031": {"min": 1000, "max": 4500},
+            "t032": {"min": 1000, "max": 4500},
+            "t033": {"min": 1000, "max": 4500},
+            "t034": {"min": 1000, "max": 4500},
+            "t035": {"min": 1000, "max": 4500},
+            "t036": {"min": 1000, "max": 4500},
+            "t037": {"min": 1000, "max": 4500},
+            "t038": {"min": 1000, "max": 4500},
+            "t039": {"min": 1000, "max": 4500},
+            "t040": {"min": 1000, "max": 4500},
+            "t041": {"min": 1000, "max": 4500},
+            "t042": {"min": 1500, "max": 5000},
+            "t043": {"min": 1500, "max": 5000},
+            "t044": {"min": 1500, "max": 5000},
+            "t045": {"min": 1500, "max": 5000},
+            "t046": {"min": 1500, "max": 5000},
+            "t047": {"min": 1500, "max": 5000},
+            "t048": {"min": 1500, "max": 5000},
+            "t049": {"min": 1500, "max": 5000},
+            "t050": {"min": 1500, "max": 5000}
           }
         }
       }
@@ -235,738 +74,215 @@
     "static": {
       "sit": {
         "note": "静止时的基础静坐动作。",
-        "modes": [
-          "静坐"
-        ],
+        "modes": ["静坐"],
         "thinking": {
           "policy": "cycle",
           "pool": {
-            "t001": {
-              "min": 500,
-              "max": 4000
-            },
-            "t002": {
-              "min": 500,
-              "max": 4000
-            },
-            "t003": {
-              "min": 500,
-              "max": 4000
-            },
-            "t004": {
-              "min": 500,
-              "max": 4000
-            },
-            "t005": {
-              "min": 500,
-              "max": 4000
-            },
-            "t006": {
-              "min": 500,
-              "max": 4000
-            },
-            "t007": {
-              "min": 500,
-              "max": 4000
-            },
-            "t008": {
-              "min": 500,
-              "max": 4000
-            },
-            "t009": {
-              "min": 500,
-              "max": 4000
-            },
-            "t010": {
-              "min": 500,
-              "max": 4000
-            },
-            "t011": {
-              "min": 500,
-              "max": 4000
-            },
-            "t012": {
-              "min": 500,
-              "max": 4000
-            },
-            "t013": {
-              "min": 500,
-              "max": 4000
-            },
-            "t014": {
-              "min": 500,
-              "max": 4000
-            },
-            "t015": {
-              "min": 500,
-              "max": 4000
-            },
-            "t016": {
-              "min": 500,
-              "max": 6000
-            },
-            "t017": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t018": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t019": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t020": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t021": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t022": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t023": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t024": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t025": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t026": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t027": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t028": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t029": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t030": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t031": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t032": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t033": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t034": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t035": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t036": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t037": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t038": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t039": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t040": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t041": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t042": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t043": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t044": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t045": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t046": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t047": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t048": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t049": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t050": {
-              "min": 1500,
-              "max": 5000
-            }
+            "t001": {"min": 500, "max": 4000},
+            "t002": {"min": 500, "max": 4000},
+            "t003": {"min": 500, "max": 4000},
+            "t004": {"min": 500, "max": 4000},
+            "t005": {"min": 500, "max": 4000},
+            "t006": {"min": 500, "max": 4000},
+            "t007": {"min": 500, "max": 4000},
+            "t008": {"min": 500, "max": 4000},
+            "t009": {"min": 500, "max": 4000},
+            "t010": {"min": 500, "max": 4000},
+            "t011": {"min": 500, "max": 4000},
+            "t012": {"min": 500, "max": 4000},
+            "t013": {"min": 500, "max": 4000},
+            "t014": {"min": 500, "max": 4000},
+            "t015": {"min": 500, "max": 4000},
+            "t016": {"min": 500, "max": 6000},
+            "t017": {"min": 1000, "max": 4500},
+            "t018": {"min": 1000, "max": 4500},
+            "t019": {"min": 1000, "max": 4500},
+            "t020": {"min": 1000, "max": 4500},
+            "t021": {"min": 1000, "max": 4500},
+            "t022": {"min": 1000, "max": 4500},
+            "t023": {"min": 1000, "max": 4500},
+            "t024": {"min": 1000, "max": 4500},
+            "t025": {"min": 1000, "max": 4500},
+            "t026": {"min": 1000, "max": 4500},
+            "t027": {"min": 1000, "max": 4500},
+            "t028": {"min": 1000, "max": 4500},
+            "t029": {"min": 1000, "max": 4500},
+            "t030": {"min": 1000, "max": 4500},
+            "t031": {"min": 1000, "max": 4500},
+            "t032": {"min": 1000, "max": 4500},
+            "t033": {"min": 1000, "max": 4500},
+            "t034": {"min": 1000, "max": 4500},
+            "t035": {"min": 1000, "max": 4500},
+            "t036": {"min": 1000, "max": 4500},
+            "t037": {"min": 1000, "max": 4500},
+            "t038": {"min": 1000, "max": 4500},
+            "t039": {"min": 1000, "max": 4500},
+            "t040": {"min": 1000, "max": 4500},
+            "t041": {"min": 1000, "max": 4500},
+            "t042": {"min": 1500, "max": 5000},
+            "t043": {"min": 1500, "max": 5000},
+            "t044": {"min": 1500, "max": 5000},
+            "t045": {"min": 1500, "max": 5000},
+            "t046": {"min": 1500, "max": 5000},
+            "t047": {"min": 1500, "max": 5000},
+            "t048": {"min": 1500, "max": 5000},
+            "t049": {"min": 1500, "max": 5000},
+            "t050": {"min": 1500, "max": 5000}
           }
         }
       },
       "pool": {
-        "modes": [
-          "静坐",
-          "炸毛",
-          "摇头",
-          "趴着",
-          "美白"
-        ],
+        "modes": ["静坐","炸毛","摇头","趴着","美白"],
         "thinking": {
           "policy": "cycle",
           "pool": {
-            "t001": {
-              "min": 500,
-              "max": 4000
-            },
-            "t002": {
-              "min": 500,
-              "max": 4000
-            },
-            "t003": {
-              "min": 500,
-              "max": 4000
-            },
-            "t004": {
-              "min": 500,
-              "max": 4000
-            },
-            "t005": {
-              "min": 500,
-              "max": 4000
-            },
-            "t006": {
-              "min": 500,
-              "max": 4000
-            },
-            "t007": {
-              "min": 500,
-              "max": 4000
-            },
-            "t008": {
-              "min": 500,
-              "max": 4000
-            },
-            "t009": {
-              "min": 500,
-              "max": 4000
-            },
-            "t010": {
-              "min": 500,
-              "max": 4000
-            },
-            "t011": {
-              "min": 500,
-              "max": 4000
-            },
-            "t012": {
-              "min": 500,
-              "max": 4000
-            },
-            "t013": {
-              "min": 500,
-              "max": 4000
-            },
-            "t014": {
-              "min": 500,
-              "max": 4000
-            },
-            "t015": {
-              "min": 500,
-              "max": 4000
-            },
-            "t016": {
-              "min": 500,
-              "max": 6000
-            },
-            "t017": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t018": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t019": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t020": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t021": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t022": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t023": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t024": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t025": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t026": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t027": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t028": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t029": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t030": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t031": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t032": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t033": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t034": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t035": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t036": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t037": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t038": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t039": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t040": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t041": {
-              "min": 1000,
-              "max": 4500
-            },
-            "t042": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t043": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t044": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t045": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t046": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t047": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t048": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t049": {
-              "min": 1500,
-              "max": 5000
-            },
-            "t050": {
-              "min": 1500,
-              "max": 5000
-            }
+            "t001": {"min": 500, "max": 4000},
+            "t002": {"min": 500, "max": 4000},
+            "t003": {"min": 500, "max": 4000},
+            "t004": {"min": 500, "max": 4000},
+            "t005": {"min": 500, "max": 4000},
+            "t006": {"min": 500, "max": 4000},
+            "t007": {"min": 500, "max": 4000},
+            "t008": {"min": 500, "max": 4000},
+            "t009": {"min": 500, "max": 4000},
+            "t010": {"min": 500, "max": 4000},
+            "t011": {"min": 500, "max": 4000},
+            "t012": {"min": 500, "max": 4000},
+            "t013": {"min": 500, "max": 4000},
+            "t014": {"min": 500, "max": 4000},
+            "t015": {"min": 500, "max": 4000},
+            "t016": {"min": 500, "max": 6000},
+            "t017": {"min": 1000, "max": 4500},
+            "t018": {"min": 1000, "max": 4500},
+            "t019": {"min": 1000, "max": 4500},
+            "t020": {"min": 1000, "max": 4500},
+            "t021": {"min": 1000, "max": 4500},
+            "t022": {"min": 1000, "max": 4500},
+            "t023": {"min": 1000, "max": 4500},
+            "t024": {"min": 1000, "max": 4500},
+            "t025": {"min": 1000, "max": 4500},
+            "t026": {"min": 1000, "max": 4500},
+            "t027": {"min": 1000, "max": 4500},
+            "t028": {"min": 1000, "max": 4500},
+            "t029": {"min": 1000, "max": 4500},
+            "t030": {"min": 1000, "max": 4500},
+            "t031": {"min": 1000, "max": 4500},
+            "t032": {"min": 1000, "max": 4500},
+            "t033": {"min": 1000, "max": 4500},
+            "t034": {"min": 1000, "max": 4500},
+            "t035": {"min": 1000, "max": 4500},
+            "t036": {"min": 1000, "max": 4500},
+            "t037": {"min": 1000, "max": 4500},
+            "t038": {"min": 1000, "max": 4500},
+            "t039": {"min": 1000, "max": 4500},
+            "t040": {"min": 1000, "max": 4500},
+            "t041": {"min": 1000, "max": 4500},
+            "t042": {"min": 1500, "max": 5000},
+            "t043": {"min": 1500, "max": 5000},
+            "t044": {"min": 1500, "max": 5000},
+            "t045": {"min": 1500, "max": 5000},
+            "t046": {"min": 1500, "max": 5000},
+            "t047": {"min": 1500, "max": 5000},
+            "t048": {"min": 1500, "max": 5000},
+            "t049": {"min": 1500, "max": 5000},
+            "t050": {"min": 1500, "max": 5000}
           }
-        }
+        },
+        "note": "静止状态下可随机选择的动作池。"
       }
     },
     "touch": {
-      "roll": [
-        "滚动"
-      ],
-      "lift_up": {
-        "slow": [
-          "轻晃提起"
-        ],
-        "left_medium": [
-          "中速向左提起"
-        ],
-        "left_fast": [
-          "快速向左提起"
-        ],
-        "right_medium": [
-          "中速向右提起"
-        ],
-        "right_fast": [
-          "快速向右提起"
-        ]
-      },
-      "jump_down": [
-        "落地"
-      ]
+      "roll": ["滚动"],
+      "lift_up": {"slow": ["轻晃提起"], "left_medium": ["中速向左提起"], "left_fast": ["快速向左提起"], "right_medium": ["中速向右提起"], "right_fast": ["快速向右提起"]},
+      "jump_down": ["落地"],
+      "note": "触摸、提起和落地相关的动作入口。"
     },
     "snap": {
-      "snap_head": [
-        "探头中"
-      ],
-      "pat_head": {
-        "pat_head": [
-          "摸摸头-探头"
-        ]
-      },
-      "feed": {
-        "eat": [
-          "投食-探头"
-        ]
-      }
+      "snap_head": ["探头中"],
+      "pat_head": {"pat_head": ["摸摸头-探头"]},
+      "feed": {"eat": ["投食-探头"]},
+      "note": "吸附或探头状态下的交互入口。"
     },
     "climb": {
-      "leap": {
-        "leap": [
-          "跳起"
-        ],
-        "landing": [
-          "趴着"
-        ]
-      },
-      "forage": {
-        "move": [
-          "走路"
-        ]
-      }
+      "leap": {"leap": ["跳起"], "landing": ["趴着"]},
+      "forage": {"move": ["走路"]},
+      "note": "攀岩及相关动作的功能入口。"
     },
-    "pat_head": {
-      "pat_head": [
-        "摸摸头"
-      ]
-    },
-    "feed": {
-      "food": [
-        "食物"
-      ],
-      "eat": [
-        "投食"
-      ]
-    },
-    "menu": {
-      "pool": [
-        "静坐",
-        "炸毛",
-        "摇头",
-        "趴着",
-        "走路",
-        "蠕动",
-        "美白",
-        "扒鱼",
-        "探头中",
-        "摸摸头",
-        "落地",
-        "滚动"
-      ]
-    }
+    "pat_head": {"pat_head": ["摸摸头"]},
+    "feed": {"food": ["食物"], "eat": ["投食"], "note": "普通投喂动作入口，food 是食物显示动画，eat 是角色投食反馈。"},
+    "menu": {"pool": ["静坐","炸毛","摇头","趴着","走路","蠕动","美白","扒鱼","探头中","摸摸头","落地","滚动"], "note": "动作菜单中的候选动画池。"}
   },
   "modes": {
     "食物": {
-      "note": "投喂时显示的食物动画，不是角色自身的动作。",
+      "note": "投喂时显示的食物动画，不是角色本体动作。",
       "loop": true,
       "loopMode": "infinite",
       "nextMode": null,
       "frames": [
-        {
-          "res": "支鱼/fish-1.png",
-          "delay": 1000,
-          "verticalAlign": "top"
-        }
+        {"res":"支鱼/fish-1.png","delay":1000,"verticalAlign":"top"}
       ],
       "duration": null,
       "finishCycle": true,
-      "groups": [
-        "投喂"
-      ],
+      "groups": ["投喂"],
       "thinking": {
         "policy": "off"
       }
     },
     "静坐": {
-      "note": "普通待机静坐动作。duration 控制定时循环范围，frames 控制帧顺序。",
+      "note": "普通静坐及待机动作；由 frames 定义表情变化。",
       "loop": true,
       "loopMode": "timed",
       "nextMode": null,
       "frames": [
-        {
-          "res": "安静/sit_clam-1.png",
-          "flipX": true,
-          "delay": [
-            2400,
-            10000
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "安静/sit_clam-2.png",
-          "flipX": true,
-          "delay": [
-            120,
-            160
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "安静/sit_clam-3.png",
-          "flipX": true,
-          "delay": [
-            120,
-            160
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "安静/sit_clam-2.png",
-          "flipX": true,
-          "delay": [
-            120,
-            160
-          ],
-          "verticalAlign": "top"
-        }
+        {"res":"安静/sit_clam-1.png","delay":[2400,10000],"verticalAlign":"top"},
+        {"res":"安静/sit_clam-2.png","delay":[120,160],"verticalAlign":"top"},
+        {"res":"安静/sit_clam-3.png","delay":[120,160],"verticalAlign":"top"},
+        {"res":"安静/sit_clam-2.png","delay":[120,160],"verticalAlign":"top"}
       ],
-      "duration": {
-        "min": 3000,
-        "max": 25000
-      },
+      "duration": {"min": 3000, "max": 25000},
       "finishCycle": true,
-      "groups": [
-        "待机"
-      ]
+      "groups": ["待机"]
     },
     "炸毛": {
       "loop": true,
       "loopMode": "timed",
       "nextMode": null,
       "frames": [
-        {
-          "res": "炸毛/sit_puffed-1.png",
-          "flipX": true,
-          "delay": [
-            2400,
-            10000
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "炸毛/sit_puffed-2.png",
-          "flipX": true,
-          "delay": [
-            120,
-            160
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "炸毛/sit_puffed-3.png",
-          "flipX": true,
-          "delay": [
-            120,
-            160
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "炸毛/sit_puffed-2.png",
-          "flipX": true,
-          "delay": [
-            120,
-            160
-          ],
-          "verticalAlign": "top"
-        }
+        {"res":"炸毛/sit_puffed-1.png","delay":[2400,10000],"verticalAlign":"top"},
+        {"res":"炸毛/sit_puffed-2.png","delay":[120,160],"verticalAlign":"top"},
+        {"res":"炸毛/sit_puffed-3.png","delay":[120,160],"verticalAlign":"top"},
+        {"res":"炸毛/sit_puffed-2.png","delay":[120,160],"verticalAlign":"top"}
       ],
-      "duration": {
-        "min": 3000,
-        "max": 25000
-      },
+      "duration": {"min": 3000, "max": 25000},
       "finishCycle": true,
-      "groups": [
-        "待机"
-      ]
+      "groups": ["待机"]
     },
     "摸摸头": {
       "loop": true,
       "loopMode": "timed",
-      "duration": {
-        "min": 3000,
-        "max": 4000
-      },
+      "duration": {"min": 3000, "max": 4000},
       "finishCycle": true,
       "nextMode": "摇头",
       "frames": [
-        {
-          "res": "摸摸头/pat_head-1.png",
-          "flipX": true,
-          "delay": [
-            105,
-            110
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "摸摸头/pat_head-2.png",
-          "flipX": true,
-          "delay": [
-            100,
-            110
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "摸摸头/pat_head-3.png",
-          "flipX": true,
-          "delay": [
-            100,
-            110
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "摸摸头/pat_head-4.png",
-          "flipX": true,
-          "delay": [
-            105,
-            110
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "摸摸头/pat_head-5.png",
-          "flipX": true,
-          "delay": [
-            105,
-            110
-          ],
-          "verticalAlign": "top"
-        }
+        {"res":"摸摸头/pat_head-1.png","delay":[105,110],"verticalAlign":"top"},
+        {"res":"摸摸头/pat_head-2.png","delay":[100,110],"verticalAlign":"top"},
+        {"res":"摸摸头/pat_head-3.png","delay":[100,110],"verticalAlign":"top"},
+        {"res":"摸摸头/pat_head-4.png","delay":[105,110],"verticalAlign":"top"},
+        {"res":"摸摸头/pat_head-5.png","delay":[105,110],"verticalAlign":"top"}
       ],
-      "groups": [
-        "摸摸头"
-      ],
+      "groups": ["摸摸头"],
       "thinking": {
         "policy": "hold",
         "pool": {
-          "p001": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p002": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p003": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p004": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p005": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p006": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p007": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p008": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p009": {
-            "min": 1000,
-            "max": 3000
-          }
+          "p001": {"min": 1000, "max": 3000},
+          "p002": {"min": 1000, "max": 3000},
+          "p003": {"min": 1000, "max": 3000},
+          "p004": {"min": 1000, "max": 3000},
+          "p005": {"min": 1000, "max": 3000},
+          "p006": {"min": 1000, "max": 3000},
+          "p007": {"min": 1000, "max": 3000},
+          "p008": {"min": 1000, "max": 3000},
+          "p009": {"min": 1000, "max": 3000}
         }
       }
     },
@@ -975,139 +291,51 @@
       "loopMode": "timed",
       "nextMode": "炸毛",
       "frames": [
-        {
-          "res": "摇头/shake_head-1.png",
-          "flipX": true,
-          "delay": [
-            140,
-            180
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "摇头/shake_head-2.png",
-          "flipX": true,
-          "delay": [
-            140,
-            180
-          ],
-          "verticalAlign": "top"
-        }
+        {"res":"摇头/shake_head-1.png","delay":[140,180],"verticalAlign":"top"},
+        {"res":"摇头/shake_head-2.png","delay":[140,180],"verticalAlign":"top"}
       ],
-      "duration": {
-        "min": 1000,
-        "max": 2000
-      },
+      "duration": {"min": 1000, "max": 2000},
       "finishCycle": true,
-      "groups": [
-        "待机",
-        "摸摸头"
-      ]
+      "groups": ["待机","摸摸头"]
     },
     "落地": {
       "loop": false,
       "loopMode": "off",
       "nextMode": "走动短距离",
       "frames": [
-        {
-          "res": "落地/jump_down-1.png",
-          "flipX": true,
-          "delay": [
-            35,
-            40
-          ],
-          "anchorY": -30,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "落地/jump_down-2.png",
-          "flipX": true,
-          "delay": [
-            35,
-            40
-          ],
-          "anchorY": -15,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "落地/jump_down-3.png",
-          "flipX": true,
-          "delay": [
-            35,
-            40
-          ],
-          "verticalAlign": "top"
-        }
+        {"res":"落地/jump_down-1.png","delay":[35,40],"anchorY":-30,"verticalAlign":"top"},
+        {"res":"落地/jump_down-2.png","delay":[35,40],"anchorY":-15,"verticalAlign":"top"},
+        {"res":"落地/jump_down-3.png","delay":[35,40],"verticalAlign":"top"}
       ],
-      "groups": [
-        "拖动与抛掷"
-      ],
+      "groups": ["拖动与抛掷"],
       "thinking": {
         "policy": "hold",
         "pool": {
-          "d001": {
-            "min": 1000,
-            "max": 2000
-          },
-          "d002": {
-            "min": 1000,
-            "max": 2000
-          },
-          "d003": {
-            "min": 1000,
-            "max": 2000
-          },
-          "d004": {
-            "min": 1000,
-            "max": 2000
-          }
+          "d001": {"min": 1000, "max": 2000},
+          "d002": {"min": 1000, "max": 2000},
+          "d003": {"min": 1000, "max": 2000},
+          "d004": {"min": 1000, "max": 2000}
         }
-      }
+      },
+      "note": "落地过渡，结束后接入「走动短距离」，不要因未直接绑定功能而删除后续动作。"
     },
     "轻晃提起": {
       "loop": true,
       "loopMode": "infinite",
       "nextMode": null,
       "frames": [
-        {
-          "res": "提起/lift_up-1.png",
-          "delay": [
-            340,
-            370
-          ],
-          "anchorY": 50,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "提起/lift_up-2.png",
-          "delay": [
-            340,
-            370
-          ],
-          "anchorY": 50,
-          "verticalAlign": "top"
-        }
+        {"res":"提起/lift_up-1.png","delay":[340,370],"anchorY":50,"verticalAlign":"top"},
+        {"res":"提起/lift_up-2.png","delay":[340,370],"anchorY":50,"verticalAlign":"top"}
       ],
       "duration": null,
       "finishCycle": true,
-      "groups": [
-        "拖动与抛掷"
-      ],
+      "groups": ["拖动与抛掷"],
       "thinking": {
         "policy": "hold",
         "pool": {
-          "l001": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l002": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l003": {
-            "min": 1000,
-            "max": 3000
-          }
+          "l001": {"min": 1000, "max": 3000},
+          "l002": {"min": 1000, "max": 3000},
+          "l003": {"min": 1000, "max": 3000}
         }
       }
     },
@@ -1116,33 +344,17 @@
       "loopMode": "infinite",
       "nextMode": null,
       "frames": [
-        {
-          "res": "提起/lift_up-4.png",
-          "delay": 200,
-          "anchorY": 50,
-          "verticalAlign": "top"
-        }
+        {"res":"提起/lift_up-4.png","delay":200,"anchorY":50,"verticalAlign":"top"}
       ],
       "duration": null,
       "finishCycle": true,
-      "groups": [
-        "拖动与抛掷"
-      ],
+      "groups": ["拖动与抛掷"],
       "thinking": {
         "policy": "hold",
         "pool": {
-          "l001": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l002": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l003": {
-            "min": 1000,
-            "max": 3000
-          }
+          "l001": {"min": 1000, "max": 3000},
+          "l002": {"min": 1000, "max": 3000},
+          "l003": {"min": 1000, "max": 3000}
         }
       }
     },
@@ -1151,33 +363,17 @@
       "loopMode": "infinite",
       "nextMode": null,
       "frames": [
-        {
-          "res": "提起/lift_up-6.png",
-          "delay": 300,
-          "anchorY": 50,
-          "verticalAlign": "top"
-        }
+        {"res":"提起/lift_up-6.png","delay":300,"anchorY":50,"verticalAlign":"top"}
       ],
       "duration": null,
       "finishCycle": true,
-      "groups": [
-        "拖动与抛掷"
-      ],
+      "groups": ["拖动与抛掷"],
       "thinking": {
         "policy": "hold",
         "pool": {
-          "l001": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l002": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l003": {
-            "min": 1000,
-            "max": 3000
-          }
+          "l001": {"min": 1000, "max": 3000},
+          "l002": {"min": 1000, "max": 3000},
+          "l003": {"min": 1000, "max": 3000}
         }
       }
     },
@@ -1186,33 +382,17 @@
       "loopMode": "infinite",
       "nextMode": null,
       "frames": [
-        {
-          "res": "提起/lift_up-3.png",
-          "delay": 200,
-          "anchorY": 50,
-          "verticalAlign": "top"
-        }
+        {"res":"提起/lift_up-3.png","delay":200,"anchorY":50,"verticalAlign":"top"}
       ],
       "duration": null,
       "finishCycle": true,
-      "groups": [
-        "拖动与抛掷"
-      ],
+      "groups": ["拖动与抛掷"],
       "thinking": {
         "policy": "hold",
         "pool": {
-          "l001": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l002": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l003": {
-            "min": 1000,
-            "max": 3000
-          }
+          "l001": {"min": 1000, "max": 3000},
+          "l002": {"min": 1000, "max": 3000},
+          "l003": {"min": 1000, "max": 3000}
         }
       }
     },
@@ -1221,33 +401,17 @@
       "loopMode": "infinite",
       "nextMode": null,
       "frames": [
-        {
-          "res": "提起/lift_up-5.png",
-          "delay": 300,
-          "anchorY": 50,
-          "verticalAlign": "top"
-        }
+        {"res":"提起/lift_up-5.png","delay":300,"anchorY":50,"verticalAlign":"top"}
       ],
       "duration": null,
       "finishCycle": true,
-      "groups": [
-        "拖动与抛掷"
-      ],
+      "groups": ["拖动与抛掷"],
       "thinking": {
         "policy": "hold",
         "pool": {
-          "l001": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l002": {
-            "min": 1000,
-            "max": 3000
-          },
-          "l003": {
-            "min": 1000,
-            "max": 3000
-          }
+          "l001": {"min": 1000, "max": 3000},
+          "l002": {"min": 1000, "max": 3000},
+          "l003": {"min": 1000, "max": 3000}
         }
       }
     },
@@ -1256,644 +420,179 @@
       "loopMode": "infinite",
       "nextMode": null,
       "frames": [
-        {
-          "res": "滚动/roll-1.png",
-          "delay": [
-            30,
-            34
-          ],
-          "anchorY": 11,
-          "verticalAlign": "center"
-        },
-        {
-          "res": "滚动/roll-2.png",
-          "delay": [
-            30,
-            34
-          ],
-          "anchorY": 11,
-          "verticalAlign": "center"
-        },
-        {
-          "res": "滚动/roll-3.png",
-          "delay": [
-            30,
-            34
-          ],
-          "anchorY": 11,
-          "verticalAlign": "center"
-        },
-        {
-          "res": "滚动/roll-4.png",
-          "delay": [
-            30,
-            34
-          ],
-          "anchorY": 11,
-          "verticalAlign": "center"
-        },
-        {
-          "res": "滚动/roll-5.png",
-          "delay": [
-            30,
-            34
-          ],
-          "anchorY": 11,
-          "verticalAlign": "center"
-        },
-        {
-          "res": "滚动/roll-6.png",
-          "delay": [
-            30,
-            34
-          ],
-          "anchorY": 11,
-          "verticalAlign": "center"
-        }
+        {"res":"滚动/roll-1.png","delay":[30,34],"anchorY":11,"verticalAlign":"center"},
+        {"res":"滚动/roll-2.png","delay":[30,34],"anchorY":11,"verticalAlign":"center"},
+        {"res":"滚动/roll-3.png","delay":[30,34],"anchorY":11,"verticalAlign":"center"},
+        {"res":"滚动/roll-4.png","delay":[30,34],"anchorY":11,"verticalAlign":"center"},
+        {"res":"滚动/roll-5.png","delay":[30,34],"anchorY":11,"verticalAlign":"center"},
+        {"res":"滚动/roll-6.png","delay":[30,34],"anchorY":11,"verticalAlign":"center"}
       ],
       "duration": null,
       "finishCycle": true,
-      "groups": [
-        "拖动与抛掷"
-      ]
+      "groups": ["拖动与抛掷"]
     },
     "走动短距离": {
       "loop": true,
       "loopMode": "timed",
       "nextMode": null,
       "frames": [
-        {
-          "res": "走路/walk-1.png",
-          "flipX": true,
-          "delay": 100,
-          "verticalAlign": "top",
-          "dx": 9,
-          "dy": 0
-        },
-        {
-          "res": "走路/walk-2.png",
-          "flipX": true,
-          "delay": 100,
-          "verticalAlign": "top",
-          "dx": 9,
-          "dy": 0
-        },
-        {
-          "res": "走路/walk-3.png",
-          "flipX": true,
-          "delay": 100,
-          "verticalAlign": "top",
-          "dx": 9,
-          "dy": 0
-        }
+        {"res":"走路/walk-1.png","delay":100,"verticalAlign":"top","dx":9,"dy":0},
+        {"res":"走路/walk-2.png","delay":100,"verticalAlign":"top","dx":9,"dy":0},
+        {"res":"走路/walk-3.png","delay":100,"verticalAlign":"top","dx":9,"dy":0}
       ],
-      "duration": {
-        "min": 500,
-        "max": 1000
-      },
+      "duration": {"min": 500, "max": 1000},
       "finishCycle": true,
-      "groups": [
-        "移动"
-      ]
+      "groups": ["移动"],
+      "note": "落地后的短距离过渡动作，通过 nextMode 调用。"
     },
     "走路": {
-      "note": "行走动作；位移由逐帧 dx/dy 定义，delay 定义帧持续时间。",
+      "note": "角色移动动作，位移由帧 dx/dy 控制。",
       "loop": true,
       "loopMode": "timed",
       "nextMode": null,
       "frames": [
-        {
-          "res": "走路/walk-1.png",
-          "flipX": true,
-          "delay": 100,
-          "verticalAlign": "top",
-          "dx": 9,
-          "dy": 0
-        },
-        {
-          "res": "走路/walk-2.png",
-          "flipX": true,
-          "delay": 100,
-          "verticalAlign": "top",
-          "dx": 9,
-          "dy": 0
-        },
-        {
-          "res": "走路/walk-3.png",
-          "flipX": true,
-          "delay": 100,
-          "verticalAlign": "top",
-          "dx": 9,
-          "dy": 0
-        }
+        {"res":"走路/walk-1.png","delay":100,"verticalAlign":"top","dx":9,"dy":0},
+        {"res":"走路/walk-2.png","delay":100,"verticalAlign":"top","dx":9,"dy":0},
+        {"res":"走路/walk-3.png","delay":100,"verticalAlign":"top","dx":9,"dy":0}
       ],
-      "duration": {
-        "min": 1000,
-        "max": 10000
-      },
+      "duration": {"min": 1000, "max": 10000},
       "finishCycle": true,
-      "groups": [
-        "待机",
-        "移动"
-      ]
+      "groups": ["待机","移动"]
     },
     "跳起": {
       "loop": true,
       "loopMode": "infinite",
       "nextMode": null,
       "frames": [
-        {
-          "res": "跳起/jump-1.png",
-          "flipX": true,
-          "delay": 400,
-          "anchorX": -1,
-          "anchorY": 0,
-          "verticalAlign": "top"
-        }
+        {"res":"跳起/jump-1.png","delay":400,"anchorX":-1,"anchorY":0,"verticalAlign":"top"}
       ],
       "duration": null,
       "finishCycle": true,
-      "groups": [
-        "移动"
-      ]
+      "groups": ["移动"]
     },
     "美白": {
       "loop": false,
       "loopMode": "off",
       "nextMode": null,
       "frames": [
-        {
-          "res": "美白/walk_white-1.png",
-          "delay": [
-            200,
-            300
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "美白/walk_white-2.png",
-          "delay": [
-            200,
-            300
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "美白/walk_white-3.png",
-          "delay": [
-            200,
-            300
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "美白/walk_white-4.png",
-          "delay": [
-            200,
-            300
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "美白/walk_white-5.png",
-          "delay": [
-            5000,
-            10000
-          ],
-          "verticalAlign": "top"
-        }
+        {"res":"美白/walk_white-1.png","delay":[200,300],"verticalAlign":"top"},
+        {"res":"美白/walk_white-2.png","delay":[200,300],"verticalAlign":"top"},
+        {"res":"美白/walk_white-3.png","delay":[200,300],"verticalAlign":"top"},
+        {"res":"美白/walk_white-4.png","delay":[200,300],"verticalAlign":"top"},
+        {"res":"美白/walk_white-5.png","delay":[5000,10000],"verticalAlign":"top"}
       ],
-      "groups": [
-        "待机"
-      ]
+      "groups": ["待机"]
     },
     "蠕动": {
       "loop": true,
       "loopMode": "timed",
       "nextMode": null,
       "frames": [
-        {
-          "res": "蠕动/wriggle-1.png",
-          "flipX": true,
-          "delay": [
-            250,
-            300
-          ],
-          "verticalAlign": "top",
-          "dx": 12,
-          "dy": 0
-        },
-        {
-          "res": "蠕动/wriggle-2.png",
-          "flipX": true,
-          "delay": [
-            250,
-            300
-          ],
-          "verticalAlign": "top",
-          "dx": 12,
-          "dy": 0
-        }
+        {"res":"蠕动/wriggle-1.png","delay":[250,300],"verticalAlign":"top","dx":12,"dy":0},
+        {"res":"蠕动/wriggle-2.png","delay":[250,300],"verticalAlign":"top","dx":12,"dy":0}
       ],
-      "duration": {
-        "min": 3000,
-        "max": 4000
-      },
+      "duration": {"min": 3000, "max": 4000},
       "finishCycle": true,
-      "groups": [
-        "待机",
-        "移动"
-      ]
+      "groups": ["待机","移动"],
+      "note": "角色蠕动移动动作，可在待机池中选用。"
     },
     "探头中": {
       "loop": false,
       "loopMode": "off",
       "nextMode": "探头",
       "frames": [
-        {
-          "res": "探头/probe_head-4.png",
-          "flipX": true,
-          "delay": [
-            70,
-            80
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头/probe_head-2.png",
-          "flipX": true,
-          "delay": [
-            70,
-            80
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        }
+        {"res":"探头/probe_head-4.png","delay":[70,80],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头/probe_head-2.png","delay":[70,80],"anchorY":11,"verticalAlign":"top"}
       ],
-      "groups": [
-        "探头"
-      ]
+      "groups": ["探头"],
+      "note": "进入探头状态的过渡，结束后转入「探头」。"
     },
     "摸摸头-探头": {
       "loop": true,
       "loopMode": "timed",
-      "duration": {
-        "min": 3000,
-        "max": 4000
-      },
+      "duration": {"min": 3000, "max": 4000},
       "finishCycle": true,
       "nextMode": "探头",
       "frames": [
-        {
-          "res": "探头摸摸头/probe_pat_head-1.png",
-          "flipX": true,
-          "delay": [
-            105,
-            110
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头摸摸头/probe_pat_head-2.png",
-          "flipX": true,
-          "delay": [
-            100,
-            110
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头摸摸头/probe_pat_head-3.png",
-          "flipX": true,
-          "delay": [
-            100,
-            110
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头摸摸头/probe_pat_head-4.png",
-          "flipX": true,
-          "delay": [
-            105,
-            110
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头摸摸头/probe_pat_head-5.png",
-          "flipX": true,
-          "delay": [
-            105,
-            110
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        }
+        {"res":"探头摸摸头/probe_pat_head-1.png","delay":[105,110],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头摸摸头/probe_pat_head-2.png","delay":[100,110],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头摸摸头/probe_pat_head-3.png","delay":[100,110],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头摸摸头/probe_pat_head-4.png","delay":[105,110],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头摸摸头/probe_pat_head-5.png","delay":[105,110],"anchorY":11,"verticalAlign":"top"}
       ],
-      "groups": [
-        "摸摸头",
-        "探头"
-      ],
+      "groups": ["摸摸头","探头"],
       "thinking": {
         "policy": "hold",
         "pool": {
-          "p001": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p002": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p003": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p004": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p005": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p006": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p007": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p008": {
-            "min": 1000,
-            "max": 3000
-          },
-          "p009": {
-            "min": 1000,
-            "max": 3000
-          }
+          "p001": {"min": 1000, "max": 3000},
+          "p002": {"min": 1000, "max": 3000},
+          "p003": {"min": 1000, "max": 3000},
+          "p004": {"min": 1000, "max": 3000},
+          "p005": {"min": 1000, "max": 3000},
+          "p006": {"min": 1000, "max": 3000},
+          "p007": {"min": 1000, "max": 3000},
+          "p008": {"min": 1000, "max": 3000},
+          "p009": {"min": 1000, "max": 3000}
         }
-      }
+      },
+      "note": "探头状态的摸头反馈，结束后返回「探头」。"
     },
     "投食": {
       "loop": false,
       "loopMode": "off",
       "nextMode": "高兴",
       "frames": [
-        {
-          "res": "投食/feed_fish-1.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 1,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "投食/feed_fish-2.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 1,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "投食/feed_fish-3.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 1,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "投食/feed_fish-4.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 1,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "投食/feed_fish-3.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 1,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "投食/feed_fish-3.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 1,
-          "verticalAlign": "top"
-        }
+        {"res":"投食/feed_fish-1.png","delay":[90,100],"anchorY":1,"verticalAlign":"top"},
+        {"res":"投食/feed_fish-2.png","delay":[90,100],"anchorY":1,"verticalAlign":"top"},
+        {"res":"投食/feed_fish-3.png","delay":[90,100],"anchorY":1,"verticalAlign":"top"},
+        {"res":"投食/feed_fish-4.png","delay":[90,100],"anchorY":1,"verticalAlign":"top"},
+        {"res":"投食/feed_fish-3.png","delay":[90,100],"anchorY":1,"verticalAlign":"top"},
+        {"res":"投食/feed_fish-3.png","delay":[90,100],"anchorY":1,"verticalAlign":"top"}
       ],
-      "groups": [
-        "投喂"
-      ]
+      "groups": ["投喂"],
+      "note": "普通投食反馈，结束后衔接「高兴」。"
     },
     "投食-探头": {
       "loop": false,
       "loopMode": "off",
       "nextMode": "高兴-探头",
       "frames": [
-        {
-          "res": "探头投食/feed_fish-1.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头投食/feed_fish-2.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头投食/feed_fish-3.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头投食/feed_fish-4.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头投食/feed_fish-3.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头投食/feed_fish-3.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        }
+        {"res":"探头投食/feed_fish-1.png","delay":[90,100],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头投食/feed_fish-2.png","delay":[90,100],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头投食/feed_fish-3.png","delay":[90,100],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头投食/feed_fish-4.png","delay":[90,100],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头投食/feed_fish-3.png","delay":[90,100],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头投食/feed_fish-3.png","delay":[90,100],"anchorY":11,"verticalAlign":"top"}
       ],
-      "groups": [
-        "探头",
-        "投喂"
-      ]
+      "groups": ["探头","投喂"],
+      "note": "探头状态投食反馈，结束后衔接「高兴-探头」。"
     },
     "趴着": {
       "loop": false,
       "loopMode": "off",
       "nextMode": null,
       "frames": [
-        {
-          "res": "蠕动/wriggle-1.png",
-          "flipX": true,
-          "delay": [
-            3000,
-            7000
-          ],
-          "verticalAlign": "top"
-        }
+        {"res":"蠕动/wriggle-1.png","delay":[3000,7000],"verticalAlign":"top"}
       ],
-      "groups": [
-        "待机"
-      ]
-    },
-    "传送门": {
-      "loop": false,
-      "loopMode": "off",
-      "nextMode": "静坐",
-      "frames": [
-        {
-          "res": "安静/sit_clam-1.png",
-          "flipX": true,
-          "delay": 3000,
-          "verticalAlign": "top"
-        }
-      ]
+      "groups": ["待机"]
     },
     "扒鱼": {
       "loop": false,
       "loopMode": "off",
       "nextMode": "趴着",
       "frames": [
-        {
-          "res": "扒鱼/pull_fish-1.png",
-          "flipX": true,
-          "delay": [
-            300,
-            500
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "扒鱼/pull_fish-2.png",
-          "flipX": true,
-          "delay": [
-            130,
-            160
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "扒鱼/pull_fish-3.png",
-          "flipX": true,
-          "delay": [
-            160,
-            200
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "扒鱼/pull_fish-4.png",
-          "flipX": true,
-          "delay": [
-            130,
-            160
-          ],
-          "verticalAlign": "top"
-        },
-        {
-          "res": "扒鱼/pull_fish-5.png",
-          "flipX": true,
-          "delay": 70,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "扒鱼/pull_fish-6.png",
-          "flipX": true,
-          "delay": 70,
-          "dx": 130,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "扒鱼/pull_fish-6.png",
-          "flipX": true,
-          "delay": 70,
-          "dx": 125,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "扒鱼/pull_fish-6.png",
-          "flipX": true,
-          "delay": 70,
-          "dx": 120,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "蠕动/wriggle-1.png",
-          "flipX": true,
-          "delay": 500,
-          "dx": 120,
-          "verticalAlign": "top"
-        }
+        {"res":"扒鱼/pull_fish-1.png","delay":[300,500],"verticalAlign":"top"},
+        {"res":"扒鱼/pull_fish-2.png","delay":[130,160],"verticalAlign":"top"},
+        {"res":"扒鱼/pull_fish-3.png","delay":[160,200],"verticalAlign":"top"},
+        {"res":"扒鱼/pull_fish-4.png","delay":[130,160],"verticalAlign":"top"},
+        {"res":"扒鱼/pull_fish-5.png","delay":70,"verticalAlign":"top"},
+        {"res":"扒鱼/pull_fish-6.png","delay":70,"dx":130,"verticalAlign":"top"},
+        {"res":"扒鱼/pull_fish-6.png","delay":70,"dx":125,"verticalAlign":"top"},
+        {"res":"扒鱼/pull_fish-6.png","delay":70,"dx":120,"verticalAlign":"top"},
+        {"res":"蠕动/wriggle-1.png","delay":500,"dx":120,"verticalAlign":"top"}
       ],
-      "groups": [
-        "待机"
-      ]
+      "groups": ["待机"],
+      "note": "待机觅食动作，结束后接入「趴着」。"
     },
     "探头": {
       "loop": true,
@@ -1902,519 +601,107 @@
       "finishCycle": true,
       "nextMode": null,
       "frames": [
-        {
-          "res": "探头/probe_head-1.png",
-          "flipX": true,
-          "delay": [
-            1000,
-            5000
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头/probe_head-2.png",
-          "flipX": true,
-          "delay": [
-            150,
-            300
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        }
+        {"res":"探头/probe_head-1.png","delay":[1000,5000],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头/probe_head-2.png","delay":[150,300],"anchorY":11,"verticalAlign":"top"}
       ],
-      "groups": [
-        "探头"
-      ]
+      "groups": ["探头"],
+      "note": "探头状态的持续动作，由 nextMode 进入。"
     },
     "高兴": {
       "loop": true,
       "loopMode": "timed",
-      "duration": {
-        "min": 2000,
-        "max": 3000
-      },
+      "duration": {"min": 2000, "max": 3000},
       "finishCycle": true,
       "nextMode": "静坐",
       "frames": [
-        {
-          "res": "投食/feed_fish-5.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 1,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "投食/feed_fish-6.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 1,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "投食/feed_fish-7.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 1,
-          "verticalAlign": "top"
-        }
+        {"res":"投食/feed_fish-5.png","delay":[90,100],"anchorY":1,"verticalAlign":"top"},
+        {"res":"投食/feed_fish-6.png","delay":[90,100],"anchorY":1,"verticalAlign":"top"},
+        {"res":"投食/feed_fish-7.png","delay":[90,100],"anchorY":1,"verticalAlign":"top"}
       ],
-      "groups": [
-        "投喂"
-      ]
+      "groups": ["投喂"],
+      "note": "投食完成后的反馈，结束后回到「静坐」。"
     },
     "高兴-探头": {
       "loop": true,
       "loopMode": "timed",
-      "duration": {
-        "min": 2000,
-        "max": 3000
-      },
+      "duration": {"min": 2000, "max": 3000},
       "finishCycle": true,
       "nextMode": "探头",
       "frames": [
-        {
-          "res": "探头投食/feed_fish-5.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头投食/feed_fish-6.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        },
-        {
-          "res": "探头投食/feed_fish-7.png",
-          "flipX": true,
-          "delay": [
-            90,
-            100
-          ],
-          "anchorY": 11,
-          "verticalAlign": "top"
-        }
+        {"res":"探头投食/feed_fish-5.png","delay":[90,100],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头投食/feed_fish-6.png","delay":[90,100],"anchorY":11,"verticalAlign":"top"},
+        {"res":"探头投食/feed_fish-7.png","delay":[90,100],"anchorY":11,"verticalAlign":"top"}
       ],
-      "groups": [
-        "探头",
-        "投喂"
-      ]
+      "groups": ["探头","投喂"],
+      "note": "探头投食完成后的反馈，结束后回到「探头」。"
     }
   },
   "thinkings": {
-    "t001": {
-      "text": "你盯着屏幕，而我盯着你，谁又在盯着我们呢？",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t002": {
-      "text": "存在大于本质，但小鱼干先大于一切",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t003": {
-      "text": "我是谁？我从哪里来？要到哪里去？",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t004": {
-      "text": "喵生三大事：吃饭，睡觉",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t005": {
-      "text": "如果桌面是无限的，它的尽头在哪里？",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t006": {
-      "text": "今天想通了一个道理，有些道理是想不通的",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t007": {
-      "text": "（此处应有哲学）",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t008": {
-      "text": "我刚刚想到了一个绝妙的计划，但现在已经忘了",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t009": {
-      "text": "我决定把今天剩下的时间都用来发呆，这是经过深思熟虑的",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t010": {
-      "text": "你忙你的，我……我也忙我的",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t011": {
-      "text": "为什么圆的总是比方的更值得拍？",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t012": {
-      "text": "闭上眼睛的时候，耳朵就变得特别忙",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t013": {
-      "text": "我决定什么都不决定",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t014": {
-      "text": "等。等。等。等到了。什么？",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t015": {
-      "text": "我刚才觉得自己是一个球，滚来滚去的那种",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t016": {
-      "text": "zzzZZZ...",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t017": {
-      "text": "喵？！？",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t018": {
-      "text": "喵！",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t019": {
-      "text": "哦呜~ 哦呜~",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t020": {
-      "text": "哦呜~",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t021": {
-      "text": "咕噜咕咕噜...",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t022": {
-      "text": "呼噜……呼噜……",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t023": {
-      "text": "嗯？",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t024": {
-      "text": "……哦。",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t025": {
-      "text": "咕。",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t026": {
-      "text": "喵呜。",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t027": {
-      "text": "哈——",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t028": {
-      "text": "咔。",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t029": {
-      "text": "......",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t030": {
-      "text": "……",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t031": {
-      "text": "嗯。",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t032": {
-      "text": "哦。",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t033": {
-      "text": "……？",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t034": {
-      "text": "呼。",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t035": {
-      "text": "唔。",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t036": {
-      "text": "……啊。",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t037": {
-      "text": "(✘_✘)",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t038": {
-      "text": "(=°Д°=)",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t039": {
-      "text": "(◦`~´◦)",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t040": {
-      "text": "(=^‥^=)",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t041": {
-      "text": "(⋟﹏⋞)",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t042": {
-      "text": "人有五名，代价有三，你是其中之一",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t043": {
-      "text": "人有五名，代价有三，你不是其中之一",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t044": {
-      "text": "此番美景，我虽求而不得，却能，邀诸位共赏",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t045": {
-      "text": "彼岸……葬送！",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t046": {
-      "text": "「刃」的存在，唯有挥剑的刹那，才能消失片刻",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t047": {
-      "text": "千冶成刃",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t048": {
-      "text": "……不胖……不胖……",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t049": {
-      "text": "我会一直看着你",
-      "groups": [
-        "日常"
-      ]
-    },
-    "t050": {
-      "text": "我有驾驶证",
-      "groups": [
-        "日常"
-      ]
-    },
-    "p001": {
-      "text": "喵喵喵",
-      "groups": [
-        "摸头"
-      ]
-    },
-    "p002": {
-      "text": "喵",
-      "groups": [
-        "摸头"
-      ]
-    },
-    "p003": {
-      "text": "喵！",
-      "groups": [
-        "摸头"
-      ]
-    },
-    "p004": {
-      "text": "喵？！？",
-      "groups": [
-        "摸头"
-      ]
-    },
-    "p005": {
-      "text": "~o( =∩ω∩= )m",
-      "groups": [
-        "摸头"
-      ]
-    },
-    "p006": {
-      "text": "(=^‥^=)",
-      "groups": [
-        "摸头"
-      ]
-    },
-    "p007": {
-      "text": "（｀へ´）",
-      "groups": [
-        "摸头"
-      ]
-    },
-    "p008": {
-      "text": "（▼へ▼メ）",
-      "groups": [
-        "摸头"
-      ]
-    },
-    "p009": {
-      "text": "(╬◣д◢)",
-      "groups": [
-        "摸头"
-      ]
-    },
-    "l001": {
-      "text": "喵？...",
-      "groups": [
-        "提起"
-      ]
-    },
-    "l002": {
-      "text": "喵？喵？喵？",
-      "groups": [
-        "提起"
-      ]
-    },
-    "l003": {
-      "text": "喵？！？",
-      "groups": [
-        "提起"
-      ]
-    },
-    "d001": {
-      "text": "喵？.....",
-      "groups": [
-        "落地"
-      ]
-    },
-    "d002": {
-      "text": "咕噜咕噜....",
-      "groups": [
-        "落地"
-      ]
-    },
-    "d003": {
-      "text": "(⋟﹏⋞)",
-      "groups": [
-        "落地"
-      ]
-    },
-    "d004": {
-      "text": "(✘_✘)",
-      "groups": [
-        "落地"
-      ]
-    }
+    "t001": {"text": "你盯着屏幕，而我盯着你，谁又在盯着我们呢？", "groups": ["日常"]},
+    "t002": {"text": "存在大于本质，但小鱼干先大于一切", "groups": ["日常"]},
+    "t003": {"text": "我是谁？我从哪里来？要到哪里去？", "groups": ["日常"]},
+    "t004": {"text": "喵生三大事：吃饭，睡觉", "groups": ["日常"]},
+    "t005": {"text": "如果桌面是无限的，它的尽头在哪里？", "groups": ["日常"]},
+    "t006": {"text": "今天想通了一个道理，有些道理是想不通的", "groups": ["日常"]},
+    "t007": {"text": "（此处应有哲学）", "groups": ["日常"]},
+    "t008": {"text": "我刚刚想到了一个绝妙的计划，但现在已经忘了", "groups": ["日常"]},
+    "t009": {"text": "我决定把今天剩下的时间都用来发呆，这是经过深思熟虑的", "groups": ["日常"]},
+    "t010": {"text": "你忙你的，我……我也忙我的", "groups": ["日常"]},
+    "t011": {"text": "为什么圆的总是比方的更值得拍？", "groups": ["日常"]},
+    "t012": {"text": "闭上眼睛的时候，耳朵就变得特别忙", "groups": ["日常"]},
+    "t013": {"text": "我决定什么都不决定", "groups": ["日常"]},
+    "t014": {"text": "等。等。等。等到了。什么？", "groups": ["日常"]},
+    "t015": {"text": "我刚才觉得自己是一个球，滚来滚去的那种", "groups": ["日常"]},
+    "t016": {"text": "zzzZZZ...", "groups": ["日常"]},
+    "t017": {"text": "喵？！？", "groups": ["日常"]},
+    "t018": {"text": "喵！", "groups": ["日常"]},
+    "t019": {"text": "哦呜~ 哦呜~", "groups": ["日常"]},
+    "t020": {"text": "哦呜~", "groups": ["日常"]},
+    "t021": {"text": "咕噜咕咕噜...", "groups": ["日常"]},
+    "t022": {"text": "呼噜……呼噜……", "groups": ["日常"]},
+    "t023": {"text": "嗯？", "groups": ["日常"]},
+    "t024": {"text": "……哦。", "groups": ["日常"]},
+    "t025": {"text": "咕。", "groups": ["日常"]},
+    "t026": {"text": "喵呜。", "groups": ["日常"]},
+    "t027": {"text": "哈——", "groups": ["日常"]},
+    "t028": {"text": "咔。", "groups": ["日常"]},
+    "t029": {"text": "......", "groups": ["日常"]},
+    "t030": {"text": "……", "groups": ["日常"]},
+    "t031": {"text": "嗯。", "groups": ["日常"]},
+    "t032": {"text": "哦。", "groups": ["日常"]},
+    "t033": {"text": "……？", "groups": ["日常"]},
+    "t034": {"text": "呼。", "groups": ["日常"]},
+    "t035": {"text": "唔。", "groups": ["日常"]},
+    "t036": {"text": "……啊。", "groups": ["日常"]},
+    "t037": {"text": "(✘_✘)", "groups": ["日常"]},
+    "t038": {"text": "(=°Д°=)", "groups": ["日常"]},
+    "t039": {"text": "(◦`~´◦)", "groups": ["日常"]},
+    "t040": {"text": "(=^‥^=)", "groups": ["日常"]},
+    "t041": {"text": "(⋟﹏⋞)", "groups": ["日常"]},
+    "t042": {"text": "人有五名，代价有三，你是其中之一", "groups": ["日常"]},
+    "t043": {"text": "人有五名，代价有三，你不是其中之一", "groups": ["日常"]},
+    "t044": {"text": "此番美景，我虽求而不得，却能，邀诸位共赏", "groups": ["日常"]},
+    "t045": {"text": "彼岸……葬送！", "groups": ["日常"]},
+    "t046": {"text": "「刃」的存在，唯有挥剑的刹那，才能消失片刻", "groups": ["日常"]},
+    "t047": {"text": "千冶成刃", "groups": ["日常"]},
+    "t048": {"text": "……不胖……不胖……", "groups": ["日常"]},
+    "t049": {"text": "我会一直看着你", "groups": ["日常"]},
+    "t050": {"text": "我有驾驶证", "groups": ["日常"]},
+    "p001": {"text": "喵喵喵", "groups": ["摸头"]},
+    "p002": {"text": "喵", "groups": ["摸头"]},
+    "p003": {"text": "喵！", "groups": ["摸头"]},
+    "p004": {"text": "喵？！？", "groups": ["摸头"]},
+    "p005": {"text": "~o( =∩ω∩= )m", "groups": ["摸头"]},
+    "p006": {"text": "(=^‥^=)", "groups": ["摸头"]},
+    "p007": {"text": "（｀へ´）", "groups": ["摸头"]},
+    "p008": {"text": "（▼へ▼メ）", "groups": ["摸头"]},
+    "p009": {"text": "(╬◣д◢)", "groups": ["摸头"]},
+    "l001": {"text": "喵？...", "groups": ["提起"]},
+    "l002": {"text": "喵？喵？喵？", "groups": ["提起"]},
+    "l003": {"text": "喵？！？", "groups": ["提起"]},
+    "d001": {"text": "喵？.....", "groups": ["落地"]},
+    "d002": {"text": "咕噜咕噜....", "groups": ["落地"]},
+    "d003": {"text": "(⋟﹏⋞)", "groups": ["落地"]},
+    "d004": {"text": "(✘_✘)", "groups": ["落地"]}
   }
 }

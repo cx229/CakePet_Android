@@ -15,7 +15,7 @@ import java.io.File
  * 任意 Mode 均可作为角色、食物或其他显示对象的动画序列。
  */
 object RolePackageContract {
-    const val VERSION = "1.02"
+    const val VERSION = "1.10"
 
     /**
      * 必备功能路径（v1.01）。层数不限，必须按【完整路径】寻址：
