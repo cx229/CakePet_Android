@@ -1,304 +1,38 @@
-package com.cx.cakepet
-
-import android.os.Bundle
-import android.view.Gravity
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.GridLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.Spinner
-import android.widget.TextView
-import android.widget.Toast
-import android.view.MotionEvent
-import android.graphics.drawable.GradientDrawable
-import androidx.appcompat.app.AppCompatActivity
-import com.cx.cakepet.databinding.ActivityThresholdSettingsBinding
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-
-/**
- * 阈值设置页基类：仅承载「通用 UI 框架 + 渲染引擎 + 保存工具」，
- * 不含任何 page 业务数据/分支。子类只需 override [page] 与 [pageTitleText]，
- * 各自是独立 Activity（在 Manifest 注册），互不继承、互不共用业务。
- */
-abstract class BaseThresholdActivity : AppCompatActivity() {
-
-    // 点输入框以外区域即让当前输入框失焦，触发「失焦即提交」
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        commitInputOnTouchOutside(ev)
-        return super.dispatchTouchEvent(ev)
-    }
-
-    /** 子类指定自己的设置页标识。 */
-    protected abstract val page: SettingsPage
-
-    /** 子类指定标题前缀（如「通用」「吸附」）。 */
-    protected abstract val pageTitleText: String
-
-    protected lateinit var binding: ActivityThresholdSettingsBinding
-    protected val habitMode: Boolean get() = intent.getBooleanExtra("user_habit_mode", false)
-    protected val roleId by lazy {
-        if (habitMode) UserHabits.ROLE_ID
-        else intent?.getStringExtra("role_id") ?: RoleRegistry.DEFAULT.id
-    }
-    protected lateinit var petBounds: PetBounds
-    protected lateinit var petConfig: PetConfig
-    protected var current: PageBounds = PageBounds()
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = ActivityThresholdSettingsBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        petBounds = PetBounds.forRole(this, roleId)
-        petConfig = PetConfig.forRole(this, roleId)
-
-        // 与设置页一致：用占位条填满状态栏高度，标题栏黑底与状态栏连成整体覆盖状态栏
-        binding.statusBarSpacer.layoutParams.height = getStatusBarHeight()
-        binding.statusBarSpacer.requestLayout()
-
-        binding.tvTitle.text = if (habitMode) "$pageTitleText · 用户习惯"
-            else "$pageTitleText · 阈值/默认"
-        // 标题下方小字灰色：当前页面所属角色名（与设置页一致）
-        binding.tvTitleSub.text = if (habitMode) "新建角色时自动采用" else RoleStore.resolveDisplayName(this, roleId)
-        // 离开前先让持有焦点的输入框失焦 → 触发 onLostFocus 把挂起的默认值/边界编辑落盘，
-        // 否则直接返回时编辑值未提交，子页读到的仍是旧值（"改了不生效/需重载"）。
-        binding.ivBack.setOnClickListener { leave() }
-        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                leave()
-            }
-        })
-
-        // 右上角“更多”：恢复用户默认 / 重置系统默认值与阈值。
-        // 每个阈值页是独立 Activity、自带 page，重置天然只作用于本页，无需 tab 分派。
-        val btnMore = binding.btnMore
-        val moreMenu = PopupMenuHelper(
-            anchor = btnMore,
-            popupLayoutRes = R.layout.popup_threshold_more,
-            items = mapOf(
-                R.id.item_reset_user to { resetUserDefault() },
-                R.id.item_reset_system to { resetSystem() }
-            )
-        )
-        btnMore.visibility = if (habitMode) View.GONE else View.VISIBLE
-        btnMore.setOnClickListener { moreMenu.show() }
-
-        current = petBounds.getBlocking(page)
-        render()
-    }
-
-    /** 获取系统真实状态栏高度（px），失败时回退 24dp（与设置页一致）。 */
-    private fun getStatusBarHeight(): Int {
-        val resId = resources.getIdentifier("status_bar_height", "dimen", "android")
-        return if (resId > 0) resources.getDimensionPixelSize(resId)
-        else (resources.displayMetrics.density * 24f).toInt()
-    }
-
-    private val displayAdaptPage: Boolean
-        get() = page == SettingsPage.RANGE && intent.getBooleanExtra("adapt_page", false)
-
-    /** Only the active visual page participates in its reset, despite shared legacy RANGE storage. */
-    private fun displayedKeys(): Set<String>? = if (page != SettingsPage.RANGE) null else
-        if (displayAdaptPage)
-            setOf("imeMode", "imeLiftOffset", "rotationAdaptMode", "landscapeRangeMode")
-        else setOf("interactionMode", "alpha", "coreHeight", "coreWidth",
-            "rangeFullScreen", "offsetTop", "offsetBottom", "offsetLeft", "offsetRight")
-
-    // ===== 渲染（纯 UI 引擎，不区分 page） =====
-    // 按「所属设置页的模块(group)」分组渲染，与设置页的视觉结构完全一致：
-    // 每个模块 = 分隔线 + 标题(include_module_header) + 卡片(card_bg) 包裹的内容。
-    // 模块顺序、组内顺序严格对齐设置页，由 PetBounds 的 order 字段决定。
-    // 样式全部复用设置页已有 style / drawable，代码里不再手抄任何样式数值。
-    protected fun render() {
-        binding.container.removeAllViews()
-        val order = current.order.ifEmpty {
-            // 兜底：无 order 时按 group 首次出现顺序
-            current.sliders.map { it.key } + current.duals.map { it.key } + current.switches.map { it.key } +
-                (if (current.keyboardModeDefault != null) listOf("imeMode") else emptyList()) +
-                current.choices.map { it.key }
-        }
-        // 两个显示页面共用 RANGE 阈值存储，但仅呈现本页相关项目。
-        val shownOrder = displayedKeys()?.let { allowed -> order.filter { it in allowed } } ?: order
-        // 建立 key -> 项 的索引
-        val sliderMap = current.sliders.withIndex().associate { it.value.key to it }
-        val dualMap = current.duals.withIndex().associate { it.value.key to it }
-        val switchMap = current.switches.withIndex().associate { it.value.key to it }
-        val colorMap = current.colors.withIndex().associate { it.value.key to it }
-        val choiceMap = current.choices.withIndex().associate { it.value.key to it }
-
-        // 模块顺序 = order 中首次出现的 group 顺序
-        val groupOrder = mutableListOf<String>()
-        shownOrder.forEach { key ->
-            val g = (sliderMap[key]?.value?.group
-                ?: dualMap[key]?.value?.group
-                ?: switchMap[key]?.value?.group
-                ?: colorMap[key]?.value?.group
-                ?: choiceMap[key]?.value?.group
-                ?: if (key == "imeMode" && current.keyboardModeDefault != null) "键盘适应" else null) ?: return@forEach
-            if (g !in groupOrder) groupOrder.add(g)
-        }
-
-        // Settings cards use 8dp top/bottom padding; item-specific spacing remains inside each row.
-        val cardPadV = (8 * resources.displayMetrics.density + 0.5f).toInt()
-
-        groupOrder.forEachIndexed { groupIndex, g ->
-            // 非首模块前：inflate 复用 include_module_header（仅模块标题，无模块间分隔线），与设置页一致
-            val header = LayoutInflater.from(this)
-                .inflate(R.layout.include_module_header, binding.container, false)
-            header.findViewById<TextView>(R.id.tv_module_title).text = g
-            if (groupIndex == 0) {
-                (header.layoutParams as ViewGroup.MarginLayoutParams).topMargin = 0
-            }
-            binding.container.addView(header)
-
-            // 卡片容器：包裹该模块的全部内容，直接复用设置页的 card_bg + padding
-            // item 内部用 layout_margin 提供左右内边距（与设置页 item 写法一致），
-            // 因此卡片只需设置上下 padding，左右由 margin=16 承担。
-            // 选项间分隔线：showDividers=middle 在 item 之间自动绘制 item_divider（与设置页一致）。
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                background = getDrawable(R.drawable.card_bg)
-                showDividers = LinearLayout.SHOW_DIVIDER_MIDDLE
-                dividerDrawable = getDrawable(R.drawable.item_divider)
-                dividerPadding = (16 * resources.displayMetrics.density + 0.5f).toInt()
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-                setPadding(0, cardPadV, 0, cardPadV)
-            }
-            shownOrder.forEach { key ->
-                when {
-                    key == "imeMode" && current.keyboardModeDefault != null && g == "键盘适应" -> {
-                        addHabitItem(card, "imeMode", choiceRow("键盘适应", AppBounds.KEYBOARD_MODES,
-                            current.keyboardModeDefault ?: AppBounds.KEYBOARD_DEFAULT_MODE) { selected ->
-                            if (selected != current.keyboardModeDefault) {
-                                current = current.copy(keyboardModeDefault = selected)
-                                commitOne()
-                            }
-                        })
-                    }
-                    choiceMap[key]?.value?.group == g -> {
-                        val (idx, choice) = choiceMap.getValue(key)
-                        addHabitItem(card, key, choiceRow(choice.label, choice.options, choice.default,
-                            when (key) {
-                                "rotationAdaptMode" -> "默认行为"
-                                "landscapeRangeMode" -> "横屏时，可活动的范围"
-                                else -> "默认行为"
-                            }) { selected ->
-                            if (selected != current.choices[idx].default) {
-                                current = current.copy(choices = current.choices.toMutableList().also {
-                                    it[idx] = it[idx].copy(default = selected)
-                                })
-                                commitOne()
-                            }
-                        })
-                    }
-                    sliderMap[key]?.value?.group == g -> {
-                        val (idx, s) = sliderMap.getValue(key)
-                        addHabitItem(card, key, sliderItem(s, idx))
-                    }
-                    dualMap[key]?.value?.group == g -> {
-                        val (idx, d) = dualMap.getValue(key)
-                        addHabitItem(card, key, dualItem(d, idx))
-                    }
-                    switchMap[key]?.value?.group == g -> {
-                        val (idx, sw) = switchMap.getValue(key)
-                        addHabitItem(card, key, switchItem(sw, idx))
-                    }
-                    colorMap[key]?.value?.group == g -> {
-                        val (idx, c) = colorMap.getValue(key)
-                        addHabitItem(card, key, colorItem(c, idx))
-                    }
-                }
-            }
-            // Per-item spacing is owned by the shared wrapper; no first/last margin patching.
-            binding.container.addView(card)
-        }
-    }
-
-    /** One row spacing rule for both threshold and habit pages, with habits adding a side action. */
-    private fun addHabitItem(card: LinearLayout, key: String, item: View) {
-        fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
-        // The original item XMLs have incompatible outer margins (some have 12dp bottom).
-        // Replace them with consistent row padding, never stacking margin with card padding.
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(if (habitMode) 12 else 20), dp(8),
-                dp(if (habitMode) 0 else 20), dp(8))
-        }
-        if (!habitMode) {
-            row.addView(item, LinearLayout.LayoutParams(-1, -2))
-            card.addView(row, LinearLayout.LayoutParams(-1, -2))
-            return
-        }
-        // Preserve the existing inner control layout, including same-line dropdowns.
-        val label = item.findViewById<TextView>(R.id.tv_label)?.text?.toString()
-            ?.ifBlank { key } ?: key
-        row.addView(item, LinearLayout.LayoutParams(0, -2, 1f).apply {
-            marginEnd = dp(4)
-        })
-        val separator = View(this).apply {
-            setBackgroundColor(getColor(R.color.cp_subtle))
-        }
-        val menu = TextView(this).apply {
-            text = "⋮"
-            textSize = 22f
-            gravity = Gravity.CENTER
-            setTextColor(getColor(R.color.cp_title))
-            contentDescription = "更多：$label"
-            isClickable = true
-            isFocusable = true
-            setBackgroundResource(R.drawable.settings_row_ripple)
-            setOnClickListener { anchor ->
-                currentFocus?.clearFocus()
-                UnifiedOptionMenu.show(anchor,
-                    listOf("将本项应用到已有角色", "重置本项")) { selected ->
-                    when (selected) {
-                        "将本项应用到已有角色" -> showConfirmDialog(
-                            title = "应用用户习惯",
-                            bodyHtml = "将「$label」的默认值及阈值应用到<b>全部已有角色</b>？",
-                            positiveText = "应用"
-                        ) {
-                            runCatching { UserHabits.applyToExisting(this@BaseThresholdActivity, page, key) }
-                                .onSuccess { count ->
-                                    Toast.makeText(this@BaseThresholdActivity,
-                                        "已应用到 $count 个角色", Toast.LENGTH_SHORT).show()
-                                }
-                                .onFailure { error ->
-                                    Toast.makeText(this@BaseThresholdActivity,
-                                        "应用失败：${error.message}", Toast.LENGTH_LONG).show()
-                                }
-                        }
-                        "重置本项" -> showConfirmDialog(
-                            title = "重置本项",
-                            bodyHtml = "将「$label」恢复为系统初始默认值及阈值？<b>已有角色不受影响</b>。",
-                            positiveText = "重置"
-                        ) {
-                            runCatching {
-                                runBlocking { petBounds.resetSystem(page, setOf(key)) }
-                                current = petBounds.getBlocking(page)
-                                render()
-                            }.onSuccess {
-                                Toast.makeText(this@BaseThresholdActivity,
-                                    "已重置：$label", Toast.LENGTH_SHORT).show()
-                            }.onFailure { error ->
-                                Toast.makeText(this@BaseThresholdActivity,
-                                    "重置失败：${error.message}", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
-                }
-            }
-        }
         row.addView(separator, LinearLayout.LayoutParams(dp(1), -1).apply {
             marginStart = dp(3)
         })
         row.addView(menu, LinearLayout.LayoutParams(dp(44), -1))
+        }
+        // Clicking the unobstructed row toggles *visual* fold state only.
+        if (isFoldable(key)) {
+            val arrow = TextView(this).apply {
+                text = if (foldExpanded[key] == false) "▸" else "▾"
+                textSize = 18f
+                gravity = Gravity.CENTER
+                setTextColor(getColor(R.color.cp_title))
+            }
+            row.overlay.add(arrow)
+            row.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                val title = titleView ?: return@addOnLayoutChangeListener
+                val rowXY = IntArray(2)
+                val titleXY = IntArray(2)
+                row.getLocationInWindow(rowXY)
+                title.getLocationInWindow(titleXY)
+                val width = dp(18)
+                val height = dp(36)
+                val xPos = (titleXY[0] - rowXY[0] - width).coerceAtLeast(0)
+                val yPos = (titleXY[1] - rowXY[1] + (title.height - height) / 2)
+                    .coerceIn(0, (row.height - height).coerceAtLeast(0))
+                arrow.layout(xPos, yPos, xPos + width, yPos + height)
+            }
+            row.setOnClickListener {
+                val expanded = foldExpanded[key] != false
+                foldExpanded[key] = !expanded
+                arrow.text = if (expanded) "▸" else "▾"
+                refreshFolds()
+            }
+        }
+        foldRows[key] = row
         card.addView(row, LinearLayout.LayoutParams(-1, -2))
     }
 
