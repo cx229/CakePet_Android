@@ -74,8 +74,8 @@ data class PackThinking(
                 val it = obj.keys()
                 while (it.hasNext()) {
                     val id = it.next()
-                    obj.optJSONObject(id)?.optJSONObject("thinking")?.let { config ->
-                        modes[id] = config(config, "inherit")
+                    obj.optJSONObject(id)?.optJSONObject("thinking")?.let { setting ->
+                        modes[id] = config(setting, "inherit")
                     }
                 }
             }
