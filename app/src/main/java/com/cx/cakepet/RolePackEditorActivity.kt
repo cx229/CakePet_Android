@@ -863,7 +863,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             addRow.addView(input, LinearLayout.LayoutParams(0, px(42), 1f))
             addRow.addView(button("√") {
                 val name = input.text.toString().trim()
-                if (name.isBlank() || name.length > 40 || name == "未分组" ||
+                if (name.isBlank() || name.length > 40 || name == "未分组" || name == "全部" ||
                     name.any { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
                     input.error = "动画组名称不合法"
                 } else {
@@ -2971,6 +2971,12 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     /** Autosave valid text with debounce, and flush before closing or navigating. */
+    private fun functionHasAnimationPool(path: List<String>): Boolean {
+        var node: Any? = root.optJSONObject("functions")
+        for (part in path) node = (node as? JSONObject)?.opt(part)
+        return node is JSONArray || (node is JSONObject && node.optJSONArray("modes") != null)
+    }
+
     private fun thinkingDetails(id: String?) {
         var activeId = id
         var lastSaved = id?.let(::thinkingBody).orEmpty()
@@ -3115,7 +3121,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             ({
                 val name = input.text.toString().trim()
                 if (name.isNotEmpty()) {
-                    require(name != "未分组" && name.length <= 40 &&
+                    require(name != "未分组" && name != "全部" && name.length <= 40 &&
                         name.none { it == '/' || it == '\\' || it == '\n' || it == '\r' }) { "分组名称不合法" }
                     checked.add(name)
                 }
@@ -3194,7 +3200,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             animationHeader.addView(text("当前动画", 15f),
                 LinearLayout.LayoutParams(0, -2, 1f))
-            animationHeader.addView(button("修改") {
+            if (functionHasAnimationPool(path)) animationHeader.addView(button("修改") {
                 popup?.dismiss()
                 chooseFunctions(path, selected)
             })
