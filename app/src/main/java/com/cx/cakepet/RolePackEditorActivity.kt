@@ -1267,7 +1267,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             val nextChoice = text("", 13f).apply {
                 setBackgroundResource(R.drawable.bg_input)
                 gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                isSingleLine = true
+                setSingleLine(true)
                 ellipsize = TextUtils.TruncateAt.END
                 setPadding(px(9), 0, px(9), 0)
             }
@@ -1377,7 +1377,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 }
                 titleRow.addView(text(title, 14f).apply {
                     setPadding(0, 0, 0, 0)
-                    isSingleLine = true
+                    setSingleLine(true)
                     ellipsize = TextUtils.TruncateAt.END
                 }, LinearLayout.LayoutParams(0, -2, 1f))
                 titleRow.addView(text("›", 19f).apply {
@@ -1388,7 +1388,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 addView(text(summary, 11f).apply {
                     setPadding(0, px(3), 0, 0)
                     setTextColor(getColor(R.color.cp_note))
-                    isSingleLine = true
+                    setSingleLine(true)
                     ellipsize = TextUtils.TruncateAt.END
                 })
                 rippleClick(this) { click() }
