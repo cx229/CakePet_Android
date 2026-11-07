@@ -2829,6 +2829,408 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
     }
 
+
+    // ===== 碎碎念资源与引用编辑 =====
+    private fun jsonStrings(arr: JSONArray?): List<String> =
+        if (arr == null) emptyList() else (0 until arr.length())
+            .mapNotNull { arr.optString(it).takeIf(String::isNotBlank) }.distinct()
+
+    private fun thinkingObject(): JSONObject =
+        root.optJSONObject("thinkings") ?: JSONObject()
+
+    private fun thinkingBody(id: String): String {
+        val raw = thinkingObject().opt(id)
+        return if (raw is JSONObject) raw.optString("text") else (raw as? String).orEmpty()
+    }
+
+    private fun thinkingGroups(id: String): List<String> =
+        jsonStrings(thinkingObject().optJSONObject(id)?.optJSONArray("groups"))
+
+    private fun allThinkingGroups(): List<String> =
+        thinkingObject().keys().asSequence().toList().flatMap(::thinkingGroups).distinct().sorted()
+
+    private fun allThinkingIds(): List<String> =
+        thinkingObject().keys().asSequence().toList().filter { thinkingBody(it).isNotBlank() }.sorted()
+
+    private fun thinkingUses(id: String): List<String> {
+        val uses = mutableListOf<String>()
+        fun check(node: JSONObject, path: List<String>) {
+            val pool = node.optJSONObject("thinking")?.opt("pool")
+            val referenced = when (pool) {
+                is JSONObject -> pool.has(id)
+                is JSONArray -> jsonStrings(pool).contains(id)
+                else -> false
+            }
+            if (referenced) uses += "功能 · " + path.joinToString(" / ")
+            val keys = node.keys().asSequence().toList()
+            keys.filter { it != "thinking" && it != "modes" }.forEach { key ->
+                node.optJSONObject(key)?.let { check(it, path + key) }
+            }
+        }
+        root.optJSONObject("functions")?.let { check(it, emptyList()) }
+        root.optJSONObject("modes")?.let { modes ->
+            modes.keys().asSequence().toList().forEach { key ->
+                val pool = modes.optJSONObject(key)?.optJSONObject("thinking")?.opt("pool")
+                if ((pool is JSONObject && pool.has(id)) ||
+                    (pool is JSONArray && id in jsonStrings(pool))) uses += "动作 · $key"
+            }
+        }
+        return uses
+    }
+
+    private fun thinkingResources() {
+        section("碎碎念文本", "thinkings")
+        panel.addView(text("按组管理文本。点击文本编辑正文并查看直接引用；分组属于文本本身。", 12f).apply {
+            setTextColor(getColor(R.color.cp_note))
+        })
+        action("＋ 新建碎碎念") { thinkingDetails(null) }
+        val grouped = linkedMapOf<String, MutableList<String>>()
+        allThinkingGroups().forEach { grouped[it] = mutableListOf() }
+        allThinkingIds().forEach { id ->
+            val groups = thinkingGroups(id)
+            if (groups.isEmpty()) grouped.getOrPut("未分组") { mutableListOf() }.add(id)
+            else groups.forEach { grouped.getOrPut(it) { mutableListOf() }.add(id) }
+        }
+        for ((group, ids) in grouped) {
+            val opened = expandedThinkingGroups.contains(group)
+            val folder = text((if (opened) "▾ 📂  " else "▸ 📁  ") + "$group（${ids.size}）", 15f).apply {
+                setBackgroundResource(R.drawable.card_bg)
+                rippleCard(this)
+                setPadding(px(12), px(10), px(12), px(10))
+            }
+            panel.addView(folder, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
+            folder.setOnClickListener {
+                if (!expandedThinkingGroups.add(group)) expandedThinkingGroups.remove(group)
+                thinkingResources()
+            }
+            if (opened) for (id in ids) {
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setBackgroundResource(R.drawable.card_bg)
+                    rippleCard(this)
+                    setPadding(px(12), px(4), px(6), px(4))
+                }
+                row.addView(text(thinkingBody(id), 14f).apply {
+                    maxLines = 5
+                    ellipsize = TextUtils.TruncateAt.END
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text("⋮", 23f).apply {
+                    gravity = Gravity.CENTER
+                    setOnClickListener { view ->
+                        UnifiedOptionMenu.show(view, listOf("详情 / 编辑", "选择碎碎念组", "删除"),
+                            setOf("删除")) { action ->
+                            when (action) {
+                                "详情 / 编辑" -> thinkingDetails(id)
+                                "选择碎碎念组" -> chooseThinkingGroups(id)
+                                "删除" -> confirmThinkingDelete(id)
+                            }
+                        }
+                    }
+                }, LinearLayout.LayoutParams(px(42), px(42)))
+                rippleClick(row) { thinkingDetails(id) }
+                panel.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                    leftMargin = px(12)
+                    topMargin = px(4)
+                })
+            }
+        }
+    }
+    private val expandedThinkingGroups = mutableSetOf<String>()
+
+    private fun thinkingDetails(id: String?) {
+        editor(if (id == null) "新建碎碎念" else "碎碎念详情", compact = true) { box ->
+            val field = EditText(this).apply {
+                setText(if (id == null) "" else thinkingBody(id))
+                hint = "输入碎碎念文本"
+                minLines = 3
+                maxLines = 8
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                setBackgroundResource(R.drawable.bg_input)
+                setPadding(px(10), px(10), px(10), px(10))
+            }
+            box.addView(text("文本内容", 13f))
+            box.addView(field, LinearLayout.LayoutParams(-1, -2))
+            if (id != null) {
+                val groups = thinkingGroups(id)
+                box.addView(text("所属分组：" + groups.ifEmpty { listOf("未分组") }.joinToString("、"), 12f))
+                box.addView(text("直接引用位置", 14f))
+                val uses = thinkingUses(id)
+                if (uses.isEmpty()) box.addView(text("暂无引用", 12f))
+                else uses.forEach { box.addView(text(it, 12f)) }
+            }
+            ({
+                val content = field.text.toString().trim()
+                require(content.isNotBlank()) { "文本内容不能为空" }
+                change { json ->
+                    val texts = json.optJSONObject("thinkings") ?: JSONObject().also { json.put("thinkings", it) }
+                    val key = id ?: "t_" + UUID.randomUUID().toString().replace("-", "").take(12)
+                    val obj = texts.optJSONObject(key) ?: JSONObject().apply {
+                        if (id != null && texts.opt(key) is String)
+                            put("groups", JSONArray())
+                    }
+                    obj.put("text", content)
+                    if (obj.optJSONArray("groups") == null) obj.put("groups", JSONArray())
+                    texts.put(key, obj)
+                }
+                thinkingResources()
+            })
+        }
+    }
+
+    private fun chooseThinkingGroups(id: String) {
+        editor("选择碎碎念组", compact = true) { box ->
+            val known = allThinkingGroups().toMutableList()
+            val checked = thinkingGroups(id).toMutableSet()
+            val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            fun redraw() {
+                choices.removeAllViews()
+                known.distinct().forEach { group ->
+                    choices.addView(CheckBox(this).apply {
+                        text = group
+                        isChecked = group in checked
+                        setOnCheckedChangeListener { _, on ->
+                            if (on) checked.add(group) else checked.remove(group)
+                        }
+                    })
+                }
+            }
+            box.addView(choices)
+            redraw()
+            val input = entry(box, "新分组名称（可选）", "", compact = true)
+            ({
+                val name = input.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    require(name != "未分组" && name.length <= 40 &&
+                        name.none { it == '/' || it == '\\' || it == '\n' || it == '\r' }) { "分组名称不合法" }
+                    checked.add(name)
+                }
+                change { json ->
+                    val item = json.getJSONObject("thinkings")
+                    val old = item.opt(id)
+                    val obj = item.optJSONObject(id) ?: JSONObject().put("text", old as? String ?: "")
+                    obj.put("groups", JSONArray().apply { checked.forEach { put(it) } })
+                    item.put(id, obj)
+                }
+                thinkingResources()
+            })
+        }
+    }
+
+    private fun confirmThinkingDelete(id: String) {
+        val uses = thinkingUses(id)
+        if (uses.isNotEmpty()) {
+            AlertDialog.Builder(this).setTitle("无法删除：仍被引用")
+                .setMessage(uses.joinToString("\n"))
+                .setPositiveButton("我知道了", null).show()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("删除碎碎念")
+            .setMessage("确认删除「${thinkingBody(id)}」？此操作不可撤销。")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("删除") { _, _ ->
+                attempt {
+                    change { it.getJSONObject("thinkings").remove(id) }
+                    thinkingResources()
+                }
+            }.show()
+    }
+
+    /** Function details are a stable landing page for its animation and thinking editors. */
+    private fun functionDetails(path: List<String>, selected: List<String>) {
+        AlertDialog.Builder(this).setTitle("功能详情 · " + functionPathName(path))
+            .setMessage(functionDescription(path) + "\n\n当前动画：" + selected.joinToString("、"))
+            .setItems(arrayOf("选择动作动画", "配置碎碎念")) { _, which ->
+                when (which) {
+                    0 -> chooseFunctions(path, selected)
+                    1 -> thinkingConfigDialog(functionPath = path)
+                }
+            }.setNegativeButton("关闭", null).show()
+    }
+
+    private fun functionNode(json: JSONObject, path: List<String>): JSONObject {
+        var node = json.getJSONObject("functions")
+        for (key in path.dropLast(1)) node = node.getJSONObject(key)
+        val last = path.last()
+        val raw = node.opt(last)
+        if (raw is JSONArray) {
+            val converted = JSONObject().put("modes", raw)
+            node.put(last, converted)
+            return converted
+        }
+        return if (raw is JSONObject) raw else node
+    }
+
+    private fun thinkingPoolJson(config: JSONObject?): LinkedHashMap<String, Pair<Long, Long>> {
+        val result = linkedMapOf<String, Pair<Long, Long>>()
+        val baseMin = config?.optLong("min", DEFAULT_THINKING_MIN_MS) ?: DEFAULT_THINKING_MIN_MS
+        val baseMax = config?.optLong("max", DEFAULT_THINKING_MAX_MS) ?: DEFAULT_THINKING_MAX_MS
+        when (val pool = config?.opt("pool")) {
+            is JSONObject -> pool.keys().asSequence().toList().forEach { key ->
+                val time = pool.optJSONObject(key)
+                result[key] = (time?.optLong("min", baseMin) ?: baseMin) to
+                    (time?.optLong("max", baseMax) ?: baseMax)
+            }
+            is JSONArray -> jsonStrings(pool).forEach { result[it] = baseMin to baseMax }
+        }
+        return result
+    }
+
+    private fun thinkingConfigDialog(modeId: String? = null, functionPath: List<String>? = null) {
+        val target = if (modeId != null) root.getJSONObject("modes").getJSONObject(modeId)
+            else {
+                var at = root.getJSONObject("functions")
+                functionPath.orEmpty().forEach { at = at.optJSONObject(it) ?: return@forEach }
+                at
+            }
+        val old = target.optJSONObject("thinking")
+        val selected = thinkingPoolJson(old)
+        val variants = if (modeId != null) listOf("继承", "轮播", "持续", "不播放")
+            else listOf("轮播", "持续", "不播放")
+        val codes = if (modeId != null) listOf("inherit", "cycle", "hold", "off")
+            else listOf("cycle", "hold", "off")
+        editor("碎碎念配置 · " + (modeId ?: functionPath?.joinToString("/") ?: ""), compact = true) { box ->
+            box.addView(text("播放策略", 14f))
+            val spinner = Spinner(this).apply {
+                adapter = ArrayAdapter(this@RolePackEditorActivity,
+                    android.R.layout.simple_spinner_dropdown_item, variants)
+                setSelection(codes.indexOf(old?.optString("policy", if (modeId != null) "inherit" else "cycle")).coerceAtLeast(0))
+            }
+            box.addView(spinner, LinearLayout.LayoutParams(-1, px(48)))
+            val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            box.addView(content)
+            fun redraw() {
+                content.removeAllViews()
+                val policy = codes[spinner.selectedItemPosition.coerceIn(codes.indices)]
+                if (policy == "inherit" || policy == "off") {
+                    content.addView(text(if (policy == "inherit") "使用所属功能的完整碎碎念配置"
+                        else "保持休息状态，不选择新文本", 12f))
+                } else {
+                    val header = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                    }
+                    header.addView(text("碎碎念列表（${selected.size}）", 15f),
+                        LinearLayout.LayoutParams(0, -2, 1f))
+                    header.addView(button("修改") {
+                        chooseThinkingPool(selected) { changed ->
+                            selected.clear()
+                            selected.putAll(changed)
+                            redraw()
+                        }
+                    })
+                    content.addView(header)
+                    if (selected.isEmpty()) content.addView(text("尚未选择文本", 12f))
+                    else selected.forEach { (id, time) ->
+                        content.addView(text(thinkingBody(id) + "  （${time.first}–${time.second}ms）", 12f))
+                    }
+                }
+            }
+            spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) { redraw() }
+            }
+            redraw()
+            ({
+                val policy = codes[spinner.selectedItemPosition.coerceIn(codes.indices)]
+                selected.forEach { (id, time) ->
+                    require(time.first >= 0 && time.second >= time.first) { "时长范围不合法：${thinkingBody(id)}" }
+                }
+                change { json ->
+                    val obj = if (modeId != null) json.getJSONObject("modes").getJSONObject(modeId)
+                    else functionNode(json, requireNotNull(functionPath))
+                    val pool = JSONObject()
+                    selected.forEach { (key, pair) ->
+                        pool.put(key, JSONObject().put("min", pair.first).put("max", pair.second))
+                    }
+                    obj.put("thinking", JSONObject().put("policy", policy).put("pool", pool))
+                }
+                if (modeId != null) showMode(modeId) else functions()
+            })
+        }
+    }
+
+    private fun chooseThinkingPool(initial: Map<String, Pair<Long, Long>>,
+                                   confirm: (Map<String, Pair<Long, Long>>) -> Unit) {
+        val chosen = LinkedHashMap(initial)
+        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(20), px(16), px(20), px(16))
+            setBackgroundResource(R.drawable.card_bg)
+        }
+        card.addView(text("选择碎碎念", 18f).apply { gravity = Gravity.CENTER })
+        val info = text("", 12f)
+        card.addView(info)
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val viewport = ScrollView(this).apply { addView(list) }
+        card.addView(viewport, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * .55f).toInt()))
+        val opened = mutableSetOf<String>()
+        fun redraw() {
+            list.removeAllViews()
+            info.text = "已选择 ${chosen.size} 条"
+            val grouped = linkedMapOf<String, MutableList<String>>()
+            allThinkingGroups().forEach { grouped[it] = mutableListOf() }
+            allThinkingIds().forEach { id ->
+                val groups = thinkingGroups(id)
+                if (groups.isEmpty()) grouped.getOrPut("未分组") { mutableListOf() }.add(id)
+                else groups.forEach { grouped.getOrPut(it) { mutableListOf() }.add(id) }
+            }
+            for ((group, ids) in grouped) {
+                list.addView(text((if (group in opened) "▾ 📂 " else "▸ 📁 ") + "$group（${ids.size}）", 15f).apply {
+                    setBackgroundResource(R.drawable.card_bg)
+                    setOnClickListener {
+                        if (!opened.add(group)) opened.remove(group)
+                        redraw()
+                    }
+                })
+                if (group in opened) for (id in ids) {
+                    val row = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                    }
+                    row.addView(CheckBox(this).apply {
+                        text = thinkingBody(id)
+                        isChecked = id in chosen
+                        setOnCheckedChangeListener { _, enabled ->
+                            if (enabled) chosen.putIfAbsent(id, DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS)
+                            else chosen.remove(id)
+                            redraw()
+                        }
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    row.addView(text("⋮", 23f).apply {
+                        gravity = Gravity.CENTER
+                        setOnClickListener {
+                            if (id !in chosen) chosen[id] = DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS
+                            editor("显示时长 · " + thinkingBody(id), compact = true) { box ->
+                                val time = chosen[id]!!
+                                val minField = entry(box, "min（毫秒）", time.first.toString(), compact = true)
+                                val maxField = entry(box, "max（毫秒）", time.second.toString(), compact = true)
+                                ({
+                                    val lo = minField.text.toString().toLong()
+                                    val hi = maxField.text.toString().toLong()
+                                    require(lo >= 0 && hi >= lo) { "要求 0 ≤ min ≤ max" }
+                                    chosen[id] = lo to hi
+                                    redraw()
+                                })
+                            }
+                        }
+                    }, LinearLayout.LayoutParams(px(44), px(46)))
+                    list.addView(row)
+                }
+            }
+        }
+        redraw()
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
+        actions.addView(button("取消") { dialog.dismiss() })
+        actions.addView(button("确认") { confirm(chosen); dialog.dismiss() })
+        card.addView(actions)
+        dialog.setContentView(card)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels * .9f).toInt(), -2)
+    }
+
     private fun images() {
         section("图片资源", "images")
         panel.addView(text("管理角色使用的图片资源。\n点击文件夹展开，点击图片查看详情。", 12f).apply {
