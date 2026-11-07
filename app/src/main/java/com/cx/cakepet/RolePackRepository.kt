@@ -56,6 +56,7 @@ fun loadPackMeta(ctx: android.content.Context, base: String, source: RoleSource)
         name = if (root.has("name")) root.optString("name", "") else "",
         shortName = if (root.has("shortName")) root.optString("shortName", "") else "",
         functions = parseFunctions(root),
+        thinking = PackThinking.parse(root),
         modeLoops = parseModeLoops(root)
     )
 }
@@ -90,7 +91,7 @@ fun parseFunctions(root: JSONObject): Map<List<String>, List<String>> {
                 val keys = node.keys()
                 while (keys.hasNext()) {
                     val k = keys.next()
-                    visit(node.opt(k), path + k)
+                    if (k != "thinking") visit(node.opt(k), path + k)
                 }
             }
         }
