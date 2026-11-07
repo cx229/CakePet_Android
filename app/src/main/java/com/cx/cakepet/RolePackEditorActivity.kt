@@ -663,6 +663,25 @@ class RolePackEditorActivity : AppCompatActivity() {
         return dialog
     }
 
+    /** Shared visual surface for hierarchical resource/selection rows.
+     *  Only styling is shared; each picker keeps its own selection behavior.
+     */
+    private fun selectionSurface(view: View, isFolder: Boolean = false) {
+        view.background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = px(9).toFloat()
+            setColor(getColor(if (isFolder) R.color.cp_card_bg else R.color.cp_bg))
+            setStroke(px(1).coerceAtLeast(1), getColor(R.color.cp_divider))
+        }
+        rippleCard(view)
+    }
+
+    private fun selectionRowParams(depth: Int = 0): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(-1, -2).apply {
+            leftMargin = px((depth * 12).coerceAtMost(48))
+            topMargin = px(4)
+            bottomMargin = px(2)
+        }
+
     /** Shared detail-dialog visual language; retains the existing XML dialog shell. */
     private fun detailSection(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -1140,15 +1159,23 @@ class RolePackEditorActivity : AppCompatActivity() {
                     val loop = playbackKind(mode)
                     val duration = mode.optJSONObject("duration")
                     val summary = when (loop) {
-                        "timed" -> "定时 · ${duration?.optLong("min", 3000) ?: 3000}–${duration?.optLong("max", 4000) ?: 4000}ms"
+                        "timed" -> "定时循环 · ${duration?.optLong("min", 3000) ?: 3000}–${duration?.optLong("max", 4000) ?: 4000}ms"
                         "infinite" -> "无限循环"
                         else -> "播放一次"
                     }
                     val playbackCard = detailSection()
-                    playbackCard.addView(detailSectionHeader("播放方式", summary) {
+                    playbackCard.addView(detailSectionHeader("播放循环", summary) {
                         playbackSettings(currentKey) { redraw() }
+                    }.apply {
+                        setPadding(0, px(8), 0, px(8))
                     })
                     if (loop != "infinite") {
+                        playbackCard.addView(View(this).apply {
+                            setBackgroundColor(getColor(R.color.cp_divider))
+                        }, LinearLayout.LayoutParams(-1, px(1)).apply {
+                            leftMargin = px(4)
+                            rightMargin = px(4)
+                        })
                         val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
                         playbackCard.addView(detailSectionHeader("后续动画",
                             next.ifBlank { "自动（由系统决定）" }) {
@@ -1160,6 +1187,8 @@ class RolePackEditorActivity : AppCompatActivity() {
                                 }
                                 redraw()
                             }
+                        }.apply {
+                            setPadding(0, px(8), 0, px(8))
                         })
                     }
                     addDetailSection(form, playbackCard)
@@ -1224,7 +1253,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     /** Playback-only entry, retaining the former attributes() loop semantics. */
     private fun playbackSettings(key: String, onSaved: () -> Unit) {
         val current = root.getJSONObject("modes").getJSONObject(key)
-        editor("播放设置", compact = true) { form ->
+        editor("播放循环", compact = true) { form ->
             val options = listOf("播放一次", "定时循环", "无限循环")
             val spinner = Spinner(this)
             SettingsSpinnerBinder.bind(spinner, options,
@@ -1233,7 +1262,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            row.addView(text("播放方式", 14f), LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(text("播放循环", 14f), LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(spinner, LinearLayout.LayoutParams(0, px(48), 1f))
             form.addView(row)
             val timedFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1324,7 +1353,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     private fun showMode(key: String) {
         modeId = key
         bulkSelected.clear()
-        section("动画：$key", "mode")
+        section("动画·$key", "mode")
         val m = root.getJSONObject("modes").getJSONObject(key)
 
         val preview = RoleAnimationPreview(this)
@@ -1363,7 +1392,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             "timed" -> "定时循环"
             else -> "播放一次"
         }
-        playbackCard.addView(detailSectionHeader("播放设置", playbackSummary) {
+        playbackCard.addView(detailSectionHeader("播放循环", playbackSummary) {
             playbackSettings(key) { showMode(key) }
         })
         panel.addView(playbackCard, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(10) })
@@ -1708,7 +1737,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, px(12), 0, px(8))
             }
-            playbackRow.addView(text("播放方式", 14f).apply {
+            playbackRow.addView(text("播放循环", 14f).apply {
                 setTextColor(android.graphics.Color.BLACK)
                 setPadding(0, 0, px(12), 0)
             })
