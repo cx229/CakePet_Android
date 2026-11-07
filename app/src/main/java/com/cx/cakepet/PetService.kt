@@ -3618,7 +3618,6 @@ class PetService : Service() {
                 if (!c2.randomEnabled) continue
                 val next = generateRandomConfig(c2)
                 rt.config.update { _ -> next }
-                if (thinkingOn(rt.roleId)) thinkingPetMsg(rt.roleId)?.showRandomTrigger()   // 随机触发提示“变变变”
             }
         }
     }
@@ -3652,7 +3651,6 @@ class PetService : Service() {
                 val base = if (c.randomEnabled) c else c.copy(randomEnabled = true)
                 generateRandomConfig(base)
             }
-            if (thinkingOn(currentRoleId)) thinkingPetMsg(currentRoleId)?.showRandomTrigger()   // 随机触发提示“变变变”
             requestRandomReset() // 重置等待计时，从本次开始重新计时
         }
     }
