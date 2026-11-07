@@ -93,6 +93,7 @@ object RolePackEditing {
             val original = File(directory, "modes.original.jsonc")
             if (!original.exists()) original.writeText(source)
         }
+        normalizeThinkingPack(json)
         file.writeText(CompactJsoncWriter.write(json, if (parsed == null) "" else source))
         return json
     }
@@ -153,6 +154,7 @@ object RolePackEditing {
                     if (normalized.opt("anchorRes") !is Number) normalized.put("anchorRes", 128)
                     if (normalized.optJSONObject("functions") == null) normalized.put("functions", JSONObject())
                     if (normalized.optJSONObject("modes") == null) normalized.put("modes", JSONObject())
+                    normalizeThinkingPack(normalized)
                     zip.putNextEntry(ZipEntry("modes.jsonc"))
                     zip.write(CompactJsoncWriter.write(normalized, if (original.isBlank()) "" else original).toByteArray(Charsets.UTF_8))
                     zip.closeEntry()
