@@ -506,13 +506,13 @@ class RolePackEditorActivity : AppCompatActivity() {
             Toast.makeText(this, it.message ?: "操作失败", Toast.LENGTH_LONG).show()
         }
     }
-    private fun change(edit: (JSONObject) -> Unit) {
+    private fun change(silent: Boolean = false, edit: (JSONObject) -> Unit) {
         val candidate = JSONObject(root.toString())
         edit(candidate)
         RolePackEditing.commit(this, id, draft, candidate)
         root = candidate
         draft = RolePackEditing.draft(this, id)
-        Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show()
+        if (!silent) Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show()
     }
     /**
      * Use the EXACT role-rename XML shell (title, card, margins, and actual
@@ -2986,7 +2986,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             if (value.isBlank() || value == lastSaved) return
             attempt {
                 val key = activeId ?: "t_" + UUID.randomUUID().toString().replace("-", "").take(12)
-                change { json ->
+                change(silent = true) { json ->
                     val texts = json.optJSONObject("thinkings") ?: JSONObject().also {
                         json.put("thinkings", it)
                     }
@@ -3086,7 +3086,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             }
             ({ })
         }
-        popup.setOnDismissListener {
+        popup?.setOnDismissListener {
             persist()
             thinkingResources()
         }
