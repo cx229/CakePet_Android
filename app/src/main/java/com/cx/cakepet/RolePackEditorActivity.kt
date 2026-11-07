@@ -3361,41 +3361,67 @@ class RolePackEditorActivity : AppCompatActivity() {
             else listOf("轮播", "持续", "不播放")
         val codes = if (modeId != null) listOf("inherit", "cycle", "hold", "off")
             else listOf("cycle", "hold", "off")
-        editor("碎碎念配置 · " + (modeId ?: functionPath?.joinToString("/") ?: ""), compact = true) { box ->
-            box.addView(text("播放策略", 14f))
+        editor("碎碎念配置", compact = true) { box ->
+            box.addView(text(if (modeId != null) "动画 · $modeId" else "功能 · ${functionPathName(requireNotNull(functionPath))}", 12f).apply {
+                gravity = Gravity.CENTER
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(0, 0, 0, px(10))
+            }, LinearLayout.LayoutParams(-1, -2))
+            val strategyCard = detailSection()
+            val strategyRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            strategyRow.addView(text("播放策略", 15f).apply {
+                setPadding(px(2), px(4), px(2), px(4))
+            }, LinearLayout.LayoutParams(0, -2, 1f))
             val spinner = Spinner(this).apply {
                 adapter = ArrayAdapter(this@RolePackEditorActivity,
                     android.R.layout.simple_spinner_dropdown_item, variants)
                 setSelection(codes.indexOf(old?.optString("policy", if (modeId != null) "inherit" else "cycle")).coerceAtLeast(0))
             }
-            box.addView(spinner, LinearLayout.LayoutParams(-1, px(48)))
+            strategyRow.addView(spinner, LinearLayout.LayoutParams(px(124), px(44)))
+            strategyCard.addView(strategyRow)
+            addDetailSection(box, strategyCard)
             val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             box.addView(content)
             fun redraw() {
                 content.removeAllViews()
                 val policy = codes[spinner.selectedItemPosition.coerceIn(codes.indices)]
                 if (policy == "inherit" || policy == "off") {
-                    content.addView(text(if (policy == "inherit") "使用所属功能的完整碎碎念配置"
-                        else "保持休息状态，不选择新文本", 12f))
+                    content.addView(text(if (policy == "inherit") "使用所属功能的碎碎念配置"
+                        else "保持休息状态，不选择新文本", 12f).apply {
+                        gravity = Gravity.CENTER
+                        setTextColor(getColor(R.color.cp_note))
+                    })
                 } else {
-                    val header = LinearLayout(this).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        gravity = Gravity.CENTER_VERTICAL
-                    }
-                    header.addView(text("碎碎念列表（${selected.size}）", 15f),
-                        LinearLayout.LayoutParams(0, -2, 1f))
-                    header.addView(button("修改") {
+                    val listCard = detailSection()
+                    listCard.addView(detailSectionHeader("碎碎念文本", "${selected.size} 条") {
                         chooseThinkingPool(selected) { changed ->
                             selected.clear()
                             selected.putAll(changed)
                             redraw()
                         }
                     })
-                    content.addView(header)
-                    if (selected.isEmpty()) content.addView(text("尚未选择文本", 12f))
-                    else selected.forEach { (id, time) ->
-                        content.addView(text(thinkingBody(id) + "  （${time.first}–${time.second}ms）", 12f))
+                    if (selected.isEmpty()) listCard.addView(text("尚未选择文本", 12f).apply {
+                        setTextColor(getColor(R.color.cp_note))
+                    })
+                    selected.entries.forEachIndexed { index, (id, time) ->
+                        val line = detailListRow()
+                        line.addView(detailNumber(index))
+                        line.addView(text(thinkingBody(id), 12f).apply {
+                            setPadding(0, px(3), 0, px(3))
+                        }, LinearLayout.LayoutParams(0, -2, 1f))
+                        line.addView(text("${time.first}–${time.second}ms", 10f).apply {
+                            setTextColor(getColor(R.color.cp_note))
+                            setPadding(px(4), px(3), 0, px(3))
+                        })
+                        listCard.addView(line, LinearLayout.LayoutParams(-1, -2).apply {
+                            leftMargin = px(8)
+                            topMargin = px(4)
+                        })
                     }
+                    addDetailSection(content, listCard)
                 }
             }
             spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
