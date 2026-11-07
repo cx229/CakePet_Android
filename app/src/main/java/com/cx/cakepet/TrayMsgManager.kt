@@ -361,10 +361,12 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                 } else {
                     // 末帧：整串纯随机噪点，短暂停留后清空
                     textView.text = buildString(len) { repeat(len) { append(noiseChar()) } }
-                    handler.postDelayed({
+                    val finish = Runnable {
                         cancelDissolve()
                         onCleared()
-                    }, stepMs)
+                    }
+                    dissolveRunnable = finish
+                    handler.postDelayed(finish, stepMs)
                 }
             }
         }
@@ -392,10 +394,12 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                 } else {
                     // 末帧原样停留极短后清空
                     textView.text = original
-                    handler.postDelayed({
+                    val finish = Runnable {
                         cancelDissolve()
                         onCleared()
-                    }, stepMs)
+                    }
+                    dissolveRunnable = finish
+                    handler.postDelayed(finish, stepMs)
                 }
             }
         }
@@ -425,10 +429,12 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                     // 末帧：整串纯空格（汉字位置两空格），短暂停留后清空
                     val blank = buildString { for (ch in original) append(spaceNoiseChar(ch)) }
                     textView.text = blank
-                    handler.postDelayed({
+                    val finish = Runnable {
                         cancelDissolve()
                         onCleared()
-                    }, stepMs)
+                    }
+                    dissolveRunnable = finish
+                    handler.postDelayed(finish, stepMs)
                 }
             }
         }
@@ -456,10 +462,12 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                 } else {
                     // 末帧整串黑框，短暂停留后清空
                     textView.text = BLOCK_CHAR.toString().repeat(len)
-                    handler.postDelayed({
+                    val finish = Runnable {
                         cancelDissolve()
                         onCleared()
-                    }, stepMs)
+                    }
+                    dissolveRunnable = finish
+                    handler.postDelayed(finish, stepMs)
                 }
             }
         }
@@ -522,10 +530,12 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                     handler.postDelayed(this, stepMs)
                 } else {
                     textView.text = target
-                    handler.postDelayed({
+                    val finish = Runnable {
                         cancelMaterialize()
                         onShown()
-                    }, stepMs)
+                    }
+                    materializeRunnable = finish
+                    handler.postDelayed(finish, stepMs)
                 }
             }
         }
@@ -552,10 +562,12 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                     handler.postDelayed(this, stepMs)
                 } else {
                     textView.text = target
-                    handler.postDelayed({
+                    val finish = Runnable {
                         cancelMaterialize()
                         onShown()
-                    }, stepMs)
+                    }
+                    materializeRunnable = finish
+                    handler.postDelayed(finish, stepMs)
                 }
             }
         }
@@ -581,10 +593,12 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                     handler.postDelayed(this, stepMs)
                 } else {
                     textView.text = target
-                    handler.postDelayed({
+                    val finish = Runnable {
                         cancelMaterialize()
                         onShown()
-                    }, stepMs)
+                    }
+                    materializeRunnable = finish
+                    handler.postDelayed(finish, stepMs)
                 }
             }
         }
@@ -611,10 +625,12 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                     handler.postDelayed(this, stepMs)
                 } else {
                     textView.text = target
-                    handler.postDelayed({
+                    val finish = Runnable {
                         cancelMaterialize()
                         onShown()
-                    }, stepMs)
+                    }
+                    materializeRunnable = finish
+                    handler.postDelayed(finish, stepMs)
                 }
             }
         }
