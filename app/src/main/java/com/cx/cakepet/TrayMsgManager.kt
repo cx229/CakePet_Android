@@ -170,7 +170,7 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
 
     private fun enterText(id: String) {
         val content = thinkingTexts[id] ?: run { enterRest(); return }
-        resetPhase(id, effectiveThinking.sampleDuration())
+        resetPhase(id, effectiveThinking.sampleDuration(id))
         showingText = true
         transitionSerial++
         stopLoop()
@@ -244,8 +244,8 @@ class TrayMsgManager(private val context: Context, private val roleId: String? =
                     if (activeId !in config.pool || thinkingTexts[activeId].isNullOrBlank()) {
                         // An unavailable ID has an effective [0,0] duration.
                         phaseTargetMs = 0L
-                    } else if (phaseTargetMs < config.minMs || phaseTargetMs > config.maxMs) {
-                        phaseTargetMs = config.sampleDuration()
+                    } else if (phaseTargetMs < config.durationFor(activeId).minMs || phaseTargetMs > config.durationFor(activeId).maxMs) {
+                        phaseTargetMs = config.sampleDuration(activeId)
                     }
                 }
                 // Preserve the original immediate first utterance when initially enabled.
