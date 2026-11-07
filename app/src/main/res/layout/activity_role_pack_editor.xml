@@ -48,6 +48,17 @@
                 android:ellipsize="end"
                 android:textColor="@color/cp_hint_dark" />
         </LinearLayout>
+        <TextView
+            android:id="@+id/tv_mode_more"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:text="⋯"
+            android:textSize="27sp"
+            android:textColor="@color/cp_title"
+            android:contentDescription="更多动画设置"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:visibility="gone" />
     </LinearLayout>
     <ScrollView android:id="@+id/editor_scroll"
         android:layout_width="match_parent"
