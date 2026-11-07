@@ -2693,22 +2693,29 @@ class RolePackEditorActivity : AppCompatActivity() {
                     when (val child = node.opt(segment)) {
                         is JSONObject -> if (child.has("modes")) {
                             val checked = key in selected
-                            val row = CheckBox(this).apply {
+                            val check = CheckBox(this).apply {
                                 text = functionSegment(path)
                                 isChecked = checked
                                 setOnCheckedChangeListener { _, checkedNow ->
                                     if (checkedNow) selected.add(key) else selected.remove(key)
                                 }
                             }
-                            listing.addView(row)
+                            val row = LinearLayout(this).apply {
+                                orientation = LinearLayout.HORIZONTAL
+                                gravity = Gravity.CENTER_VERTICAL
+                                selectionSurface(this)
+                                setPadding(px(8), px(3), px(8), px(3))
+                                addView(check, LinearLayout.LayoutParams(-1, px(46)))
+                            }
+                            listing.addView(row, selectionRowParams(path.size))
+                            rippleClick(row) { check.isChecked = !check.isChecked }
                         } else {
                             val descendantPaths = leaves.keys.filter { it.startsWith("$key/") }
                             val open = key in expanded
                             val folder = LinearLayout(this).apply {
                                 orientation = LinearLayout.HORIZONTAL
                                 gravity = Gravity.CENTER_VERTICAL
-                                setBackgroundResource(R.drawable.card_bg)
-                                rippleCard(this)
+                                selectionSurface(this, isFolder = true)
                                 setPadding(px(12), px(5), px(10), px(5))
                             }
                             folder.addView(text(
@@ -2717,10 +2724,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                             folder.addView(text(
                                 "${descendantPaths.count { it in selected }}/${descendantPaths.size}", 11f
                             ).apply { setTextColor(getColor(R.color.cp_note)) })
-                            listing.addView(folder, LinearLayout.LayoutParams(-1, px(49)).apply {
-                                leftMargin = px((depth * 12).coerceAtMost(48))
-                                topMargin = px(4)
-                            })
+                            listing.addView(folder, selectionRowParams(depth).apply { height = px(49) })
                             rippleClick(folder) {
                                 if (!expanded.add(key)) expanded.remove(key)
                                 redraw()
@@ -2731,8 +2735,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                             val checked = key in selected
                             val row = LinearLayout(this).apply {
                                 orientation = LinearLayout.VERTICAL
-                                setBackgroundResource(R.drawable.card_bg)
-                                rippleCard(this)
+                                selectionSurface(this)
                                 setPadding(px(10), px(4), px(8), px(4))
                             }
                             val check = CheckBox(this).apply {
@@ -2746,10 +2749,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                                 setTextColor(getColor(R.color.cp_note))
                                 setPadding(px(10), 0, px(6), px(4))
                             })
-                            listing.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
-                                leftMargin = px(((depth + 1) * 12).coerceAtMost(60))
-                                topMargin = px(3)
-                            })
+                            listing.addView(row, selectionRowParams(depth + 1))
                             var restoringCheck = false
                             check.setOnCheckedChangeListener { _, nowChecked ->
                                 if (restoringCheck) return@setOnCheckedChangeListener
@@ -2850,11 +2850,12 @@ class RolePackEditorActivity : AppCompatActivity() {
             selectionInfo.text = "已选 ${selected.size} 个动画"
             if (single) {
                 listing.addView(text("○  自动（由系统决定）", 15f).apply {
-                    setBackgroundResource(R.drawable.card_bg)
+                    selectionSurface(this)
+                    setPadding(px(12), px(6), px(8), px(6))
                     isClickable = true
                     setOnClickListener { selected.clear(); redraw() }
                     setTextColor(getColor(if (selected.isEmpty()) R.color.cp_title else R.color.cp_note))
-                }, LinearLayout.LayoutParams(-1, px(46)))
+                }, selectionRowParams().apply { height = px(46) })
             }
             for (group in groups.distinct()) {
                 val candidates = ids().filter { modeId ->
@@ -2864,18 +2865,20 @@ class RolePackEditorActivity : AppCompatActivity() {
                 if (candidates.isEmpty()) continue
                 listing.addView(text((if (group in expanded) "▾ 📂 " else "▸ 📁 ") +
                     "$group（${candidates.count { it in selected }}/${candidates.size}）", 15f).apply {
-                    setBackgroundResource(R.drawable.card_bg)
+                    selectionSurface(this, isFolder = true)
+                    setPadding(px(12), px(6), px(8), px(6))
                     isClickable = true
                     setOnClickListener { if (!expanded.add(group)) expanded.remove(group); redraw() }
-                })
+                }, selectionRowParams())
                 if (group in expanded) {
                     for (name in candidates) {
                         val row = LinearLayout(this).apply {
                             orientation = LinearLayout.HORIZONTAL
                             gravity = Gravity.CENTER_VERTICAL
-                            setPadding(px(14), 0, px(5), 0)
+                            selectionSurface(this)
+                            setPadding(px(10), 0, px(5), 0)
                         }
-                        row.addView(CheckBox(this).apply {
+                        val check = CheckBox(this).apply {
                             text = name
                             isChecked = name in selected
                             setOnCheckedChangeListener { _, checked ->
@@ -2883,8 +2886,10 @@ class RolePackEditorActivity : AppCompatActivity() {
                                 if (checked) selected.add(name) else selected.remove(name)
                                 redraw()
                             }
-                        }, LinearLayout.LayoutParams(-1, px(46)))
-                        listing.addView(row)
+                        }
+                        row.addView(check, LinearLayout.LayoutParams(-1, px(46)))
+                        listing.addView(row, selectionRowParams(1))
+                        rippleClick(row) { check.isChecked = !check.isChecked }
                     }
                 }
             }
