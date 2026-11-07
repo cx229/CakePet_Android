@@ -377,7 +377,7 @@ class RolePackEditorActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tv_mode_more).setOnClickListener { anchor ->
             if (screen != "mode") return@setOnClickListener
             val current = modeId
-            UnifiedOptionMenu.show(anchor, listOf("重命名", "动画组")) { choice ->
+            UnifiedOptionMenu.show(anchor, listOf("重命名", "动画组"), emptySet()) { choice ->
                 when (choice) {
                     "重命名" -> renameMode(current) { renamed -> showMode(renamed) }
                     "动画组" -> editModeGroups(current) { /* Stay on current editor. */ }
@@ -1224,7 +1224,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     /** Playback-only entry, retaining the former attributes() loop semantics. */
     private fun playbackSettings(key: String, onSaved: () -> Unit) {
         val current = root.getJSONObject("modes").getJSONObject(key)
-        editor("播放方式", compact = true) { form ->
+        editor("播放设置", compact = true) { form ->
             val options = listOf("播放一次", "定时循环", "无限循环")
             val spinner = Spinner(this)
             SettingsSpinnerBinder.bind(spinner, options,
