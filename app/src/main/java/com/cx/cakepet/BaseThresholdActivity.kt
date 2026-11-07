@@ -108,6 +108,89 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
         else setOf("interactionMode", "alpha", "coreHeight", "coreWidth",
             "rangeFullScreen", "offsetTop", "offsetBottom", "offsetLeft", "offsetRight")
 
+    // UI hierarchy follows the existing role settings pages. Fold state is
+    // presentation-only and must never modify saved default switches.
+    private val foldExpanded = mutableMapOf<String, Boolean>()
+    private val foldRows = linkedMapOf<String, View>()
+    private val foldModules = mutableListOf<Pair<View, View>>()
+    private val foldModuleKeys = mutableListOf<List<String>>()
+
+    private fun parentKey(key: String): String? = when (page) {
+        SettingsPage.MOVEMENT -> when (key) {
+            "moveEnabled" -> null
+            "gravityEnabled", "reboundEnabled", "throwEnabled", "wallClimb", "maxSpeed" -> "moveEnabled"
+            "tiltGravity", "gravity", "gravityTop", "gravityBottom", "gravityLeft", "gravityRight" -> "gravityEnabled"
+            "bounceVibrate", "rebound", "reboundTop", "reboundBottom", "reboundLeft", "reboundRight" -> "reboundEnabled"
+            "throwCoeff" -> "throwEnabled"
+            "autoForage", "leapEnabled" -> "wallClimb"
+            "forageMultiplier" -> "autoForage"
+            "leapProbability" -> "leapEnabled"
+            else -> null
+        }
+        SettingsPage.SNAP -> if (key == "snapEnabled") null else "snapEnabled"
+        SettingsPage.RANGE -> when (key) {
+            "coreHeight", "coreWidth" -> "interactionMode"
+            "offsetTop", "offsetBottom", "offsetLeft", "offsetRight" -> "rangeFullScreen"
+            "imeLiftOffset" -> "imeMode"
+            else -> null
+        }
+        SettingsPage.THINKING -> when (key) {
+            "thinkingEnabled" -> null
+            "thinkingBgAlpha", "thinkingBgColor" -> "thinkingBgEnabled"
+            else -> "thinkingEnabled"
+        }
+        SettingsPage.RANDOM -> if (key == "randomEnabled") null else "randomEnabled"
+        SettingsPage.FEEDING -> when (key) {
+            "feedingEnabled" -> null
+            "feedGrow" -> "feedGrowEnabled"
+            "feedExpire" -> "feedingAutoExpire"
+            else -> "feedingEnabled"
+        }
+        SettingsPage.MAIN -> null
+    }
+
+    private fun depthFor(key: String): Int {
+        var ancestor = parentKey(key)
+        var depth = 0
+        val seen = mutableSetOf(key)
+        while (ancestor != null && seen.add(ancestor)) {
+            depth++
+            ancestor = parentKey(ancestor)
+        }
+        return depth
+    }
+
+    private fun isFoldable(key: String) = when (page) {
+        SettingsPage.MOVEMENT -> key in setOf("moveEnabled", "gravityEnabled", "reboundEnabled",
+            "throwEnabled", "wallClimb", "autoForage", "leapEnabled")
+        SettingsPage.SNAP -> key == "snapEnabled"
+        SettingsPage.THINKING -> key in setOf("thinkingEnabled", "thinkingBgEnabled")
+        SettingsPage.RANDOM -> key == "randomEnabled"
+        SettingsPage.FEEDING -> key in setOf("feedingEnabled", "feedGrowEnabled", "feedingAutoExpire")
+        else -> false
+    }
+
+    private fun isFoldVisible(key: String): Boolean {
+        var ancestor = parentKey(key)
+        val seen = mutableSetOf(key)
+        while (ancestor != null && seen.add(ancestor)) {
+            if (foldExpanded[ancestor] == false) return false
+            ancestor = parentKey(ancestor)
+        }
+        return true
+    }
+
+    private fun refreshFolds() {
+        foldRows.forEach { (key, row) ->
+            row.visibility = if (isFoldVisible(key)) View.VISIBLE else View.GONE
+        }
+        foldModules.forEachIndexed { index, (header, card) ->
+            val shown = foldModuleKeys[index].any { foldRows[it]?.visibility == View.VISIBLE }
+            header.visibility = if (shown) View.VISIBLE else View.GONE
+            card.visibility = if (shown) View.VISIBLE else View.GONE
+        }
+    }
+
     // ===== 渲染（纯 UI 引擎，不区分 page） =====
     // 按「所属设置页的模块(group)」分组渲染，与设置页的视觉结构完全一致：
     // 每个模块 = 分隔线 + 标题(include_module_header) + 卡片(card_bg) 包裹的内容。
@@ -115,6 +198,9 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
     // 样式全部复用设置页已有 style / drawable，代码里不再手抄任何样式数值。
     protected fun render() {
         binding.container.removeAllViews()
+        foldRows.clear()
+        foldModules.clear()
+        foldModuleKeys.clear()
         val order = current.order.ifEmpty {
             // 兜底：无 order 时按 group 首次出现顺序
             current.sliders.map { it.key } + current.duals.map { it.key } + current.switches.map { it.key } +
@@ -170,7 +256,9 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                 )
                 setPadding(0, cardPadV, 0, cardPadV)
             }
+            val moduleKeys = mutableListOf<String>()
             shownOrder.forEach { key ->
+                val beforeCount = card.childCount
                 when {
                     key == "imeMode" && current.keyboardModeDefault != null && g == "键盘适应" -> {
                         addHabitItem(card, "imeMode", choiceRow("键盘适应", AppBounds.KEYBOARD_MODES,
@@ -214,10 +302,14 @@ abstract class BaseThresholdActivity : AppCompatActivity() {
                         addHabitItem(card, key, colorItem(c, idx))
                     }
                 }
+                if (card.childCount > beforeCount) moduleKeys.add(key)
             }
             // Per-item spacing is owned by the shared wrapper; no first/last margin patching.
             binding.container.addView(card)
+            foldModules.add(header to card)
+            foldModuleKeys.add(moduleKeys)
         }
+        refreshFolds()
     }
 
     /** One row spacing rule for both threshold and habit pages, with habits adding a side action. */
