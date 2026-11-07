@@ -98,7 +98,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun modeChainText(start: String, modes: JSONObject): String =
-        "<" + modeChain(start, modes).joinToString("→") + ">"
+        "[" + modeChain(start, modes).joinToString(" > ") + "]"
 
     /**
      * Keep the existing chain syntax, and make each actual Mode name a link.
@@ -112,22 +112,22 @@ class RolePackEditorActivity : AppCompatActivity() {
         val richText = SpannableStringBuilder(label)
         starts.forEachIndexed { chainIndex, first ->
             if (chainIndex > 0) richText.append("，")
-            richText.append("<")
+            richText.append("[")
             modeChain(first, modes).forEachIndexed { index, segment ->
-                if (index > 0) richText.append("→")
+                if (index > 0) richText.append(" > ")
                 val begin = richText.length
                 richText.append(segment)
                 if (modes.optJSONObject(segment) != null) {
                     richText.setSpan(object : ClickableSpan() {
                         override fun onClick(widget: View) { onModeClick(segment) }
                         override fun updateDrawState(ds: TextPaint) {
-                            ds.color = getColor(android.R.color.holo_blue_dark)
+                            ds.color = getColor(R.color.cp_sub)
                             ds.isUnderlineText = true
                         }
                     }, begin, richText.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
             }
-            richText.append(">")
+            richText.append("]")
         }
         return text("", size).apply {
             setText(richText, TextView.BufferType.SPANNABLE)
@@ -2164,15 +2164,31 @@ class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundResource(R.drawable.card_bg)
             rippleCard(this)
-            setPadding(px(12), px(7), px(12), px(7))
+            setPadding(if (examplePath != null) px(1) else px(12), px(5),
+                if (examplePath != null) px(1) else px(12), px(5))
             isClickable = true
             if (immediate) setOnClickListener { click() }
             else rippleClick(this) { click() }
         }
-        // Keep the original order and typography: title, description, current animation chains.
+        // The title chevron belongs to a real centered row, not spaced text.
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
-        if (description.isNotBlank()) content.addView(text(description, 12f).apply {
+        if (examplePath != null) {
+            val titleRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            titleRow.addView(text(title, 15f).apply { setPadding(0, 0, 0, 0) },
+                LinearLayout.LayoutParams(-2, -2))
+            titleRow.addView(text("›", 15f).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setTextColor(getColor(R.color.cp_title))
+                setPadding(px(4), 0, 0, 0)
+            }, LinearLayout.LayoutParams(-2, -2))
+            content.addView(titleRow)
+        } else {
+            content.addView(text(title, 15f).apply { setPadding(0, 0, 0, 0) })
+        }
+        if (description.isNotBlank()) content.addView(text(description, 10f).apply {
             setPadding(0, px(2), 0, 0)
             setTextColor(getColor(R.color.cp_note))
         })
@@ -2180,10 +2196,10 @@ class RolePackEditorActivity : AppCompatActivity() {
             val subtitleView = if (examplePath != null) {
                 val functionPath = examplePath
                 val animationNames = functionAnimationsAt(functionPath)
-                linkedModeChains(animationNames, root.getJSONObject("modes"), "当前动画：", 11f) {
+                linkedModeChains(animationNames, root.getJSONObject("modes"), "当前动画：", 10f) {
                     showMode(it)
                 }
-            } else text(subtitle, 11f)
+            } else text(subtitle, 10f)
             subtitleView.apply {
                 setPadding(0, px(2), 0, 0)
                 setTextColor(getColor(if (examplePath == null) R.color.cp_note else R.color.cp_title))
@@ -2192,25 +2208,13 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
         val bitmap = examplePath?.let { templateRandomFrame(it) }
         if (bitmap != null) {
-            val example = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-            }
-            example.addView(ImageView(this).apply {
+            card.addView(ImageView(this).apply {
                 setImageBitmap(bitmap)
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 isClickable = false
                 isFocusable = false
-            }, LinearLayout.LayoutParams(px(48), px(48)))
-            example.addView(text("示例", 8f).apply {
-                includeFontPadding = false
-                setLineHeight((8f * resources.displayMetrics.scaledDensity).toInt().coerceAtLeast(1))
-                gravity = Gravity.CENTER
-                setPadding(0, 0, 0, 0)
-                setTextColor(getColor(R.color.cp_note))
-            }, LinearLayout.LayoutParams(px(48), -2))
-            card.addView(example, LinearLayout.LayoutParams(px(48), -2).apply {
-                rightMargin = px(8)
+            }, LinearLayout.LayoutParams(px(48), px(48)).apply {
+                rightMargin = px(5)
             })
         }
         card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
@@ -2239,7 +2243,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             when (val child = values.opt(key)) {
                 is JSONObject -> if (child.has("modes")) {
                     val selected = jsonStrings(child.optJSONArray("modes"))
-                    functionItem(parent, "▣  " + functionPathName(currentPath) + "   ›",
+                    functionItem(parent, "▣  " + functionPathName(currentPath),
                         "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) }, path.size,
                         description = functionDescription(currentPath), examplePath = currentPath) {
                         functionDetails(currentPath, selected)
@@ -2268,7 +2272,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                 is JSONArray -> {
                     val selected = (0 until child.length()).map { child.optString(it) }
                         .filter { it.isNotBlank() }
-                    functionItem(parent, "▣  " + functionPathName(currentPath) + "   ›",
+                    functionItem(parent, "▣  " + functionPathName(currentPath),
                         "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) }, path.size,
                         description = functionDescription(currentPath), examplePath = currentPath) {
                         functionDetails(currentPath, selected)
