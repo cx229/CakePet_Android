@@ -1713,7 +1713,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         // frames. No nested scrolling or wrap-content RecyclerView measurement.
         val pageHeader = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(px(16), px(16), px(16), 0)
+            // RecyclerView already provides the shared 16dp horizontal gutter.
+            // Padding this header again made playback/association cards 16dp
+            // narrower on each side than the frame-section surface.
+            setPadding(0, px(16), 0, 0)
             layoutParams = RecyclerView.LayoutParams(-1, -2)
         }
         while (panel.childCount > 0) {
