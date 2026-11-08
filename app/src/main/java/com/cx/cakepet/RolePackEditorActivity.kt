@@ -1225,22 +1225,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             box.addView(choices)
             redraw()
-            box.addView(text("创建新组", 12f).apply {
-                setTextColor(getColor(R.color.cp_note))
-            })
+            // A floating outline label replaces the separate heading.
             val addRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            val input = EditText(this).apply {
-                hint = "新组名称"
-                setSingleLine(true)
-                textSize = 14f
-                setTextColor(getColor(R.color.cp_title))
-                setBackgroundResource(R.drawable.bg_input)
-                setPadding(px(10), 0, px(10), 0)
-            }
-            addRow.addView(input, LinearLayout.LayoutParams(0, px(42), 1f))
+            val inputField = FormInputField(this)
+            val input = inputField.configure("新组名称", placeholder = "输入新组名称")
+            addRow.addView(inputField, LinearLayout.LayoutParams(0, -2, 1f))
             addRow.addView(button("√") {
                 val name = input.text.toString().trim()
                 if (name.isBlank() || name.length > 40 || name == "未分组" || name == "全部" ||
@@ -3848,17 +3840,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         editor(if (id == null) "新建碎碎念" else "碎碎念详情",
             compact = true, subtitle = "角色底部消息文本") { box ->
             val textCard = dialogSection()
-            textCard.addView(text("文本内容", 15f))
-            val field = EditText(this).apply {
-                setText(originalText)
-                hint = "输入碎碎念文本"
-                minLines = 3
-                maxLines = 8
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                setBackgroundResource(R.drawable.bg_input)
-                setPadding(px(10), px(10), px(10), px(10))
-            }
-            textCard.addView(field, LinearLayout.LayoutParams(-1, -2))
+            val textField = FormInputField(this)
+            val field = textField.configure("文本内容", originalText,
+                placeholder = "输入碎碎念文本", multiline = true)
+            textCard.addView(textField, LinearLayout.LayoutParams(-1, -2))
             addDetailSection(box, textCard)
 
             val groupCard = dialogSection()
@@ -3959,22 +3944,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             box.addView(choices)
             redraw()
-            box.addView(text("创建新组", 12f).apply {
-                setTextColor(getColor(R.color.cp_note))
-            })
+            // A floating outline label replaces the separate heading.
             val addRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            val input = EditText(this).apply {
-                hint = "新组名称"
-                setSingleLine(true)
-                textSize = 14f
-                setTextColor(getColor(R.color.cp_title))
-                setBackgroundResource(R.drawable.bg_input)
-                setPadding(px(10), 0, px(10), 0)
-            }
-            addRow.addView(input, LinearLayout.LayoutParams(0, px(42), 1f))
+            val inputField = FormInputField(this)
+            val input = inputField.configure("新组名称", placeholder = "输入新组名称")
+            addRow.addView(inputField, LinearLayout.LayoutParams(0, -2, 1f))
             addRow.addView(button("√") {
                 val name = input.text.toString().trim()
                 if (name.isBlank() || name.length > 40 || name == "全部" || name == "未分组" ||
@@ -4267,21 +4244,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             editor("碎碎念设置", compact = true,
                                 subtitle = "碎碎念文本 · ${thinkingBody(id).take(28)}") { box ->
                                 val textCard = dialogSection()
-                                textCard.addView(text("文本内容", 15f))
-                                val field = EditText(this@RolePackEditorActivity).apply {
-                                    setText(thinkingBody(id))
-                                    hint = "输入碎碎念文本"
-                                    minLines = 3
-                                    maxLines = 8
-                                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                                    setBackgroundResource(R.drawable.bg_input)
-                                    setPadding(px(10), px(10), px(10), px(10))
-                                }
-                                textCard.addView(field, LinearLayout.LayoutParams(-1, -2))
-                                textCard.addView(text("将影响全部引用位置（${thinkingUses(id).size}次引用）", 12f).apply {
-                                    setTextColor(getColor(R.color.cp_sub))
-                                    setPadding(0, px(3), 0, 0)
-                                })
+                                val textField = FormInputField(this@RolePackEditorActivity)
+                                val field = textField.configure("文本内容", thinkingBody(id),
+                                    placeholder = "输入碎碎念文本",
+                                    helper = "将影响全部引用位置（${thinkingUses(id).size}次引用）",
+                                    multiline = true)
+                                textCard.addView(textField, LinearLayout.LayoutParams(-1, -2))
                                 addDetailSection(box, textCard)
                                 val time = chosen[id]!!
                                 val timeCard = dialogSection()
