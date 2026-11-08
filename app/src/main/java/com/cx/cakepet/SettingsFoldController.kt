@@ -106,6 +106,22 @@ class SettingsFoldController(private val host: Activity) {
             section.expanded = !section.expanded
             refresh()
         }
+        // When forced ON, the main card opens diagnostics, while the existing
+        // left chevron still folds/unfolds the fully usable child settings.
+        header.setOnTouchListener { view, event ->
+            if (!section.locked || section.forceOff ||
+                event.x > view.paddingStart.toFloat()) return@setOnTouchListener false
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> true
+                android.view.MotionEvent.ACTION_UP -> {
+                    section.expanded = !section.expanded
+                    refresh()
+                    true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> true
+                else -> true
+            }
+        }
         refresh()
     }
 
