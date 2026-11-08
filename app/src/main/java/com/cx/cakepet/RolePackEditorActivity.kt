@@ -1031,11 +1031,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val roleName = root.optString("name").ifBlank { "角色" }
         val report = RolePackNormalizer.report(draft)
         if (report != null) {
-            val issues = report.optJSONArray("issues")?.length() ?: 0
+            val issues = report.optJSONArray("issues")
+            val repaired = (0 until (issues?.length() ?: 0)).count {
+                issues?.optJSONObject(it)?.optString("type") == "已补全"
+            }
+            val unsupported = (issues?.length() ?: 0) - repaired
             val invalid = report.has("parseError")
-            if (issues > 0 || invalid) {
-                menuCard("素材包兼容检查 · ${if (invalid) "原配置需要修复" else "$issues 项记录"}",
-                    "已补全缺失结构；可查看原配置、未定义内容与格式问题",
+            if (repaired > 0 || unsupported > 0 || invalid) {
+                menuCard("素材包兼容检查 · ${if (invalid) "原配置需要修复" else "$unsupported 项需检查"}",
+                    "已补齐 $repaired 项缺失结构；点击查看导入诊断与原始配置",
                     android.R.drawable.ic_dialog_alert) { showPackRepairReport() }
             }
         }
@@ -1092,7 +1096,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun editPackSource() {
         val origin = RolePackNormalizer.original(draft)
         val current = File(draft, "modes.jsonc")
-        val initial = (if (origin.exists()) origin else current).readText()
+        // A malformed import needs its untouched original. Otherwise edit the
+        // CURRENT document so subsequent edits are never overwritten by old backups.
+        val invalidSource = RolePackNormalizer.report(draft)?.has("parseError") == true
+        val initial = (if (invalidSource && origin.exists()) origin else current).readText()
         editor("编辑 JSONC 原始配置", compact = true,
             subtitle = "保存后按当前格式重新解析和补齐") { form ->
             val inputField = FormInputField(this)
