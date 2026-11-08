@@ -1075,9 +1075,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val repaired = (0 until (issues?.length() ?: 0)).count {
                 issues?.optJSONObject(it)?.optString("type") == "已补全"
             }
-            val unsupported = (issues?.length() ?: 0) - repaired
+            val unsupported = (0 until (issues?.length() ?: 0)).count {
+                issues?.optJSONObject(it)?.optString("type") == "格式不支持"
+            }
             val invalid = report.has("parseError")
-            if (repaired > 0 || unsupported > 0 || invalid) {
+            if (unsupported > 0 || invalid) {
                 menuCard("素材包兼容检查 · ${if (invalid) "原配置需要修复" else "$unsupported 项需检查"}",
                     "已补齐 $repaired 项缺失结构；点击查看提示并在对应编辑页修复",
                     android.R.drawable.ic_dialog_alert) { showPackRepairReport() }
