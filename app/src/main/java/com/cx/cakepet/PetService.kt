@@ -2623,9 +2623,20 @@ class PetService : Service() {
             }
             fishLayers.filter { it.roleId == rid }.forEach { fl ->
                 val applied = imeFishOffsets[fl.iv] ?: 0
-                val (newY, newOffset) = imePosition(fl.lp.y, fl.lp.height, applied,
+                val (mappedY, newOffset) = imePosition(fl.lp.y, fl.lp.height, applied,
                     mode, keyboardTop, vis, active, closingLocal, previousTop,
                     stretchTop, stretchSourceBottom, stretchTargetBottom)
+                // Food is clamped to the role's offset canvas floor after IME mapping.
+                // It can differ from the raw keyboard top by more than the 12dp tolerance.
+                // Restore lifted food (or food at that effective floor) on local close;
+                // the final reclamp applies normal canvas offsets again.
+                val oldEffectiveTop = previousTop?.minus(
+                    if (c.feedingFullScreen) 0f else rotatedBottomOffset)
+                val atEffectiveTop = closingLocal && oldEffectiveTop != null &&
+                    kotlin.math.abs(fl.lp.y + fl.lp.height - oldEffectiveTop) <=
+                        12f * resources.displayMetrics.density
+                val newY = if (closingLocal && (applied != 0 || atEffectiveTop))
+                    vis.bottom - fl.lp.height else mappedY
                 moveAuxiliary(fl.iv, fl.lp, newY - fl.lp.y, fl.borderView)
                 if (newOffset == 0) imeFishOffsets.remove(fl.iv) else imeFishOffsets[fl.iv] = newOffset
             }
