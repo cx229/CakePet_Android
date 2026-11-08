@@ -82,6 +82,12 @@ class MovementSettingsActivity : AppCompatActivity() {
             )
         )
         btnMore.setOnClickListener { moveMoreMenu.show() }
+        // Broad behavior controls expose the same underlying functions as specific settings.
+        // These are reference links, not new or duplicated function bindings.
+        SettingsMaterialLink.attach(this, roleId, R.id.sw_move_enabled, "移动",
+            "移动", "standby", "touch", "climb")
+        SettingsMaterialLink.attach(this, roleId, R.id.sw_gravity_enabled, "重力",
+            "重力", "touch/roll", "touch/jump_down", "climb/leap/landing")
         SettingsMaterialLink.attach(this, roleId, R.id.sw_throw, "抛掷", "抛掷", "touch")
         SettingsMaterialLink.attach(this, roleId, R.id.sw_wallclimb, "攀岩走壁", "攀爬", "climb")
         SettingsMaterialLink.attach(this, roleId, R.id.sw_auto_forage, "自动觅食", "自动觅食", "climb/forage")
