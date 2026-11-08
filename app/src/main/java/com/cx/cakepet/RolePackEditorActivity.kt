@@ -3939,32 +3939,59 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
-    /** Confirm updates only the caller's draft, not the material pack. */
+    /** Mirror animation group selection: add candidates locally, then confirm once. */
     private fun chooseThinkingGroups(initialGroups: List<String>, onConfirm: (List<String>) -> Unit) {
         editor("选择碎碎念组", compact = true, confirmLabel = "确认") { box ->
-            val known = (allThinkingGroups() + initialGroups)
-                .filter { it != "全部" && it != "未分组" }.distinct()
+            val groups = (allThinkingGroups() + initialGroups)
+                .filter { it != "全部" && it != "未分组" }.distinct().toMutableList()
             val checked = initialGroups.toMutableSet()
             val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            known.forEach { group ->
-                choices.addView(CheckBox(this).apply {
-                    text = group
-                    isChecked = group in checked
-                    setOnCheckedChangeListener { _, on ->
-                        if (on) checked.add(group) else checked.remove(group)
-                    }
-                })
+            fun redraw() {
+                choices.removeAllViews()
+                groups.forEach { group ->
+                    choices.addView(CheckBox(this).apply {
+                        text = group
+                        isChecked = group in checked
+                        setOnCheckedChangeListener { _, on ->
+                            if (on) checked.add(group) else checked.remove(group)
+                        }
+                    })
+                }
             }
             box.addView(choices)
-            val input = entry(box, "新分组名称（可选）", "", compact = true)
-            ({
+            redraw()
+            box.addView(text("创建新组", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            })
+            val addRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val input = EditText(this).apply {
+                hint = "新组名称"
+                setSingleLine(true)
+                textSize = 14f
+                setTextColor(getColor(R.color.cp_title))
+                setBackgroundResource(R.drawable.bg_input)
+                setPadding(px(10), 0, px(10), 0)
+            }
+            addRow.addView(input, LinearLayout.LayoutParams(0, px(42), 1f))
+            addRow.addView(button("√") {
                 val name = input.text.toString().trim()
-                if (name.isNotEmpty()) {
-                    require(name != "未分组" && name != "全部" && name.length <= 40 &&
-                        name.none { it == '/' || it == '\\' || it == '\n' || it == '\r' }) { "分组名称不合法" }
+                if (name.isBlank() || name.length > 40 || name == "全部" || name == "未分组" ||
+                    name.any { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
+                    input.error = "碎碎念组名称不合法"
+                } else {
+                    if (name !in groups) groups.add(name)
                     checked.add(name)
+                    input.setText("")
+                    redraw()
                 }
-                onConfirm(checked.toList())
+            }, LinearLayout.LayoutParams(px(48), px(42)).apply { leftMargin = px(8) })
+            box.addView(addRow)
+            ({
+                require(input.text.toString().isBlank()) { "请先点击添加新组" }
+                onConfirm(groups.filter { it in checked })
             })
         }
     }
