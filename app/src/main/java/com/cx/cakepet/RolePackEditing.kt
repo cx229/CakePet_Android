@@ -10,6 +10,52 @@ import java.util.zip.*
 
 /** File-only functions for the v1.02 material editor. */
 object RolePackEditing {
+    /** Single-purpose tree for missing standby animations, reusable from home and settings. */
+    fun showMissingStandby(activity: android.app.Activity, instanceId: String) {
+        val descriptor = RoleStore.descriptorForInstance(activity, instanceId)
+        val context = activity
+        val density = context.resources.displayMetrics.density
+        fun dp(n: Int) = (n * density + .5f).toInt()
+        val box = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(22), dp(12), dp(22), dp(8))
+        }
+        val folder = android.widget.TextView(context).apply {
+            text = "▾  📂  待机"
+            textSize = 16f
+            setPadding(0, dp(6), 0, dp(6))
+        }
+        box.addView(folder)
+        val leaf = android.widget.TextView(context).apply {
+            text = "    ▣  待机池\n    素材包必要动画缺失"
+            textSize = 14f
+            setTextColor(context.getColor(R.color.cp_danger))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        box.addView(leaf)
+        val dialog = android.app.AlertDialog.Builder(context)
+            .setTitle("缺失的功能动画")
+            .setView(box)
+            .setNegativeButton("关闭", null)
+            .create()
+        val open = {
+            dialog.dismiss()
+            if (descriptor == null) {
+                android.widget.Toast.makeText(context, "当前素材包不可读取，请先恢复素材包", android.widget.Toast.LENGTH_LONG).show()
+            } else if (descriptor.source == RoleSource.ASSETS) {
+                android.widget.Toast.makeText(context, "预装素材包不可直接编辑，请在素材包管理页复制后修复", android.widget.Toast.LENGTH_LONG).show()
+                context.startActivity(android.content.Intent(context, RoleManageActivity::class.java))
+            } else {
+                context.startActivity(android.content.Intent(context, RolePackEditorActivity::class.java).apply {
+                    putExtra("role_id", descriptor.id)
+                    putExtra("initial_function_path", "standby/pool")
+                })
+            }
+        }
+        leaf.setOnClickListener { open() }
+        dialog.show()
+    }
+
     fun newId() = "custom_" + UUID.randomUUID().toString().replace("-", "").take(16)
     fun dir(ctx: Context, id: String): File {
         val live = File(ctx.filesDir, "roles/$id")
