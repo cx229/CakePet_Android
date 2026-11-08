@@ -9,7 +9,7 @@
         <item name="boxCornerRadiusBottomEnd">10dp</item>
         <item name="hintTextColor">@color/cp_sub</item>
         <item name="boxStrokeColor">@color/cp_sub</item>
-        <item name="placeholderTextColor">@color/cp_note</item>
+        <item name="placeholderTextColor">@color/cp_placeholder</item>
     </style>
 
     <!-- 设置页：每个选项的主标题（带 Switch/滑块的那种） -->
