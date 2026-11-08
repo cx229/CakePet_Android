@@ -199,7 +199,9 @@ fun cleanPackReferences(root: JSONObject) {
         for (key in node.keys().asSequence().toList()) {
             when (val value = node.opt(key)) {
                 is JSONArray -> if (key != "modes" && key != "pool" && key != "groups" &&
-                    key != "thinking" && key != "usage") node.put(key, filterModes(value))
+                    key != "thinking" && key != "usage" &&
+                    (0 until value.length()).all { value.opt(it) is String })
+                    node.put(key, filterModes(value))
                 is JSONObject -> if (key != "thinking") cleanFunction(value)
             }
         }
