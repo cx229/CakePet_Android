@@ -3160,13 +3160,20 @@ open class RolePackEditorActivity : AppCompatActivity() {
             -1, (resources.displayMetrics.heightPixels * .55f).toInt()
         ))
 
-        fun warnLastBinding(path: List<String>) {
+        fun warnLastBinding(path: List<String>, proceed: () -> Unit) {
+            val critical = path == listOf("standby", "static_pool")
+            val normalStandby = path == listOf("standby", "pool")
             showConfirmDialog(
-                title = "无法解除绑定",
-                bodyHtml = "功能「${functionPathName(path)}」至少需要保留一个动画。",
-                subText = "当前只有「$modeId」绑定到这个功能。请先为该功能添加其他动画。",
-                positiveText = "我知道了"
-            ) { }
+                title = "解除最后一个动画绑定？",
+                bodyHtml = if (critical)
+                    "静止待机池清空后，素材包将不满足角色最低运行要求。"
+                else if (normalStandby)
+                    "普通待机池将为空，日常待机无法从此池选择动画。"
+                else "功能「${functionPathName(path)}」将没有关联动画。",
+                subText = if (critical) "可以继续保存或导出素材包，补齐静止待机动画后才可启动角色。"
+                    else "对应动画不会触发，不影响其他独立功能。",
+                positiveText = "仍然解绑"
+            ) { proceed() }
         }
 
         lateinit var redraw: () -> Unit
@@ -3244,13 +3251,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 if (restoringCheck) return@setOnCheckedChangeListener
                                 if (!nowChecked && checked && leaves.getValue(key).second
                                         .filter { it != modeId }.isEmpty()) {
-                                    // Restore without firing another selection callback.
-                                    // Restore without dropping this checkbox's listener.
-                                    // Suppress only the programmatic callback.
                                     restoringCheck = true
                                     try { check.isChecked = true }
                                     finally { restoringCheck = false }
-                                    warnLastBinding(path)
+                                    warnLastBinding(path) {
+                                        selected.remove(key)
+                                        redraw()
+                                    }
                                 } else {
                                     if (nowChecked) selected.add(key) else selected.remove(key)
                                     redraw()
@@ -3270,7 +3277,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(-2, -2).apply { rightMargin = px(5) })
         actions.addView(dialogButton("确认", primary = true) {
             attempt {
-                // Verify again at commit time; never clear an existing function pool.
+                // Empty pools are valid editor data; only runtime readiness is restricted.
                 change { json ->
                     val functions = json.getJSONObject("functions")
                     for ((key, pair) in leaves) {
@@ -3282,9 +3289,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             .filter { it.isNotBlank() }
                         val updated = oldModes.filter { it != modeId }.toMutableList()
                         if (key in selected && modeId !in updated) updated.add(modeId)
-                        require(oldModes.isEmpty() || updated.isNotEmpty()) {
-                            "功能「${functionPathName(path)}」至少需要保留一个动画"
-                        }
                         if (node.optJSONObject(path.last()) != null) node.getJSONObject(path.last()).put("modes", JSONArray().apply { updated.distinct().forEach { put(it) } })
                         else node.put(path.last(), JSONArray().apply { updated.distinct().forEach { put(it) } })
                     }
@@ -3376,12 +3380,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(-2, -2).apply { rightMargin = px(5) })
         actions.addView(dialogButton("确认", primary = true) {
-            if (!single && selected.isEmpty()) {
-                Toast.makeText(this, "至少选择一个动画", Toast.LENGTH_SHORT).show()
-            } else {
-                onConfirm(selected.toList())
-                dialog.dismiss()
-            }
+            onConfirm(selected.toList())
+            dialog.dismiss()
         }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = px(5) })
         body.addView(actions)
         dialog.setContentView(frame)
