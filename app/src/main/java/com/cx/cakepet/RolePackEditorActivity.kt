@@ -98,23 +98,42 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
+    private fun renderMissingLinkedCards(container: LinearLayout) {
+        templateExamples.clear()
+        linkedPaths.map { it.split("/") }.distinct().forEach { path ->
+            // A setting may name several dependencies: show only those that
+            // actually prevent the setting from taking effect right now.
+            if (functionAnimationsAt(path).any(::playableMode)) return@forEach
+            functionItem(container, functionPathName(path), "当前动画：", 0,
+                description = functionDescription(path), examplePath = path) {
+                functionDetails(path, functionAnimationsAt(path))
+            }
+        }
+    }
+
     private fun showLinkedFunctions() {
+        val missingOnly = intent.getBooleanExtra("missing_only", false)
         val count = RoleStore.getHomeRoles(this).count { it.templateId == id }
         val dialog = editor("${linkedTitle} · 功能/动画", compact = true,
             readOnly = true, subtitle = "素材包：${linkedPackName}") { form ->
-            addDetailSection(form, sharedNotice(
-                if (linkedReadOnly) "预装素材包 · 只读" else "共享素材配置",
-                count,
-                if (linkedReadOnly) "可查看功能、动画与碎碎念，复制素材包后可编辑。"
-                else "修改后将影响使用此素材包的所有角色。",
-                linkedReadOnly
-            ))
+            if (!missingOnly) {
+                addDetailSection(form, sharedNotice(
+                    if (linkedReadOnly) "预装素材包 · 只读" else "共享素材配置",
+                    count,
+                    if (linkedReadOnly) "可查看功能、动画与碎碎念，复制素材包后可编辑。"
+                    else "修改后将影响使用此素材包的所有角色。",
+                    linkedReadOnly
+                ))
+            }
             val tree = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             form.addView(tree)
             linkedTreeContainer = tree
-            openedFunctionFolders.clear()
-            expandLinkedFolders(root.getJSONObject("functions"), emptyList())
-            functionTree(tree, root.getJSONObject("functions"), emptyList())
+            if (missingOnly) renderMissingLinkedCards(tree)
+            else {
+                openedFunctionFolders.clear()
+                expandLinkedFolders(root.getJSONObject("functions"), emptyList())
+                functionTree(tree, root.getJSONObject("functions"), emptyList())
+            }
             ({ })
         }
         dialog.setOnDismissListener {
@@ -790,7 +809,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         draft = RolePackEditing.draft(this, id)
         if (linkedMode) linkedTreeContainer?.let { tree ->
             tree.removeAllViews()
-            functionTree(tree, root.getJSONObject("functions"), emptyList())
+            if (intent.getBooleanExtra("missing_only", false)) renderMissingLinkedCards(tree)
+            else functionTree(tree, root.getJSONObject("functions"), emptyList())
         }
         if (!silent) Toast.makeText(this,
             if (linkedMode) "素材包已保存，关联角色将使用最新配置" else "已保存",
