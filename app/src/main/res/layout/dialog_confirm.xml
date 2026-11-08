@@ -5,15 +5,15 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingStart="24dp"
-    android:paddingEnd="24dp">
+    android:paddingStart="22dp"
+    android:paddingEnd="22dp">
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:maxWidth="420dp"
         app:cardBackgroundColor="@color/cp_card_bg"
-        app:cardCornerRadius="28dp"
+        app:cardCornerRadius="24dp"
         app:cardElevation="6dp"
         app:contentPadding="0dp">
 
@@ -21,7 +21,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="20dp">
 
         <TextView
             android:id="@+id/tv_title"
@@ -38,21 +38,32 @@
             android:id="@+id/tv_body"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="14dp"
             android:layout_marginBottom="4dp"
             android:gravity="center"
             android:textAlignment="center"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:lineSpacingExtra="2dp"
             android:textColor="@color/cp_text"
             tools:text="正文"/>
+
+        <TextView
+            android:id="@+id/tv_sub"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:textAlignment="center"
+            android:textSize="11sp"
+            android:textColor="@color/cp_sub"
+            tools:text="小字说明"/>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginTop="20dp">
+            android:layout_marginTop="16dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_negative"
@@ -77,16 +88,7 @@
                 android:text="重置"/>
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/tv_sub"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:gravity="center"
-            android:textAlignment="center"
-            android:textSize="8sp"
-            android:textColor="@color/cp_note"
-            tools:text="小字说明"/>
+
     </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 </FrameLayout>
