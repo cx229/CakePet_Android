@@ -24,7 +24,9 @@ class SettingsFoldController(private val host: Activity) {
         val dependency: (PetConfigData) -> Boolean,
         var expanded: Boolean,
         val arrow: TextView,
-        val dependencyHint: TextView?
+        val dependencyHint: TextView?,
+        var locked: Boolean = false,
+        var onLockedClick: (() -> Unit)? = null
     )
 
     private val sections = mutableListOf<Section>()
@@ -97,9 +99,21 @@ class SettingsFoldController(private val host: Activity) {
         // interactive children consume their own events, preserving controls.
         header.isClickable = true
         header.setOnClickListener {
+            if (section.locked) { section.onLockedClick?.invoke(); return@setOnClickListener }
             section.expanded = !section.expanded
             refresh()
         }
+        refresh()
+    }
+
+    /** Lock control and fold content, but keep the header navigable to repair. */
+    fun setLocked(masterId: Int, locked: Boolean, onClick: (() -> Unit)? = null) {
+        val section = sections.firstOrNull { it.id == masterId } ?: return
+        if (locked && !section.locked) section.expanded = false
+        if (!locked && section.locked) section.expanded = true
+        section.locked = locked
+        section.onLockedClick = onClick
+        section.switch.isEnabled = !locked
         refresh()
     }
 
@@ -117,13 +131,13 @@ class SettingsFoldController(private val host: Activity) {
             val effective = section.switch.isChecked && available
             section.dependencyHint?.visibility =
                 if (available) View.GONE else View.VISIBLE
-            section.arrow.text = if (section.expanded) "▾" else "▸"
+            section.arrow.text = if (section.expanded && !section.locked) "▾" else "▸"
             section.arrow.contentDescription =
                 if (section.expanded) "收起详细设置" else "展开详细设置"
             // Gray out ineffective parameters but keep the original saved selections readable.
             for (childId in section.children) {
                 val child = row(childId) ?: continue
-                val visible = section.expanded && ancestorsExpanded
+                val visible = section.expanded && !section.locked && ancestorsExpanded
                 child.visibility = if (visible) View.VISIBLE else View.GONE
                 child.alpha = if (effective) 1f else 0.48f
                 // Existing card headings must follow their card, without matching a
