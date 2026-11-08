@@ -144,7 +144,8 @@ class SnapSettingsActivity : AppCompatActivity() {
         val sb = b.sliders.first { it.key == "snapThreshold" }
         suppressSnapPreview = true
         suppressEnabled = true
-        swSnapEnabled.isChecked = c.snapEnabled
+        val snapReady = MaterialFunctionSupport.hasPlayable(this, roleId, MaterialFunctionSupport.SNAP)
+        swSnapEnabled.isChecked = c.snapEnabled && snapReady
         swStop.isChecked = c.snapTop
         swSbottom.isChecked = c.snapBottom
         swSleft.isChecked = c.snapLeft
@@ -156,6 +157,9 @@ class SnapSettingsActivity : AppCompatActivity() {
             EditSync.setText(thresholdVal, c.snapThreshold.toInt().toString())
         }
         folding?.refresh(c)
+        folding?.setForced(R.id.sw_snap_enabled, if (snapReady) 0 else -1) {
+            RolePackEditing.showMissingFunctions(this, roleId, listOf(MaterialFunctionSupport.SNAP))
+        }
     }
 
     // 吸附距离滑块：绑定 + 初始回填。抽成方法，onCreate 与 onResume 复用，
@@ -199,6 +203,7 @@ class SnapSettingsActivity : AppCompatActivity() {
         super.onResume()
         SettingsMaterialLink.refresh(this, roleId)
         refreshUI()
+        if (::swSnapEnabled.isInitialized) lifecycleScope.launch { applyConfigToUi(config.getBlocking()) }
     }
 
     /**
