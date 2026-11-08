@@ -114,15 +114,11 @@ object RoleStore {
         val presets = RoleRegistry.PRESETS
         val raw = ctx.homeRolesStore.data.first()[KEY_HOME_ROLES] ?: ""
         if (raw.isEmpty()) {
-            val seed = presets.map { HomeRoleInstance(it.id, it.id) }
-            ctx.homeRolesStore.edit { prefs ->
-                prefs[KEY_HOME_ROLES] = instancesToJson(seed).toString()
-                prefs[KEY_ADDITIONAL_PRESETS_SEEDED] = true
-            }
-            seed
+            // An intentionally empty home screen is valid. Never reseed presets.
+            emptyList()
         } else {
             val arr = JSONArray(raw)
-            val stored = (0 until arr.length()).map { i ->
+            (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
                 HomeRoleInstance(
                     instanceId = o.getString("instanceId"),
@@ -131,23 +127,7 @@ object RoleStore {
                     shortName = o.optString("shortName", "")
                 )
             }
-            if (ctx.homeRolesStore.data.first()[KEY_ADDITIONAL_PRESETS_SEEDED] != true) {
-                val known = stored.map { it.templateId }.toSet()
-                val missing = presets.filter { it.id !in known }
-                    .map { HomeRoleInstance(it.id, it.id) }
-                val merged = stored + missing
-                ctx.homeRolesStore.edit { prefs ->
-                    prefs[KEY_HOME_ROLES] = instancesToJson(merged).toString()
-                    prefs[KEY_ADDITIONAL_PRESETS_SEEDED] = true
-                }
-                merged.filter { RoleRegistry.byId(it.templateId) != null }
-            } else {
-                stored.filter { RoleRegistry.byId(it.templateId) != null }.let { visible ->
-                    if (visible.isEmpty() && stored.isNotEmpty())
-                        presets.map { HomeRoleInstance(it.id, it.id) }
-                    else visible
-                }
-            }
+            // Preserve unresolved templates; never erase instance-specific settings.
         }
     }
 
