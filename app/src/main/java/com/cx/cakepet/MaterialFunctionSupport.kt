@@ -80,11 +80,9 @@ internal object MaterialFunctionSupport {
         else -> null // Bare climbing has physical state but no mandatory climb-only animation.
     }
 
-    fun missing(ctx: Context, instanceId: String, label: String): String? {
-        val path = requirement(label) ?: return null
-        val root = read(ctx, instanceId) ?: return "素材包配置无法读取，功能暂不可用"
-        val descriptor = RoleStore.descriptorForInstance(ctx, instanceId)
-            ?: return "无法定位当前素材包，功能暂不可用"
+    fun hasPlayable(ctx: Context, instanceId: String, path: List<String>): Boolean {
+        val root = read(ctx, instanceId) ?: return false
+        val descriptor = RoleStore.descriptorForInstance(ctx, instanceId) ?: return false
         val imageCache = mutableMapOf<String, Boolean>()
         val playable = available(root, path) { res ->
             imageCache.getOrPut(res) {
@@ -104,7 +102,14 @@ internal object MaterialFunctionSupport {
                 }.getOrDefault(false)
             }
         }
-        return if (playable) null
-            else "当前素材包缺少可播放的必要动画（${path.joinToString("/")}），功能暂不可用"
+        return playable
+    }
+
+    fun missing(ctx: Context, instanceId: String, label: String): String? {
+        if (label == "移动") return if (hasPlayable(ctx, instanceId, STATIC)) null
+            else "素材包必要动画缺失，移动强制开启"
+        val path = requirement(label) ?: return null
+        return if (hasPlayable(ctx, instanceId, path)) null
+            else "素材包必要动画缺失，该功能强制关闭"
     }
 }
