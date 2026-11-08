@@ -1166,10 +1166,10 @@ class PetService : Service() {
         }
         // 重新应用本角色共享配置（物理参数/缩放/碎碎念样式/点击穿透等），新实例据此拿到配置、现有实例幂等刷新。
         val rt = engines[roleId] ?: return
-        applySharedConfig(rt)
-        // 资源包：按当前选择重应用（避免改数量时退回默认资源）。
+        // New instances must load their own role's pack before capability checks.
         val pack = resolveCurrentSpritePack(rt)
         pets.filter { it.roleId == roleId }.forEach { it.view.applySpritePack(pack) }
+        applySharedConfig(rt)
         recalcBounds()
         // 实例数量变化（新增/移除）后，重新置顶辅助浮层（宠物窗叠放保持召唤顺序、不再重排）。
         reapplyZOrder()
@@ -1786,11 +1786,11 @@ class PetService : Service() {
         thinkingOffsetY = c.thinkingOffset
         singleTrayMsg = c.singleTrayMsg
         // 碎碎念：独立浮窗，可见性跟随宠物（visible && enabled），按实例错开高度
-        applySharedConfig(rt)
-        // 资源包：根据角色选择初始化（预装只保留白酥）。pets 已在 initPetView 创建完毕。
+        // Resolve this role's material before applying function-specific runtime gates.
         rt.spritePackId = c.spritePack
         val pack = resolveCurrentSpritePack(rt)
         pets.filter { it.roleId == roleId }.forEach { it.view.applySpritePack(pack) }
+        applySharedConfig(rt)
         // 体感重力：同步开关与强度，并按需启停传感器。
         // 有效体感 = 体感开关开启 且 重力·抛掷总开关开启；重力关时体感整体失效
         // （不注册传感器、不量化方向、不触发 roll），但【不改动】tiltGravity 存储值，
@@ -1970,6 +1970,9 @@ class PetService : Service() {
                 rt.spritePackId = c.spritePack
                 val pack = resolveCurrentSpritePack(rt)
                 pets.filter { it.roleId == rt.roleId }.forEach { it.view.applySpritePack(pack) }
+                // The preceding applySharedConfig used the old role pack; recompute
+                // effective function switches without changing stored preferences.
+                applySharedConfig(rt)
                 reloadFishBitmap(rt.roleId)
             }
             // 体感重力：强度随设置页“重力强度”联动；开关变化启停传感器。
