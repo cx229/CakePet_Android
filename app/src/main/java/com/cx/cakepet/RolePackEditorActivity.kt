@@ -130,7 +130,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setTextColor(getColor(R.color.cp_note))
                 setPadding(px(3), 0, 0, px(8))
             })
-            val note = detailSection()
+            val note = dialogSection()
             val summary = when (config.policy) {
                 "off" -> "不播放"
                 "hold" -> "持续 · ${config.pool.size} 条"
@@ -138,7 +138,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             note.addView(detailSectionHeader("碎碎念配置", summary) { linkedReadonlyThinking(path) })
             addDetailSection(form, note)
-            val animations = detailSection()
+            val animations = dialogSection()
             animations.addView(detailSectionHeader("当前动画", "动画链 ${selected.size} 个"))
             val modes = root.getJSONObject("modes")
             selected.forEachIndexed { index, key ->
@@ -158,7 +158,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun linkedReadonlyThinking(path: List<String>) {
         val config = PackThinking.parse(root).functions[path] ?: ThinkingConfig()
         editor("碎碎念配置", compact = true, readOnly = true) { form ->
-            val card = detailSection()
+            val card = dialogSection()
             val policy = when (config.policy) {
                 "off" -> "不播放"
                 "hold" -> "持续"
@@ -191,7 +191,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     }, LinearLayout.LayoutParams(-1, px(136)))
                 }
             }
-            val playback = detailSection()
+            val playback = dialogSection()
             playback.addView(detailSectionHeader("播放循环", when (playbackKind(mode)) {
                 "timed" -> "定时循环"
                 "infinite" -> "无限循环"
@@ -200,10 +200,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
             playback.addView(detailSectionHeader("后续动画", next.ifBlank { "无" }))
             addDetailSection(form, playback)
-            val thinking = detailSection()
+            val thinking = dialogSection()
             thinking.addView(detailSectionHeader("碎碎念配置", modeThinkingSummary(mode)))
             addDetailSection(form, thinking)
-            val frameCard = detailSection()
+            val frameCard = dialogSection()
             frameCard.addView(detailSectionHeader("动画帧", "${frames?.length() ?: 0} 帧"))
             addDetailSection(form, frameCard)
             ({ })
@@ -883,12 +883,23 @@ open class RolePackEditorActivity : AppCompatActivity() {
             bottomMargin = px(2)
         }
 
-    /** Quiet background groups related details without framing every section. */
+    /** Existing editor-page card styling. Do not change when adjusting dialogs. */
     private fun detailSection(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = px(12).toFloat()
-            setColor(getColor(R.color.cp_bg))
+            setColor(getColor(R.color.cp_card_bg))
+            setStroke(px(1), getColor(R.color.cp_divider))
+        }
+        setPadding(px(10), px(9), px(10), px(9))
+    }
+    /** Dialog-only module: an outlined surface, with gray independent list rows. */
+    private fun dialogSection(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = px(12).toFloat()
+            setColor(getColor(R.color.cp_card_bg))
+            setStroke(px(1), getColor(R.color.cp_divider))
         }
         setPadding(px(11), px(9), px(11), px(9))
     }
@@ -1377,7 +1388,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         "infinite" -> "无限循环"
                         else -> "播放一次"
                     }
-                    val playbackCard = detailSection()
+                    val playbackCard = dialogSection()
                     playbackCard.addView(detailSectionHeader("播放循环", summary) {
                         linkedConsent { playbackSettings(currentKey) { redraw() } }
                     }.apply {
@@ -1406,12 +1417,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         })
                     }
                     addDetailSection(form, playbackCard)
-                    val functionCard = detailSection()
+                    val functionCard = dialogSection()
                     functionCard.addView(detailSectionHeader("绑定功能", "${modeBindingCount(currentKey)} 个") {
                         linkedConsent { bindModeToFunctions(currentKey) { redraw() } }
                     })
                     addDetailSection(form, functionCard)
-                    val thinkingCard = detailSection()
+                    val thinkingCard = dialogSection()
                     thinkingCard.addView(detailSectionHeader("碎碎念配置", modeThinkingSummary(mode)) {
                         linkedConsent { thinkingConfigDialog(modeId = currentKey) { redraw() } }
                     })
@@ -2469,7 +2480,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     )
 
     private fun frameGroup(box: LinearLayout, title: String, note: String = ""): LinearLayout {
-        val group = detailSection()
+        val group = dialogSection()
         group.addView(text(title, 15f).apply { setPadding(0, 0, 0, px(6)) })
         if (note.isNotBlank()) group.addView(text(note, 11f).apply {
             setTextColor(getColor(R.color.cp_note))
@@ -3385,7 +3396,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setTextColor(getColor(R.color.cp_note))
                 setPadding(px(2), 0, px(2), px(10))
             }, LinearLayout.LayoutParams(-1, -2))
-            val previewCard = detailSection()
+            val previewCard = dialogSection()
             previewCard.addView(ImageView(this).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 setBackgroundResource(R.drawable.bg_thumb_border)
@@ -3397,7 +3408,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             })
             addDetailSection(box, previewCard)
 
-            val references = detailSection()
+            val references = dialogSection()
             val summary = if (uses.isEmpty()) "未使用"
                 else "${uses.map { it.first }.distinct().size} 个动画 · ${uses.size} 帧"
             references.addView(detailSectionHeader("被引用位置", summary))
@@ -3716,7 +3727,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setTextColor(getColor(R.color.cp_note))
                 setPadding(0, 0, 0, px(10))
             }, LinearLayout.LayoutParams(-1, -2))
-            val textCard = detailSection()
+            val textCard = dialogSection()
             textCard.addView(text("文本内容", 15f))
             val field = EditText(this).apply {
                 setText(originalText)
@@ -3730,7 +3741,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             textCard.addView(field, LinearLayout.LayoutParams(-1, -2))
             addDetailSection(box, textCard)
 
-            val groupCard = detailSection()
+            val groupCard = dialogSection()
             val groupInfo = text("", 12f).apply {
                 setTextColor(getColor(R.color.cp_note))
                 gravity = Gravity.END
@@ -3760,7 +3771,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             groupCard.addView(groupHeader)
             addDetailSection(box, groupCard)
 
-            val referencesCard = detailSection()
+            val referencesCard = dialogSection()
             val refs = id?.let(::thinkingUses).orEmpty()
             referencesCard.addView(detailSectionHeader("被引用位置",
                 if (refs.isEmpty()) "未被引用" else "${refs.size} 次引用"))
@@ -3885,13 +3896,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setPadding(px(2), 0, px(2), px(12))
             }, LinearLayout.LayoutParams(-1, -2))
 
-            val thinkingCard = detailSection()
+            val thinkingCard = dialogSection()
             thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
                 linkedConsent { thinkingConfigDialog(functionPath = path) }
             })
             addDetailSection(box, thinkingCard)
 
-            val animationsCard = detailSection()
+            val animationsCard = dialogSection()
             animationsCard.addView(detailSectionHeader(
                 "当前动画", "动画链 ${selected.size} 个",
                 if (functionHasAnimationPool(path)) ({
@@ -3968,7 +3979,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setTextColor(getColor(R.color.cp_note))
                 setPadding(0, 0, 0, px(10))
             }, LinearLayout.LayoutParams(-1, -2))
-            val strategyCard = detailSection()
+            val strategyCard = dialogSection()
             val strategyRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -3992,7 +4003,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         setTextColor(getColor(R.color.cp_note))
                     })
                 } else {
-                    val listCard = detailSection()
+                    val listCard = dialogSection()
                     listCard.addView(detailSectionHeader("碎碎念文本", "${selected.size} 条") {
                         chooseThinkingPool(selected) { changed ->
                             selected.clear()
