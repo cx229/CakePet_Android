@@ -8,6 +8,7 @@
     <color name="cp_title">#FFFFFFFF</color>
     <color name="cp_sub">#B4B4BA</color>
     <color name="cp_note">#8A8A90</color>
+    <color name="cp_placeholder">#77777D</color>      <!-- 夜间表单占位提示 -->
     <color name="cp_value">#CFCFD4</color>
     <color name="cp_divider">#3C3C40</color>
     <color name="cp_status_bar">#242528</color>
