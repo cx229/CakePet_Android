@@ -80,17 +80,15 @@ object RolePackageContract {
                 errors.add("功能映射无法解析：${it.message}")
                 return ValidationResult(false, json.optString("version"), errors)
             }
+        // Only the static standby pool is a package-wide startup requirement.
+        // Missing keys and explicit empty arrays mean the same thing. Every other
+        // function is independently optional, even when its references are broken.
+        val staticPool = functions[listOf("standby", "static_pool")].orEmpty()
         val used = linkedSetOf<String>()
-        // Missing function paths are optional. Do not force a full template.
-        for ((path, refs) in functions) {
-            for (name in refs) {
-                if (name.isBlank()) continue
-                if (modes.optJSONObject(name) == null) {
-                    errors.add("功能 ${path.joinToString("/")} 引用不存在的动作：$name")
-                } else used.add(name)
-            }
+        for (name in staticPool) {
+            if (modes.optJSONObject(name) != null) used.add(name)
         }
-        if (used.isEmpty()) errors.add("至少需要一个可用功能及其动作")
+        if (used.isEmpty()) errors.add("静态待机池至少需要一个存在且可播放的动作")
 
         // Active nextMode chains are also part of a playable animation.
         val pending = java.util.ArrayDeque<String>()
@@ -154,8 +152,10 @@ object RolePackageContract {
         val errors = mutableListOf<String>()
         val modes = json.optJSONObject("modes") ?: return errors
         val functions = runCatching { parseFunctions(json) }.getOrNull() ?: return errors
+        // Optional functions may be absent or broken without blocking import.
+        // Verify only assets reachable from the minimum startup pool.
         val used = linkedSetOf<String>()
-        for ((_, refs) in functions) for (name in refs) {
+        for (name in functions[listOf("standby", "static_pool")].orEmpty()) {
             if (modes.optJSONObject(name) != null) used.add(name)
         }
         val pending = java.util.ArrayDeque<String>()
