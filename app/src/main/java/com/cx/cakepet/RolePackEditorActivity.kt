@@ -785,8 +785,21 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun editor(title: String, compact: Boolean = false, readOnly: Boolean = false,
                        extraAction: (() -> Unit)? = null, confirmLabel: String = "保存",
                        readOnlyActionLabel: String = "重命名", subtitle: String? = null,
+                       renameLayout: Boolean = false,
                        create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
         val frame = layoutInflater.inflate(R.layout.dialog_content_shell, null)
+        if (renameLayout) {
+            // Only the four compact rename dialogs use the home-role margins.
+            val shell = frame as FrameLayout
+            shell.setPadding(px(20), 0, px(20), 0)
+            val card = shell.getChildAt(0) as android.view.ViewGroup
+            card.layoutParams = (card.layoutParams as FrameLayout.LayoutParams).apply {
+                width = minOf(px(420), resources.displayMetrics.widthPixels - px(40))
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+            (card.getChildAt(0) as LinearLayout).setPadding(px(20), px(20), px(20), px(20))
+            frame.findViewById<LinearLayout>(R.id.dialog_actions).gravity = Gravity.CENTER
+        }
         frame.findViewById<TextView>(R.id.tv_title).text = title
         frame.findViewById<TextView>(R.id.tv_subtitle).apply {
             if (subtitle.isNullOrBlank()) visibility = View.GONE
@@ -1265,7 +1278,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun showModeGroupOptions(anchor: View, group: String) {
         UnifiedOptionMenu.show(anchor, listOf("重命名", "解散"), setOf("解散")) { choice ->
             when (choice) {
-                "重命名" -> editor("重命名动画组", compact = true) { box ->
+                "重命名" -> editor("重命名动画组", compact = true,
+                    subtitle = "当前分组 · $group", renameLayout = true) { box ->
                     val name = entry(box, "动画组名称", group, compact = true)
                     val save: () -> Unit = {
                         val target = name.text.toString().trim()
@@ -3347,8 +3361,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun renameDialog(relative: String, directory: Boolean) {
         val file = File(draft, relative)
-        editor(if (directory) "重命名文件夹" else "重命名图片") { box ->
-            val input = entry(box, "名称", if (directory) file.name else file.nameWithoutExtension)
+        editor(if (directory) "重命名文件夹" else "重命名图片",
+            compact = true, renameLayout = true,
+            subtitle = if (directory) "当前文件夹 · $relative" else "当前图片 · $relative") { box ->
+            val input = entry(box, "名称", if (directory) file.name else file.nameWithoutExtension, compact = true)
             val save: () -> Unit = {
                 renameResource(relative, input.text.toString().trim(), directory)
             }
@@ -3748,7 +3764,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         UnifiedOptionMenu.show(anchor, listOf("重命名", "解散"), setOf("解散")) { choice ->
             when (choice) {
                 "重命名" -> editor("重命名碎碎念组", compact = true,
-                    subtitle = "当前分组 · $group") { box ->
+                    subtitle = "当前分组 · $group", renameLayout = true) { box ->
                     val field = entry(box, "碎碎念组名称", group, compact = true)
                     ({
                         val target = field.text.toString().trim()
