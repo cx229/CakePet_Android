@@ -715,7 +715,7 @@ class PetService : Service() {
                 val rc = roleConfig(inst.roleId)
                 // 生效条件：攀岩已开(上级移动+攀岩) 且 本开关开 且 当前攀岩态 且 非吸附态（吸附态不喜乱动）。
                 v.forageMultiplier = rc.forageMultiplier   // 自动觅食倍率：放大当前帧 dx/dy，不注入额外导航速度
-                v.autoForage = rc.autoForage     // 自动觅食开关：供 PetView 落地决策判定是否插队进入攀岩态
+                v.autoForage = rc.autoForage && v.hasFunction("climb", "forage", "move")     // 自动觅食开关：供 PetView 落地决策判定是否插队进入攀岩态
                 val effForage = v.wallClimb && rc.autoForage && !v.physics.isSnapped &&
                     !v.physics.isThrowing && !v.physics.isDragging
                 if (!effForage) {
@@ -1194,10 +1194,11 @@ class PetService : Service() {
             v.setConfig(c.scale, c.gravity, c.reboundRatio,
                 c.gravityTop, c.gravityBottom, c.gravityLeft, c.gravityRight,
                 c.reboundTop, c.reboundBottom, c.reboundLeft, c.reboundRight,
-                effectiveGravity, c.maxSpeed, c.throwEnabled, c.throwCoeff)
+                effectiveGravity, c.maxSpeed,
+                c.throwEnabled && v.hasFunction("touch", "roll"), c.throwCoeff)
             // 层级门控：移动（总开关）→ 攀岩 → 飞跃。上级关则下级一并失效。
             val effClimb = c.moveEnabled && c.wallClimb          // 攀岩是移动下级：移动关则攀岩关
-            val effLeap  = effClimb && c.leapEnabled             // 飞跃开关依赖攀岩功能，但起飞不要求角色已处于攀岩状态
+            val effLeap  = effClimb && c.leapEnabled && v.hasFunction("climb", "leap", "leap")             // 飞跃开关依赖攀岩功能，但起飞不要求角色已处于攀岩状态
             v.useStaticPool = !c.moveEnabled   // 静止池只看"移动"总开关（重力关仅关重力，不进静止池）
             v.wallClimb = effClimb            // 攀岩走壁开关（已被移动总开关门控）
             v.setLeapParams(effLeap, c.leapProbability)  // 好动飞跃：在正常待机动作选择边界按概率起飞
@@ -1906,12 +1907,12 @@ class PetService : Service() {
                 p.snapBottom = c.snapBottom
                 p.snapLeft = c.snapLeft
                 p.snapRight = c.snapRight
-                p.snapEnabled = c.snapEnabled   // 吸附边缘总开关：关闭则完全不吸附
+                p.snapEnabled = c.snapEnabled && inst.view.hasFunction("snap", "snap_head")   // 吸附边缘总开关：关闭则完全不吸附
                 p.reboundEnabled = c.reboundEnabled   // 反弹总开关：关闭则所有碰撞反弹失效（撞墙停靠、不振动）
                 p.snapDist = c.snapThreshold   // 吸附判定距离阈值（像素）
                 p.gravityEnabled = effectiveGravity
                 p.maxSpeed = c.maxSpeed
-                p.throwEnabled = c.throwEnabled
+                p.throwEnabled = c.throwEnabled && inst.view.hasFunction("touch", "roll")
                 p.throwCoeff = c.throwCoeff
                 inst.view.useStaticPool = !c.moveEnabled   // 静止池只看"移动"总开关（重力关仅关重力，不进静止池）
             }
