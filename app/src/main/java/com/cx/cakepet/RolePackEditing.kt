@@ -10,50 +10,64 @@ import java.util.zip.*
 
 /** File-only functions for the v1.02 material editor. */
 object RolePackEditing {
-    /** Single-purpose tree for missing standby animations, reusable from home and settings. */
-    fun showMissingStandby(activity: android.app.Activity, instanceId: String) {
+    /** Filtered function-tree repair navigation shared by settings and home. */
+    fun showMissingFunctions(activity: android.app.Activity, instanceId: String,
+                             paths: List<List<String>>) {
         val descriptor = RoleStore.descriptorForInstance(activity, instanceId)
-        val context = activity
-        val density = context.resources.displayMetrics.density
+        val density = activity.resources.displayMetrics.density
         fun dp(n: Int) = (n * density + .5f).toInt()
-        val box = android.widget.LinearLayout(context).apply {
+        val box = android.widget.LinearLayout(activity).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(dp(22), dp(12), dp(22), dp(8))
+            setPadding(dp(20), dp(10), dp(20), dp(12))
         }
-        val folder = android.widget.TextView(context).apply {
-            text = "▾  📂  待机"
-            textSize = 16f
-            setPadding(0, dp(6), 0, dp(6))
-        }
-        box.addView(folder)
-        val leaf = android.widget.TextView(context).apply {
-            text = "    ▣  待机池\n    素材包必要动画缺失"
-            textSize = 14f
-            setTextColor(context.getColor(R.color.cp_danger))
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-        }
-        box.addView(leaf)
-        val dialog = android.app.AlertDialog.Builder(context)
-            .setTitle("缺失的功能动画")
-            .setView(box)
-            .setNegativeButton("关闭", null)
-            .create()
-        val open = {
-            dialog.dismiss()
-            if (descriptor == null) {
-                android.widget.Toast.makeText(context, "当前素材包不可读取，请先恢复素材包", android.widget.Toast.LENGTH_LONG).show()
-            } else if (descriptor.source == RoleSource.ASSETS) {
-                android.widget.Toast.makeText(context, "预装素材包不可直接编辑，请在素材包管理页复制后修复", android.widget.Toast.LENGTH_LONG).show()
-                context.startActivity(android.content.Intent(context, RoleManageActivity::class.java))
-            } else {
-                context.startActivity(android.content.Intent(context, RolePackEditorActivity::class.java).apply {
+        val names = mapOf(
+            "standby" to "待机", "static_pool" to "静止待机池",
+            "pool" to "待机池", "touch" to "抛掷", "roll" to "滚动",
+            "snap" to "吸附", "snap_head" to "探头", "feed" to "投食",
+            "food" to "食物", "climb" to "攀岩", "leap" to "飞跃",
+            "forage" to "觅食", "move" to "移动")
+        var dialog: android.app.AlertDialog? = null
+        val navigate: (List<String>) -> Unit = { path ->
+            dialog?.dismiss()
+            when {
+                descriptor == null ->
+                    android.widget.Toast.makeText(activity, "素材包不可读取，请先恢复素材包", android.widget.Toast.LENGTH_LONG).show()
+                descriptor.source == RoleSource.ASSETS -> {
+                    android.widget.Toast.makeText(activity, "预装素材包请先复制为可编辑副本", android.widget.Toast.LENGTH_LONG).show()
+                    activity.startActivity(android.content.Intent(activity, RoleManageActivity::class.java))
+                }
+                else -> activity.startActivity(android.content.Intent(activity, RolePackEditorActivity::class.java).apply {
                     putExtra("role_id", descriptor.id)
-                    putExtra("initial_function_path", "standby/pool")
+                    putExtra("initial_function_path", path.joinToString("/"))
                 })
             }
         }
-        leaf.setOnClickListener { open() }
+        paths.distinct().groupBy { it.firstOrNull().orEmpty() }.forEach { (group, leaves) ->
+            box.addView(android.widget.TextView(activity).apply {
+                text = "▾ 📂  " + (names[group] ?: group)
+                textSize = 15f
+                setPadding(0, dp(6), 0, dp(7))
+            })
+            leaves.forEach { path ->
+                box.addView(android.widget.TextView(activity).apply {
+                    text = "    ▣  " + (names[path.last()] ?: path.last()) +
+                        "\n    素材包必要动画缺失"
+                    textSize = 13f
+                    setTextColor(activity.getColor(R.color.cp_danger))
+                    setPadding(dp(8), dp(7), dp(8), dp(7))
+                    isClickable = true
+                    setOnClickListener { navigate(path) }
+                })
+            }
+        }
+        dialog = android.app.AlertDialog.Builder(activity)
+            .setTitle("缺失的功能动画")
+            .setView(box).setNegativeButton("关闭", null).create()
         dialog.show()
+    }
+
+    fun showMissingStandby(activity: android.app.Activity, instanceId: String) {
+        showMissingFunctions(activity, instanceId, listOf(MaterialFunctionSupport.NORMAL))
     }
 
     fun newId() = "custom_" + UUID.randomUUID().toString().replace("-", "").take(16)
