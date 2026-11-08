@@ -1190,16 +1190,17 @@ class PetService : Service() {
         rt.tiltStrength = c.gravity
         pets.filter { it.roleId == rt.roleId }.forEachIndexed { index, inst ->
             val v = inst.view
-            val effectiveGravity = c.gravityEnabled && c.moveEnabled
+            val effectiveMove = c.moveEnabled || !v.hasFunction("standby", "static_pool")
+            val effectiveGravity = c.gravityEnabled && effectiveMove
             v.setConfig(c.scale, c.gravity, c.reboundRatio,
                 c.gravityTop, c.gravityBottom, c.gravityLeft, c.gravityRight,
                 c.reboundTop, c.reboundBottom, c.reboundLeft, c.reboundRight,
                 effectiveGravity, c.maxSpeed,
                 c.throwEnabled && v.hasFunction("touch", "roll"), c.throwCoeff)
             // 层级门控：移动（总开关）→ 攀岩 → 飞跃。上级关则下级一并失效。
-            val effClimb = c.moveEnabled && c.wallClimb          // 攀岩是移动下级：移动关则攀岩关
+            val effClimb = effectiveMove && c.wallClimb          // 攀岩是移动下级：移动关则攀岩关
             val effLeap  = effClimb && c.leapEnabled && v.hasFunction("climb", "leap", "leap")             // 飞跃开关依赖攀岩功能，但起飞不要求角色已处于攀岩状态
-            v.useStaticPool = !c.moveEnabled   // 静止池只看"移动"总开关（重力关仅关重力，不进静止池）
+            v.useStaticPool = !effectiveMove   // 静止池只看"移动"总开关（重力关仅关重力，不进静止池）
             v.wallClimb = effClimb            // 攀岩走壁开关（已被移动总开关门控）
             v.setLeapParams(effLeap, c.leapProbability)  // 好动飞跃：在正常待机动作选择边界按概率起飞
             v.syncClimbState(effClimb)   // 攀岩走壁开启即进攀爬态（平地=贴地墙），好动飞跃方可触发
@@ -1886,7 +1887,7 @@ class PetService : Service() {
             }
             // 物理参数同步：仅作用于本角色实例（各实例物理独立生效）。
             // 有效重力 = 重力·抛掷开关 且 移动总开关（移动关闭则整体静止，与“关闭后「酥」静悄悄地”一致）。
-            val effectiveGravity = c.gravityEnabled && c.moveEnabled
+            val effectiveGravity = c.gravityEnabled && (c.moveEnabled || pets.any { it.roleId == rt.roleId && !it.view.hasFunction("standby", "static_pool") })
             pets.filter { it.roleId == rt.roleId }.forEach { inst ->
                 val p = inst.view.physics
                 p.gravity = c.gravity
@@ -1914,7 +1915,7 @@ class PetService : Service() {
                 p.maxSpeed = c.maxSpeed
                 p.throwEnabled = c.throwEnabled && inst.view.hasFunction("touch", "roll")
                 p.throwCoeff = c.throwCoeff
-                inst.view.useStaticPool = !c.moveEnabled   // 静止池只看"移动"总开关（重力关仅关重力，不进静止池）
+                inst.view.useStaticPool = !(c.moveEnabled || !inst.view.hasFunction("standby", "static_pool"))   // 静止池只看"移动"总开关（重力关仅关重力，不进静止池）
             }
             // 进入静止模式（移动总开关关闭）时，立刻清零速度并复位抛掷态，使物理停止位移。
             // 仅由"移动"总开关决定；关重力不动这里——关重力只关重力、宠物仍在正常池可抛掷滚动。
