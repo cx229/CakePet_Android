@@ -165,8 +165,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
             card.addView(detailSectionHeader("播放方式", policy))
             val node = functionNode(root, path)
             thinkingPoolJson(node.optJSONObject("thinking")).forEach { (name, times) ->
-                card.addView(text("${thinkingBody(name)}  ·  ${times.first}–${times.second}ms", 12f).apply {
-                    setPadding(px(5), px(6), px(5), px(6))
+                val row = detailListRow()
+                row.addView(text(thinkingBody(name), 12f), LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text("${times.first}–${times.second}ms", 11f).apply {
+                    setTextColor(getColor(R.color.cp_sub))
+                    setPadding(px(5), 0, 0, 0)
+                })
+                card.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                    topMargin = px(5)
                 })
             }
             addDetailSection(form, card)
@@ -2242,7 +2248,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        val (outer, body) = pickerShell(dialog, "选择素材")
+        val (outer, body) = pickerShell(dialog, "选择素材",
+            "动画 · ${request.mode}" + if (request.index >= 0) " · 第 ${request.index} 帧" else "")
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(info)
         val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -2995,7 +3002,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
         val (frame, body) = pickerShell(dialog, "绑定到功能",
-            "动画：$modeId · 勾选或取消绑定的功能")
+            "动画 · $modeId")
         val selectionInfo = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(selectionInfo)
         val listing = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -3982,8 +3989,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 if (policy == "inherit" || policy == "off") {
                     content.addView(text(if (policy == "inherit") "使用当前功能的碎碎念设置"
                         else "保持休息状态，不选择新文本", 12f).apply {
-                        gravity = Gravity.CENTER
-                        setTextColor(getColor(R.color.cp_note))
+                        gravity = Gravity.START
+                        setTextColor(getColor(R.color.cp_sub))
+                        setPadding(px(3), px(7), px(3), px(4))
                     })
                 } else {
                     val listCard = dialogSection()
