@@ -856,6 +856,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             else { text = subtitle; visibility = View.VISIBLE }
         }
         frame.findViewById<View>(R.id.btn_close_x).setOnClickListener { dialog.dismiss() }
+        dialog.setCanceledOnTouchOutside(true)
         frame.findViewById<View>(R.id.dialog_actions).visibility = View.GONE
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         frame.findViewById<FrameLayout>(R.id.dialog_body_slot)
