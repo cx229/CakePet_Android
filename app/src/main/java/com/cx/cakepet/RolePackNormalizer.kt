@@ -91,10 +91,9 @@ internal object RolePackNormalizer {
                 val prefix = path.take(i + 1).joinToString("/")
                 val current = node.opt(key)
                 if (current !is JSONObject || current.has("modes")) {
-                    issues += Issue(if (!node.has(key)) "已补全" else "格式不支持",
+                    if (node.has(key)) issues += Issue("格式不支持",
                         "functions/$prefix",
-                        if (!node.has(key)) "缺少功能文件夹，已补全"
-                        else "预期文件夹 Object，实际 ${kind(current)}；原值已备份",
+                        "预期文件夹 Object，实际 ${kind(current)}；原值已备份",
                         current?.toString())
                     node.put(key, JSONObject())
                 }
@@ -105,10 +104,10 @@ internal object RolePackNormalizer {
             val valid = value is JSONArray || (value is JSONObject && value.optJSONArray("modes") != null)
             if (!valid) {
                 val missing = !node.has(key)
-                issues += Issue(if (missing) "已补全" else "格式不支持",
+                // An absent mapping is equivalent to an explicit empty list.
+                if (!missing) issues += Issue("格式不支持",
                     "functions/${path.joinToString("/")}",
-                    if (missing) "未配置，已添加空动画池" else
-                        "预期 Array 或带 modes 数组的 Object，实际 ${kind(value)}；已创建空池，原值已备份",
+                    "预期 Array 或带 modes 数组的 Object，实际 ${kind(value)}；已创建空池，原值已备份",
                     value?.toString())
                 node.put(key, JSONArray())
             }
