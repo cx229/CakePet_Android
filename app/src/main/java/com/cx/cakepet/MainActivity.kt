@@ -275,6 +275,10 @@ class MainActivity : AppCompatActivity() {
 
     /** 召唤/归位同一按钮：未召唤→召唤；已召唤→归位。单活跃角色（切换会先召回旧的）。 */
     private fun onSummon(instanceId: String) {
+        if (!MaterialFunctionSupport.hasPlayable(this, instanceId, MaterialFunctionSupport.NORMAL)) {
+            RolePackEditing.showMissingStandby(this, instanceId)
+            return
+        }
         if (!hasOverlayPermission()) {
             showConfirmDialog(
                 title = "开启悬浮窗权限",
