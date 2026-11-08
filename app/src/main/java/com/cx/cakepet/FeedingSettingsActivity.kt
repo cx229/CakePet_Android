@@ -357,6 +357,7 @@ class FeedingSettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        SettingsMaterialLink.refresh(this, roleId)
         // 从阈值页返回时，重读最新上下界并回填当前配置值（按新界钳制），即时热更新。
         bindBounds()
         refreshUI()
