@@ -3838,20 +3838,28 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun confirmThinkingDelete(id: String) {
         val uses = thinkingUses(id)
         if (uses.isNotEmpty()) {
-            AlertDialog.Builder(this).setTitle("无法删除：仍被引用")
-                .setMessage(uses.joinToString("\n") { it.label(::functionPathName) })
-                .setPositiveButton("我知道了", null).show()
+            val references = android.text.TextUtils.htmlEncode(
+                uses.joinToString("\n") { it.label(::functionPathName) }
+            ).replace("\n", "<br>")
+            showConfirmDialog(
+                title = "无法删除：仍被引用",
+                bodyHtml = references,
+                positiveText = "我知道了",
+                showNegative = false
+            ) { }
             return
         }
-        AlertDialog.Builder(this).setTitle("删除碎碎念")
-            .setMessage("确认删除「${thinkingBody(id)}」？此操作不可撤销。")
-            .setNegativeButton("取消", null)
-            .setPositiveButton("删除") { _, _ ->
-                attempt {
-                    change { it.getJSONObject("thinkings").remove(id) }
-                    thinkingResources()
-                }
-            }.show()
+        showConfirmDialog(
+            title = "删除碎碎念",
+            bodyHtml = "确认删除「" + android.text.TextUtils.htmlEncode(thinkingBody(id)) + "」？",
+            subText = "此操作不可撤销。",
+            positiveText = "删除"
+        ) {
+            attempt {
+                change { it.getJSONObject("thinkings").remove(id) }
+                thinkingResources()
+            }
+        }
     }
 
     /**
