@@ -52,53 +52,47 @@
                 android:focusable="true"/>
         </LinearLayout>
 
-        <TextView
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/til_name"
+            style="@style/CakePetFormInput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="角色名称"
-            android:textSize="12sp"
-            android:textColor="@color/cp_sub" />
+            android:hint="角色名称"
+            app:placeholderText="例如：芝麻酥">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:textSize="15sp"
+                android:textColor="@color/cp_text"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="11dp"
+                android:paddingBottom="9dp" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <EditText
-            android:id="@+id/et_name"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:inputType="text"
-            android:hint="如：芝麻酥"
-            android:textSize="15sp"
-            android:textColor="@color/cp_text"
-            android:textColorHint="@color/cp_sub"
-            android:background="@drawable/bg_input"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp" />
-
-        <TextView
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/til_short"
+            style="@style/CakePetFormInput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="角色简称"
-            android:textSize="12sp"
-            android:textColor="@color/cp_sub" />
-
-        <EditText
-            android:id="@+id/et_short"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:inputType="text"
-            android:hint="酥"
-            android:textSize="15sp"
-            android:textColor="@color/cp_text"
-            android:textColorHint="@color/cp_sub"
-            android:background="@drawable/bg_input"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp" />
+            android:hint="角色简称"
+            app:placeholderText="例如：酥">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_short"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:textSize="15sp"
+                android:textColor="@color/cp_text"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="11dp"
+                android:paddingBottom="9dp" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
