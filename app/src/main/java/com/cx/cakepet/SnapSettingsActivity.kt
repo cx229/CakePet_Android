@@ -74,6 +74,7 @@ class SnapSettingsActivity : AppCompatActivity() {
             )
         )
         snapBtnMore.setOnClickListener { snapMoreMenu.show() }
+        SettingsMaterialLink.attach(this, roleId, R.id.sw_snap_enabled, "吸附边缘", "吸附", "snap")
 
         swSnapEnabled = findViewById(R.id.sw_snap_enabled)
         swStop = findViewById(R.id.sw_stop)
