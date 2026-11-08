@@ -163,3 +163,55 @@ fun normalizeThinkingPack(root: JSONObject) {
             modes.optJSONObject(key)?.optJSONObject("thinking")?.let(::normalize)
     }
 }
+
+/**
+ * Remove dangling references only: an existing but broken Mode or blank text
+ * resource remains editable, while IDs that have no target cannot be repaired
+ * by clicking them. Does not delete resource definitions or instance settings.
+ */
+fun cleanPackReferences(root: JSONObject) {
+    val modeIds = root.optJSONObject("modes")?.keys()?.asSequence()?.toSet().orEmpty()
+    val thinkingIds = root.optJSONObject("thinkings")?.keys()?.asSequence()?.toSet().orEmpty()
+    fun filterModes(values: JSONArray): JSONArray = JSONArray().also { out ->
+        for (i in 0 until values.length()) {
+            val raw = values.opt(i)
+            if (raw is String && raw.isNotBlank() && raw in modeIds) out.put(raw)
+        }
+    }
+    fun cleanThinking(node: JSONObject) {
+        val thinking = node.optJSONObject("thinking") ?: return
+        when (val pool = thinking.opt("pool")) {
+            is JSONArray -> {
+                val filtered = JSONArray()
+                for (i in 0 until pool.length()) {
+                    val value = pool.opt(i)
+                    if (value is String && value.isNotBlank() && value in thinkingIds) filtered.put(value)
+                }
+                thinking.put("pool", filtered)
+            }
+            is JSONObject -> for (id in pool.keys().asSequence().toList())
+                if (id.isBlank() || id !in thinkingIds) pool.remove(id)
+        }
+    }
+    fun cleanFunction(node: JSONObject) {
+        node.optJSONArray("modes")?.let { node.put("modes", filterModes(it)) }
+        cleanThinking(node)
+        for (key in node.keys().asSequence().toList()) {
+            when (val value = node.opt(key)) {
+                is JSONArray -> if (key != "modes" && key != "pool" && key != "groups" &&
+                    key != "thinking" && key != "usage") node.put(key, filterModes(value))
+                is JSONObject -> if (key != "thinking") cleanFunction(value)
+            }
+        }
+    }
+    root.optJSONObject("functions")?.let(::cleanFunction)
+    root.optJSONObject("modes")?.let { modes ->
+        for (id in modes.keys().asSequence().toList()) {
+            val mode = modes.optJSONObject(id) ?: continue
+            cleanThinking(mode)
+            val next = mode.optString("nextMode")
+            if (next.isNotBlank() && next != "null" && next !in modeIds)
+                mode.remove("nextMode")
+        }
+    }
+}
