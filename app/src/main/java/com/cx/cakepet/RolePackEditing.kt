@@ -88,6 +88,7 @@ object RolePackEditing {
             if (!original.exists()) original.writeText(source)
         }
         normalizeThinkingPack(json)
+        cleanPackReferences(json)
         if (parseError != null || issues.isNotEmpty() ||
             !File(directory, RolePackNormalizer.REPORT_FILE).exists()) {
             // Keep the first import report while ordinary saves/reopens change the repaired structure.
@@ -125,6 +126,7 @@ object RolePackEditing {
     }
     fun commit(ctx: Context, id: String, draft: File, json: JSONObject) {
         require(json.optString("id") == id) { "角色 ID 不可变更" }
+        cleanPackReferences(json)
         val configFile = File(draft, "modes.jsonc")
         configFile.writeText(CompactJsoncWriter.write(json, configFile.readText()))
         val live = dir(ctx, id)
@@ -154,6 +156,7 @@ object RolePackEditing {
                     if (normalized.opt("decodeTarget") !is Number) normalized.put("decodeTarget", 256)
                     if (normalized.opt("anchorRes") !is Number) normalized.put("anchorRes", 128)
                     normalizeThinkingPack(normalized)
+                    cleanPackReferences(normalized)
                     zip.putNextEntry(ZipEntry("modes.jsonc"))
                     zip.write(CompactJsoncWriter.writeExport(normalized, original).toByteArray(Charsets.UTF_8))
                     zip.closeEntry()
