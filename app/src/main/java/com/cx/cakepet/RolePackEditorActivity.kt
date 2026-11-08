@@ -1408,7 +1408,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
                         playbackCard.addView(detailSectionHeader("后续动画",
                             next.ifBlank { "自动（由系统决定）" }) {
-                            linkedConsent { chooseModes(single = true, initial = listOfNotNull(next.takeIf { it.isNotEmpty() })) { selected ->
+                            linkedConsent { chooseModes(single = true, initial = listOfNotNull(next.takeIf { it.isNotEmpty() })),
+                                headerDescription = "当前动画 · $currentKey") { selected ->
                                 val nextId = selected.firstOrNull().orEmpty()
                                 change { json ->
                                     json.getJSONObject("modes").getJSONObject(currentKey).put("nextMode",
@@ -1537,7 +1538,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             redrawNext()
             nextChoice.setOnClickListener {
                 chooseModes(single = true,
-                    initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { selected ->
+                    initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() }),
+                    headerDescription = "当前动画 · $key") { selected ->
                     nextModeId = selected.firstOrNull().orEmpty()
                     redrawNext()
                 }
@@ -2077,7 +2079,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 isFocusable = true
                 setOnClickListener {
                     chooseModes(single = true,
-                        initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() })) { chosen ->
+                        initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() }),
+                        headerDescription = "当前动画 · $key") { chosen ->
                         nextModeId = chosen.firstOrNull().orEmpty()
                         text = if (nextModeId.isEmpty()) "自动（由系统决定）  ▾" else "$nextModeId  ▾"
                     }
@@ -2558,7 +2561,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
         val indices = bulkSelected.sorted()
         if (indices.isEmpty()) return
-        editor("批量编辑帧属性", compact = true) { box ->
+        editor("批量编辑帧属性", compact = true,
+            subtitle = "动画 · $key · 已选 ${indices.size} 帧") { box ->
             val first = frames.getJSONObject(indices.first())
             val touched = mutableSetOf<String>()
             fun watch(input: EditText, name: String) {
@@ -2655,7 +2659,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun editFrame(key: String, index: Int) {
         val frame = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
-        editor("编辑第 $index 帧", compact = true) { box ->
+        editor("编辑第 $index 帧", compact = true,
+            subtitle = "动画 · $key") { box ->
             val time = frameGroup(box, "播放时间", "单位毫秒，相同为固定时长，不同则随机取值。")
             val range = delayRange(frame)
             val (min, max) = frameFields(time, "最短时间", range.first, "最长时间", range.second)
@@ -3996,7 +4001,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 } else {
                     val listCard = dialogSection()
                     listCard.addView(detailSectionHeader("碎碎念文本", "${selected.size} 条") {
-                        chooseThinkingPool(selected) { changed ->
+                        chooseThinkingPool(selected,
+                            if (modeId != null) "动画 · $modeId"
+                            else "功能 · ${functionPathName(requireNotNull(functionPath))}") { changed ->
                             selected.clear()
                             selected.putAll(changed)
                             redraw()
@@ -4052,10 +4059,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun chooseThinkingPool(initial: Map<String, Pair<Long, Long>>,
+                                   subtitle: String,
                                    confirm: (Map<String, Pair<Long, Long>>) -> Unit) {
         val chosen = LinkedHashMap(initial)
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        val (frame, body) = pickerShell(dialog, "选择碎碎念")
+        val (frame, body) = pickerShell(dialog, "选择碎碎念", subtitle)
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_sub)) }
         body.addView(info)
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -4111,8 +4119,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         gravity = Gravity.CENTER
                         setOnClickListener {
                             if (id !in chosen) chosen[id] = DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS
-                            editor("碎碎念设置", compact = true) { box ->
-                                val textCard = detailSection()
+                            editor("碎碎念设置", compact = true,
+                                subtitle = "碎碎念文本 · ${thinkingBody(id).take(28)}") { box ->
+                                val textCard = dialogSection()
                                 textCard.addView(text("文本内容", 15f))
                                 val field = EditText(this@RolePackEditorActivity).apply {
                                     setText(thinkingBody(id))
@@ -4130,7 +4139,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 })
                                 addDetailSection(box, textCard)
                                 val time = chosen[id]!!
-                                val timeCard = detailSection()
+                                val timeCard = dialogSection()
                                 timeCard.addView(text("持续时间", 15f))
                                 val rangeRow = LinearLayout(this@RolePackEditorActivity).apply {
                                     orientation = LinearLayout.HORIZONTAL
