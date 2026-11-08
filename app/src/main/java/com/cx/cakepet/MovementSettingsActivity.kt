@@ -193,14 +193,14 @@ class MovementSettingsActivity : AppCompatActivity() {
             swTiltGravity.isChecked = c.tiltGravity
             swReboundEnabled.isChecked = c.reboundEnabled
             swBounceVibrate.isChecked = c.bounceVibrate
-            swThrow.isChecked = c.throwEnabled
+            swThrow.isChecked = c.throwEnabled && MaterialFunctionSupport.hasPlayable(this, roleId, MaterialFunctionSupport.THROW)
             swWallClimb.isChecked = c.wallClimb
-            swLeap.isChecked = c.leapEnabled
-            swAutoForage.isChecked = c.autoForage
+            swLeap.isChecked = c.leapEnabled && MaterialFunctionSupport.hasPlayable(this, roleId, MaterialFunctionSupport.LEAP)
+            swAutoForage.isChecked = c.autoForage && MaterialFunctionSupport.hasPlayable(this, roleId, MaterialFunctionSupport.FORAGE)
             suppressSwitch = false
             folds.refresh(c)
-            folds.setLocked(R.id.sw_move_enabled, !staticAvailable) {
-                RolePackEditing.showMissingStandby(this, roleId)
+            folds.setForced(R.id.sw_move_enabled, if (staticAvailable) 0 else 1) {
+                RolePackEditing.showMissingFunctions(this, roleId, listOf(MaterialFunctionSupport.STATIC))
             }
             val gated = listOf(
                 R.id.sw_throw to "抛掷",
@@ -208,10 +208,10 @@ class MovementSettingsActivity : AppCompatActivity() {
                 R.id.sw_leap to "飞跃"
             )
             gated.forEach { (id, label) ->
-                folds.setLocked(id, MaterialFunctionSupport.missing(this, roleId, label) != null) {
-                    MaterialFunctionSupport.requirement(label)?.let { path ->
-                        RolePackEditing.showMissingFunctions(this, roleId, listOf(path))
-                    }
+                val missingPath = MaterialFunctionSupport.requirement(label)
+                val forcedOff = missingPath != null && !MaterialFunctionSupport.hasPlayable(this, roleId, missingPath)
+                folds.setForced(id, if (forcedOff) -1 else 0) {
+                    if (missingPath != null) RolePackEditing.showMissingFunctions(this, roleId, listOf(missingPath))
                 }
             }
         }
