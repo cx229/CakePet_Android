@@ -26,6 +26,8 @@ class SettingsFoldController(private val host: Activity) {
         val arrow: TextView,
         val dependencyHint: TextView?,
         var locked: Boolean = false,
+        var forceOff: Boolean = false,
+        var previousExpansion: Boolean = true,
         var onLockedClick: (() -> Unit)? = null
     )
 
@@ -106,20 +108,37 @@ class SettingsFoldController(private val host: Activity) {
         refresh()
     }
 
-    /** Lock control and fold content, but keep the header navigable to repair. */
-    fun setLocked(masterId: Int, locked: Boolean, onClick: (() -> Unit)? = null) {
+    /**
+     * Forced-on locks only the switch; its child controls remain usable.
+     * Forced-off additionally folds the children, preserving previous fold state.
+     * The parent setting row stays clickable as a repair entry in either case.
+     */
+    fun setForced(masterId: Int, state: Int, onClick: (() -> Unit)? = null) {
         val section = sections.firstOrNull { it.id == masterId } ?: return
-        if (locked && !section.locked) section.expanded = false
-        if (!locked && section.locked) section.expanded = true
-        section.locked = locked
-        section.onLockedClick = onClick
-        section.switch.isEnabled = !locked
+        val wasForcedOff = section.locked && section.forceOff
+        val nowForcedOff = state < 0
+        if (!wasForcedOff && nowForcedOff) {
+            section.previousExpansion = section.expanded
+            section.expanded = false
+        } else if (wasForcedOff && !nowForcedOff) {
+            section.expanded = section.previousExpansion
+        }
+        section.locked = state != 0
+        section.forceOff = nowForcedOff
+        section.onLockedClick = if (state != 0) onClick else null
+        section.switch.isEnabled = state == 0
         refresh()
     }
 
+    fun setLocked(masterId: Int, locked: Boolean, onClick: (() -> Unit)? = null) =
+        setForced(masterId, if (locked) -1 else 0, onClick)
+
     fun refresh(c: PetConfigData? = null) {
         if (c != null) config = c
-        val snapshot = config ?: return
+        val stored = config ?: return
+        // Forced movement-on must not gray out otherwise usable child controls.
+        val snapshot = if (sections.any { it.id == R.id.sw_move_enabled && it.locked && !it.forceOff })
+            stored.copy(moveEnabled = true) else stored
         val groups = sections.associateBy { it.id }
         for (section in sections) {
             val ancestorsExpanded = section.ancestors.all { groups[it]?.expanded != false }
@@ -131,13 +150,13 @@ class SettingsFoldController(private val host: Activity) {
             val effective = section.switch.isChecked && available
             section.dependencyHint?.visibility =
                 if (available) View.GONE else View.VISIBLE
-            section.arrow.text = if (section.expanded && !section.locked) "▾" else "▸"
+            section.arrow.text = if (section.expanded && !section.forceOff) "▾" else "▸"
             section.arrow.contentDescription =
                 if (section.expanded) "收起详细设置" else "展开详细设置"
             // Gray out ineffective parameters but keep the original saved selections readable.
             for (childId in section.children) {
                 val child = row(childId) ?: continue
-                val visible = section.expanded && !section.locked && ancestorsExpanded
+                val visible = section.expanded && !section.forceOff && ancestorsExpanded
                 child.visibility = if (visible) View.VISIBLE else View.GONE
                 child.alpha = if (effective) 1f else 0.48f
                 // Existing card headings must follow their card, without matching a
