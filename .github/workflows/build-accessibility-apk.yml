@@ -75,7 +75,7 @@ jobs:
       - name: Build debug APK
         run: |
           set -o pipefail
-          ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee build-debug.log
+          bash ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee build-debug.log
 
       - name: Name GitHub test APK
         run: |
