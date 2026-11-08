@@ -178,7 +178,8 @@ class MovementSettingsActivity : AppCompatActivity() {
             }
             // 程序化回填所有开关用 suppressSwitch 包住：回流 setChecked 不再触发 listener 写盘
             suppressSwitch = true
-            swMoveEnabled.isChecked = c.moveEnabled
+            val staticAvailable = MaterialFunctionSupport.hasPlayable(this, roleId, MaterialFunctionSupport.STATIC)
+            swMoveEnabled.isChecked = c.moveEnabled || !staticAvailable
             swTop.isChecked = c.gravityTop
             swBottom.isChecked = c.gravityBottom
             swLeft.isChecked = c.gravityLeft
@@ -197,6 +198,19 @@ class MovementSettingsActivity : AppCompatActivity() {
             swAutoForage.isChecked = c.autoForage
             suppressSwitch = false
             folds.refresh(c)
+            folds.setLocked(R.id.sw_move_enabled, !staticAvailable) {
+                RolePackEditing.showMissingStandby(this, roleId)
+            }
+            val gated = listOf(
+                R.id.sw_throw to "抛掷",
+                R.id.sw_auto_forage to "自动觅食",
+                R.id.sw_leap to "飞跃"
+            )
+            gated.forEach { (id, label) ->
+                folds.setLocked(id, MaterialFunctionSupport.missing(this, roleId, label) != null) {
+                    RolePackEditing.showMissingStandby(this, roleId)
+                }
+            }
         }
         // 【顺序至关重要】：configFlow 的首帧会同步立即发射，applyConfig 会立刻读取
         // maxSpeedBar / bs / 各 EditText。因此收集必须放在【所有 findViewById 之后】，
@@ -243,6 +257,10 @@ class MovementSettingsActivity : AppCompatActivity() {
         // 移动总开关：关闭后「酥」静止（不运动/不掉落）
         swMoveEnabled.setOnCheckedChangeListener { _, b ->
             if (suppressSwitch) return@setOnCheckedChangeListener
+            if (!b && !MaterialFunctionSupport.hasPlayable(this, roleId, MaterialFunctionSupport.STATIC)) {
+                RolePackEditing.showMissingStandby(this, roleId)
+                return@setOnCheckedChangeListener
+            }
             lifecycleScope.launch { config.update { it.copy(moveEnabled = b) } }
         }
         swGravityEnabled.setOnCheckedChangeListener { _, b ->
