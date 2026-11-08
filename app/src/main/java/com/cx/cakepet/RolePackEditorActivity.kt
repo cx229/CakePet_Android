@@ -2061,8 +2061,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     .orEmpty().takeUnless { it == "关闭" }.orEmpty()
                 frameInfo.text = delayText + if (transformLabel.isBlank()) "" else "  $transformLabel"
                 val coords = mutableListOf<String>()
-                if (x != "-" || y != "-") coords.add("XY($x,$y)")
-                if (dx != "-" || dy != "-") coords.add("dxy($dx,$dy)")
+                if (x != "-" || y != "-") coords.add("锚点($x,$y)")
+                if (dx != "-" || dy != "-") coords.add("位移($dx,$dy)")
                 (labels.getChildAt(1) as TextView).apply {
                     text = coords.joinToString("  ")
                     visibility = if (coords.isEmpty()) View.GONE else View.VISIBLE
@@ -2665,12 +2665,20 @@ open class RolePackEditorActivity : AppCompatActivity() {
     )
 
     private fun frameGroup(box: LinearLayout, title: String, note: String = ""): LinearLayout {
-        val group = dialogSection()
-        group.addView(text(title, 15f).apply { setPadding(0, 0, 0, px(6)) })
-        if (note.isNotBlank()) group.addView(text(note, 11f).apply {
-            setTextColor(getColor(R.color.cp_note))
-            setPadding(0, 0, 0, px(7))
+        // Compact spacing belongs to frame-property dialogs only, not all editor forms.
+        val group = dialogSection().apply {
+            setPadding(px(10), px(7), px(10), px(7))
+        }
+        group.addView(text(title, 15f).apply {
+            includeFontPadding = false
+            setPadding(0, 0, 0, 0)
         })
+        if (note.isNotBlank()) group.addView(text(note, 11f).apply {
+            includeFontPadding = false
+            setTextColor(getColor(R.color.cp_note))
+            setPadding(0, 0, 0, px(4))
+        })
+        else group.getChildAt(0).setPadding(0, 0, 0, px(4))
         addDetailSection(box, group)
         return group
     }
@@ -2693,7 +2701,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        row.addView(text(title, 13f), LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(text(title, 13f).apply {
+            includeFontPadding = false
+            setPadding(0, 0, 0, 0)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
         val dropdown = Spinner(this)
         SettingsSpinnerBinder.bind(dropdown, choices.map { it.first },
             choices.indexOfFirst { it.second == selected }.coerceAtLeast(0)) {
@@ -2750,18 +2761,18 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     override fun afterTextChanged(s: android.text.Editable?) { touched.add(name) }
                 })
             }
-            val time = frameGroup(box, "播放时间", "单位毫秒，相同为固定时长，不同则随机取值。")
+            val time = frameGroup(box, "播放时间", "每帧播放的时间，单位毫秒；最短到最长为随机范围。")
             val range = delayRange(first)
             val (min, max) = frameFields(time, "最短时间", range.first, "最长时间", range.second)
             watch(min, "delay"); watch(max, "delay")
-            val move = frameGroup(box, "帧位移", "播放这一帧时产生的位移，可填写负数。")
+            val move = frameGroup(box, "帧位移", "水平正数向右，垂直正数向下。")
             val (dx, dy) = frameFields(move, "水平 X", optional(first, "dx"), "垂直 Y", optional(first, "dy"), "0", "0")
             watch(dx, "dx"); watch(dy, "dy")
-            val anchor = frameGroup(box, "锚点位置", "用于图片对齐；水平距左侧、垂直距底边。")
+            val anchor = frameGroup(box, "锚点位置", "水平距图片左侧，垂直距图片底部。")
             val (ax, ay) = frameFields(anchor, "水平 X", optional(first, "anchorX"),
                 "垂直 Y", optional(first, "anchorY"), "自动居中", "图片底边")
             watch(ax, "anchorX"); watch(ay, "anchorY")
-            val image = frameGroup(box, "图片处理", "只修改你实际调整过的选项。")
+            val image = frameGroup(box, "图片处理")
             var transformValue = first.optString("transform", "none")
             var alignValue = first.optString("verticalAlign", "bottom")
             frameSelect(image, "图片变换", frameTransforms, transformValue) { value ->
@@ -2839,13 +2850,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val frame = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
         editor("编辑第 $index 帧", compact = true,
             subtitle = "动画 · $key") { box ->
-            val time = frameGroup(box, "播放时间", "单位毫秒，相同为固定时长，不同则随机取值。")
+            val time = frameGroup(box, "播放时间", "每帧播放的时间，单位毫秒；最短到最长为随机范围。")
             val range = delayRange(frame)
             val (min, max) = frameFields(time, "最短时间", range.first, "最长时间", range.second)
-            val move = frameGroup(box, "帧位移", "播放这一帧时产生的位移，可填写负数。")
+            val move = frameGroup(box, "帧位移", "水平正数向右，垂直正数向下。")
             val (dx, dy) = frameFields(move, "水平 X", optional(frame, "dx"),
                 "垂直 Y", optional(frame, "dy"), "0", "0")
-            val anchor = frameGroup(box, "锚点位置", "用于图片对齐；水平距左侧、垂直距底边。")
+            val anchor = frameGroup(box, "锚点位置", "水平距图片左侧，垂直距图片底部。")
             val (ax, ay) = frameFields(anchor, "水平 X", optional(frame, "anchorX"),
                 "垂直 Y", optional(frame, "anchorY"), "自动居中", "图片底边")
             val image = frameGroup(box, "图片处理")
