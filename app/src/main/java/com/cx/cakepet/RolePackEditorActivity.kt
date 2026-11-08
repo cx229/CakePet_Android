@@ -580,7 +580,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
             override fun handleOnBackPressed() = navigateBack()
         })
         val initialMode = intent.getStringExtra("initial_mode_id")
+        val initialFunction = intent.getStringExtra("initial_function_path")
         home()
+        if (initialFunction == "standby/pool") {
+            functions()
+            functionDetails(MaterialFunctionSupport.NORMAL,
+                functionAnimationsAt(MaterialFunctionSupport.NORMAL))
+        }
         if (initialMode != null && root.optJSONObject("modes")?.has(initialMode) == true)
             showMode(initialMode)
     }
@@ -3433,7 +3439,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(-2, -2).apply { rightMargin = px(5) })
         actions.addView(dialogButton("确认", primary = true) {
             attempt {
-                // Empty pools are valid editor data; only runtime readiness is restricted.
+                // Only block a transition from playable to unplayable standby.
+                val oldStandby = functionAnimationsAt(MaterialFunctionSupport.NORMAL)
+                val remains = if ("standby/pool" in selected) {
+                    (oldStandby.filter { it != modeId } + modeId).distinct()
+                } else oldStandby.filter { it != modeId }
+                if (oldStandby.any(::playableMode) && remains.none(::playableMode))
+                    error("待机池至少需要一个有效动画，不能从有效状态解绑")
                 change { json ->
                     val functions = json.getJSONObject("functions")
                     for ((key, pair) in leaves) {
@@ -3553,6 +3565,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
             footerNote = "执行到该功能时，将随机选中以上动画播放") { selected ->
             val saveSelection = {
                 attempt {
+                    if (path == MaterialFunctionSupport.NORMAL &&
+                        chosen.any(::playableMode) && selected.none(::playableMode))
+                        error("待机池至少需要一个有效动画，不能从有效状态清空")
                     change { json ->
                         var node = json.getJSONObject("functions")
                         path.dropLast(1).forEach { node = node.getJSONObject(it) }
