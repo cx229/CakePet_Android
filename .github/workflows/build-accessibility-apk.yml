@@ -65,6 +65,12 @@ jobs:
           test -s app/signing/cakepet-shared-debug.jks
           keytool -list -keystore app/signing/cakepet-shared-debug.jks -storepass android -alias cakepet-debug
 
+      - name: Stamp APK version with actual CI build time
+        run: |
+          set -euo pipefail
+          echo "CAKEPET_CI_VERSION_NAME=v1.$(TZ=Asia/Shanghai date +%y.%m.%d.%H.%M)" >> "$GITHUB_ENV"
+          echo "CAKEPET_CI_VERSION_CODE=$(($(date +%s) / 60))" >> "$GITHUB_ENV"
+
       - name: Build debug APK
         run: |
           set -o pipefail
