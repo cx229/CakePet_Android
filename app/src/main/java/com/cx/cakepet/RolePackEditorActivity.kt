@@ -100,22 +100,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun showLinkedFunctions() {
         val count = RoleStore.getHomeRoles(this).count { it.templateId == id }
-        val dialog = editor("${linkedTitle} · 功能/动画", compact = true, readOnly = true) { form ->
-            form.addView(text("素材包：${linkedPackName}", 12f).apply {
-                setTextColor(getColor(R.color.cp_note))
-                setPadding(px(4), 0, 0, px(8))
-            })
-            val info = detailSection()
-            info.addView(detailSectionHeader(
+        val dialog = editor("${linkedTitle} · 功能/动画", compact = true,
+            readOnly = true, subtitle = "素材包：${linkedPackName}") { form ->
+            addDetailSection(form, sharedNotice(
                 if (linkedReadOnly) "预装素材包 · 只读" else "共享素材配置",
-                "${count} 个角色实例"))
-            info.addView(text(if (linkedReadOnly)
-                "可查看功能、动画与碎碎念，复制素材包后可编辑。"
-                else "修改后将影响使用此素材包的所有角色。", 12f).apply {
-                setTextColor(getColor(R.color.cp_note))
-                setPadding(px(3), px(1), px(3), px(5))
-            })
-            addDetailSection(form, info)
+                count,
+                if (linkedReadOnly) "可查看功能、动画与碎碎念，复制素材包后可编辑。"
+                else "修改后将影响使用此素材包的所有角色。",
+                linkedReadOnly
+            ))
             val tree = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             form.addView(tree)
             linkedTreeContainer = tree
@@ -784,34 +777,29 @@ open class RolePackEditorActivity : AppCompatActivity() {
             if (linkedMode) "素材包已保存，关联角色将使用最新配置" else "已保存",
             Toast.LENGTH_SHORT).show()
     }
-    /**
-     * Use the EXACT role-rename XML shell (title, card, margins, and actual
-     * Material buttons), not a programmatic approximation of its appearance.
-     * Only the variable body area is replaced by this editor's form.
-     */
+    /** Common content shell; inner widgets retain their existing layout and save semantics. */
     private fun editor(title: String, compact: Boolean = false, readOnly: Boolean = false,
                        extraAction: (() -> Unit)? = null, confirmLabel: String = "保存",
-                        readOnlyActionLabel: String = "重命名",
-                        create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
-        val frame = layoutInflater.inflate(R.layout.dialog_rename_role, null)
+                       readOnlyActionLabel: String = "重命名", subtitle: String? = null,
+                       create: (LinearLayout) -> (() -> Unit)): android.app.Dialog {
+        val frame = layoutInflater.inflate(R.layout.dialog_content_shell, null)
         frame.findViewById<TextView>(R.id.tv_title).text = title
-        val card = (frame as android.view.ViewGroup).getChildAt(0) as android.view.ViewGroup
-        val content = card.getChildAt(0) as LinearLayout
-        // Remove the rename-specific name/short label+field pairs.
-        repeat(4) { content.removeViewAt(1) }
+        frame.findViewById<TextView>(R.id.tv_subtitle).apply {
+            if (subtitle.isNullOrBlank()) visibility = View.GONE
+            else { visibility = View.VISIBLE; text = subtitle }
+        }
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val save = create(form)
         val viewport = ScrollView(this).apply {
             isFillViewport = false
             addView(form)
         }
-        content.addView(viewport, 1, LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = px(if (compact) 12 else 20)
-        })
+        frame.findViewById<FrameLayout>(R.id.dialog_body_slot).addView(
+            viewport, FrameLayout.LayoutParams(-1, -2))
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        if (readOnly) (frame.findViewById<View>(R.id.btn_negative).parent as? LinearLayout)?.gravity = Gravity.END
+        frame.findViewById<View>(R.id.btn_close_x).setOnClickListener { dialog.dismiss() }
         frame.findViewById<TextView>(R.id.btn_negative).apply {
-            if (readOnly) text = "关闭"
+            text = if (readOnly) "关闭" else "取消"
             setOnClickListener { dialog.dismiss() }
         }
         frame.findViewById<TextView>(R.id.btn_positive).apply {
@@ -829,17 +817,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         dialog.setContentView(frame)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.setCanceledOnTouchOutside(true)
         dialog.show()
         dialog.window?.setLayout(-1, -2)
         if (readOnly) {
             detailDialogs.add(dialog)
             dialog.setOnDismissListener { detailDialogs.remove(dialog) }
         }
-        // Keep save/cancel fixed while the form scrolls with keyboard and
-        // conditional fields (such as timed playback) independently.
+        // Keep title and footer anchored, with only the content scrolling.
         fun resizeForm() {
             if (!dialog.isShowing || viewport.width <= 0) return
-            val maxHeight = (resources.displayMetrics.heightPixels * 0.65f).toInt()
+            val maxHeight = (resources.displayMetrics.heightPixels * 0.72f).toInt()
             val contentWidth = viewport.width.coerceAtLeast(1)
             form.measure(
                 View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY),
@@ -856,6 +844,23 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         viewport.post { resizeForm() }
         return dialog
+    }
+
+    /** Same title / X / outer spacing for pickers; picker logic owns its own footer. */
+    private fun pickerShell(dialog: android.app.Dialog, title: String,
+                            subtitle: String? = null): Pair<View, LinearLayout> {
+        val frame = layoutInflater.inflate(R.layout.dialog_content_shell, null)
+        frame.findViewById<TextView>(R.id.tv_title).text = title
+        frame.findViewById<TextView>(R.id.tv_subtitle).apply {
+            if (subtitle.isNullOrBlank()) visibility = View.GONE
+            else { text = subtitle; visibility = View.VISIBLE }
+        }
+        frame.findViewById<View>(R.id.btn_close_x).setOnClickListener { dialog.dismiss() }
+        frame.findViewById<View>(R.id.dialog_actions).visibility = View.GONE
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        frame.findViewById<FrameLayout>(R.id.dialog_body_slot)
+            .addView(body, FrameLayout.LayoutParams(-1, -2))
+        return frame to body
     }
 
     /** Shared visual surface for hierarchical resource/selection rows.
@@ -877,16 +882,44 @@ open class RolePackEditorActivity : AppCompatActivity() {
             bottomMargin = px(2)
         }
 
-    /** Shared detail-dialog visual language; retains the existing XML dialog shell. */
+    /** Quiet background groups related details without framing every section. */
     private fun detailSection(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = px(12).toFloat()
-            setColor(getColor(R.color.cp_card_bg))
-            setStroke(px(1), getColor(R.color.cp_divider))
+            setColor(getColor(R.color.cp_bg))
         }
-        setPadding(px(10), px(9), px(10), px(9))
+        setPadding(px(11), px(9), px(11), px(9))
     }
+    private fun sharedNotice(title: String, instanceCount: Int,
+                             message: String, locked: Boolean): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = px(12).toFloat()
+                setColor(getColor(R.color.cp_bg))
+            }
+            setPadding(px(11), px(11), px(11), px(10))
+            val headline = LinearLayout(this@RolePackEditorActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            headline.addView(ImageView(this@RolePackEditorActivity).apply {
+                setImageResource(if (locked) R.drawable.ic_dialog_lock else R.drawable.ic_dialog_info)
+                imageTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.cp_sub))
+            }, LinearLayout.LayoutParams(px(18), px(18)).apply { rightMargin = px(7) })
+            headline.addView(text(title, 13f).apply {
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            headline.addView(text(instanceCount.toString() + " 个角色实例", 11f).apply {
+                setTextColor(getColor(R.color.cp_sub))
+            })
+            addView(headline)
+            addView(text(message, 12f).apply {
+                setTextColor(getColor(R.color.cp_sub))
+                setPadding(0, px(5), 0, 0)
+            })
+        }
     private fun detailListRow(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
