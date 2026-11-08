@@ -16,6 +16,10 @@ class SettingsRippleRow @JvmOverloads constructor(
 ) : LinearLayout(context, attrs, defStyleAttr) {
     private var auxiliaryTouchBounds: Rect? = null
 
+    /** A fold-managed row routes diagnostic taps through its fold controller. */
+    var managedByFoldController: Boolean = false
+    var diagnosticClickInstalled: Boolean = false
+
     init {
         foreground = context.getDrawable(R.drawable.settings_row_ripple)
         isClickable = true
