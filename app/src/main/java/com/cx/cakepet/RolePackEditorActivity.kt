@@ -37,6 +37,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private var linkedTitle = ""
     private var linkedPaths = emptySet<String>()
     private var linkedPackName = ""
+    private var linkedTreeContainer: LinearLayout? = null
     private lateinit var linkedPack: RoleDescriptor
 
     /** Reuses the existing editor's actual recursive folder tree and Function dialogs. */
@@ -98,6 +99,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             addDetailSection(form, info)
             val tree = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             form.addView(tree)
+            linkedTreeContainer = tree
             openedFunctionFolders.clear()
             functionTree(tree, root.getJSONObject("functions"), emptyList())
             ({ })
@@ -754,6 +756,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         RolePackEditing.commit(this, id, draft, candidate)
         root = candidate
         draft = RolePackEditing.draft(this, id)
+        if (linkedMode) linkedTreeContainer?.let { tree ->
+            tree.removeAllViews()
+            functionTree(tree, root.getJSONObject("functions"), emptyList())
+        }
         if (!silent) Toast.makeText(this,
             if (linkedMode) "素材包已保存，关联角色将使用最新配置" else "已保存",
             Toast.LENGTH_SHORT).show()
