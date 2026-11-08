@@ -50,12 +50,6 @@ class MovementSettingsActivity : AppCompatActivity() {
     private lateinit var forageSpeedBar: Slider
     private lateinit var forageSpeedVal: EditText
 
-    override fun onResume() {
-        super.onResume()
-        refreshMovementStatus?.invoke()
-        if (::config.isInitialized) SettingsMaterialLink.refresh(this, roleId)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_movement_settings)
@@ -310,6 +304,7 @@ class MovementSettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshMovementStatus?.invoke()
         SettingsMaterialLink.refresh(this, roleId)
         // 从阈值页返回后重新读取阈值，使滑块行程与回写范围同步为新阈值
         bs = roleBounds.getBlocking(SettingsPage.MOVEMENT).sliders.associateBy { it.key }
