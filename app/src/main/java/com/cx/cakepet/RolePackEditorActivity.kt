@@ -3499,23 +3499,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             }
                             if (open) drawNode(child, path, depth + 1)
                         }
-                        is JSONArray -> drawLeaf(path, depth)         if (!nowChecked && checked && leaves.getValue(key).second
-                                        .filter { it != modeId }.isEmpty()) {
-                                    restoringCheck = true
-                                    try { check.isChecked = true }
-                                    finally { restoringCheck = false }
-                                    warnLastBinding(path) {
-                                        selected.remove(key)
-                                        redraw()
-                                    }
-                                } else {
-                                    if (nowChecked) selected.add(key) else selected.remove(key)
-                                    redraw()
-                                }
-                            }
-                            rippleClick(row) { check.isChecked = !check.isChecked }
-                        }
-                    }
+                        is JSONArray -> drawLeaf(path, depth)
                 }
             }
             drawNode(functionsRoot, emptyList(), 0)
