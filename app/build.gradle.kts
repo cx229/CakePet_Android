@@ -12,8 +12,8 @@ android {
         applicationId = "com.cx.cakepet"
         minSdk = 29
         targetSdk = 37
-        versionCode = 126934 // Android upgrade requires monotonically increasing versionCode
-        versionName = "v1.26.11.08.13.49" // v1.YY.MM.DD.hh.mm, Beijing time (UTC+8); update for each APK build
+        versionCode = System.getenv("CAKEPET_CI_VERSION_CODE")?.toIntOrNull() ?: 126934 // CI time-based, monotonic per minute
+        versionName = System.getenv("CAKEPET_CI_VERSION_NAME") ?: "v1.26.11.08.13.49" // CI assigns actual build time (UTC+8)
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
