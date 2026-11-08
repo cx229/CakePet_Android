@@ -13,6 +13,34 @@ import android.widget.TextView
 
 /** The label stays on the original title baseline; its hit box borrows the existing row padding. */
 object SettingsMaterialLink {
+    private fun updateNotice(activity: Activity, instanceId: String, label: String,
+                             note: TextView, toggle: View) {
+        val message = MaterialFunctionSupport.missing(activity, instanceId, label)
+        note.text = message.orEmpty()
+        note.visibility = if (message == null) View.GONE else View.VISIBLE
+        toggle.isEnabled = message == null
+    }
+
+    /** Refresh when returning from the linked material editor, without recreating the page. */
+    fun refresh(activity: Activity, instanceId: String) {
+        fun visit(node: View) {
+            if (node is TextView) {
+                val label = (node.tag as? String)?.removePrefix("material_warning:")
+                if (label != null && node.tag.toString().startsWith("material_warning:")) {
+                    val row = node.parent as? ViewGroup
+                    val setting = row?.parent as? SettingsRippleRow
+                    val toggle = setting?.let { container ->
+                        (0 until container.childCount).map { container.getChildAt(it) }
+                            .firstOrNull { it is android.widget.Switch }
+                    }
+                    if (toggle != null) updateNotice(activity, instanceId, label, node, toggle)
+                }
+            }
+            if (node is ViewGroup) for (i in 0 until node.childCount) visit(node.getChildAt(i))
+        }
+        visit(activity.findViewById(android.R.id.content))
+    }
+
     fun attach(activity: Activity, instanceId: String, switchId: Int,
                title: String, label: String, vararg paths: String) {
         val toggle = activity.findViewById<View>(switchId) ?: return
@@ -63,6 +91,18 @@ object SettingsMaterialLink {
         }
         inline.addView(link, LinearLayout.LayoutParams(-2, -2))
         owner.addView(inline, position, originalParams)
+        // Keep the stored preference untouched; only runtime capability gates behavior.
+        // This note belongs to the same card and never conflates sibling features.
+        val availabilityNote = TextView(activity).apply {
+            tag = "material_warning:$label"
+            textSize = 10f
+            setTextColor(activity.getColor(R.color.cp_danger))
+            includeFontPadding = false
+            setPadding(0, dp(3), 0, 0)
+        }
+        owner.addView(availabilityNote, position + 1, LinearLayout.LayoutParams(-1, -2))
+        updateNotice(activity, instanceId, label, availabilityNote, toggle)
+
 
         // Only the touch rectangle grows. Neither the heading nor its note moves down.
         settingRow.post {
