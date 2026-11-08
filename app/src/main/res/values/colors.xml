@@ -32,6 +32,7 @@
     <color name="cp_title">#000000</color>            <!-- 标题文字（标题栏/选项标题） -->
     <color name="cp_sub">#555555</color>              <!-- 子标题/模块小标题 -->
     <color name="cp_note">#AAAAAA</color>             <!-- 备注/说明文字 -->
+    <color name="cp_placeholder">#BDBDBD</color>      <!-- 表单占位提示，比实际输入值更淡 -->
     <color name="cp_value">#333333</color>            <!-- 数值/次要文字 -->
     <color name="cp_divider">#E5E5E5</color>          <!-- 分隔线 -->
     <color name="cp_status_bar">#F0F0F0</color>      <!-- 标题栏/状态栏占位背景 -->
