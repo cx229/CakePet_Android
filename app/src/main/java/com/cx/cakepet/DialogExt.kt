@@ -103,6 +103,8 @@ fun AppCompatActivity.showRenameDialog(
     )
     dialog.setCancelable(true)
 
+    view.findViewById<android.view.View>(R.id.btn_close_x)
+        .setOnClickListener { dialog.dismiss() }
     btnNegative.setOnClickListener { dialog.dismiss() }
     btnPositive.setOnClickListener {
         dialog.dismiss()
