@@ -22,9 +22,11 @@ class FormInputField(context: Context) : TextInputLayout(context) {
         setBoxCornerRadii(dp(10f), dp(10f), dp(10f), dp(10f))
         setBoxStrokeColorStateList(ColorStateList(
             arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()),
-            intArrayOf(context.getColor(R.color.cp_sub), context.getColor(R.color.cp_divider))
+            intArrayOf(context.getColor(R.color.cp_sub), context.getColor(R.color.cp_btn_outline_stroke))
         ))
+        setDefaultHintTextColor(ColorStateList.valueOf(context.getColor(R.color.cp_sub)))
         setHintTextColor(ColorStateList.valueOf(context.getColor(R.color.cp_sub)))
+        setPlaceholderTextColor(ColorStateList.valueOf(context.getColor(R.color.cp_placeholder)))
         input.setTextColor(context.getColor(R.color.cp_text))
         input.setHintTextColor(context.getColor(R.color.cp_note))
         input.textSize = 15f
