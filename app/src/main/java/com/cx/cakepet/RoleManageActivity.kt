@@ -335,6 +335,11 @@ class RoleManageActivity : AppCompatActivity() {
                 }
                 val originalName = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')
                     ?.takeIf { it.isNotBlank() } ?: "导入素材包"
+                // Repair sidecars belong to this app, not to the incoming ZIP.
+                // Never trust an imported report or original backup: both must describe
+                // the modes.jsonc that was actually extracted in this import.
+                File(dest, RolePackNormalizer.REPORT_FILE).delete()
+                RolePackNormalizer.original(dest).delete()
                 RolePackEditing.prepareEditable(dest, id, originalName)
                 ok = true
                 break
