@@ -16,14 +16,14 @@ internal object MaterialFunctionSupport {
     val LEAP = listOf("climb", "leap", "leap")
     val FORAGE = listOf("climb", "forage", "move")
 
-    fun available(root: JSONObject, path: List<String>): Boolean {
+    fun available(root: JSONObject, path: List<String>, imageAvailable: (String) -> Boolean = { true }): Boolean {
         val modes = root.optJSONObject("modes") ?: return false
         val candidates = parseFunctions(root)[path].orEmpty()
         return candidates.any { name ->
             val frames = modes.optJSONObject(name)?.optJSONArray("frames") ?: return@any false
             frames.length() > 0 && (0 until frames.length()).all { index ->
                 val frame = frames.optJSONObject(index) ?: return@all false
-                frame.optString("res").isNotBlank() && frame.opt("delay").let { delay ->
+                frame.optString("res").let { it.isNotBlank() && imageAvailable(it) } && frame.opt("delay").let { delay ->
                     when (delay) {
                         is Number -> delay.toLong() > 0
                         is org.json.JSONArray -> delay.length() == 2 &&
@@ -61,7 +61,28 @@ internal object MaterialFunctionSupport {
     fun missing(ctx: Context, instanceId: String, label: String): String? {
         val path = requirement(label) ?: return null
         val root = read(ctx, instanceId) ?: return "素材包配置无法读取，功能暂不可用"
-        return if (available(root, path)) null
-            else "当前素材包缺少必要动画（${path.joinToString("/")}），功能暂不可用"
+        val descriptor = RoleStore.descriptorForInstance(ctx, instanceId)
+            ?: return "无法定位当前素材包，功能暂不可用"
+        val imageCache = mutableMapOf<String, Boolean>()
+        val playable = available(root, path) { res ->
+            imageCache.getOrPut(res) {
+                runCatching {
+                    val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    if (descriptor.source == RoleSource.ASSETS) {
+                        ctx.assets.open("${descriptor.rootPath}/$res").use {
+                            android.graphics.BitmapFactory.decodeStream(it, null, options)
+                        }
+                    } else {
+                        val base = java.io.File(ctx.filesDir, "roles/${descriptor.rootPath}").canonicalFile
+                        val image = java.io.File(base, res).canonicalFile
+                        if (!image.toPath().startsWith(base.toPath()) || !image.isFile) return@getOrPut false
+                        android.graphics.BitmapFactory.decodeFile(image.absolutePath, options)
+                    }
+                    options.outWidth > 0 && options.outHeight > 0
+                }.getOrDefault(false)
+            }
+        }
+        return if (playable) null
+            else "当前素材包缺少可播放的必要动画（${path.joinToString("/")}），功能暂不可用"
     }
 }
