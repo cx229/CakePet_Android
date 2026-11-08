@@ -1408,7 +1408,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
                         playbackCard.addView(detailSectionHeader("后续动画",
                             next.ifBlank { "自动（由系统决定）" }) {
-                            linkedConsent { chooseModes(single = true, initial = listOfNotNull(next.takeIf { it.isNotEmpty() })),
+                            linkedConsent { chooseModes(single = true,
+                                initial = listOfNotNull(next.takeIf { it.isNotEmpty() }),
                                 headerDescription = "当前动画 · $currentKey") { selected ->
                                 val nextId = selected.firstOrNull().orEmpty()
                                 change { json ->
@@ -3669,7 +3670,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             if (group != "全部") folder.addView(text("+", 23f).apply {
                 gravity = Gravity.CENTER
                 isClickable = true
-                contentDescription = if (group == "未分组") "新建未分组碎碎念" else "在$group中新建碎碎念"
+                contentDescription = if (group == "未分组") "新建未分组碎碎念" else "在${group}中新建碎碎念"
                 setOnClickListener {
                     thinkingDetails(null, group.takeUnless { it == "未分组" })
                 }
