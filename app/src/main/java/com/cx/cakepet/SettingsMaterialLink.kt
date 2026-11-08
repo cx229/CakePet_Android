@@ -20,6 +20,21 @@ object SettingsMaterialLink {
         note.visibility = if (message == null) View.GONE else View.VISIBLE
         // Lock only its interaction, never rewrite the saved preference.
         toggle.isEnabled = message == null
+        val row = toggle.parent as? SettingsRippleRow
+        if (row != null && !row.managedByFoldController) {
+            val blocked = if (label == "移动") listOf(MaterialFunctionSupport.STATIC)
+                else listOfNotNull(MaterialFunctionSupport.requirement(label))
+            if (message != null && blocked.isNotEmpty()) {
+                row.setOnClickListener {
+                    RolePackEditing.showMissingFunctions(activity, instanceId, blocked)
+                }
+                row.diagnosticClickInstalled = true
+            } else if (row.diagnosticClickInstalled) {
+                row.setOnClickListener(null)
+                row.isClickable = true
+                row.diagnosticClickInstalled = false
+            }
+        }
     }
 
     /** Refresh when returning from the linked material editor, without recreating the page. */
