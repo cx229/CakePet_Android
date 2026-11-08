@@ -1006,22 +1006,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
         dialog.window?.setLayout(-1, -2)
     }
 
-    private fun entry(box: LinearLayout, title: String, initial: String, compact: Boolean = false): EditText {
-        val item = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        item.addView(text(title, 12f).apply {
-            setPadding(0, 0, 0, px(4))
-            setTextColor(getColor(R.color.cp_sub))
-        })
-        val field = EditText(this).apply {
-            setText(initial)
-            setSingleLine(true)
-            textSize = 15f
-            setTextColor(getColor(R.color.cp_text))
-            setHintTextColor(getColor(R.color.cp_sub))
-            setBackgroundResource(R.drawable.bg_input)
-            setPadding(px(12), px(8), px(12), px(8))
-        }
-        item.addView(field, LinearLayout.LayoutParams(-1, px(if (compact) 42 else 46)))
+    private fun entry(box: LinearLayout, title: String, initial: String,
+                      compact: Boolean = false, placeholder: String = "请输入$title",
+                      helper: String? = null): EditText {
+        // Use the same permanently notched label in full and compact form dialogs.
+        val item = FormInputField(this)
+        val field = item.configure(title, initial, placeholder, helper)
         box.addView(item, LinearLayout.LayoutParams(-1, -2).apply {
             bottomMargin = px(if (compact) 8 else 12)
         })
@@ -2530,7 +2520,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val right = entry(row, b, bv, compact = true)
         (left.parent as View).layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
         (right.parent as View).layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
-        left.hint = ah; right.hint = bh
+        if (ah.isNotBlank()) (left.parent as FormInputField).setPlaceholderText(ah)
+        if (bh.isNotBlank()) (right.parent as FormInputField).setPlaceholderText(bh)
         box.addView(row)
         return left to right
     }
