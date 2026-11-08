@@ -68,6 +68,11 @@
             android:theme="@style/Theme.CakePet.FullscreenTitle" />
 
         <activity
+            android:name=".RolePackLinkedActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.Transparent"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name=".RolePackEditorActivity"
             android:exported="false"
             android:theme="@style/Theme.CakePet.FullscreenTitle"
