@@ -106,9 +106,40 @@ class ImageModeManager(
      * 按【功能路径】取该功能的候选叶子（v1.01 契约）。
      * 返回空表表示素材包未提供该功能——调用方应据此【跳过】，不要发空 setMode。
      */
+    // Only static standby is package-wide mandatory. Check its candidates lazily
+    // and cache image-bound results so one broken alternative cannot be selected.
+    private val staticReadyCache = mutableMapOf<String, Boolean>()
+    private val imageReadyCache = mutableMapOf<String, Boolean>()
+    private fun validStaticCandidate(start: String): Boolean {
+        return staticReadyCache.getOrPut(start) {
+            val visited = mutableSetOf<String>()
+            var next: String? = start
+            while (!next.isNullOrBlank()) {
+                if (!visited.add(next)) return@getOrPut false
+                val mode = modes[next] ?: return@getOrPut false
+                if (mode.frames.isEmpty()) return@getOrPut false
+                for (frame in mode.frames) {
+                    if (frame.resName.isBlank()) return@getOrPut false
+                    val valid = imageReadyCache.getOrPut(frame.resName) {
+                        val resource = currentPack.resolve(frame.resName) ?: return@getOrPut false
+                        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        runCatching {
+                            openPackStream(resource)?.use { BitmapFactory.decodeStream(it, null, opts) }
+                            opts.outWidth > 0 && opts.outHeight > 0
+                        }.getOrDefault(false)
+                    }
+                    if (!valid) return@getOrPut false
+                }
+                if (mode.loopMode == "infinite") return@getOrPut true
+                next = mode.nextModeName
+            }
+            true
+        }
+    }
     fun leavesOf(vararg path: String): List<String> =
         currentPack.functions[path.toList()].orEmpty().filter { name ->
-            modes[name]?.frames?.isNotEmpty() == true
+            modes[name]?.frames?.isNotEmpty() == true &&
+                (path.toList() != MaterialFunctionSupport.STATIC || validStaticCandidate(name))
         }
 
     /**
@@ -166,6 +197,8 @@ class ImageModeManager(
         )
         // 清空旧模式，按 JSON 重建
         modes.clear()
+        staticReadyCache.clear()
+        imageReadyCache.clear()
         val modesObj = root.getJSONObject("modes")
         val kit = modesObj.keys()
         while (kit.hasNext()) {
@@ -408,6 +441,8 @@ class ImageModeManager(
         rawSizeCache.clear()
         modeVisualCache.clear()
         modes.clear()
+        staticReadyCache.clear()
+        imageReadyCache.clear()
         pack.configPath?.let { loadModesFromJson(it) }
         val (w, h) = globalMaxSize()
         globalW = w
