@@ -240,6 +240,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private lateinit var scroll: ScrollView
     private lateinit var titleText: TextView
     private lateinit var subtitleText: TextView
+    private var homePreviewPlayer: PreviewPlayer? = null
     private val expandedResourceFolders = mutableSetOf<String>()
     private var screen = "home"
     private data class EditorPage(val name: String, val mode: String, val scrollY: Int)
@@ -623,6 +624,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
     override fun onDestroy() {
         removeBulkBar()
         stopAnimation()
+        homePreviewPlayer?.stop()
+        homePreviewPlayer = null
         if (::draft.isInitialized) draft.deleteRecursively()
         super.onDestroy()
     }
@@ -781,6 +784,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         scroll.visibility = View.VISIBLE
         scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, 0)
         stopAnimation()
+        homePreviewPlayer?.stop()
+        homePreviewPlayer = null
         val pageChanged = screen != dest
         if (!restoringPage && pageChanged)
             pageHistory.addLast(EditorPage(screen, modeId, currentPageScrollY()))
@@ -1091,6 +1096,34 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun home() {
         section("素材包编辑", "home")
         val roleName = root.optString("name").ifBlank { "角色" }
+        // Same 64dp bordered preview and player as the material catalog card.
+        val previewColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        val preview = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundResource(R.drawable.bg_thumb_border)
+            clipToOutline = true
+            setPadding(px(4), px(4), px(4), px(4))
+        }
+        previewColumn.addView(preview, LinearLayout.LayoutParams(px(64), px(64)))
+        previewColumn.addView(text(roleName, 14f).apply {
+            gravity = Gravity.CENTER
+        })
+        panel.addView(previewColumn, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = px(10)
+        })
+        RoleRegistry.byId(id)?.let { role ->
+            runCatching {
+                val mgr = ImageModeManager(this, buildSpritePackForRole(this, role))
+                PreviewPlayer(mgr, preview, resources.displayMetrics.density)
+            }.onSuccess { player ->
+                homePreviewPlayer = player
+                preview.setOnClickListener { player.triggerPat() }
+                player.start()
+            }
+        }
         if (!standbyReady()) {
             menuCard("素材包必要动画缺失",
                 "待机 / 待机池没有有效动画，点击前往修复",
@@ -2996,7 +3029,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 isClickable = false
                 isFocusable = false
-                setBackgroundResource(R.drawable.bg_thumb_border)
             }, LinearLayout.LayoutParams(px(52), px(52)).apply {
                 rightMargin = px(7)
             })
