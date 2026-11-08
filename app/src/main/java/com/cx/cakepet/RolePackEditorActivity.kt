@@ -696,7 +696,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         })
     }
 
-    private fun menuCard(title: String, note: String, iconRes: Int, click: () -> Unit) {
+    private fun menuCard(title: String, note: String, iconRes: Int, danger: Boolean = false, click: () -> Unit) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -709,7 +709,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         card.addView(ImageView(this).apply {
             setImageResource(iconRes)
-            imageTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.cp_note))
+            imageTintList = android.content.res.ColorStateList.valueOf(getColor(if (danger) R.color.cp_danger else R.color.cp_note))
             scaleType = ImageView.ScaleType.FIT_CENTER
             contentDescription = null
         }, LinearLayout.LayoutParams(px(22), px(22)).apply { rightMargin = px(12) })
@@ -718,7 +718,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        heading.addView(text(title, 16f).apply { setPadding(0, 0, 0, 0) })
+        heading.addView(text(title, 16f).apply {
+            setPadding(0, 0, 0, 0)
+            if (danger) setTextColor(getColor(R.color.cp_danger))
+        })
         labels.addView(heading)
         labels.addView(text(note, 12f).apply {
             setPadding(0, px(4), 0, 0)
@@ -1060,7 +1063,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         if (!standbyReady()) {
             menuCard("素材包必要动画缺失",
                 "待机 / 待机池没有有效动画，点击前往修复",
-                android.R.drawable.ic_dialog_alert) {
+                android.R.drawable.ic_dialog_alert, danger = true) {
                 functions()
                 functionDetails(MaterialFunctionSupport.NORMAL,
                     functionAnimationsAt(MaterialFunctionSupport.NORMAL))
