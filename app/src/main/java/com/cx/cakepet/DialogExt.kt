@@ -41,6 +41,9 @@ fun AppCompatActivity.showConfirmDialog(
     tvTitle.text = title
     if (titleColorRes != null) tvTitle.setTextColor(androidx.core.content.ContextCompat.getColor(this, titleColorRes))
     tvBody.text = Html.fromHtml(bodyHtml, Html.FROM_HTML_MODE_LEGACY)
+    // Keep lengthy validation/reference messages readable inside a compact dialog.
+    tvBody.maxLines = 11
+    tvBody.movementMethod = android.text.method.ScrollingMovementMethod.getInstance()
     if (subText.isNullOrEmpty()) {
         tvSub.visibility = android.view.View.GONE
     } else {
