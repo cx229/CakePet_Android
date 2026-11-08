@@ -229,11 +229,15 @@ class RoleManageActivity : AppCompatActivity() {
             RolePackEditing.validationErrorsForRole(this, role)
         }.getOrElse { listOf("读取素材包失败：${it.message}") }
         if (errors.isNotEmpty()) {
-            AlertDialog.Builder(this)
-                .setTitle("素材包暂时无法加入角色")
-                .setMessage(errors.mapIndexed { index, error -> "${index + 1}. $error" }.joinToString("\n"))
-                .setPositiveButton("知道了", null)
-                .show()
+            val summary = errors.mapIndexed { index, error ->
+                "${index + 1}. $error"
+            }.joinToString("\n")
+            showConfirmDialog(
+                title = "素材包暂时无法加入角色",
+                bodyHtml = android.text.TextUtils.htmlEncode(summary).replace("\n", "<br>"),
+                positiveText = "知道了",
+                showNegative = false
+            ) { }
             return
         }
         val instanceId = "inst_${System.currentTimeMillis()}_${(Math.random() * 10000).toInt()}"
@@ -344,11 +348,13 @@ class RoleManageActivity : AppCompatActivity() {
             tmp.delete()
             // 若曾解出过合法包结构但资源缺失，给出具体校验错误；否则提示压缩包无效。
             if (lastErrors.isNotEmpty()) {
-                AlertDialog.Builder(this)
-                    .setTitle("资源包校验失败")
-                    .setMessage(lastErrors.joinToString("\n"))
-                    .setPositiveButton("知道了", null)
-                    .show()
+                showConfirmDialog(
+                    title = "资源包校验失败",
+                    bodyHtml = android.text.TextUtils.htmlEncode(lastErrors.joinToString("\n"))
+                        .replace("\n", "<br>"),
+                    positiveText = "知道了",
+                    showNegative = false
+                ) { }
             } else {
                 // 把真正的失败原因暴露出来：原先只给一句笼统提示，异常被 catch 吞掉，
                 // 无法区分【压缩包损坏】【文件名过长】【Zip Slip 拦截】【磁盘空间不足】等情况。
