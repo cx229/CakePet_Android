@@ -1,0 +1,143 @@
+package com.cx.cakepet
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+
+/**
+ * Editor-side compatibility catalog, deliberately separate from runtime readiness.
+ * Empty pools are editable placeholders, NOT compulsory functions or playable modes.
+ */
+internal object RolePackNormalizer {
+    const val REPORT_FILE = ".cakepet-import-report.json"
+    const val ORIGINAL_FILE = "modes.original.jsonc"
+
+    // Existing runtime contract + additional active paths represented by the shipped v1.10 template.
+    val supportedPaths: List<List<String>> = (
+        RolePackageContract.REQUIRED_FUNCTION_PATHS + listOf(
+            listOf("climb", "leap", "leap"),
+            listOf("climb", "leap", "landing"),
+            listOf("climb", "forage", "move")
+        )
+    ).distinct()
+
+    private val knownNodes: Set<List<String>> = buildSet {
+        supportedPaths.forEach { path ->
+            (1..path.size).forEach { add(path.take(it)) }
+        }
+    }
+    private val leaves = supportedPaths.toSet()
+
+    data class Issue(val type: String, val path: String, val detail: String, val raw: String? = null) {
+        fun toJson(): JSONObject = JSONObject().put("type", type).put("path", path)
+            .put("detail", detail).apply { if (raw != null) put("raw", raw) }
+    }
+
+    private fun kind(value: Any?): String = when (value) {
+        null, JSONObject.NULL -> "null"
+        is JSONObject -> "Object"
+        is JSONArray -> "Array"
+        is String -> "String"
+        is Number -> "Number"
+        is Boolean -> "Boolean"
+        else -> value.javaClass.simpleName
+    }
+
+    /**
+     * Repair known structural types, but keep unknown keys untouched.
+     * A backup is required whenever an incoming value has to be replaced.
+     */
+    fun normalize(root: JSONObject): List<Issue> {
+        val issues = mutableListOf<Issue>()
+        for ((field, default) in listOf(
+            "functions" to { JSONObject() },
+            "modes" to { JSONObject() }
+        )) {
+            val original = root.opt(field)
+            if (original !is JSONObject) {
+                if (root.has(field)) issues += Issue("格式不支持", field,
+                    "预期 Object，实际 ${kind(original)}；已创建可编辑结构，原值保存在原始配置中",
+                    original?.toString())
+                else issues += Issue("已补全", field, "缺少顶层对象，已创建空结构")
+                root.put(field, default())
+            }
+        }
+        val modes = root.getJSONObject("modes")
+        for (id in modes.keys().asSequence().toList()) {
+            val raw = modes.opt(id)
+            if (raw !is JSONObject) {
+                issues += Issue("格式不支持", "modes/$id",
+                    "预期 Object，实际 ${kind(raw)}；已用空动作占位，原值保存在原始配置中",
+                    raw?.toString())
+                modes.put(id, JSONObject().put("frames", JSONArray()))
+            } else if (raw.optJSONArray("frames") == null) {
+                val previous = raw.opt("frames")
+                issues += Issue(if (raw.has("frames")) "格式不支持" else "已补全",
+                    "modes/$id/frames",
+                    if (raw.has("frames")) "预期 Array，实际 ${kind(previous)}；已替换为空帧列表"
+                    else "已补全空帧列表（不会生成图片）", previous?.toString())
+                raw.put("frames", JSONArray())
+            }
+        }
+        val functions = root.getJSONObject("functions")
+        // Normalize every declared function path, including ones missing from incoming JSON.
+        for (path in supportedPaths) {
+            var node = functions
+            for (i in 0 until path.lastIndex) {
+                val key = path[i]
+                val prefix = path.take(i + 1).joinToString("/")
+                val current = node.opt(key)
+                if (current !is JSONObject || current.has("modes")) {
+                    issues += Issue(if (!node.has(key)) "已补全" else "格式不支持",
+                        "functions/$prefix",
+                        if (!node.has(key)) "缺少功能文件夹，已补全"
+                        else "预期文件夹 Object，实际 ${kind(current)}；原值已备份",
+                        current?.toString())
+                    node.put(key, JSONObject())
+                }
+                node = node.getJSONObject(key)
+            }
+            val key = path.last()
+            val value = node.opt(key)
+            val valid = value is JSONArray || (value is JSONObject && value.optJSONArray("modes") != null)
+            if (!valid) {
+                val missing = !node.has(key)
+                issues += Issue(if (missing) "已补全" else "格式不支持",
+                    "functions/${path.joinToString("/")}",
+                    if (missing) "未配置，已添加空动画池" else
+                        "预期 Array 或带 modes 数组的 Object，实际 ${kind(value)}；已创建空池，原值已备份",
+                    value?.toString())
+                node.put(key, JSONArray())
+            }
+        }
+        fun scan(node: JSONObject, path: List<String>) {
+            for (key in node.keys().asSequence().toList()) {
+                if (key in setOf("note", "usage", "thinking", "modes")) continue
+                val next = path + key
+                val value = node.opt(key)
+                if (next !in knownNodes) {
+                    issues += Issue("未定义", "functions/${next.joinToString("/")}",
+                        "当前软件未定义该功能路径；已保留原值，不作为已支持功能使用",
+                        value?.toString())
+                }
+                if (value is JSONObject && value.optJSONArray("modes") == null) scan(value, next)
+            }
+        }
+        scan(functions, emptyList())
+        return issues
+    }
+
+    fun writeReport(directory: File, sourceVersion: String?, issues: List<Issue>, parseError: String? = null) {
+        val report = JSONObject()
+            .put("sourceVersion", sourceVersion ?: "未知")
+            .put("targetVersion", RolePackageContract.VERSION)
+            .put("issues", JSONArray().apply { issues.forEach { put(it.toJson()) } })
+        if (parseError != null) report.put("parseError", parseError)
+        File(directory, REPORT_FILE).writeText(report.toString(2))
+    }
+
+    fun report(directory: File): JSONObject? =
+        runCatching { JSONObject(File(directory, REPORT_FILE).readText()) }.getOrNull()
+
+    fun original(directory: File): File = File(directory, ORIGINAL_FILE)
+}
