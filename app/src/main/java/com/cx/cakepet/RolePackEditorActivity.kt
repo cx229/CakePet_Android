@@ -3656,11 +3656,31 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         for ((group, ids) in grouped) {
             val opened = expandedThinkingGroups.contains(group)
-            val folder = text((if (opened) "▾ 📂  " else "▸ 📁  ") + "$group（${ids.size}）", 15f).apply {
+            // Match the action layout already used by animation group headers.
+            val folder = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
                 setBackgroundResource(R.drawable.card_bg)
                 rippleCard(this)
-                setPadding(px(12), px(10), px(12), px(10))
+                setPadding(px(12), px(6), px(12), px(6))
             }
+            folder.addView(text((if (opened) "▾ 📂  " else "▸ 📁  ") +
+                "$group（${ids.size}）", 15f), LinearLayout.LayoutParams(0, -2, 1f))
+            if (group != "全部") folder.addView(text("+", 23f).apply {
+                gravity = Gravity.CENTER
+                isClickable = true
+                contentDescription = if (group == "未分组") "新建未分组碎碎念" else "在$group中新建碎碎念"
+                setOnClickListener {
+                    thinkingDetails(null, group.takeUnless { it == "未分组" })
+                }
+            }, LinearLayout.LayoutParams(px(38), px(44)))
+            if (group != "全部" && group != "未分组")
+                folder.addView(text("⋮", 23f).apply {
+                    gravity = Gravity.CENTER
+                    isClickable = true
+                    contentDescription = "$group 分组操作"
+                    setOnClickListener { anchor -> showThinkingGroupOptions(anchor, group) }
+                }, LinearLayout.LayoutParams(px(38), px(44)))
             panel.addView(folder, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
             folder.setOnClickListener {
                 if (!expandedThinkingGroups.add(group)) expandedThinkingGroups.remove(group)
@@ -3692,7 +3712,20 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             setOf("删除")) { action ->
                             when (action) {
                                 "详情 / 编辑" -> thinkingDetails(id)
-                                "选择碎碎念组" -> thinkingDetails(id)
+                                "选择碎碎念组" -> chooseThinkingGroups(thinkingGroups(id)) { selected ->
+                                    if (selected != thinkingGroups(id)) {
+                                        change { json ->
+                                            val texts = json.getJSONObject("thinkings")
+                                            val item = texts.optJSONObject(id) ?: JSONObject().apply {
+                                                put("text", thinkingBody(id))
+                                            }.also { texts.put(id, it) }
+                                            item.put("groups", JSONArray().apply {
+                                                selected.distinct().forEach { put(it) }
+                                            })
+                                        }
+                                        thinkingResources()
+                                    }
+                                }
                                 "删除" -> confirmThinkingDelete(id)
                             }
                         }
@@ -3707,6 +3740,68 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private val expandedThinkingGroups = mutableSetOf<String>()
+
+    /** Reuse the animation-group menu semantics; membership is stored on each text. */
+    private fun showThinkingGroupOptions(anchor: View, group: String) {
+        if (group == "全部" || group == "未分组") return
+        UnifiedOptionMenu.show(anchor, listOf("重命名", "解散"), setOf("解散")) { choice ->
+            when (choice) {
+                "重命名" -> editor("重命名碎碎念组", compact = true,
+                    subtitle = "当前分组 · $group") { box ->
+                    val field = entry(box, "碎碎念组名称", group, compact = true)
+                    ({
+                        val target = field.text.toString().trim()
+                        require(target.isNotEmpty() && target.length <= 40 &&
+                            target != "全部" && target != "未分组" &&
+                            target.none { ch -> ch == '/' || ch == '\\' || ch == '\n' || ch == '\r' }) {
+                            "碎碎念组名称不合法"
+                        }
+                        require(target == group || target !in allThinkingGroups()) {
+                            "碎碎念组已存在"
+                        }
+                        if (target != group) {
+                            change { json ->
+                                val texts = json.getJSONObject("thinkings")
+                                texts.keys().asSequence().toList().forEach { id ->
+                                    val item = texts.optJSONObject(id) ?: return@forEach
+                                    val groups = item.optJSONArray("groups") ?: return@forEach
+                                    for (index in 0 until groups.length()) {
+                                        if (groups.optString(index) == group) groups.put(index, target)
+                                    }
+                                }
+                            }
+                            if (expandedThinkingGroups.remove(group))
+                                expandedThinkingGroups.add(target)
+                            thinkingResources()
+                        }
+                    })
+                }
+                "解散" -> showConfirmDialog(
+                    title = "解散碎碎念组",
+                    bodyHtml = "确认解散「${android.text.TextUtils.htmlEncode(group)}」？组内碎碎念不会删除，已存在的功能和动画引用不会改变。",
+                    positiveText = "解散"
+                ) {
+                    attempt {
+                        change { json ->
+                            val texts = json.getJSONObject("thinkings")
+                            texts.keys().asSequence().toList().forEach { id ->
+                                val item = texts.optJSONObject(id) ?: return@forEach
+                                val old = item.optJSONArray("groups") ?: return@forEach
+                                val kept = JSONArray()
+                                for (index in 0 until old.length()) {
+                                    val name = old.optString(index)
+                                    if (name != group) kept.put(name)
+                                }
+                                item.put("groups", kept)
+                            }
+                        }
+                        expandedThinkingGroups.remove(group)
+                        thinkingResources()
+                    }
+                }
+            }
+        }
+    }
 
     private fun functionAnimationsAt(path: List<String>): List<String> {
         var node: Any? = root.optJSONObject("functions")
@@ -3726,10 +3821,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     /** Autosave valid text with debounce, and flush before closing or navigating. */
-    private fun thinkingDetails(id: String?) {
-        // The body and group membership share one local draft until Save is pressed.
+    private fun thinkingDetails(id: String?, initialGroup: String? = null) {
+        // Group-local creation prefills membership; nothing is committed until Save.
         val originalText = id?.let(::thinkingBody).orEmpty()
-        val draftGroups = id?.let(::thinkingGroups)?.toMutableList() ?: mutableListOf()
+        val draftGroups = id?.let(::thinkingGroups)?.toMutableList()
+            ?: mutableListOf<String>().apply {
+                if (initialGroup != null && initialGroup != "全部" && initialGroup != "未分组")
+                    add(initialGroup)
+            }
         editor(if (id == null) "新建碎碎念" else "碎碎念详情",
             compact = true, subtitle = "角色底部消息文本") { box ->
             val textCard = dialogSection()
