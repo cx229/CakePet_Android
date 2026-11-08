@@ -1052,7 +1052,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         editor("素材包兼容检查", compact = true, readOnly = true,
             subtitle = "原始版本 · ${report?.optString("sourceVersion", "未知") ?: "未知"}",
             readOnlyActionLabel = "编辑原始配置",
-            extraAction = { editPackSource() }) { form ->
+            extraAction = {
+                detailDialogs.lastOrNull { it.isShowing }?.dismiss()
+                editPackSource()
+            }) { form ->
             val error = report?.optString("parseError")?.takeIf { it.isNotBlank() }
             if (error != null) form.addView(text("JSONC 解析失败：$error", 13f).apply {
                 setTextColor(getColor(R.color.cp_danger))
@@ -3001,6 +3004,24 @@ open class RolePackEditorActivity : AppCompatActivity() {
         return card
     }
 
+    private fun unsupportedFunction(path: List<String>, value: Any?) {
+        editor("未定义 / 不支持的功能", compact = true, readOnly = true,
+            subtitle = path.joinToString("/"), readOnlyActionLabel = "编辑 JSONC",
+            extraAction = {
+                detailDialogs.lastOrNull { it.isShowing }?.dismiss()
+                editPackSource()
+            }) { form ->
+            form.addView(text("当前版本没有该功能的内置定义或其类型不符合要求；" +
+                "原始值已保留，可通过 JSONC 编辑器修复。", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            })
+            form.addView(text(value?.toString() ?: "null", 12f).apply {
+                setTextIsSelectable(true)
+            })
+            ({ })
+        }
+    }
+
     private fun functionTree(parent: LinearLayout, values: JSONObject, path: List<String>) {
         val keys = values.keys().asSequence()
             .filter { it != "thinking" && it != "modes" && it != "note" && it != "usage" }
@@ -3017,6 +3038,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val currentPath = path + key
             val fullKey = currentPath.joinToString("/")
             val displayName = functionPathName(currentPath)
+            val undefined = currentPath !in RolePackNormalizer.supportedPaths &&
+                RolePackNormalizer.supportedPaths.none { known ->
+                    known.size > currentPath.size && known.take(currentPath.size) == currentPath
+                }
             if (linkedMode && linkedPaths.none { allowed ->
                     fullKey == allowed || fullKey.startsWith(allowed + "/") ||
                     allowed.startsWith(fullKey + "/")
@@ -3024,10 +3049,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
             when (val child = values.opt(key)) {
                 is JSONObject -> if (child.has("modes")) {
                     val selected = jsonStrings(child.optJSONArray("modes"))
-                    functionItem(parent, "▣  " + functionPathName(currentPath),
-                        "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) }, path.size,
-                        description = functionDescription(currentPath), examplePath = currentPath) {
-                        functionDetails(currentPath, selected)
+                    functionItem(parent, (if (undefined) "未定义 · " else "▣  ") + displayName,
+                        if (undefined) "当前软件未定义此功能路径，原值已保留" else
+                            "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) },
+                        path.size, description = if (undefined) fullKey else functionDescription(currentPath),
+                        examplePath = if (undefined) null else currentPath) {
+                        if (undefined) unsupportedFunction(currentPath, child)
+                        else functionDetails(currentPath, selected)
                     }
                 } else {
                     val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -3043,7 +3071,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         }
                         children.visibility = if (opened) View.VISIBLE else View.GONE
                     }
-                    folderCard = functionItem(parent, "", functionFolderDescription(currentPath), path.size, immediate = true) {
+                    folderCard = functionItem(parent, "",
+                        if (undefined) "未定义文件夹 · 原配置已保留" else functionFolderDescription(currentPath),
+                        path.size, immediate = true) {
                         if (!openedFunctionFolders.add(fullKey)) openedFunctionFolders.remove(fullKey)
                         refreshFolder()
                     }
@@ -3053,10 +3083,19 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 is JSONArray -> {
                     val selected = (0 until child.length()).map { child.optString(it) }
                         .filter { it.isNotBlank() }
-                    functionItem(parent, "▣  " + functionPathName(currentPath),
-                        "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) }, path.size,
-                        description = functionDescription(currentPath), examplePath = currentPath) {
-                        functionDetails(currentPath, selected)
+                    functionItem(parent, (if (undefined) "未定义 · " else "▣  ") + displayName,
+                        if (undefined) "当前软件未定义此功能路径，原值已保留" else
+                            "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) },
+                        path.size, description = if (undefined) fullKey else functionDescription(currentPath),
+                        examplePath = if (undefined) null else currentPath) {
+                        if (undefined) unsupportedFunction(currentPath, child)
+                        else functionDetails(currentPath, selected)
+                    }
+                }
+                else -> {
+                    functionItem(parent, "格式不支持 · " + displayName,
+                        "字段类型无法识别，原始值已保留", path.size, description = fullKey) {
+                        unsupportedFunction(currentPath, child)
                     }
                 }
             }
