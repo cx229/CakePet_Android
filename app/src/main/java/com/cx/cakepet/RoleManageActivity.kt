@@ -87,6 +87,7 @@ class RoleManageActivity : AppCompatActivity() {
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
         dialog.setContentView(view)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.setCanceledOnTouchOutside(true)
         view.findViewById<View>(R.id.btn_close_x).setOnClickListener { dialog.dismiss() }
         view.findViewById<View>(R.id.btn_negative).setOnClickListener { dialog.dismiss() }
         view.findViewById<TextView>(R.id.btn_positive).apply {
