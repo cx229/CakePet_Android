@@ -100,6 +100,7 @@ class FeedingSettingsActivity : AppCompatActivity() {
             )
         )
         btnMore.setOnClickListener { moreMenu.show() }
+        SettingsMaterialLink.attach(this, roleId, R.id.sw_feeding_enabled, "投食", "投食", "feed", "snap/feed")
 
         // 滑块范围（跟随阈值页基础范围）：抽到 bindBounds()，onCreate 与 onResume 复用，
         // 使从阈值页返回时滑块行程（最新上下界）即时热更新。下方局部声明供 EditSync 的 defaultValue 使用。
