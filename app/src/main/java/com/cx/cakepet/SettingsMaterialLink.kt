@@ -16,9 +16,10 @@ object SettingsMaterialLink {
     private fun updateNotice(activity: Activity, instanceId: String, label: String,
                              note: TextView, toggle: View) {
         val message = MaterialFunctionSupport.missing(activity, instanceId, label)
-        note.text = message?.plus("（运行时停用，保留原开关设置）").orEmpty()
+        note.text = message.orEmpty()
         note.visibility = if (message == null) View.GONE else View.VISIBLE
-        // Do not mutate the switch: parent fold dependencies and stored intent stay authoritative.
+        // Lock only its interaction, never rewrite the saved preference.
+        toggle.isEnabled = message == null
     }
 
     /** Refresh when returning from the linked material editor, without recreating the page. */
