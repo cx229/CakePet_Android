@@ -2945,6 +2945,37 @@ open class RolePackEditorActivity : AppCompatActivity() {
         else -> "展开查看该分类下的功能"
     }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
+    /**
+     * Current pack sprite preview for a Function leaf, shared by the main page
+     * and the filtered linked overlay. No fallback to another character's art.
+     */
+    private fun functionPreview(path: List<String>): android.graphics.Bitmap? {
+        val key = "function-preview:" + path.joinToString("/")
+        if (templateExamples.containsKey(key)) return templateExamples[key]
+        val modes = root.optJSONObject("modes")
+        var bitmap: android.graphics.Bitmap? = null
+        for (modeId in functionAnimationsAt(path)) {
+            val frames = modes?.optJSONObject(modeId)?.optJSONArray("frames") ?: continue
+            for (index in 0 until frames.length()) {
+                val res = frames.optJSONObject(index)?.optString("res").orEmpty()
+                if (res.isBlank() || res.startsWith("/") ||
+                    res.contains('\\') || res.split('/').any { it == ".." }) continue
+                bitmap = runCatching {
+                    val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+                    if (linkedMode && linkedReadOnly)
+                        assets.open("${linkedPack.rootPath}/$res").use {
+                            BitmapFactory.decodeStream(it, null, opts)
+                        }
+                    else BitmapFactory.decodeFile(File(draft, res).absolutePath, opts)
+                }.getOrNull()
+                if (bitmap != null) break
+            }
+            if (bitmap != null) break
+        }
+        templateExamples[key] = bitmap
+        return bitmap
+    }
+
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
                              level: Int, immediate: Boolean = false, description: String = "",
                              examplePath: List<String>? = null, click: () -> Unit): LinearLayout {
@@ -2953,69 +2984,54 @@ open class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundResource(R.drawable.card_bg)
             rippleCard(this)
-            setPadding(if (examplePath != null) px(1) else px(12), px(5),
-                if (examplePath != null) px(1) else px(12), px(5))
+            setPadding(if (examplePath != null) px(6) else px(12), px(5),
+                px(8), px(5))
             isClickable = true
             if (immediate) setOnClickListener { click() }
             else rippleClick(this) { click() }
         }
-        // The title chevron belongs to a real centered row, not spaced text.
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         if (examplePath != null) {
-            val titleRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            titleRow.addView(text(title, 15f).apply { setPadding(0, 0, 0, 0) },
-                LinearLayout.LayoutParams(-2, -2))
-            titleRow.addView(text("›", 15f).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                setTextColor(getColor(R.color.cp_title))
-                setPadding(px(4), 0, 0, 0)
-            }, LinearLayout.LayoutParams(-2, -2))
-            content.addView(titleRow)
-        } else {
-            content.addView(text(title, 15f).apply { setPadding(0, 0, 0, 0) })
-        }
-        if (description.isNotBlank()) content.addView(text(description, 10f).apply {
-            setPadding(0, px(2), 0, 0)
-            setTextColor(getColor(R.color.cp_note))
-        })
-        if (examplePath != null) {
-            val refs = functionAnimationsAt(examplePath)
-            val bad = refs.filter { !playableMode(it) }
-            val missing = refs.isEmpty()
-            if (examplePath == MaterialFunctionSupport.NORMAL && !standbyReady()) {
-                val note = "素材包必要动画缺失"
-                if (note.isNotBlank()) content.addView(text(note, 10f).apply {
-                    setPadding(0, px(2), 0, 0)
-                    setTextColor(getColor(R.color.cp_danger))
-                })
-            }
-        }
-        if (subtitle.isNotBlank()) {
-            val subtitleView = if (examplePath != null) {
-                val functionPath = examplePath
-                val animationNames = functionAnimationsAt(functionPath)
-                linkedModeChains(animationNames, root.getJSONObject("modes"), "当前动画：", 10f) {
-                    openModeFromDetail(it)
-                }
-            } else text(subtitle, 10f)
-            subtitleView.apply {
-                setPadding(0, px(2), 0, 0)
-                setTextColor(getColor(if (examplePath == null) R.color.cp_note else R.color.cp_title))
-            }
-            content.addView(subtitleView)
-        }
-        val bitmap = examplePath?.let { templateRandomFrame(it) }
-        if (bitmap != null) {
+            val bitmap = functionPreview(examplePath)
             card.addView(ImageView(this).apply {
-                setImageBitmap(bitmap)
+                if (bitmap != null) setImageBitmap(bitmap)
+                else {
+                    setImageResource(android.R.drawable.ic_menu_gallery)
+                    imageTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.cp_note))
+                    setPadding(px(9), px(9), px(9), px(9))
+                }
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 isClickable = false
                 isFocusable = false
-            }, LinearLayout.LayoutParams(px(48), px(48)).apply {
-                rightMargin = px(5)
+                setBackgroundResource(R.drawable.bg_thumb_border)
+            }, LinearLayout.LayoutParams(px(52), px(52)).apply {
+                rightMargin = px(7)
+            })
+        }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(text(title, if (examplePath != null) 13f else 15f).apply {
+            setPadding(0, 0, 0, 0)
+        })
+        if (description.isNotBlank()) content.addView(text(description, 10f).apply {
+            setPadding(0, px(3), 0, 0)
+            setTextColor(getColor(R.color.cp_note))
+        })
+        if (examplePath != null) {
+            val names = functionAnimationsAt(examplePath)
+            if (names.none(::playableMode)) {
+                content.addView(text("无有效动画", 10f).apply {
+                    setPadding(0, px(3), 0, 0)
+                    setTextColor(getColor(R.color.cp_danger))
+                })
+            }
+            content.addView(linkedModeChains(names, root.getJSONObject("modes"),
+                "当前动画：", 10f) { mode ->
+                if (linkedMode && linkedReadOnly) linkedReadonlyMode(mode)
+                else openModeFromDetail(mode)
+            }.apply { setPadding(0, px(3), 0, 0) })
+        } else if (subtitle.isNotBlank()) {
+            content.addView(text(subtitle, 10f).apply {
+                setPadding(0, px(3), 0, 0)
+                setTextColor(getColor(R.color.cp_note))
             })
         }
         card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
@@ -3025,7 +3041,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setTextColor(getColor(R.color.cp_title))
                 isClickable = true
                 setOnClickListener { click() }
-            }, LinearLayout.LayoutParams(px(38), px(48)))
+            }, LinearLayout.LayoutParams(px(38), px(52)))
         }
         node.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
             leftMargin = px((level * 12).coerceAtMost(48))
@@ -3102,7 +3118,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             when (val child = values.opt(key)) {
                 is JSONObject -> if (child.has("modes")) {
                     val selected = jsonStrings(child.optJSONArray("modes"))
-                    functionItem(parent, (if (undefined) "未定义 · " else "▣  ") + displayName,
+                    functionItem(parent, (if (undefined) "未定义 · " else "") + displayName,
                         if (undefined) "当前软件未定义此功能路径，原值已保留" else
                             "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) },
                         path.size, description = if (undefined) fullKey else functionDescription(currentPath),
