@@ -282,6 +282,7 @@ class MovementSettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        SettingsMaterialLink.refresh(this, roleId)
         // 从阈值页返回后重新读取阈值，使滑块行程与回写范围同步为新阈值
         bs = roleBounds.getBlocking(SettingsPage.MOVEMENT).sliders.associateBy { it.key }
         setupSliders()
