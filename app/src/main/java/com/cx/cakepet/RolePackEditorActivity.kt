@@ -1029,12 +1029,93 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun home() {
         section("素材包编辑", "home")
         val roleName = root.optString("name").ifBlank { "角色" }
+        val report = RolePackNormalizer.report(draft)
+        if (report != null) {
+            val issues = report.optJSONArray("issues")?.length() ?: 0
+            val invalid = report.has("parseError")
+            if (issues > 0 || invalid) {
+                menuCard("素材包兼容检查 · ${if (invalid) "原配置需要修复" else "$issues 项记录"}",
+                    "已补全缺失结构；可查看原配置、未定义内容与格式问题",
+                    android.R.drawable.ic_dialog_alert) { showPackRepairReport() }
+            }
+        }
         menuCard("基本信息", "定义了「$roleName」的身份与信息", android.R.drawable.ic_menu_info_details) { info() }
         menuCard("功能映射", "决定了「$roleName」在何时会触发什么动作动画", android.R.drawable.ic_menu_manage) { functions() }
         menuCard("动作动画", "制定了「$roleName」有什么动作动画", android.R.drawable.ic_media_play) { modes() }
         menuCard("图片资源", "列举了「$roleName」所用的图片", android.R.drawable.ic_menu_gallery) { images() }
         menuCard("碎碎念文本", "影响了「$roleName」的思考内容", android.R.drawable.ic_dialog_email) { thinkingResources() }
     }
+    /** Report is an import snapshot, not a runtime validity verdict. */
+    private fun showPackRepairReport() {
+        val report = RolePackNormalizer.report(draft)
+        val origin = RolePackNormalizer.original(draft)
+        editor("素材包兼容检查", compact = true, readOnly = true,
+            subtitle = "原始版本 · ${report?.optString("sourceVersion", "未知") ?: "未知"}",
+            readOnlyActionLabel = "编辑原始配置",
+            extraAction = { editPackSource() }) { form ->
+            val error = report?.optString("parseError")?.takeIf { it.isNotBlank() }
+            if (error != null) form.addView(text("JSONC 解析失败：$error", 13f).apply {
+                setTextColor(getColor(R.color.cp_danger))
+            })
+            val issues = report?.optJSONArray("issues")
+            if (issues == null || issues.length() == 0) {
+                form.addView(text("没有保存的导入修复记录。", 13f))
+            } else for (i in 0 until issues.length()) {
+                val entry = issues.optJSONObject(i) ?: continue
+                val type = entry.optString("type")
+                val path = entry.optString("path")
+                val description = entry.optString("detail")
+                val card = dialogSection()
+                card.addView(text("$type · $path", 13f))
+                card.addView(text(description, 11f).apply {
+                    setTextColor(getColor(R.color.cp_note))
+                })
+                val raw = entry.optString("raw")
+                if (raw.isNotBlank()) card.addView(text("原值：$raw", 11f).apply {
+                    setTextColor(getColor(R.color.cp_sub))
+                    setTextIsSelectable(true)
+                })
+                addDetailSection(form, card)
+            }
+            form.addView(text(
+                if (origin.exists()) "原始配置已保留，点击下方按钮可手动修复 JSONC。"
+                else "原始配置没有单独备份；可以查看并编辑当前配置。", 11f
+            ).apply { setTextColor(getColor(R.color.cp_note)) })
+            ({ })
+        }
+    }
+
+    /** Syntax recovery is explicit: do not silently accept an unparseable document. */
+    private fun editPackSource() {
+        val origin = RolePackNormalizer.original(draft)
+        val current = File(draft, "modes.jsonc")
+        val initial = (if (origin.exists()) origin else current).readText()
+        editor("编辑 JSONC 原始配置", compact = true,
+            subtitle = "保存后按当前格式重新解析和补齐") { form ->
+            val inputField = FormInputField(this)
+            val input = inputField.configure("JSONC 内容", initial, "请输入有效 JSONC",
+                helper = "保留已有配置；无法确定含义的旧字段请手动检查。", multiline = true)
+            input.minLines = 10
+            input.maxLines = 20
+            form.addView(inputField, LinearLayout.LayoutParams(-1, -2))
+            ({
+                val updated = input.text.toString()
+                // Fail before overwriting the draft if JSONC remains malformed.
+                parseJsonc(updated)
+                if (!origin.exists() && current.isFile) origin.writeText(current.readText())
+                current.writeText(updated)
+                File(draft, RolePackNormalizer.REPORT_FILE).delete()
+                val corrected = RolePackEditing.prepareEditable(draft, id,
+                    root.optString("name").ifBlank { id })
+                RolePackEditing.commit(this, id, draft, corrected)
+                root = corrected
+                draft = RolePackEditing.draft(this, id)
+                home()
+                Toast.makeText(this, "配置已重新解析，缺失功能已补齐", Toast.LENGTH_SHORT).show()
+            })
+        }
+    }
+
     private fun info() {
         editor("基本信息", compact = true) { box ->
             val name = entry(box, "名称", root.optString("name"), compact = true)
