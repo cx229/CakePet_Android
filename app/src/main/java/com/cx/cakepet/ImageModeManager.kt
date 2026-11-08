@@ -108,10 +108,10 @@ class ImageModeManager(
      */
     // Only static standby is package-wide mandatory. Check its candidates lazily
     // and cache image-bound results so one broken alternative cannot be selected.
-    private val staticReadyCache = mutableMapOf<String, Boolean>()
+    private val playableModeCache = mutableMapOf<String, Boolean>()
     private val imageReadyCache = mutableMapOf<String, Boolean>()
-    private fun validStaticCandidate(start: String): Boolean {
-        return staticReadyCache.getOrPut(start) {
+    private fun isPlayableCandidate(start: String): Boolean {
+        return playableModeCache.getOrPut(start) {
             val visited = mutableSetOf<String>()
             var next: String? = start
             while (!next.isNullOrBlank()) {
@@ -141,7 +141,7 @@ class ImageModeManager(
     fun leavesOf(vararg path: String): List<String> =
         currentPack.functions[path.toList()].orEmpty().filter { name ->
             modes[name]?.frames?.isNotEmpty() == true &&
-                (path.toList() != MaterialFunctionSupport.STATIC || validStaticCandidate(name))
+                isPlayableCandidate(name)
         }
 
     /**
@@ -199,7 +199,7 @@ class ImageModeManager(
         )
         // 清空旧模式，按 JSON 重建
         modes.clear()
-        staticReadyCache.clear()
+        playableModeCache.clear()
         imageReadyCache.clear()
         val modesObj = root.getJSONObject("modes")
         val kit = modesObj.keys()
@@ -247,14 +247,17 @@ class ImageModeManager(
     /** delay 字段：[min,max]=随机区间；数字=固定值(ms)。 */
     private fun parseDelay(d: Any?): () -> Long = when (d) {
         is JSONArray -> {
+            require(d.length() == 2 && d.opt(0) is Number && d.opt(1) is Number)
             val min = d.getLong(0)
             val max = d.getLong(1)
+            require(min > 0 && max >= min)
             rnd(min, max)
         }
-        is Int -> fixed(d.toLong())
-        is Long -> fixed(d)
-        is Double -> fixed(d.toLong())
-        else -> fixed(100)
+        is Number -> {
+            require(d.toLong() > 0)
+            fixed(d.toLong())
+        }
+        else -> error("帧缺少有效 delay")
     }
 
     private fun registerMode(mode: ImageModeDef) {
@@ -443,7 +446,7 @@ class ImageModeManager(
         rawSizeCache.clear()
         modeVisualCache.clear()
         modes.clear()
-        staticReadyCache.clear()
+        playableModeCache.clear()
         imageReadyCache.clear()
         pack.configPath?.let { loadModesFromJson(it) }
         val (w, h) = globalMaxSize()
