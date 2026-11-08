@@ -291,7 +291,8 @@ class FeedingSettingsActivity : AppCompatActivity() {
 
     private fun applyConfigToUi(c: PetConfigData) {
         suppressSwitches = true
-        swFeedingEnabled.isChecked = c.feedingEnabled
+        val feedReady = MaterialFunctionSupport.hasPlayable(this, roleId, MaterialFunctionSupport.FEED)
+        swFeedingEnabled.isChecked = c.feedingEnabled && feedReady
         swFullScreen.isChecked = c.feedingFullScreen
         swEdgeRefresh.isChecked = c.feedingEdgeRefresh
         swAutoExpire.isChecked = c.feedingAutoExpire
@@ -327,6 +328,9 @@ class FeedingSettingsActivity : AppCompatActivity() {
             EditSync.setText(periodMaxVal, c.feedingPeriodMax.toString())
         }
         folding?.refresh(c)
+        folding?.setForced(R.id.sw_feeding_enabled, if (feedReady) 0 else -1) {
+            RolePackEditing.showMissingFunctions(this, roleId, listOf(MaterialFunctionSupport.FEED))
+        }
     }
 
     private fun setExpireEnabled(enabled: Boolean) {
