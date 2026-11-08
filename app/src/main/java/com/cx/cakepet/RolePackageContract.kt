@@ -80,9 +80,9 @@ object RolePackageContract {
                 errors.add("功能映射无法解析：${it.message}")
                 return ValidationResult(false, json.optString("version"), errors)
             }
-        val candidates = functions[MaterialFunctionSupport.STATIC].orEmpty()
+        val candidates = functions[MaterialFunctionSupport.NORMAL].orEmpty()
         if (candidates.none { modeErrors(modes, it).isEmpty() }) {
-            errors.add("静止待机池至少需要一个可播放的完整动作")
+            errors.add("待机池至少需要一个可播放的完整动画")
         }
         return ValidationResult(errors.isEmpty(), json.optString("version"), errors)
     }
@@ -100,7 +100,7 @@ object RolePackageContract {
     /**
      * Examine only a single chosen animation and its active continuation.
      * Broken optional clips and broken alternatives in the same pool do not
-     * invalidate a pack if at least one static standby candidate works.
+     * invalidate a pack if at least one regular standby candidate works.
      */
     private fun modeErrors(modes: JSONObject, start: String, directory: File? = null): List<String> {
         val errors = mutableListOf<String>()
@@ -156,9 +156,9 @@ object RolePackageContract {
     /** Missing, empty and damaged optional functions never block an export. */
     fun verifyAssets(dest: File, json: JSONObject): List<String> {
         val modes = json.optJSONObject("modes") ?: return emptyList()
-        val candidates = parseFunctions(json)[MaterialFunctionSupport.STATIC].orEmpty()
+        val candidates = parseFunctions(json)[MaterialFunctionSupport.NORMAL].orEmpty()
         if (candidates.any { modeErrors(modes, it, dest).isEmpty() }) return emptyList()
-        return listOf("静止待机池没有可解码的有效动画，请补齐后再启动角色")
+        return listOf("待机池没有可解码的有效动画，请补齐后再启动角色")
     }
 
     /** 校验字段为非空字符串（非布尔/数字/空串）。 */
