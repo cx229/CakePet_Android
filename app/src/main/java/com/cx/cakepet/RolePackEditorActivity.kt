@@ -30,7 +30,171 @@ import java.io.File
 import java.util.UUID
 
 /** Edit incomplete packs incrementally; validate strictly only when adding a home role. */
-class RolePackEditorActivity : AppCompatActivity() {
+open class RolePackEditorActivity : AppCompatActivity() {
+    private val linkedMode: Boolean get() = intent.hasExtra("linked_title")
+    private var linkedReadOnly = false
+    private var linkedApproved = false
+    private var linkedTitle = ""
+    private var linkedPaths = emptySet<String>()
+    private var linkedPackName = ""
+    private lateinit var linkedPack: RoleDescriptor
+
+    /** Reuses the existing editor's actual recursive folder tree and Function dialogs. */
+    private fun setupLinkedOverlay() {
+        val instance = intent.getStringExtra("source_instance_id") ?: run { finish(); return }
+        val pack = RoleStore.descriptorForInstance(this, instance) ?: run { finish(); return }
+        linkedPack = pack
+        id = pack.id
+        linkedReadOnly = pack.source == RoleSource.ASSETS
+        linkedPackName = pack.displayName
+        linkedTitle = intent.getStringExtra("linked_title").orEmpty()
+        linkedPaths = intent.getStringArrayListExtra("linked_paths").orEmpty().toSet()
+        try {
+            root = if (linkedReadOnly) assets.open("${pack.rootPath}/modes.jsonc")
+                .bufferedReader().use { parseJsonc(it.readText()) }
+            else {
+                draft = RolePackEditing.draft(this, id)
+                RolePackEditing.prepareEditable(draft, id, pack.displayName)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, e.message ?: "读取素材包失败", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        setContentView(FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.TRANSPARENT) })
+        showLinkedFunctions()
+    }
+
+    private fun linkedConsent(action: () -> Unit) {
+        if (!linkedMode || linkedApproved) { action(); return }
+        showConfirmDialog(
+            title = "确认编辑共享素材",
+            bodyHtml = "正在编辑素材包「${linkedPackName}」，修改将影响使用此素材包的全部角色。",
+            subText = "不会修改角色各自的开关、概率等独立设置。",
+            positiveText = "继续编辑"
+        ) {
+            linkedApproved = true
+            action()
+        }
+    }
+
+    private fun showLinkedFunctions() {
+        val count = RoleStore.getHomeRoles(this).count { it.templateId == id }
+        val dialog = editor("${linkedTitle} · 功能/动画", compact = true, readOnly = true) { form ->
+            form.addView(text("素材包：${linkedPackName}", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(4), 0, 0, px(8))
+            })
+            val info = detailSection()
+            info.addView(detailSectionHeader(
+                if (linkedReadOnly) "预装素材包 · 只读" else "共享素材配置",
+                "${count} 个角色实例"))
+            info.addView(text(if (linkedReadOnly)
+                "可查看功能、动画与碎碎念，复制素材包后可编辑。"
+                else "修改后将影响使用此素材包的所有角色。", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(3), px(1), px(3), px(5))
+            })
+            addDetailSection(form, info)
+            val tree = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            form.addView(tree)
+            openedFunctionFolders.clear()
+            functionTree(tree, root.getJSONObject("functions"), emptyList())
+            ({ })
+        }
+        dialog.setOnDismissListener {
+            detailDialogs.remove(dialog)
+            if (!isFinishing) finish()
+        }
+    }
+
+    private fun linkedReadonlyFunction(path: List<String>, selected: List<String>) {
+        val config = PackThinking.parse(root).functions[path] ?: ThinkingConfig()
+        editor(functionPathName(path), compact = true, readOnly = true) { form ->
+            form.addView(text(functionDescription(path), 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(3), 0, 0, px(8))
+            })
+            val note = detailSection()
+            val summary = when (config.policy) {
+                "off" -> "不播放"
+                "hold" -> "持续 · ${config.pool.size} 条"
+                else -> "轮播 · ${config.pool.size} 条"
+            }
+            note.addView(detailSectionHeader("碎碎念配置", summary) { linkedReadonlyThinking(path) })
+            addDetailSection(form, note)
+            val animations = detailSection()
+            animations.addView(detailSectionHeader("当前动画", "动画链 ${selected.size} 个"))
+            val modes = root.getJSONObject("modes")
+            selected.forEachIndexed { index, key ->
+                val row = detailListRow()
+                row.addView(detailNumber(index))
+                row.addView(linkedModeChains(listOf(key), modes, "", 13f) {
+                    linkedReadonlyMode(it)
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                animations.addView(row)
+            }
+            if (selected.isEmpty()) animations.addView(text("暂无关联动画", 12f))
+            addDetailSection(form, animations)
+            ({ })
+        }
+    }
+
+    private fun linkedReadonlyThinking(path: List<String>) {
+        val config = PackThinking.parse(root).functions[path] ?: ThinkingConfig()
+        editor("碎碎念配置", compact = true, readOnly = true) { form ->
+            val card = detailSection()
+            val policy = when (config.policy) {
+                "off" -> "不播放"
+                "hold" -> "持续"
+                else -> "轮播"
+            }
+            card.addView(detailSectionHeader("播放方式", policy))
+            val node = functionNode(root, path)
+            thinkingPoolJson(node.optJSONObject("thinking")).forEach { (name, times) ->
+                card.addView(text("${thinkingBody(name)}  ·  ${times.first}–${times.second}ms", 12f).apply {
+                    setPadding(px(5), px(6), px(5), px(6))
+                })
+            }
+            addDetailSection(form, card)
+            ({ })
+        }
+    }
+
+    private fun linkedReadonlyMode(key: String) {
+        val mode = root.optJSONObject("modes")?.optJSONObject(key) ?: return
+        editor(key, compact = true, readOnly = true) { form ->
+            val frames = mode.optJSONArray("frames")
+            val firstRes = frames?.optJSONObject(0)?.optString("res").orEmpty()
+            if (firstRes.isNotBlank()) {
+                runCatching {
+                    assets.open("${linkedPack.rootPath}/" + firstRes).use { BitmapFactory.decodeStream(it) }
+                }.getOrNull()?.let { preview ->
+                    form.addView(ImageView(this).apply {
+                        setImageBitmap(preview)
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                    }, LinearLayout.LayoutParams(-1, px(136)))
+                }
+            }
+            val playback = detailSection()
+            playback.addView(detailSectionHeader("播放循环", when (playbackKind(mode)) {
+                "timed" -> "定时循环"
+                "infinite" -> "无限循环"
+                else -> "播放一次"
+            }))
+            val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+            playback.addView(detailSectionHeader("后续动画", next.ifBlank { "无" }))
+            addDetailSection(form, playback)
+            val thinking = detailSection()
+            thinking.addView(detailSectionHeader("碎碎念配置", modeThinkingSummary(mode)))
+            addDetailSection(form, thinking)
+            val frameCard = detailSection()
+            frameCard.addView(detailSectionHeader("动画帧", "${frames?.length() ?: 0} 帧"))
+            addDetailSection(form, frameCard)
+            ({ })
+        }
+    }
+
     private lateinit var id: String
     private lateinit var draft: File
     private lateinit var root: JSONObject
@@ -52,6 +216,14 @@ class RolePackEditorActivity : AppCompatActivity() {
      * Page history still returns to the originating resource/function list.
      */
     private fun openModeEditorFromDetail(key: String) {
+        if (linkedMode) {
+            linkedConsent {
+                startActivity(Intent(this, RolePackEditorActivity::class.java)
+                    .putExtra("role_id", id).putExtra("initial_mode_id", key))
+                finish()
+            }
+            return
+        }
         detailDialogs.toList().asReversed().forEach { it.dismiss() }
         showMode(key)
     }
@@ -354,6 +526,7 @@ class RolePackEditorActivity : AppCompatActivity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        if (linkedMode) { setupLinkedOverlay(); return }
         id = intent.getStringExtra("role_id") ?: run { finish(); return }
         try {
             draft = RolePackEditing.draft(this, id)
@@ -387,7 +560,10 @@ class RolePackEditorActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = navigateBack()
         })
+        val initialMode = intent.getStringExtra("initial_mode_id")
         home()
+        if (initialMode != null && root.optJSONObject("modes")?.has(initialMode) == true)
+            showMode(initialMode)
     }
     override fun onDestroy() {
         removeBulkBar()
@@ -572,12 +748,15 @@ class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private fun change(silent: Boolean = false, edit: (JSONObject) -> Unit) {
+        require(!linkedMode || !linkedReadOnly && linkedApproved) { "请先确认共享素材修改" }
         val candidate = JSONObject(root.toString())
         edit(candidate)
         RolePackEditing.commit(this, id, draft, candidate)
         root = candidate
         draft = RolePackEditing.draft(this, id)
-        if (!silent) Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show()
+        if (!silent) Toast.makeText(this,
+            if (linkedMode) "素材包已保存，关联角色将使用最新配置" else "已保存",
+            Toast.LENGTH_SHORT).show()
     }
     /**
      * Use the EXACT role-rename XML shell (title, card, margins, and actual
@@ -1139,6 +1318,7 @@ class RolePackEditorActivity : AppCompatActivity() {
 
     /** Lightweight overview; child editors commit independently. */
     private fun modeDetails(initialKey: String) {
+        if (linkedMode && linkedReadOnly) { linkedReadonlyMode(initialKey); return }
         if (root.optJSONObject("modes")?.has(initialKey) != true) return
         var currentKey = initialKey
         lateinit var redraw: () -> Unit
@@ -1158,7 +1338,7 @@ class RolePackEditorActivity : AppCompatActivity() {
                     }
                     val playbackCard = detailSection()
                     playbackCard.addView(detailSectionHeader("播放循环", summary) {
-                        playbackSettings(currentKey) { redraw() }
+                        linkedConsent { playbackSettings(currentKey) { redraw() } }
                     }.apply {
                         setPadding(0, px(8), 0, px(8))
                     })
@@ -1172,14 +1352,14 @@ class RolePackEditorActivity : AppCompatActivity() {
                         val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
                         playbackCard.addView(detailSectionHeader("后续动画",
                             next.ifBlank { "自动（由系统决定）" }) {
-                            chooseModes(single = true, initial = listOfNotNull(next.takeIf { it.isNotEmpty() })) { selected ->
+                            linkedConsent { chooseModes(single = true, initial = listOfNotNull(next.takeIf { it.isNotEmpty() })) { selected ->
                                 val nextId = selected.firstOrNull().orEmpty()
                                 change { json ->
                                     json.getJSONObject("modes").getJSONObject(currentKey).put("nextMode",
                                         if (nextId.isEmpty()) JSONObject.NULL else nextId)
                                 }
                                 redraw()
-                            }
+                            } }
                         }.apply {
                             setPadding(0, px(8), 0, px(8))
                         })
@@ -1187,12 +1367,12 @@ class RolePackEditorActivity : AppCompatActivity() {
                     addDetailSection(form, playbackCard)
                     val functionCard = detailSection()
                     functionCard.addView(detailSectionHeader("绑定功能", "${modeBindingCount(currentKey)} 个") {
-                        bindModeToFunctions(currentKey) { redraw() }
+                        linkedConsent { bindModeToFunctions(currentKey) { redraw() } }
                     })
                     addDetailSection(form, functionCard)
                     val thinkingCard = detailSection()
                     thinkingCard.addView(detailSectionHeader("碎碎念配置", modeThinkingSummary(mode)) {
-                        thinkingConfigDialog(modeId = currentKey) { redraw() }
+                        linkedConsent { thinkingConfigDialog(modeId = currentKey) { redraw() } }
                     })
                     addDetailSection(form, thinkingCard)
                 }
@@ -1207,14 +1387,14 @@ class RolePackEditorActivity : AppCompatActivity() {
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             heading.text = label
             heading.setOnClickListener {
-                renameMode(currentKey) { renamed ->
+                linkedConsent { renameMode(currentKey) { renamed ->
                     currentKey = renamed
                     refreshHeading()
                     redraw()
                     dialog.findViewById<TextView>(R.id.btn_positive).text =
                         "编辑动画 · ${root.getJSONObject("modes").getJSONObject(renamed).getJSONArray("frames").length()}帧"
                     if (screen == "modes") modes()
-                }
+                } }
             }
         }
         refreshHeading()
@@ -2691,6 +2871,10 @@ class RolePackEditorActivity : AppCompatActivity() {
             val currentPath = path + key
             val fullKey = currentPath.joinToString("/")
             val displayName = functionPathName(currentPath)
+            if (linkedMode && linkedPaths.none { allowed ->
+                    fullKey == allowed || fullKey.startsWith(allowed + "/") ||
+                    allowed.startsWith(fullKey + "/")
+                }) continue
             when (val child = values.opt(key)) {
                 is JSONObject -> if (child.has("modes")) {
                     val selected = jsonStrings(child.optJSONArray("modes"))
@@ -3684,6 +3868,7 @@ class RolePackEditorActivity : AppCompatActivity() {
      * while selection and saving continue to use the canonical internal keys.
      */
     private fun functionDetails(path: List<String>, selected: List<String>) {
+        if (linkedMode && linkedReadOnly) { linkedReadonlyFunction(path, selected); return }
         val all = PackThinking.parse(root).functions
         val effective = all[path] ?: ThinkingConfig()
         val thinkingSummary = when (effective.policy) {
@@ -3701,7 +3886,7 @@ class RolePackEditorActivity : AppCompatActivity() {
 
             val thinkingCard = detailSection()
             thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
-                thinkingConfigDialog(functionPath = path)
+                linkedConsent { thinkingConfigDialog(functionPath = path) }
             })
             addDetailSection(box, thinkingCard)
 
@@ -3709,7 +3894,7 @@ class RolePackEditorActivity : AppCompatActivity() {
             animationsCard.addView(detailSectionHeader(
                 "当前动画", "动画链 ${selected.size} 个",
                 if (functionHasAnimationPool(path)) ({
-                    chooseFunctions(path, selected)
+                    linkedConsent { chooseFunctions(path, selected) }
                 }) else null
             ))
             val animations = root.getJSONObject("modes")
