@@ -1,6 +1,7 @@
 package com.cx.cakepet
 
 import android.view.Gravity
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
@@ -15,6 +16,10 @@ object SettingsSpinnerBinder {
         val ctx = spinner.context
         val density = spinner.resources.displayMetrics.density
         fun dp(n: Int) = (n * density + .5f).toInt()
+        fun graySurface(): GradientDrawable = GradientDrawable().apply {
+            cornerRadius = dp(8).toFloat()
+            setColor(ctx.getColor(R.color.cp_bg))
+        }
         spinner.adapter = object : ArrayAdapter<String>(ctx, android.R.layout.simple_spinner_item, entries) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
                 TextView(ctx).apply {
@@ -23,6 +28,9 @@ object SettingsSpinnerBinder {
                     gravity = Gravity.END or Gravity.CENTER_VERTICAL
                     textAlignment = View.TEXT_ALIGNMENT_GRAVITY
                     setTextColor(ctx.getColor(R.color.cp_title))
+                    background = graySurface()
+                    setPadding(dp(8), 0, dp(12), 0)
+                    minHeight = dp(44)
                 }
 
             override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View =
@@ -39,6 +47,7 @@ object SettingsSpinnerBinder {
                         textSize = 11f
                         gravity = Gravity.CENTER_VERTICAL
                         setTextColor(ctx.getColor(R.color.cp_title))
+                        background = graySurface()
                         setPadding(dp(16), 0, dp(16), 0)
                     }, LinearLayout.LayoutParams(-1, dp(48)))
                 }
