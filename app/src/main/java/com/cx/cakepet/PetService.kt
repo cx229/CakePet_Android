@@ -1897,7 +1897,7 @@ class PetService : Service() {
                 p.gravityLeft = c.gravityLeft
                 p.gravityRight = c.gravityRight
                 // 攀岩开关（或移动总开关）关闭时若仍在墙上，立即退出攀爬态（仅清专用状态位，绝不碰全局重力/体感）。
-                if (inst.view.climbWall >= 0 && !(c.moveEnabled && c.wallClimb)) {
+                if (inst.view.climbWall >= 0 && !((c.moveEnabled || !inst.view.hasFunction("standby", "static_pool")) && c.wallClimb)) {
                     inst.view.restoreBaseGravity()
                 }
                 p.reboundTop = c.reboundTop
@@ -1923,8 +1923,8 @@ class PetService : Service() {
             // 注意：这里只清物理状态，不调 enterIdle()/cancelForced()——避免误杀菜单正在播放的
             // 非移动一次性动作（摸头/炸毛/摇头）。动画切回静坐由 PetView.updateAnimByState 每帧处理：
             // 当移动关且未播放一次性动作时才切 SIT_CLAM，播放中则保留动作（符合"仅播放非移动池"）。
-            if (!c.moveEnabled) {
-                pets.filter { it.roleId == rt.roleId }.forEach { inst ->
+            if (!c.moveEnabled && pets.any { it.roleId == rt.roleId && it.view.useStaticPool }) {
+                pets.filter { it.roleId == rt.roleId && it.view.useStaticPool }.forEach { inst ->
                     val p = inst.view.physics
                     if (inst.view.flying) {
                         // 飞行中关闭移动总开关：强制停飞并切静坐（而非继续飞到目的地才落地），
@@ -3787,7 +3787,7 @@ class PetService : Service() {
             // 由用户在首页卡片自行召唤）。仅【系统重启/START_STICKY 重建】才走下面的默认角色恢复。
             noAutoSummon -> Unit
             // 无意图（系统重启/START_STICKY 重建）：恢复默认角色（exiting 已在 onCreate 拦截）
-            else -> summonRole(RoleRegistry.DEFAULT.id)
+            else -> RoleStore.getHomeRoles(this).firstOrNull()?.let { summonRole(it.instanceId) }
         }
         // 退出态下返回 NOT_STICKY，避免 START_STICKY 在进程被回收后重建服务，
         // 造成“非活非死”（通知残留 + 服务反复复活）。
@@ -3887,6 +3887,9 @@ class PetService : Service() {
      * 为指定角色按 pet_config_<id>/pet_bounds_<id> 构造配置，建宠物窗与物理循环并启动。
      */
     private fun startRole(roleId: String) {
+        // External intents and service restoration must obey the same minimum
+        // requirement as the home-screen summon button; never erase the instance.
+        if (!MaterialFunctionSupport.hasPlayable(this, roleId, MaterialFunctionSupport.NORMAL)) return
         val descriptor = RoleStore.descriptorForInstance(this, roleId) ?: RoleRegistry.byId(roleId) ?: return
         val rt = engines.getOrPut(roleId) {
             RoleRuntime(roleId, PetConfig.forRole(this, roleId), PetBounds.forRole(this, roleId))
