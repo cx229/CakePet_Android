@@ -51,49 +51,49 @@ object RolePackEditing {
         }
     }
     /**
-     * Transport and editing accept incomplete packs. Preserve malformed original JSONC,
-     * add only structural defaults, and never invent pictures or animation frames.
+     * Import is deliberately permissive: normalize structural paths for editing,
+     * retain unknown JSON members, and back up unsupported source values.
+     * Runtime readiness is checked separately when adding a role to home.
      */
     fun prepareEditable(directory: File, id: String, suggestedName: String): JSONObject {
         directory.mkdirs()
         val file = File(directory, "modes.jsonc")
         val source = if (file.isFile) file.readText() else ""
-        val parsed = runCatching { parseJsonc(source) }.getOrNull()
-        if (source.isNotBlank() && (parsed == null ||
-            parsed.optString("version") != RolePackageContract.VERSION)) {
-            val original = File(directory, "modes.original.jsonc")
-            if (!original.exists()) original.writeText(source)
-        }
+        val result = runCatching { parseJsonc(source) }
+        val parsed = result.getOrNull()
+        val parseError = if (source.isNotBlank() && parsed == null)
+            result.exceptionOrNull()?.message ?: "无法解析 JSONC" else null
         val json = parsed ?: JSONObject()
+        val originVersion = parsed?.optString("version")?.takeIf { it.isNotBlank() }
+        val issues = RolePackNormalizer.normalize(json).toMutableList()
+        fun replaceWrong(field: String, expected: String, replacement: Any) {
+            val old = json.opt(field)
+            issues += RolePackNormalizer.Issue(
+                if (json.has(field)) "格式不支持" else "已补全", field,
+                if (json.has(field)) "预期 $expected，实际 ${old?.javaClass?.simpleName ?: "null"}；已填入默认值"
+                else "缺失，已填入默认值", old?.toString())
+            json.put(field, replacement)
+        }
         json.put("version", RolePackageContract.VERSION)
         json.put("id", id)
-        if (json.optString("name").isBlank()) json.put("name", suggestedName.ifBlank { id })
-        if (json.optString("shortName").isBlank()) json.put("shortName", json.optString("name"))
-        if (json.optJSONArray("authors") == null) json.put("authors", JSONArray().put("未知"))
-        if (json.opt("decodeTarget") !is Number) json.put("decodeTarget", 256)
-        if (json.opt("anchorRes") !is Number) json.put("anchorRes", 128)
-        if (json.optJSONObject("functions") == null) json.put("functions", JSONObject())
-        if (json.optJSONObject("modes") == null) json.put("modes", JSONObject())
-        // Normalize malformed action containers for the visual editor, retaining
-        // the untouched source in a sidecar for manual recovery.
-        val modes = json.getJSONObject("modes")
-        var malformed = false
-        val actionIds = modes.keys().asSequence().toList()
-        for (actionId in actionIds) {
-            val action = modes.optJSONObject(actionId)
-            if (action == null) {
-                modes.put(actionId, JSONObject().put("frames", JSONArray()))
-                malformed = true
-            } else if (action.optJSONArray("frames") == null) {
-                action.put("frames", JSONArray())
-                malformed = true
-            }
-        }
-        if (malformed && source.isNotBlank()) {
-            val original = File(directory, "modes.original.jsonc")
+        if (json.optString("name").isBlank()) replaceWrong("name", "非空 String", suggestedName.ifBlank { id })
+        if (json.optString("shortName").isBlank()) replaceWrong("shortName", "非空 String", json.optString("name"))
+        if (json.optJSONArray("authors") == null) replaceWrong("authors", "Array", JSONArray().put("未知"))
+        if (json.opt("decodeTarget") !is Number) replaceWrong("decodeTarget", "Number", 256)
+        if (json.opt("anchorRes") !is Number) replaceWrong("anchorRes", "Number", 128)
+        // Never discard malformed source, even if a best-effort editor object is possible.
+        if (source.isNotBlank() && (parseError != null || originVersion != RolePackageContract.VERSION ||
+                issues.any { it.type == "格式不支持" || it.type == "未定义" })) {
+            val original = RolePackNormalizer.original(directory)
             if (!original.exists()) original.writeText(source)
         }
         normalizeThinkingPack(json)
+        if (parseError != null || issues.isNotEmpty() ||
+            !File(directory, RolePackNormalizer.REPORT_FILE).exists()) {
+            // Keep the first import report while ordinary saves/reopens change the repaired structure.
+            val existing = File(directory, RolePackNormalizer.REPORT_FILE)
+            if (!existing.exists()) RolePackNormalizer.writeReport(directory, originVersion, issues, parseError)
+        }
         file.writeText(CompactJsoncWriter.write(json, if (parsed == null) "" else source))
         return json
     }
@@ -145,6 +145,7 @@ object RolePackEditing {
                     val config = File(root, "modes.jsonc")
                     val original = config.takeIf { it.isFile }?.readText().orEmpty()
                     val normalized = runCatching { parseJsonc(original) }.getOrNull() ?: JSONObject()
+                    RolePackNormalizer.normalize(normalized)
                     normalized.put("version", RolePackageContract.VERSION)
                     normalized.put("id", role.id)
                     if (normalized.optString("name").isBlank()) normalized.put("name", role.displayName)
@@ -152,13 +153,15 @@ object RolePackEditing {
                     if (normalized.optJSONArray("authors") == null) normalized.put("authors", JSONArray().put("未知"))
                     if (normalized.opt("decodeTarget") !is Number) normalized.put("decodeTarget", 256)
                     if (normalized.opt("anchorRes") !is Number) normalized.put("anchorRes", 128)
-                    if (normalized.optJSONObject("functions") == null) normalized.put("functions", JSONObject())
-                    if (normalized.optJSONObject("modes") == null) normalized.put("modes", JSONObject())
                     normalizeThinkingPack(normalized)
                     zip.putNextEntry(ZipEntry("modes.jsonc"))
                     zip.write(CompactJsoncWriter.writeExport(normalized, original).toByteArray(Charsets.UTF_8))
                     zip.closeEntry()
-                    if (root.isDirectory) root.walkTopDown().filter { it.isFile && it != config }.forEach { file ->
+                    if (root.isDirectory) root.walkTopDown().filter {
+                        it.isFile && it != config &&
+                        it.name != RolePackNormalizer.ORIGINAL_FILE &&
+                        it.name != RolePackNormalizer.REPORT_FILE
+                    }.forEach { file ->
                         zip.putNextEntry(ZipEntry(file.relativeTo(root).invariantSeparatorsPath))
                         file.inputStream().use { it.copyTo(zip) }
                         zip.closeEntry()
