@@ -312,7 +312,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     richText.setSpan(object : ClickableSpan() {
                         override fun onClick(widget: View) { onModeClick(segment) }
                         override fun updateDrawState(ds: TextPaint) {
-                            ds.color = getColor(R.color.cp_sub)
+                            ds.color = getColor(if (playableMode(segment)) R.color.cp_sub else R.color.cp_danger)
                             ds.isUnderlineText = true
                         }
                     }, begin, richText.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -2959,8 +2959,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val refs = functionAnimationsAt(examplePath)
             val bad = refs.filter { !playableMode(it) }
             val missing = refs.isEmpty()
-            if (missing || bad.isNotEmpty()) {
-                val critical = examplePath == MaterialFunctionSupport.STATIC
+            if ((missing && examplePath == MaterialFunctionSupport.NORMAL) || bad.isNotEmpty()) {
+                val critical = examplePath == MaterialFunctionSupport.NORMAL
                 val required = examplePath in setOf(
                     MaterialFunctionSupport.STATIC, MaterialFunctionSupport.NORMAL,
                     MaterialFunctionSupport.THROW, MaterialFunctionSupport.SNAP,
@@ -2968,13 +2968,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     MaterialFunctionSupport.FORAGE, listOf("pat_head", "pat_head")
                 )
                 val note = when {
-                    critical && missing -> "运行必备：静止待机池为空，角色暂不可启动"
-                    critical && bad.isNotEmpty() -> "静止待机包含无效动画：${bad.joinToString("、")}"
-                    missing && required -> "该功能必要动画未配置，相关行为暂不可用"
-                    missing -> "可选动画未配置，不影响其他功能"
+                    critical && missing -> "素材包必要动画缺失：待机池为空"
+                    critical && bad.isNotEmpty() && bad.size == refs.size -> "素材包必要动画缺失：待机池无有效动画"
+                    missing && required -> "该功能未配置动画"
+                    missing -> ""
                     else -> "部分引用动画无效：${bad.joinToString("、")}"
                 }
-                content.addView(text(note, 10f).apply {
+                if (note.isNotBlank()) content.addView(text(note, 10f).apply {
                     setPadding(0, px(2), 0, 0)
                     setTextColor(getColor(if (required || bad.isNotEmpty()) R.color.cp_danger else R.color.cp_note))
                 })
@@ -3081,6 +3081,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 RolePackNormalizer.supportedPaths.none { known ->
                     known.size > currentPath.size && known.take(currentPath.size) == currentPath
                 }
+            if (undefined) continue
             if (linkedMode && linkedPaths.none { allowed ->
                     fullKey == allowed || fullKey.startsWith(allowed + "/") ||
                     allowed.startsWith(fullKey + "/")
@@ -3141,15 +3142,138 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
+    private fun standbyReady(): Boolean =
+        functionAnimationsAt(MaterialFunctionSupport.NORMAL).any(::playableMode)
+
+    private val functionFolderOrder = listOf(
+        "standby", "pat_head", "snap", "feed", "touch", "climb", "menu"
+    )
+
+    /** View-only flat list; preserve full unknown paths in the actual JSON tree. */
+    private fun undefinedFunctions(): List<Pair<List<String>, Any?>> {
+        val results = mutableListOf<Pair<List<String>, Any?>>()
+        fun visit(node: JSONObject, path: List<String>) {
+            for (key in node.keys().asSequence().toList()) {
+                if (key in setOf("thinking", "modes", "note", "usage")) continue
+                val next = path + key
+                val value = node.opt(key)
+                val known = RolePackNormalizer.supportedPaths.any {
+                    it == next || (it.size > next.size && it.take(next.size) == next)
+                }
+                if (!known) {
+                    if (value is JSONObject && !value.has("modes")) visit(value, next)
+                    else results.add(next to value)
+                } else if (value is JSONObject && !value.has("modes")) visit(value, next)
+            }
+        }
+        visit(root.getJSONObject("functions"), emptyList())
+        return results.sortedBy { it.first.joinToString("/") }
+    }
+
+    private fun deleteUndefined(path: List<String>) {
+        showConfirmDialog(
+            title = "删除未定义功能？",
+            bodyHtml = "确认删除「${path.joinToString("/") }」？",
+            subText = "只移除功能映射，不删除任何动画、角色实例或设置。",
+            positiveText = "删除"
+        ) {
+            attempt {
+                change { json ->
+                    var node = json.getJSONObject("functions")
+                    path.dropLast(1).forEach { node = node.getJSONObject(it) }
+                    node.remove(path.last())
+                }
+                functions()
+            }
+        }
+    }
+
+    private fun renderUndefined(parent: LinearLayout, path: List<String>, value: Any?) {
+        val ids = when (value) {
+            is JSONArray -> jsonStrings(value)
+            is JSONObject -> jsonStrings(value.optJSONArray("modes"))
+            else -> emptyList()
+        }
+        val item = functionItem(parent, path.joinToString(" / "), "", 0,
+            immediate = true) { unsupportedFunction(path, value) }
+        val content = item.getChildAt(0) as? LinearLayout
+        content?.addView(linkedModeChains(ids, root.getJSONObject("modes"),
+            "当前动画：", 10f) { openModeFromDetail(it) })
+        val more = text("⋮", 23f).apply {
+            gravity = Gravity.CENTER
+            isClickable = true
+            setOnClickListener { anchor ->
+                UnifiedOptionMenu.show(anchor, listOf("查看", "删除"), setOf("删除")) { choice ->
+                    if (choice == "删除") deleteUndefined(path)
+                    else unsupportedFunction(path, value)
+                }
+            }
+        }
+        item.addView(more, LinearLayout.LayoutParams(px(38), px(48)))
+    }
+
+    private fun showUndefinedFolder(entries: List<Pair<List<String>, Any?>>) {
+        if (entries.isEmpty()) return
+        val open = "undefined" in openedFunctionFolders
+        val wrapper = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        functionItem(panel,
+            (if (open) "▾ 📂  " else "▸ 📁  ") + "未定义 (${entries.size})",
+            "", 0, immediate = true) {
+            if (!openedFunctionFolders.add("undefined")) openedFunctionFolders.remove("undefined")
+            functions()
+        }.also { card ->
+            card.addView(text("⋮", 23f).apply {
+                gravity = Gravity.CENTER
+                isClickable = true
+                setOnClickListener { anchor ->
+                    UnifiedOptionMenu.show(anchor, listOf("删除全部未定义功能"), setOf("删除全部未定义功能")) {
+                        showConfirmDialog(title = "删除全部未定义功能？",
+                            bodyHtml = "将删除 ${entries.size} 项未定义功能映射，不删除动画或角色实例。",
+                            positiveText = "删除") {
+                            attempt {
+                                change { json ->
+                                    val paths = entries.map { it.first }.sortedByDescending { it.size }
+                                    paths.forEach { path ->
+                                        var node = json.getJSONObject("functions")
+                                        path.dropLast(1).forEach { part ->
+                                            node = node.optJSONObject(part) ?: return@forEach
+                                        }
+                                        node.remove(path.last())
+                                    }
+                                }
+                                functions()
+                            }
+                        }
+                    }
+                }
+            }, LinearLayout.LayoutParams(px(38), px(48)))
+        }
+        if (open) entries.forEach { (path, value) -> renderUndefined(wrapper, path, value) }
+        panel.addView(wrapper)
+    }
+
     private fun functions() {
-        // 每次重新加载功能页，都重新抽取示例；折叠/展开已存在的卡片不换。
         templateExamples.clear()
         section("功能映射", "functions")
-        panel.addView(text("决定角色在不同情况下播放的动画。\n点击文件夹展开，点击功能卡片编辑。", 12f).apply {
-            setPadding(px(4), 0, px(4), px(6))
+        if (!standbyReady()) {
+            val warning = functionItem(panel, "素材包必要动画缺失",
+                "待机 / 待机池没有有效动画，点击修复", 0, immediate = true) {
+                functionDetails(MaterialFunctionSupport.NORMAL,
+                    functionAnimationsAt(MaterialFunctionSupport.NORMAL))
+            }
+            (warning.getChildAt(0) as? LinearLayout)?.getChildAt(0)
+                ?.let { (it as? TextView)?.setTextColor(getColor(R.color.cp_danger)) }
+        }
+        panel.addView(text("点击文件夹展开，点击功能卡片查看与编辑动画。", 12f).apply {
             setTextColor(getColor(R.color.cp_note))
         })
-        functionTree(panel, root.getJSONObject("functions"), emptyList())
+        val all = root.getJSONObject("functions")
+        val canonical = JSONObject()
+        functionFolderOrder.forEach { key ->
+            all.optJSONObject(key)?.let { canonical.put(key, it) }
+        }
+        functionTree(panel, canonical, emptyList())
+        showUndefinedFolder(undefinedFunctions())
     }
 
     /**
@@ -3193,16 +3317,16 @@ open class RolePackEditorActivity : AppCompatActivity() {
         ))
 
         fun warnLastBinding(path: List<String>, proceed: () -> Unit) {
-            val critical = path == listOf("standby", "static_pool")
+            val critical = path == listOf("standby", "pool")
             val normalStandby = path == listOf("standby", "pool")
             showConfirmDialog(
                 title = "解除最后一个动画绑定？",
                 bodyHtml = if (critical)
-                    "静止待机池清空后，素材包将不满足角色最低运行要求。"
+                    "待机池清空后，素材包将不满足最低运行要求。"
                 else if (normalStandby)
                     "普通待机池将为空，日常待机无法从此池选择动画。"
                 else "功能「${functionPathName(path)}」将没有关联动画。",
-                subText = if (critical) "可以继续保存或导出素材包，补齐静止待机动画后才可启动角色。"
+                subText = if (critical) "请至少保留一个有效待机动画。"
                     else "对应动画不会触发，不影响其他独立功能。",
                 positiveText = "仍然解绑"
             ) { proceed() }
@@ -3442,9 +3566,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 val critical = path == listOf("standby", "static_pool")
                 showConfirmDialog(
                     title = "清空功能动画？",
-                    bodyHtml = if (critical) "静止待机池清空后，角色将无法满足最低运行要求。"
+                    bodyHtml = if (critical) "待机池清空后，角色将无法满足最低运行要求。"
                         else "功能「${functionPathName(path)}」将没有关联动画。",
-                    subText = if (critical) "素材包仍可保存、导出，但需补齐静止待机动作才能启动。"
+                    subText = if (critical) "请至少保留一个有效待机动画。"
                         else "不会自动替代为其他功能的动画。",
                     positiveText = "仍然清空"
                 ) { saveSelection() }
