@@ -1499,6 +1499,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun playbackSettings(key: String, onSaved: () -> Unit) {
         val current = root.getJSONObject("modes").getJSONObject(key)
         editor("播放循环", compact = true, subtitle = "动画 · $key") { form ->
+            val settingsCard = dialogSection()
             val options = listOf("播放一次", "定时循环", "无限循环")
             val spinner = Spinner(this)
             SettingsSpinnerBinder.bind(spinner, options,
@@ -1509,7 +1510,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             row.addView(text("播放循环", 14f), LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(spinner, LinearLayout.LayoutParams(0, px(48), 1f))
-            form.addView(row)
+            settingsCard.addView(row)
             val timedFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val timerRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             val previous = current.optJSONObject("duration")
@@ -1529,7 +1530,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             timedFields.addView(finish)
             // Keep the expanded timed-loop controls visually grouped with their dropdown.
             timedFields.setPadding(px(8), px(10), px(8), px(12))
-            form.addView(timedFields)
+            settingsCard.addView(timedFields)
 
             // Keep nextMode and loop settings in a single playback dialog.
             // Infinite looping hides this field but must not erase its stored value.
@@ -1563,11 +1564,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val nextDivider = View(this).apply {
                 setBackgroundColor(getColor(R.color.cp_divider))
             }
-            form.addView(nextDivider, LinearLayout.LayoutParams(-1, px(1)).apply {
+            settingsCard.addView(nextDivider, LinearLayout.LayoutParams(-1, px(1)).apply {
                 topMargin = px(9)
                 bottomMargin = px(7)
             })
-            form.addView(nextRow)
+            settingsCard.addView(nextRow)
+            addDetailSection(form, settingsCard)
             fun refreshFields() {
                 timedFields.visibility = if (spinner.selectedItemPosition == 1) View.VISIBLE else View.GONE
                 nextRow.visibility = if (spinner.selectedItemPosition == 2) View.GONE else View.VISIBLE
