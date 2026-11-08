@@ -1025,7 +1025,20 @@ open class RolePackEditorActivity : AppCompatActivity() {
         return node as? FormInputField ?: error("Input has no form field container")
     }
 
-    private fun ids(): List<String> = root.getJSONObject("modes").keys().asSequence().toList().sorted()
+    private fun ids(): List<String> = root.getJSONObject("modes").keys().asSequence().toList()
+        .sortedWith(compareBy<String> { !playableMode(it) }.thenBy { it })
+
+    private fun playableMode(modeId: String): Boolean {
+        val probe = JSONObject().put("modes", root.optJSONObject("modes"))
+            .put("functions", JSONObject().put("probe", JSONArray().put(modeId)))
+        val base = draft.canonicalFile
+        return MaterialFunctionSupport.available(probe, listOf("probe")) { relative ->
+            runCatching {
+                val image = File(base, relative).canonicalFile
+                image.toPath().startsWith(base.toPath()) && image.isFile && image.length() > 0L
+            }.getOrDefault(false)
+        }
+    }
     private fun home() {
         section("素材包编辑", "home")
         val roleName = root.optString("name").ifBlank { "角色" }
@@ -1039,7 +1052,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val invalid = report.has("parseError")
             if (repaired > 0 || unsupported > 0 || invalid) {
                 menuCard("素材包兼容检查 · ${if (invalid) "原配置需要修复" else "$unsupported 项需检查"}",
-                    "已补齐 $repaired 项缺失结构；点击查看导入诊断与原始配置",
+                    "已补齐 $repaired 项缺失结构；点击查看提示并在对应编辑页修复",
                     android.R.drawable.ic_dialog_alert) { showPackRepairReport() }
             }
         }
@@ -1055,10 +1068,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val origin = RolePackNormalizer.original(draft)
         editor("素材包兼容检查", compact = true, readOnly = true,
             subtitle = "原始版本 · ${report?.optString("sourceVersion", "未知") ?: "未知"}",
-            readOnlyActionLabel = "编辑原始配置",
+            readOnlyActionLabel = "查看功能映射",
             extraAction = {
                 detailDialogs.lastOrNull { it.isShowing }?.dismiss()
-                editPackSource()
+                functions()
             }) { form ->
             val error = report?.optString("parseError")?.takeIf { it.isNotBlank() }
             if (error != null) form.addView(text("JSONC 解析失败：$error", 13f).apply {
@@ -1077,52 +1090,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 card.addView(text(description, 11f).apply {
                     setTextColor(getColor(R.color.cp_note))
                 })
-                val raw = entry.optString("raw")
-                if (raw.isNotBlank()) card.addView(text("原值：$raw", 11f).apply {
-                    setTextColor(getColor(R.color.cp_sub))
-                    setTextIsSelectable(true)
-                })
                 addDetailSection(form, card)
             }
             form.addView(text(
-                if (origin.exists()) "原始配置已保留，点击下方按钮可手动修复 JSONC。"
-                else "原始配置没有单独备份；可以查看并编辑当前配置。", 11f
+                if (origin.exists()) "原始配置已备份。请在功能、动画、碎碎念等页面修复；未支持内容仍会保留。"
+                else "请在功能、动画、碎碎念等页面修复。", 11f
             ).apply { setTextColor(getColor(R.color.cp_note)) })
             ({ })
-        }
-    }
-
-    /** Syntax recovery is explicit: do not silently accept an unparseable document. */
-    private fun editPackSource() {
-        val origin = RolePackNormalizer.original(draft)
-        val current = File(draft, "modes.jsonc")
-        // A malformed import needs its untouched original. Otherwise edit the
-        // CURRENT document so subsequent edits are never overwritten by old backups.
-        val invalidSource = RolePackNormalizer.report(draft)?.has("parseError") == true
-        val initial = (if (invalidSource && origin.exists()) origin else current).readText()
-        editor("编辑 JSONC 原始配置", compact = true,
-            subtitle = "保存后按当前格式重新解析和补齐") { form ->
-            val inputField = FormInputField(this)
-            val input = inputField.configure("JSONC 内容", initial, "请输入有效 JSONC",
-                helper = "保留已有配置；无法确定含义的旧字段请手动检查。", multiline = true)
-            input.minLines = 10
-            input.maxLines = 20
-            form.addView(inputField, LinearLayout.LayoutParams(-1, -2))
-            ({
-                val updated = input.text.toString()
-                // Fail before overwriting the draft if JSONC remains malformed.
-                parseJsonc(updated)
-                if (!origin.exists() && current.isFile) origin.writeText(current.readText())
-                current.writeText(updated)
-                File(draft, RolePackNormalizer.REPORT_FILE).delete()
-                val corrected = RolePackEditing.prepareEditable(draft, id,
-                    root.optString("name").ifBlank { id })
-                RolePackEditing.commit(this, id, draft, corrected)
-                root = corrected
-                draft = RolePackEditing.draft(this, id)
-                home()
-                Toast.makeText(this, "配置已重新解析，缺失功能已补齐", Toast.LENGTH_SHORT).show()
-            })
         }
     }
 
@@ -1243,6 +1217,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     gravity = Gravity.CENTER_VERTICAL
                 }
                 headline.addView(text(key, 16f).apply { setPadding(0, 0, 0, 0) })
+                if (!playableMode(key)) headline.addView(text("  · 无效动画", 11f).apply {
+                    setTextColor(getColor(R.color.cp_danger))
+                })
                 if (playbackKind(mode) != "infinite") {
                     val nextMode = mode.optString("nextMode", "").takeUnless { it == "null" }.orEmpty()
                     headline.addView(text("  →" + nextMode.ifBlank { "无" }, 11f).apply {
@@ -3039,20 +3016,36 @@ open class RolePackEditorActivity : AppCompatActivity() {
         return card
     }
 
+    /** Unknown paths remain preserved; repairs never require editing raw JSONC. */
     private fun unsupportedFunction(path: List<String>, value: Any?) {
         editor("未定义 / 不支持的功能", compact = true, readOnly = true,
-            subtitle = path.joinToString("/"), readOnlyActionLabel = "编辑 JSONC",
+            subtitle = path.joinToString("/"), readOnlyActionLabel = "移除此项",
             extraAction = {
-                detailDialogs.lastOrNull { it.isShowing }?.dismiss()
-                editPackSource()
+                showConfirmDialog(
+                    title = "移除不支持的配置？",
+                    bodyHtml = "将移除「${path.joinToString("/")}」。",
+                    subText = "此操作不可撤销；导入时的原始配置备份不会被删除。",
+                    positiveText = "确认移除"
+                ) {
+                    change { json ->
+                        var node = json.getJSONObject("functions")
+                        path.dropLast(1).forEach { node = node.getJSONObject(it) }
+                        node.remove(path.last())
+                    }
+                    detailDialogs.lastOrNull { it.isShowing }?.dismiss()
+                    functions()
+                }
             }) { form ->
-            form.addView(text("当前版本没有该功能的内置定义或其类型不符合要求；" +
-                "原始值已保留，可通过 JSONC 编辑器修复。", 12f).apply {
+            form.addView(text("当前软件未定义此功能或不支持其字段类型。内容已保留，不影响其他功能；不再需要时可以移除。", 12f).apply {
                 setTextColor(getColor(R.color.cp_note))
             })
-            form.addView(text(value?.toString() ?: "null", 12f).apply {
-                setTextIsSelectable(true)
-            })
+            form.addView(text("路径：${path.joinToString("/")}", 12f))
+            form.addView(text("类型：${when (value) {
+                is JSONObject -> "对象"
+                is JSONArray -> "列表"
+                null, JSONObject.NULL -> "空值"
+                else -> "未支持的字段"
+            }}", 12f))
             ({ })
         }
     }
@@ -3067,7 +3060,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     "standby" -> listOf("pool", "static_pool")
                     else -> emptyList()
                 }
-                priority.filter { it in existing } + existing.filter { it !in priority }
+                val ordered = priority.filter { it in existing } + existing.filter { it !in priority }.sorted()
+                ordered.sortedWith(compareBy { segment ->
+                    val next = path + segment
+                    next !in RolePackNormalizer.supportedPaths &&
+                        RolePackNormalizer.supportedPaths.none { it.size > next.size && it.take(next.size) == next }
+                })
             }
         for (key in keys) {
             val currentPath = path + key
@@ -3792,7 +3790,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         thinkingObject().keys().asSequence().toList().flatMap(::thinkingGroups).distinct().sorted()
 
     private fun allThinkingIds(): List<String> =
-        thinkingObject().keys().asSequence().toList().filter { thinkingBody(it).isNotBlank() }.sorted()
+        thinkingObject().keys().asSequence().toList()
+            .sortedWith(compareBy<String> { thinkingBody(it).isBlank() }.thenBy { it })
 
     private data class ThinkingReference(val functionPath: List<String>? = null, val modeId: String? = null) {
         fun label(functionName: (List<String>) -> String): String =
@@ -3879,7 +3878,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     setPadding(px(12), px(4), px(6), px(4))
                 }
                 val textContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-                textContainer.addView(text(thinkingBody(id), 14f).apply {
+                textContainer.addView(text(thinkingBody(id).ifBlank { "无效碎碎念 · 文本为空（点击修复）" }, 14f).apply {
+                    if (thinkingBody(id).isBlank()) setTextColor(getColor(R.color.cp_danger))
                     maxLines = 5
                     ellipsize = TextUtils.TruncateAt.END
                 })
