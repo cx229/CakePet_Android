@@ -110,7 +110,8 @@ class SettingsFoldController(private val host: Activity) {
         // left chevron still folds/unfolds the fully usable child settings.
         header.setOnTouchListener { view, event ->
             if (!section.locked || section.forceOff ||
-                event.x > view.paddingStart.toFloat()) return@setOnTouchListener false
+                event.x < arrow.left.toFloat() || event.x > arrow.right.toFloat() ||
+                event.y < arrow.top.toFloat() || event.y > arrow.bottom.toFloat()) return@setOnTouchListener false
             when (event.actionMasked) {
                 android.view.MotionEvent.ACTION_DOWN -> true
                 android.view.MotionEvent.ACTION_UP -> {
