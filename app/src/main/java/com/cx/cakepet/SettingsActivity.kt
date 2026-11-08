@@ -129,6 +129,7 @@ class SettingsActivity : AppCompatActivity() {
                 R.id.item_settings_import to { importRoleSettings.launch(arrayOf("application/json", "text/plain")) },
                 R.id.item_settings_export to { exportRoleSettings.launch("CakePet-RoleSettings-$roleId.json") },
                 R.id.item_rename to { showRename() },
+                R.id.item_edit_material to { confirmEditMaterial() },
                 R.id.item_reset_all to { confirmResetAll() },
                 R.id.item_delete to { confirmDeleteRole() }
             )
@@ -243,6 +244,32 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(android.content.Intent(this, DebugActivity::class.java).apply { putExtra("role_id", roleId) })
         }
         findViewById<android.widget.ImageView>(R.id.iv_back).setOnClickListener { finish() }
+    }
+
+    /** Open the actual source material pack, without changing the role's own settings. */
+    private fun confirmEditMaterial() {
+        val pack = RoleStore.descriptorForInstance(this, roleId)
+        if (pack == null) {
+            showConfirmDialog(title = "无法编辑素材包",
+                bodyHtml = "当前角色所属的素材包不存在。",
+                positiveText = "知道了", showNegative = false) { }
+            return
+        }
+        if (pack.source == RoleSource.ASSETS) {
+            showConfirmDialog(title = "模板不可编辑",
+                bodyHtml = "模板「${pack.displayName}」不可编辑，请通过复制或新建素材包创建可编辑副本。",
+                positiveText = "知道了", showNegative = false) { }
+            return
+        }
+        showConfirmDialog(
+            title = "编辑所属素材包",
+            bodyHtml = "即将进入「${pack.displayName}」的素材包编辑页。",
+            subText = "修改素材包将影响使用该素材包的全部角色。",
+            positiveText = "进入编辑"
+        ) {
+            startActivity(Intent(this, RolePackEditorActivity::class.java)
+                .putExtra("role_id", pack.id))
+        }
     }
 
     /** 重命名当前角色实例：复用卡片样式 dialog_rename_role，写入 home_roles 的独立改名（不回写素材包）。
