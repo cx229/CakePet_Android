@@ -106,7 +106,10 @@ class ImageModeManager(
      * 按【功能路径】取该功能的候选叶子（v1.01 契约）。
      * 返回空表表示素材包未提供该功能——调用方应据此【跳过】，不要发空 setMode。
      */
-    fun leavesOf(vararg path: String): List<String> = currentPack.functions[path.toList()] ?: emptyList()
+    fun leavesOf(vararg path: String): List<String> =
+        currentPack.functions[path.toList()].orEmpty().filter { name ->
+            modes[name]?.frames?.isNotEmpty() == true
+        }
 
     /**
      * 按功能路径取【模式名】（从候选里挑一个）。
@@ -167,36 +170,42 @@ class ImageModeManager(
         val kit = modesObj.keys()
         while (kit.hasNext()) {
             val name = kit.next()
-            val m = modesObj.getJSONObject(name)
-            val duration = m.optJSONObject("duration")
-            val configuredKind = m.optString("loopMode")
-            val loopMode = if (configuredKind in listOf("off", "timed", "infinite")) configuredKind else when {
-                !m.optBoolean("loop", false) -> "off"
-                duration != null -> "timed"
-                else -> "infinite"
+            // A damaged optional animation must not prevent other functions
+            // (especially the standby pool) from being loaded.
+            try {
+                val m = modesObj.getJSONObject(name)
+                val duration = m.optJSONObject("duration")
+                val configuredKind = m.optString("loopMode")
+                val loopMode = if (configuredKind in listOf("off", "timed", "infinite")) configuredKind else when {
+                    !m.optBoolean("loop", false) -> "off"
+                    duration != null -> "timed"
+                    else -> "infinite"
+                }
+                val loop = loopMode != "off"
+                // Inactive settings remain on disk and must not control runtime playback.
+                val durationMin = if (loopMode == "timed") duration?.optLong("min") else null
+                val durationMax = if (loopMode == "timed") duration?.optLong("max") else null
+                val finishCycle = m.optBoolean("finishCycle", true)
+                val nextModeName = if (m.has("nextMode") && !m.isNull("nextMode")) m.getString("nextMode") else null
+                val framesArr = m.getJSONArray("frames")
+                val frames = mutableListOf<Frame>()
+                for (i in 0 until framesArr.length()) {
+                    val f = framesArr.getJSONObject(i)
+                    val res = f.getString("res")
+                    val delay = parseDelay(f.get("delay"))
+                    val anchorX = if (f.has("anchorX")) f.getInt("anchorX") else -1
+                    val anchorY = if (f.has("anchorY")) f.getInt("anchorY") else null
+                    val dx = if (f.has("dx")) f.getInt("dx") else 0
+                    val dy = if (f.has("dy")) f.getInt("dy") else 0
+                    val align = f.optString("verticalAlign", "bottom")
+                    frames.add(Frame(res, delay, anchorX, anchorY, dx, dy, align,
+                        f.optString("transform", "none")))
+                }
+                if (frames.isNotEmpty()) registerMode(ImageModeDef(name, frames, loop, loopMode, durationMin,
+                    durationMax, finishCycle, nextModeName))
+            } catch (e: Exception) {
+                Log.w("ImageModeManager", "跳过不可播放的可选动作: $name", e)
             }
-            val loop = loopMode != "off"
-            // Inactive settings remain on disk and must not control runtime playback.
-            val durationMin = if (loopMode == "timed") duration?.optLong("min") else null
-            val durationMax = if (loopMode == "timed") duration?.optLong("max") else null
-            val finishCycle = m.optBoolean("finishCycle", true)
-            val nextModeName = if (m.has("nextMode") && !m.isNull("nextMode")) m.getString("nextMode") else null
-            val framesArr = m.getJSONArray("frames")
-            val frames = mutableListOf<Frame>()
-            for (i in 0 until framesArr.length()) {
-                val f = framesArr.getJSONObject(i)
-                val res = f.getString("res")
-                val delay = parseDelay(f.get("delay"))
-                val anchorX = if (f.has("anchorX")) f.getInt("anchorX") else -1
-                val anchorY = if (f.has("anchorY")) f.getInt("anchorY") else null
-                val dx = if (f.has("dx")) f.getInt("dx") else 0
-                val dy = if (f.has("dy")) f.getInt("dy") else 0
-                val align = f.optString("verticalAlign", "bottom")
-                frames.add(Frame(res, delay, anchorX, anchorY, dx, dy, align,
-                    f.optString("transform", "none")))
-            }
-            registerMode(ImageModeDef(name, frames, loop, loopMode, durationMin,
-                durationMax, finishCycle, nextModeName))
         }
     }
 
