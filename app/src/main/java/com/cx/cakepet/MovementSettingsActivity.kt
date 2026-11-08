@@ -82,6 +82,10 @@ class MovementSettingsActivity : AppCompatActivity() {
             )
         )
         btnMore.setOnClickListener { moveMoreMenu.show() }
+        SettingsMaterialLink.attach(this, roleId, R.id.sw_throw, "抛掷", "抛掷", "touch")
+        SettingsMaterialLink.attach(this, roleId, R.id.sw_wallclimb, "攀岩走壁", "攀爬", "climb")
+        SettingsMaterialLink.attach(this, roleId, R.id.sw_auto_forage, "自动觅食", "自动觅食", "climb/forage")
+        SettingsMaterialLink.attach(this, roleId, R.id.sw_leap, "飞跃", "飞跃", "climb/leap")
 
         // 滑块
         maxSpeedBar = findViewById(R.id.maxspeed_bar)
