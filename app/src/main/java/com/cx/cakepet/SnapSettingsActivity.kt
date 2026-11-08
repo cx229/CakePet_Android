@@ -197,6 +197,7 @@ class SnapSettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        SettingsMaterialLink.refresh(this, roleId)
         refreshUI()
     }
 
