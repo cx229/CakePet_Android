@@ -799,6 +799,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             (card.getChildAt(0) as LinearLayout).setPadding(px(20), px(20), px(20), px(20))
             frame.findViewById<LinearLayout>(R.id.dialog_actions).gravity = Gravity.CENTER
+            // A single-field rename has no outlined module; match the field label instead.
+            frame.findViewById<LinearLayout>(R.id.dialog_heading).setPadding(0, 0, 0, 0)
         }
         frame.findViewById<TextView>(R.id.tv_title).text = title
         frame.findViewById<TextView>(R.id.tv_subtitle).apply {
