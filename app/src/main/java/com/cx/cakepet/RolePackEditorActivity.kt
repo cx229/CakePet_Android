@@ -1475,7 +1475,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun renameMode(key: String, onRenamed: (String) -> Unit) {
-        editor("重命名动画", compact = true, subtitle = "当前动画 · $key") { form ->
+        editor("重命名动画", compact = true, subtitle = "当前动画 · $key",
+            renameLayout = true) { form ->
             val name = entry(form, "动画名称", key, compact = true)
             ({
                 val renamed = name.text.toString().trim()
@@ -1696,6 +1697,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val frameHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            // Give the frame-section heading a little breathing room without
+            // changing the RecyclerView surface or frame-card geometry.
+            setPadding(px(4), px(4), px(4), px(4))
         }
         frameHeader.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f),
             LinearLayout.LayoutParams(0, -2, 1f))
