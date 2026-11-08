@@ -952,44 +952,25 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun optionsDialog(title: String, items: List<String>, choose: (Int) -> Unit) {
-        val frame = android.widget.FrameLayout(this).apply {
-            setPadding(px(24), 0, px(24), 0)
-        }
-        val card = com.google.android.material.card.MaterialCardView(this).apply {
-            radius = px(28).toFloat()
-            cardElevation = px(6).toFloat()
-            setCardBackgroundColor(getColor(R.color.cp_card_bg))
-        }
-        frame.addView(card, android.widget.FrameLayout.LayoutParams(-1, -2))
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(20), px(18), px(20), px(18))
-        }
-        card.addView(content)
-        content.addView(text(title, 18f).apply {
-            gravity = Gravity.CENTER
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        })
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        val (frame, body) = pickerShell(dialog, title)
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         items.forEachIndexed { index, option ->
             list.addView(text(option, 15f).apply {
-                setBackgroundResource(R.drawable.card_bg)
+                selectionSurface(this)
                 setPadding(px(14), px(12), px(14), px(12))
                 isClickable = true
-                setOnClickListener {
-                    dialog.dismiss()
-                    choose(index)
-                }
+                setOnClickListener { dialog.dismiss(); choose(index) }
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(5) })
         }
-        content.addView(ScrollView(this).apply { addView(list) },
+        body.addView(ScrollView(this).apply { addView(list) },
             LinearLayout.LayoutParams(-1,
                 minOf(px(56 * items.size + 10), resources.displayMetrics.heightPixels / 2)))
-        content.addView(dialogButton("关闭", primary = false) { dialog.dismiss() },
+        body.addView(dialogButton("关闭", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(-1, px(42)).apply { topMargin = px(10) })
         dialog.setContentView(frame)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.setCanceledOnTouchOutside(true)
         dialog.show()
         dialog.window?.setLayout(-1, -2)
     }
