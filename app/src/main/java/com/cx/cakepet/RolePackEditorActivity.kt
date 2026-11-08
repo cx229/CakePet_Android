@@ -582,10 +582,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val initialMode = intent.getStringExtra("initial_mode_id")
         val initialFunction = intent.getStringExtra("initial_function_path")
         home()
-        if (initialFunction == "standby/pool") {
+        if (!initialFunction.isNullOrBlank()) {
+            val path = initialFunction.split("/")
             functions()
-            functionDetails(MaterialFunctionSupport.NORMAL,
-                functionAnimationsAt(MaterialFunctionSupport.NORMAL))
+            functionDetails(path, functionAnimationsAt(path))
         }
         if (initialMode != null && root.optJSONObject("modes")?.has(initialMode) == true)
             showMode(initialMode)
