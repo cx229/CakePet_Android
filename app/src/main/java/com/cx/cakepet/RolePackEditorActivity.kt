@@ -307,15 +307,21 @@ open class RolePackEditorActivity : AppCompatActivity() {
             modeChain(first, modes).forEachIndexed { index, segment ->
                 if (index > 0) richText.append(" > ")
                 val begin = richText.length
+                val exists = modes.optJSONObject(segment) != null
+                val valid = exists && playableMode(segment)
                 richText.append(segment)
-                if (modes.optJSONObject(segment) != null) {
+                if (!valid) richText.append("（异常）")
+                if (exists) {
                     richText.setSpan(object : ClickableSpan() {
                         override fun onClick(widget: View) { onModeClick(segment) }
                         override fun updateDrawState(ds: TextPaint) {
-                            ds.color = getColor(if (playableMode(segment)) R.color.cp_sub else R.color.cp_danger)
+                            ds.color = getColor(if (valid) R.color.cp_sub else R.color.cp_danger)
                             ds.isUnderlineText = true
                         }
                     }, begin, richText.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                } else {
+                    richText.setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.cp_danger)),
+                        begin, richText.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
             }
             richText.append("]")
