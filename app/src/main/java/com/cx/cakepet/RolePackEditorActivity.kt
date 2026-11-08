@@ -2251,21 +2251,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        val outer = FrameLayout(this).apply { setPadding(px(20), 0, px(20), 0) }
-        val card = com.google.android.material.card.MaterialCardView(this).apply {
-            radius = px(26).toFloat()
-            setCardBackgroundColor(getColor(R.color.cp_card_bg))
-        }
-        outer.addView(card, FrameLayout.LayoutParams(-1, -2))
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(14), px(14), px(14), px(14))
-        }
-        card.addView(body)
-        body.addView(text("选择素材", 18f).apply {
-            gravity = Gravity.CENTER
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        })
+        val (outer, body) = pickerShell(dialog, "选择素材")
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(info)
         val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -3017,26 +3003,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
 
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        val frame = FrameLayout(this).apply { setPadding(px(22), 0, px(22), 0) }
-        val card = com.google.android.material.card.MaterialCardView(this).apply {
-            radius = px(26).toFloat()
-            setCardBackgroundColor(getColor(R.color.cp_card_bg))
-        }
-        frame.addView(card, FrameLayout.LayoutParams(-1, -2))
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(16), px(14), px(16), px(14))
-        }
-        card.addView(body)
-        body.addView(text("绑定到功能", 18f).apply {
-            gravity = Gravity.CENTER
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        })
-        body.addView(text("动画：$modeId\n勾选要绑定的功能；取消勾选将解除对应绑定。", 12f).apply {
-            gravity = Gravity.CENTER
-            setPadding(px(4), 0, px(4), px(10))
-            setTextColor(getColor(R.color.cp_note))
-        })
+        val (frame, body) = pickerShell(dialog, "绑定到功能",
+            "动画：$modeId · 勾选或取消绑定的功能")
         val selectionInfo = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(selectionInfo)
         val listing = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -3193,26 +3161,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val groups = knownGroups() + "未分组"
         val expanded = mutableSetOf<String>()
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        val frame = FrameLayout(this).apply { setPadding(px(22), 0, px(22), 0) }
-        val card = com.google.android.material.card.MaterialCardView(this).apply {
-            radius = px(26).toFloat()
-            setCardBackgroundColor(getColor(R.color.cp_card_bg))
-        }
-        frame.addView(card, FrameLayout.LayoutParams(-1, -2))
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(16), px(14), px(16), px(14))
-        }
-        card.addView(body)
-        body.addView(text(headerTitle ?: if (single) "选择后续动画" else "选择功能动画", 18f).apply {
-            gravity = Gravity.CENTER
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        })
-        if (!headerDescription.isNullOrBlank()) body.addView(text(headerDescription, 12f).apply {
-            gravity = Gravity.CENTER
-            setPadding(px(4), 0, px(4), px(10))
-            setTextColor(getColor(R.color.cp_note))
-        })
+        val (frame, body) = pickerShell(dialog,
+            headerTitle ?: if (single) "选择后续动画" else "选择功能动画",
+            headerDescription)
         val selectionInfo = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(selectionInfo)
         val listing = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -4111,17 +4062,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                    confirm: (Map<String, Pair<Long, Long>>) -> Unit) {
         val chosen = LinkedHashMap(initial)
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(20), px(16), px(20), px(16))
-            setBackgroundResource(R.drawable.card_bg)
-        }
-        card.addView(text("选择碎碎念", 18f).apply { gravity = Gravity.CENTER })
-        val info = text("", 12f)
-        card.addView(info)
+        val (frame, body) = pickerShell(dialog, "选择碎碎念")
+        val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_sub)) }
+        body.addView(info)
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val viewport = ScrollView(this).apply { addView(list) }
-        card.addView(viewport, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * .55f).toInt()))
+        body.addView(viewport, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * .55f).toInt()))
         val opened = mutableSetOf<String>()
         fun redraw() {
             list.removeAllViews()
@@ -4227,11 +4173,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
         actions.addView(button("取消") { dialog.dismiss() })
         actions.addView(button("确认") { confirm(chosen); dialog.dismiss() })
-        card.addView(actions)
-        dialog.setContentView(card)
+        body.addView(actions)
+        dialog.setContentView(frame)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.setCanceledOnTouchOutside(true)
         dialog.show()
-        dialog.window?.setLayout((resources.displayMetrics.widthPixels * .9f).toInt(), -2)
+        dialog.window?.setLayout(-1, -2)
     }
 
     private fun images() {
