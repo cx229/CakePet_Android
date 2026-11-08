@@ -3145,6 +3145,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val (frame, body) = pickerShell(dialog,
             headerTitle ?: if (single) "选择后续动画" else "选择功能动画",
             headerDescription)
+        if (!footerNote.isNullOrBlank()) body.addView(text(footerNote, 11f).apply {
+            setTextColor(getColor(R.color.cp_sub))
+            setPadding(0, px(6), 0, px(8))
+        })
         val selectionInfo = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(selectionInfo)
         val listing = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -3201,10 +3205,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         redraw()
-        if (!footerNote.isNullOrBlank()) body.addView(text(footerNote, 11f).apply {
-            setPadding(px(2), px(10), px(2), px(8))
-            setTextColor(getColor(R.color.cp_note))
-        })
+
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, px(12), 0, 0) }
         actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
             LinearLayout.LayoutParams(-2, -2).apply { rightMargin = px(5) })
