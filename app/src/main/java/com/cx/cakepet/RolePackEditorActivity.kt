@@ -1031,11 +1031,20 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun playableMode(modeId: String): Boolean {
         val probe = JSONObject().put("modes", root.optJSONObject("modes"))
             .put("functions", JSONObject().put("probe", JSONArray().put(modeId)))
-        val base = draft.canonicalFile
         return MaterialFunctionSupport.available(probe, listOf("probe")) { relative ->
             runCatching {
-                val image = File(base, relative).canonicalFile
-                image.toPath().startsWith(base.toPath()) && image.isFile && image.length() > 0L
+                val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                if (linkedReadOnly) {
+                    assets.open("${linkedPack.rootPath}/$relative").use {
+                        android.graphics.BitmapFactory.decodeStream(it, null, options)
+                    }
+                } else {
+                    val base = draft.canonicalFile
+                    val image = File(base, relative).canonicalFile
+                    if (!image.toPath().startsWith(base.toPath()) || !image.isFile) return@runCatching false
+                    android.graphics.BitmapFactory.decodeFile(image.absolutePath, options)
+                }
+                options.outWidth > 0 && options.outHeight > 0
             }.getOrDefault(false)
         }
     }
@@ -2948,10 +2957,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         })
         if (examplePath != null) {
             val refs = functionAnimationsAt(examplePath)
-            val bad = refs.filter { id ->
-                val mode = root.optJSONObject("modes")?.optJSONObject(id)
-                mode?.optJSONArray("frames")?.length()?.let { it > 0 } != true
-            }
+            val bad = refs.filter { !playableMode(it) }
             val missing = refs.isEmpty()
             if (missing || bad.isNotEmpty()) {
                 val critical = examplePath == MaterialFunctionSupport.STATIC
