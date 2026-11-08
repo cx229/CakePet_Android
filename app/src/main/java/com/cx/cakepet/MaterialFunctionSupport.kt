@@ -18,21 +18,43 @@ internal object MaterialFunctionSupport {
 
     fun available(root: JSONObject, path: List<String>, imageAvailable: (String) -> Boolean = { true }): Boolean {
         val modes = root.optJSONObject("modes") ?: return false
-        val candidates = parseFunctions(root)[path].orEmpty()
-        return candidates.any { name ->
-            val frames = modes.optJSONObject(name)?.optJSONArray("frames") ?: return@any false
-            frames.length() > 0 && (0 until frames.length()).all { index ->
-                val frame = frames.optJSONObject(index) ?: return@all false
-                frame.optString("res").let { it.isNotBlank() && imageAvailable(it) } && frame.opt("delay").let { delay ->
-                    when (delay) {
+        return parseFunctions(root)[path].orEmpty().any { start ->
+            val visited = mutableSetOf<String>()
+            var current: String? = start
+            var valid = true
+            while (!current.isNullOrBlank()) {
+                if (!visited.add(current)) break
+                val mode = modes.optJSONObject(current)
+                val frames = mode?.optJSONArray("frames")
+                if (frames == null || frames.length() == 0) {
+                    valid = false
+                    break
+                }
+                for (index in 0 until frames.length()) {
+                    val frame = frames.optJSONObject(index)
+                    if (frame == null) { valid = false; break }
+                    val res = frame.optString("res")
+                    val delay = frame.opt("delay")
+                    val delayValid = when (delay) {
                         is Number -> delay.toLong() > 0
                         is org.json.JSONArray -> delay.length() == 2 &&
                             delay.opt(0) is Number && delay.opt(1) is Number &&
                             delay.optLong(0) > 0 && delay.optLong(1) >= delay.optLong(0)
                         else -> false
                     }
+                    if (res.isBlank() || !imageAvailable(res) || !delayValid) {
+                        valid = false
+                        break
+                    }
                 }
+                if (!valid) break
+                val loop = mode?.optString("loopMode")
+                val infinite = loop == "infinite" || (loop !in listOf("off", "timed") &&
+                    mode?.optBoolean("loop", false) == true && mode.optJSONObject("duration") == null)
+                if (infinite) break
+                current = mode?.optString("nextMode")?.takeIf { it.isNotBlank() && it != "null" }
             }
+            valid
         }
     }
 
@@ -75,8 +97,8 @@ internal object MaterialFunctionSupport {
                     } else {
                         val base = java.io.File(ctx.filesDir, "roles/${descriptor.rootPath}").canonicalFile
                         val image = java.io.File(base, res).canonicalFile
-                        if (!image.toPath().startsWith(base.toPath()) || !image.isFile) return@getOrPut false
-                        android.graphics.BitmapFactory.decodeFile(image.absolutePath, options)
+                        if (image.toPath().startsWith(base.toPath()) && image.isFile)
+                            android.graphics.BitmapFactory.decodeFile(image.absolutePath, options)
                     }
                     options.outWidth > 0 && options.outHeight > 0
                 }.getOrDefault(false)
