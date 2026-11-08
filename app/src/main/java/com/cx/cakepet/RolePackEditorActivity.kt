@@ -1057,6 +1057,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun home() {
         section("素材包编辑", "home")
         val roleName = root.optString("name").ifBlank { "角色" }
+        if (!standbyReady()) {
+            menuCard("素材包必要动画缺失",
+                "待机 / 待机池没有有效动画，点击前往修复",
+                android.R.drawable.ic_dialog_alert) {
+                functions()
+                functionDetails(MaterialFunctionSupport.NORMAL,
+                    functionAnimationsAt(MaterialFunctionSupport.NORMAL))
+            }
+        }
         val report = RolePackNormalizer.report(draft)
         if (report != null) {
             val issues = report.optJSONArray("issues")
@@ -2965,7 +2974,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val refs = functionAnimationsAt(examplePath)
             val bad = refs.filter { !playableMode(it) }
             val missing = refs.isEmpty()
-            if ((missing && examplePath == MaterialFunctionSupport.NORMAL) || bad.isNotEmpty()) {
+            if (examplePath == MaterialFunctionSupport.NORMAL && !standbyReady()) {
                 val critical = examplePath == MaterialFunctionSupport.NORMAL
                 val required = examplePath in setOf(
                     MaterialFunctionSupport.STATIC, MaterialFunctionSupport.NORMAL,
@@ -2973,13 +2982,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     MaterialFunctionSupport.FEED, MaterialFunctionSupport.LEAP,
                     MaterialFunctionSupport.FORAGE, listOf("pat_head", "pat_head")
                 )
-                val note = when {
-                    critical && missing -> "素材包必要动画缺失：待机池为空"
-                    critical && bad.isNotEmpty() && bad.size == refs.size -> "素材包必要动画缺失：待机池无有效动画"
-                    missing && required -> "该功能未配置动画"
-                    missing -> ""
-                    else -> "部分引用动画无效：${bad.joinToString("、")}"
-                }
+                val note = "素材包必要动画缺失"
                 if (note.isNotBlank()) content.addView(text(note, 10f).apply {
                     setPadding(0, px(2), 0, 0)
                     setTextColor(getColor(if (required || bad.isNotEmpty()) R.color.cp_danger else R.color.cp_note))
@@ -3219,7 +3222,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun showUndefinedFolder(entries: List<Pair<List<String>, Any?>>) {
-        if (entries.isEmpty()) return
         val open = "undefined" in openedFunctionFolders
         val wrapper = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         functionItem(panel,
@@ -3254,7 +3256,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
             }, LinearLayout.LayoutParams(px(38), px(48)))
         }
-        if (open) entries.forEach { (path, value) -> renderUndefined(wrapper, path, value) }
+        if (open) {
+            if (entries.isEmpty()) wrapper.addView(text("暂无未定义功能", 11f).apply { setTextColor(getColor(R.color.cp_note)) })
+            entries.forEach { (path, value) -> renderUndefined(wrapper, path, value) }
+        }
         panel.addView(wrapper)
     }
 
