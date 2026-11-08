@@ -10,6 +10,13 @@ import java.util.zip.*
 
 /** File-only functions for the v1.02 material editor. */
 object RolePackEditing {
+    // In-process revision: only material commits invalidate cached preview engines.
+    // No material-package format changes or repeated JSON reads while a preview plays.
+    private val materialRevisions = mutableMapOf<String, Long>()
+    @Synchronized fun revision(id: String): Long = materialRevisions[id] ?: 0L
+    @Synchronized private fun markChanged(id: String) {
+        materialRevisions[id] = (materialRevisions[id] ?: 0L) + 1L
+    }
     /**
      * The same transparent host, dialog shell, cards and Mode links as the
      * existing "编辑功能/动画" entry. Only its leaf filter differs: no folders.
@@ -164,6 +171,9 @@ object RolePackEditing {
         if (!draft.renameTo(live)) { backup.renameTo(live); error("保存失败") }
         backup.deleteRecursively()
         RoleStore.updateUserRole(ctx, id, json.optString("name"), json.optString("shortName"), parseAuthors(json))
+        // Mark the specific pack stale after it has been durably replaced. Previews
+        // compare this token when next visible; an unchanged pack stays cached.
+        markChanged(id)
         if (validationErrors(live).isEmpty()) PetService.instance?.refreshMaterialPack(id)
     }
     fun export(ctx: Context, role: RoleDescriptor, uri: Uri) {

@@ -202,7 +202,8 @@ class RoleManageActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // 导入/删除后回到本页时刷新缓存与列表。
+        // Material edits make only affected cached preview engines stale.
+        adapter.invalidateChangedPreviews()
         RoleRegistry.refreshUserRoles(this)
         loadList()
     }
@@ -459,6 +460,12 @@ class RoleManageActivity : AppCompatActivity() {
         val items = mutableListOf<RoleDescriptor>()
         private val players = mutableMapOf<String, PreviewPlayer>()
         private val mgrCache = mutableMapOf<String, ImageModeManager>()
+        private val mgrVersions = mutableMapOf<String, Long>()
+        fun invalidateChangedPreviews() {
+            mgrCache.keys.toList().forEach { id ->
+                if (mgrVersions[id] != RolePackEditing.revision(id)) mgrCache.remove(id)
+            }
+        }
         /** templateId → 已加入首页的实例数量（由 loadList 一次性读入，不随 bind 逐项查盘）。 */
         private val counts = mutableMapOf<String, Int>()
 
@@ -541,7 +548,9 @@ class RoleManageActivity : AppCompatActivity() {
             // 复用/重建该模板的预览播放器（静坐一遍 → 之后随机动作循环）。
             players[role.id]?.stop()
             val mgr = mgrCache.getOrPut(role.id) {
-                ImageModeManager(ctx, buildSpritePackForRole(ctx, role))
+                ImageModeManager(ctx, buildSpritePackForRole(ctx, role)).also {
+                    mgrVersions[role.id] = RolePackEditing.revision(role.id)
+                }
             }
             val player = PreviewPlayer(mgr, thumb, ctx.resources.displayMetrics.density)
             players[role.id] = player

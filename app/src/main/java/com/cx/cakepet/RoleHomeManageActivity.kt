@@ -76,6 +76,7 @@ class RoleHomeManageActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        adapter.invalidateChangedPreviews()
         loadList()
     }
 
@@ -165,6 +166,14 @@ class RoleHomeManageActivity : AppCompatActivity() {
 
         private val players = mutableMapOf<String, PreviewPlayer>()
         private val mgrCache = mutableMapOf<String, ImageModeManager>()
+        private val mgrVersions = mutableMapOf<String, Long>()
+        fun invalidateChangedPreviews() {
+            mgrCache.keys.toList().forEach { instanceId ->
+                val templateId = RoleStore.descriptorForInstance(this@RoleHomeManageActivity, instanceId)?.id
+                if (templateId == null || mgrVersions[instanceId] != RolePackEditing.revision(templateId))
+                    mgrCache.remove(instanceId)
+            }
+        }
 
         fun submit(list: List<HomeRoleInstance>) {
             items.clear()
@@ -219,7 +228,9 @@ class RoleHomeManageActivity : AppCompatActivity() {
             val desc = RoleStore.descriptorForInstance(ctx, inst.instanceId)
             if (desc != null) {
                 val mgr = mgrCache.getOrPut(inst.instanceId) {
-                    ImageModeManager(ctx, buildSpritePackForRole(ctx, desc))
+                    ImageModeManager(ctx, buildSpritePackForRole(ctx, desc)).also {
+                        mgrVersions[inst.instanceId] = RolePackEditing.revision(desc.id)
+                    }
                 }
                 val player = PreviewPlayer(mgr, thumb, ctx.resources.displayMetrics.density)
                 players[inst.instanceId] = player

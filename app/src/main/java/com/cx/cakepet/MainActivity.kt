@@ -99,6 +99,13 @@ class MainActivity : AppCompatActivity() {
         PetService.onActiveRolesChanged = {
             runOnUiThread { if (::binding.isInitialized && !isFinishing && !isDestroyed) refreshCards() }
         }
+        // The editor may have committed a new version of a pack while this page was paused.
+        // Only invalidate engines whose source pack actually changed.
+        previewMgrCache.keys.toList().forEach { id ->
+            if (previewMgrVersions[id] != RolePackEditing.revision(id)) previewMgrCache.remove(id)
+        }
+        previewPlayers.values.forEach { it.stop() }
+        previewPlayers.clear()
         buildRoleCards()   // 重建首页实例列表（加入新角色/重复加入后需刷新），内部末尾调用 refreshCards()
         // 恢复时启动所有预览播放器（onPause 已停止），继续“静坐一遍→随机动作”。
         previewPlayers.values.forEach { it.start() }
@@ -218,7 +225,9 @@ class MainActivity : AppCompatActivity() {
             // 动态预览：每实例一个播放器（静坐一遍 → 之后随机动作循环）。管理器按模板 id 共享。
             if (role != null) {
                 val mgr = previewMgrCache.getOrPut(role.id) {
-                    ImageModeManager(ctx, buildSpritePackForRole(ctx, role))
+                    ImageModeManager(ctx, buildSpritePackForRole(ctx, role)).also {
+                        previewMgrVersions[role.id] = RolePackEditing.revision(role.id)
+                    }
                 }
                 val player = PreviewPlayer(mgr, thumb, ctx.resources.displayMetrics.density)
                 previewPlayers[inst.instanceId] = player
@@ -322,6 +331,7 @@ class MainActivity : AppCompatActivity() {
 
     /** 预览图管理器缓存（按模板 id 共享，避免每次重建解析 modes.json / 重算统一画布）。 */
     private val previewMgrCache = mutableMapOf<String, ImageModeManager>()
+    private val previewMgrVersions = mutableMapOf<String, Long>()
     /** 每实例一个动态预览播放器（静坐一遍 → 之后随机模式循环）。 */
     private val previewPlayers = mutableMapOf<String, PreviewPlayer>()
 

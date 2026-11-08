@@ -247,6 +247,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private val pageHistory = java.util.ArrayDeque<EditorPage>()
     private var restoringPage = false
     private val detailDialogs = mutableListOf<android.app.Dialog>()
+    private val functionDetailRefreshers = mutableMapOf<android.app.Dialog, () -> Unit>()
     private fun openModeFromDetail(key: String) = modeDetails(key)
 
     /** Enter a real page from nested detail dialogs.
@@ -817,6 +818,22 @@ open class RolePackEditorActivity : AppCompatActivity() {
         RolePackEditing.commit(this, id, draft, candidate)
         root = candidate
         draft = RolePackEditing.draft(this, id)
+        // JSON has changed, but existing View text and lists are not live bindings.
+        // Refresh underlying cards without navigating or collapsing folders, then
+        // refresh any visible read-only function details from the current root.
+        if (!linkedMode && screen == "functions") {
+            val previousScroll = scroll.scrollY
+            functions()
+            scroll.post { if (screen == "functions") scroll.scrollTo(0, previousScroll) }
+        }
+        functionDetailRefreshers.toMap().forEach { (dialog, refresh) ->
+            if (dialog.isShowing) refresh() else functionDetailRefreshers.remove(dialog)
+        }
+        if (!linkedMode && screen == "home") {
+            homePreviewPlayer?.stop()
+            homePreviewPlayer = null
+            home()
+        }
         if (linkedMode) linkedTreeContainer?.let { tree ->
             tree.removeAllViews()
             if (intent.getBooleanExtra("missing_only", false)) renderMissingLinkedCards(tree)
@@ -3280,6 +3297,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun showUndefinedFolder(entries: List<Pair<List<String>, Any?>>) {
+        if (entries.isEmpty()) {
+            openedFunctionFolders.remove("undefined")
+            return
+        }
         val open = "undefined" in openedFunctionFolders
         val wrapper = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         functionItem(panel,
@@ -3315,7 +3336,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }, LinearLayout.LayoutParams(px(38), px(48)))
         }
         if (open) {
-            if (entries.isEmpty()) wrapper.addView(text("暂无未定义功能", 11f).apply { setTextColor(getColor(R.color.cp_note)) })
             entries.forEach { (path, value) -> renderUndefined(wrapper, path, value) }
         }
         panel.addView(wrapper)
@@ -3404,29 +3424,53 @@ open class RolePackEditorActivity : AppCompatActivity() {
             listing.removeAllViews()
             selectionInfo.text = "已绑定 ${selected.size} 个功能"
 
+            fun drawLeaf(path: List<String>, depth: Int) {
+                val key = path.joinToString("/")
+                val wasSelected = key in selected
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    selectionSurface(this)
+                    setPadding(px(10), px(4), px(8), px(4))
+                }
+                val check = CheckBox(this).apply {
+                    text = functionSegment(path)
+                    textSize = 14f
+                    isChecked = wasSelected
+                    setTextColor(getColor(R.color.cp_title))
+                }
+                row.addView(check, LinearLayout.LayoutParams(-1, px(42)))
+                row.addView(text(functionDescription(path), 11f).apply {
+                    setTextColor(getColor(R.color.cp_note))
+                    setPadding(px(10), 0, px(6), px(4))
+                })
+                listing.addView(row, selectionRowParams(depth + 1))
+                var restoringCheck = false
+                check.setOnCheckedChangeListener { _, nowChecked ->
+                    if (restoringCheck) return@setOnCheckedChangeListener
+                    val others = leaves.getValue(key).second.filter { it != modeId }
+                    if (!nowChecked && wasSelected && others.isEmpty()) {
+                        restoringCheck = true
+                        try { check.isChecked = true }
+                        finally { restoringCheck = false }
+                        warnLastBinding(path) {
+                            selected.remove(key)
+                            redraw()
+                        }
+                    } else {
+                        if (nowChecked) selected.add(key) else selected.remove(key)
+                        redraw()
+                    }
+                }
+                rippleClick(row) { check.isChecked = !check.isChecked }
+            }
+
             fun drawNode(node: JSONObject, parent: List<String>, depth: Int) {
                 node.keys().asSequence().filter { it != "thinking" && it != "modes" }.toList().forEach { segment ->
                     val path = parent + segment
                     val key = path.joinToString("/")
                     when (val child = node.opt(segment)) {
                         is JSONObject -> if (child.has("modes")) {
-                            val checked = key in selected
-                            val check = CheckBox(this).apply {
-                                text = functionSegment(path)
-                                isChecked = checked
-                                setOnCheckedChangeListener { _, checkedNow ->
-                                    if (checkedNow) selected.add(key) else selected.remove(key)
-                                }
-                            }
-                            val row = LinearLayout(this).apply {
-                                orientation = LinearLayout.HORIZONTAL
-                                gravity = Gravity.CENTER_VERTICAL
-                                selectionSurface(this)
-                                setPadding(px(8), px(3), px(8), px(3))
-                                addView(check, LinearLayout.LayoutParams(-1, px(46)))
-                            }
-                            listing.addView(row, selectionRowParams(path.size))
-                            rippleClick(row) { check.isChecked = !check.isChecked }
+                            drawLeaf(path, depth)
                         } else {
                             val descendantPaths = leaves.keys.filter { it.startsWith("$key/") }
                             val open = key in expanded
@@ -3436,42 +3480,26 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 selectionSurface(this, isFolder = true)
                                 setPadding(px(12), px(5), px(10), px(5))
                             }
-                            folder.addView(text(
+                            val folderText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                            folderText.addView(text(
                                 (if (open) "▾ 📂  " else "▸ 📁  ") + functionSegment(path), 15f
-                            ).apply { setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(0, -2, 1f))
+                            ).apply { setPadding(0, 0, 0, 0) })
+                            folderText.addView(text(functionFolderDescription(path), 10f).apply {
+                                setTextColor(getColor(R.color.cp_note))
+                                setPadding(px(22), 0, 0, 0)
+                            })
+                            folder.addView(folderText, LinearLayout.LayoutParams(0, -2, 1f))
                             folder.addView(text(
                                 "${descendantPaths.count { it in selected }}/${descendantPaths.size}", 11f
                             ).apply { setTextColor(getColor(R.color.cp_note)) })
-                            listing.addView(folder, selectionRowParams(depth).apply { height = px(49) })
+                            listing.addView(folder, selectionRowParams(depth).apply { height = px(58) })
                             rippleClick(folder) {
                                 if (!expanded.add(key)) expanded.remove(key)
                                 redraw()
                             }
                             if (open) drawNode(child, path, depth + 1)
                         }
-                        is JSONArray -> {
-                            val checked = key in selected
-                            val row = LinearLayout(this).apply {
-                                orientation = LinearLayout.VERTICAL
-                                selectionSurface(this)
-                                setPadding(px(10), px(4), px(8), px(4))
-                            }
-                            val check = CheckBox(this).apply {
-                                text = functionSegment(path)
-                                textSize = 14f
-                                isChecked = checked
-                                setTextColor(getColor(R.color.cp_title))
-                            }
-                            row.addView(check, LinearLayout.LayoutParams(-1, px(42)))
-                            row.addView(text(functionDescription(path), 11f).apply {
-                                setTextColor(getColor(R.color.cp_note))
-                                setPadding(px(10), 0, px(6), px(4))
-                            })
-                            listing.addView(row, selectionRowParams(depth + 1))
-                            var restoringCheck = false
-                            check.setOnCheckedChangeListener { _, nowChecked ->
-                                if (restoringCheck) return@setOnCheckedChangeListener
-                                if (!nowChecked && checked && leaves.getValue(key).second
+                        is JSONArray -> drawLeaf(path, depth)         if (!nowChecked && checked && leaves.getValue(key).second
                                         .filter { it != modeId }.isEmpty()) {
                                     restoringCheck = true
                                     try { check.isChecked = true }
@@ -4386,48 +4414,57 @@ open class RolePackEditorActivity : AppCompatActivity() {
      */
     private fun functionDetails(path: List<String>, selected: List<String>) {
         if (linkedMode && linkedReadOnly) { linkedReadonlyFunction(path, selected); return }
-        val all = PackThinking.parse(root).functions
-        val effective = all[path] ?: ThinkingConfig()
-        val thinkingSummary = when (effective.policy) {
-            "off" -> "不播放"
-            "hold" -> "持续 · ${effective.pool.size} 条"
-            else -> "轮播 · ${effective.pool.size} 条"
-        }
-        var popup: android.app.Dialog? = null
-        popup = editor(functionPathName(path), compact = true, readOnly = true,
+        lateinit var refresh: () -> Unit
+        val popup = editor(functionPathName(path), compact = true, readOnly = true,
             subtitle = functionDescription(path)) { box ->
-
-            val thinkingCard = dialogSection()
-            thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
-                linkedConsent { thinkingConfigDialog(functionPath = path) }
-            })
-            addDetailSection(box, thinkingCard)
-
-            val animationsCard = dialogSection()
-            animationsCard.addView(detailSectionHeader(
-                "当前动画", "动画链 ${selected.size} 个",
-                if (functionHasAnimationPool(path)) ({
-                    linkedConsent { chooseFunctions(path, selected) }
-                }) else null
-            ))
-            val animations = root.getJSONObject("modes")
-            selected.forEachIndexed { index, start ->
-                val row = detailListRow()
-                row.addView(detailNumber(index))
-                row.addView(linkedModeChains(listOf(start), animations, "", 13f) { target ->
-                    openModeFromDetail(target)
-                }.apply { setPadding(0, px(2), 0, px(2)) },
-                    LinearLayout.LayoutParams(0, -2, 1f))
-                animationsCard.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
-                    leftMargin = px(8)
-                    topMargin = px(4)
+            refresh = {
+                box.removeAllViews()
+                val effective = PackThinking.parse(root).functions[path] ?: ThinkingConfig()
+                val thinkingSummary = when (effective.policy) {
+                    "off" -> "不播放"
+                    "hold" -> "持续 · ${effective.pool.size} 条"
+                    else -> "轮播 · ${effective.pool.size} 条"
+                }
+                val currentSelection = functionAnimationsAt(path)
+                val thinkingCard = dialogSection()
+                thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
+                    linkedConsent { thinkingConfigDialog(functionPath = path) }
                 })
+                addDetailSection(box, thinkingCard)
+
+                val animationsCard = dialogSection()
+                animationsCard.addView(detailSectionHeader(
+                    "当前动画", "动画链 ${currentSelection.size} 个",
+                    if (functionHasAnimationPool(path)) ({
+                        // Always use the latest selection, not the original dialog argument.
+                        linkedConsent { chooseFunctions(path, functionAnimationsAt(path)) }
+                    }) else null
+                ))
+                val animations = root.getJSONObject("modes")
+                currentSelection.forEachIndexed { index, start ->
+                    val row = detailListRow()
+                    row.addView(detailNumber(index))
+                    row.addView(linkedModeChains(listOf(start), animations, "", 13f) { target ->
+                        openModeFromDetail(target)
+                    }.apply { setPadding(0, px(2), 0, px(2)) },
+                        LinearLayout.LayoutParams(0, -2, 1f))
+                    animationsCard.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                        leftMargin = px(8)
+                        topMargin = px(4)
+                    })
+                }
+                if (currentSelection.isEmpty()) animationsCard.addView(text("暂无关联动画", 12f).apply {
+                    setTextColor(getColor(R.color.cp_note))
+                })
+                addDetailSection(box, animationsCard)
             }
-            if (selected.isEmpty()) animationsCard.addView(text("暂无关联动画", 12f).apply {
-                setTextColor(getColor(R.color.cp_note))
-            })
-            addDetailSection(box, animationsCard)
+            refresh()
             ({ })
+        }
+        functionDetailRefreshers[popup] = refresh
+        popup.setOnDismissListener {
+            detailDialogs.remove(popup)
+            functionDetailRefreshers.remove(popup)
         }
     }
 
