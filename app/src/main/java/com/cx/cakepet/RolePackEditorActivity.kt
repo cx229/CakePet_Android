@@ -323,8 +323,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
         starts.forEachIndexed { chainIndex, first ->
             if (chainIndex > 0) richText.append("，")
             richText.append("[")
-            modeChain(first, modes).forEachIndexed { index, segment ->
+            modeChain(first, modes).forEachIndexed segmentLoop@{ index, segment ->
                 if (index > 0) richText.append(" > ")
+                // Structural terminators represent looping, not actual Mode IDs.
+                if (segment == "∞" || segment == "◎") {
+                    richText.append(segment)
+                    return@segmentLoop
+                }
                 val begin = richText.length
                 val exists = modes.optJSONObject(segment) != null
                 val valid = exists && playableMode(segment)
@@ -2965,37 +2970,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
         else -> "展开查看该分类下的功能"
     }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
-    /**
-     * Current pack sprite preview for a Function leaf, shared by the main page
-     * and the filtered linked overlay. No fallback to another character's art.
-     */
-    private fun functionPreview(path: List<String>): android.graphics.Bitmap? {
-        val key = "function-preview:" + path.joinToString("/")
-        if (templateExamples.containsKey(key)) return templateExamples[key]
-        val modes = root.optJSONObject("modes")
-        var bitmap: android.graphics.Bitmap? = null
-        for (modeId in functionAnimationsAt(path)) {
-            val frames = modes?.optJSONObject(modeId)?.optJSONArray("frames") ?: continue
-            for (index in 0 until frames.length()) {
-                val res = frames.optJSONObject(index)?.optString("res").orEmpty()
-                if (res.isBlank() || res.startsWith("/") ||
-                    res.contains('\\') || res.split('/').any { it == ".." }) continue
-                bitmap = runCatching {
-                    val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
-                    if (linkedMode && linkedReadOnly)
-                        assets.open("${linkedPack.rootPath}/$res").use {
-                            BitmapFactory.decodeStream(it, null, opts)
-                        }
-                    else BitmapFactory.decodeFile(File(draft, res).absolutePath, opts)
-                }.getOrNull()
-                if (bitmap != null) break
-            }
-            if (bitmap != null) break
-        }
-        templateExamples[key] = bitmap
-        return bitmap
-    }
-
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
                              level: Int, immediate: Boolean = false, description: String = "",
                              examplePath: List<String>? = null, click: () -> Unit): LinearLayout {
@@ -3011,7 +2985,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             else rippleClick(this) { click() }
         }
         if (examplePath != null) {
-            val bitmap = functionPreview(examplePath)
+            val bitmap = templateRandomFrame(examplePath)
             card.addView(ImageView(this).apply {
                 if (bitmap != null) setImageBitmap(bitmap)
                 else {
@@ -3110,6 +3084,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             .filter { it != "thinking" && it != "modes" && it != "note" && it != "usage" }
             .toList().let { existing ->
                 val priority = when (path.joinToString("/")) {
+                    "" -> functionFolderOrder
                     "touch" -> listOf("lift_up", "roll", "jump_down")
                     "feed" -> listOf("food", "eat")
                     "standby" -> listOf("pool", "static_pool")
@@ -3172,7 +3147,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 is JSONArray -> {
                     val selected = (0 until child.length()).map { child.optString(it) }
                         .filter { it.isNotBlank() }
-                    functionItem(parent, (if (undefined) "未定义 · " else "▣  ") + displayName,
+                    functionItem(parent, (if (undefined) "未定义 · " else "") + displayName,
                         if (undefined) "当前软件未定义此功能路径，原值已保留" else
                             "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) },
                         path.size, description = if (undefined) fullKey else functionDescription(currentPath),
