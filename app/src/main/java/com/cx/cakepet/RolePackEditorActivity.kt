@@ -3500,6 +3500,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             if (open) drawNode(child, path, depth + 1)
                         }
                         is JSONArray -> drawLeaf(path, depth)
+                    }
                 }
             }
             drawNode(functionsRoot, emptyList(), 0)
