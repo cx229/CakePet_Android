@@ -2977,16 +2977,23 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             val missing = refs.isEmpty()
             if (missing || bad.isNotEmpty()) {
-                val critical = examplePath == listOf("standby", "static_pool")
+                val critical = examplePath == MaterialFunctionSupport.STATIC
+                val required = examplePath in setOf(
+                    MaterialFunctionSupport.STATIC, MaterialFunctionSupport.NORMAL,
+                    MaterialFunctionSupport.THROW, MaterialFunctionSupport.SNAP,
+                    MaterialFunctionSupport.FEED, MaterialFunctionSupport.LEAP,
+                    MaterialFunctionSupport.FORAGE, listOf("pat_head", "pat_head")
+                )
                 val note = when {
                     critical && missing -> "运行必备：静止待机池为空，角色暂不可启动"
-                    critical -> "静止待机存在无效动作，请修复"
-                    missing -> "未配置动画；该功能入口不会播放"
-                    else -> "部分引用动作不存在或没有帧：${bad.joinToString("、")}"
+                    critical && bad.isNotEmpty() -> "静止待机包含无效动画：${bad.joinToString("、")}"
+                    missing && required -> "该功能必要动画未配置，相关行为暂不可用"
+                    missing -> "可选动画未配置，不影响其他功能"
+                    else -> "部分引用动画无效：${bad.joinToString("、")}"
                 }
                 content.addView(text(note, 10f).apply {
                     setPadding(0, px(2), 0, 0)
-                    setTextColor(getColor(if (critical || bad.isNotEmpty()) R.color.cp_danger else R.color.cp_note))
+                    setTextColor(getColor(if (required || bad.isNotEmpty()) R.color.cp_danger else R.color.cp_note))
                 })
             }
         }
