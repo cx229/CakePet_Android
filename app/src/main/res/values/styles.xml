@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Static-outline field: the label remains in the outline notch when empty. -->
+    <style name="CakePetFormInput" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="expandedHintEnabled">false</item>
+        <item name="boxCornerRadiusTopStart">10dp</item>
+        <item name="boxCornerRadiusTopEnd">10dp</item>
+        <item name="boxCornerRadiusBottomStart">10dp</item>
+        <item name="boxCornerRadiusBottomEnd">10dp</item>
+        <item name="hintTextColor">@color/cp_sub</item>
+        <item name="boxStrokeColor">@color/cp_sub</item>
+        <item name="placeholderTextColor">@color/cp_note</item>
+    </style>
+
     <!-- 设置页：每个选项的主标题（带 Switch/滑块的那种） -->
     <style name="SettingsOptionTitle">
         <item name="android:layout_width">wrap_content</item>
