@@ -70,7 +70,13 @@ jobs:
           gradle --no-daemon --stacktrace assembleDebug 2>&1 | tee build-debug.log
 
       - name: Name GitHub test APK
-        run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/CakePet-v1.26.11.08.11.24-gt.apk
+        run: |
+          set -euo pipefail
+          # Read the actual debug variant version (including -gt), never a stale hardcoded tag.
+          VERSION=$(python3 -c 'import json; print(json.load(open("app/build/outputs/apk/debug/output-metadata.json"))["elements"][0]["versionName"])')
+          test -n "$VERSION"
+          echo "APK_VERSION=$VERSION" >> "$GITHUB_ENV"
+          mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/CakePet-$VERSION.apk"
 
       - name: Upload build diagnostics
         if: always()
@@ -104,7 +110,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CakePet-v1.26.11.08.04.48-gt-apk
+          name: CakePet-${{ env.APK_VERSION }}-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
