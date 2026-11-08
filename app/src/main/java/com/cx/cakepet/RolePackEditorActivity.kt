@@ -2969,6 +2969,27 @@ open class RolePackEditorActivity : AppCompatActivity() {
             setPadding(0, px(2), 0, 0)
             setTextColor(getColor(R.color.cp_note))
         })
+        if (examplePath != null) {
+            val refs = functionAnimationsAt(examplePath)
+            val bad = refs.filter { id ->
+                val mode = root.optJSONObject("modes")?.optJSONObject(id)
+                mode?.optJSONArray("frames")?.length()?.let { it > 0 } != true
+            }
+            val missing = refs.isEmpty()
+            if (missing || bad.isNotEmpty()) {
+                val critical = examplePath == listOf("standby", "static_pool")
+                val note = when {
+                    critical && missing -> "运行必备：静止待机池为空，角色暂不可启动"
+                    critical -> "静止待机存在无效动作，请修复"
+                    missing -> "未配置动画；该功能入口不会播放"
+                    else -> "部分引用动作不存在或没有帧：${bad.joinToString("、")}"
+                }
+                content.addView(text(note, 10f).apply {
+                    setPadding(0, px(2), 0, 0)
+                    setTextColor(getColor(if (critical || bad.isNotEmpty()) R.color.cp_danger else R.color.cp_note))
+                })
+            }
+        }
         if (subtitle.isNotBlank()) {
             val subtitleView = if (examplePath != null) {
                 val functionPath = examplePath
@@ -3395,15 +3416,28 @@ open class RolePackEditorActivity : AppCompatActivity() {
             headerTitle = functionPathName(path),
             headerDescription = functionDescription(path),
             footerNote = "执行到该功能时，将随机选中以上动画播放") { selected ->
-            attempt {
-                change { json ->
-                    var node = json.getJSONObject("functions")
-                    path.dropLast(1).forEach { node = node.getJSONObject(it) }
-                    if (node.optJSONObject(path.last()) != null) node.getJSONObject(path.last()).put("modes", JSONArray(selected))
-                    else node.put(path.last(), JSONArray(selected))
+            val saveSelection = {
+                attempt {
+                    change { json ->
+                        var node = json.getJSONObject("functions")
+                        path.dropLast(1).forEach { node = node.getJSONObject(it) }
+                        if (node.optJSONObject(path.last()) != null) node.getJSONObject(path.last()).put("modes", JSONArray(selected))
+                        else node.put(path.last(), JSONArray(selected))
+                    }
+                    if (detailDialogs.none { it.isShowing }) functions()
                 }
-                if (detailDialogs.none { it.isShowing }) functions()
             }
+            if (chosen.isNotEmpty() && selected.isEmpty()) {
+                val critical = path == listOf("standby", "static_pool")
+                showConfirmDialog(
+                    title = "清空功能动画？",
+                    bodyHtml = if (critical) "静止待机池清空后，角色将无法满足最低运行要求。"
+                        else "功能「${functionPathName(path)}」将没有关联动画。",
+                    subText = if (critical) "素材包仍可保存、导出，但需补齐静止待机动作才能启动。"
+                        else "不会自动替代为其他功能的动画。",
+                    positiveText = "仍然清空"
+                ) { saveSelection() }
+            } else saveSelection()
         }
     }
     private fun imageUses(): Map<String, List<Pair<String, Int>>> {
