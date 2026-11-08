@@ -24,6 +24,7 @@ class MovementSettingsActivity : AppCompatActivity() {
     private lateinit var roleBounds: PetBounds
     // 屏蔽开关 listener 回调：applyConfig 程序化回填开关时置 true，避免回流 setChecked 触发 listener 又写盘
     private var suppressSwitch: Boolean = false
+    private var refreshMovementStatus: (() -> Unit)? = null
     // 阈值范围（来自当前角色 PetBounds，用于滑块业务上下界/默认值）
     private lateinit var bs: Map<String, SliderBound>
     // 各滑块「待确认值」：挡住滞后的旧发射回流
@@ -48,6 +49,12 @@ class MovementSettingsActivity : AppCompatActivity() {
     private lateinit var leapProbVal: EditText
     private lateinit var forageSpeedBar: Slider
     private lateinit var forageSpeedVal: EditText
+
+    override fun onResume() {
+        super.onResume()
+        refreshMovementStatus?.invoke()
+        if (::config.isInitialized) SettingsMaterialLink.refresh(this, roleId)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -208,7 +215,9 @@ class MovementSettingsActivity : AppCompatActivity() {
             )
             gated.forEach { (id, label) ->
                 folds.setLocked(id, MaterialFunctionSupport.missing(this, roleId, label) != null) {
-                    RolePackEditing.showMissingStandby(this, roleId)
+                    MaterialFunctionSupport.requirement(label)?.let { path ->
+                        RolePackEditing.showMissingFunctions(this, roleId, listOf(path))
+                    }
                 }
             }
         }
@@ -217,6 +226,7 @@ class MovementSettingsActivity : AppCompatActivity() {
         // 否则首帧回调时 lateinit 视图尚未赋值 → UninitializedPropertyAccessException → 闪退。
         // （原代码把 collect 放在 findViewById 之前，属竞态，概率性崩溃即源于此。）
         setupSliders()
+        refreshMovementStatus = { applyConfig(config.getBlocking()) }
         lifecycleScope.launch {
             config.configFlow.collect { applyConfig(it) }
         }
