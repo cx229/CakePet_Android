@@ -62,6 +62,7 @@ class SettingsFoldController(private val host: Activity) {
     ) {
         val sw = host.findViewById<View>(masterId) as? CompoundButton ?: return
         val header = row(masterId) as? ViewGroup ?: return
+        (header as? SettingsRippleRow)?.managedByFoldController = true
         val arrow = TextView(host).apply {
             textSize = 20f
             gravity = Gravity.CENTER
