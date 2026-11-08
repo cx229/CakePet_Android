@@ -2975,17 +2975,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val bad = refs.filter { !playableMode(it) }
             val missing = refs.isEmpty()
             if (examplePath == MaterialFunctionSupport.NORMAL && !standbyReady()) {
-                val critical = examplePath == MaterialFunctionSupport.NORMAL
-                val required = examplePath in setOf(
-                    MaterialFunctionSupport.STATIC, MaterialFunctionSupport.NORMAL,
-                    MaterialFunctionSupport.THROW, MaterialFunctionSupport.SNAP,
-                    MaterialFunctionSupport.FEED, MaterialFunctionSupport.LEAP,
-                    MaterialFunctionSupport.FORAGE, listOf("pat_head", "pat_head")
-                )
                 val note = "素材包必要动画缺失"
                 if (note.isNotBlank()) content.addView(text(note, 10f).apply {
                     setPadding(0, px(2), 0, 0)
-                    setTextColor(getColor(if (required || bad.isNotEmpty()) R.color.cp_danger else R.color.cp_note))
+                    setTextColor(getColor(R.color.cp_danger))
                 })
             }
         }
@@ -3329,13 +3322,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
         fun warnLastBinding(path: List<String>, proceed: () -> Unit) {
             val critical = path == listOf("standby", "pool")
-            val normalStandby = path == listOf("standby", "pool")
             showConfirmDialog(
                 title = "解除最后一个动画绑定？",
                 bodyHtml = if (critical)
                     "待机池清空后，素材包将不满足最低运行要求。"
-                else if (normalStandby)
-                    "普通待机池将为空，日常待机无法从此池选择动画。"
                 else "功能「${functionPathName(path)}」将没有关联动画。",
                 subText = if (critical) "请至少保留一个有效待机动画。"
                     else "对应动画不会触发，不影响其他独立功能。",
@@ -3583,7 +3573,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             if (chosen.isNotEmpty() && selected.isEmpty()) {
-                val critical = path == listOf("standby", "static_pool")
+                val critical = path == listOf("standby", "pool")
                 showConfirmDialog(
                     title = "清空功能动画？",
                     bodyHtml = if (critical) "待机池清空后，角色将无法满足最低运行要求。"
