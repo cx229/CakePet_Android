@@ -80,59 +80,9 @@ object RolePackageContract {
                 errors.add("功能映射无法解析：${it.message}")
                 return ValidationResult(false, json.optString("version"), errors)
             }
-        // Only the static standby pool is a package-wide startup requirement.
-        // Missing keys and explicit empty arrays mean the same thing. Every other
-        // function is independently optional, even when its references are broken.
-        val staticPool = functions[listOf("standby", "static_pool")].orEmpty()
-        val used = linkedSetOf<String>()
-        for (name in staticPool) {
-            if (modes.optJSONObject(name) != null) used.add(name)
-        }
-        if (used.isEmpty()) errors.add("静态待机池至少需要一个存在且可播放的动作")
-
-        // Active nextMode chains are also part of a playable animation.
-        val pending = java.util.ArrayDeque<String>()
-        used.forEach { pending.add(it) }
-        while (!pending.isEmpty()) {
-            val name = pending.removeFirst()
-            val mode = modes.optJSONObject(name) ?: continue
-            val kind = playbackMode(mode)
-            if (kind == "infinite") continue
-            val next = mode.optString("nextMode").takeUnless { it.isBlank() || it == "null" }
-                ?: continue
-            if (modes.optJSONObject(next) == null) {
-                errors.add("动作 $name 的后续动作不存在：$next")
-            } else if (used.add(next)) pending.add(next)
-        }
-
-        for (name in used) {
-            val mode = modes.optJSONObject(name) ?: continue
-            val frames = mode.optJSONArray("frames")
-            if (frames == null || frames.length() == 0) {
-                errors.add("已使用动作 $name 没有可播放的帧")
-                continue
-            }
-            for (i in 0 until frames.length()) {
-                val frame = frames.optJSONObject(i)
-                if (frame == null) {
-                    errors.add("已使用动作 $name 的帧 $i 不是对象")
-                    continue
-                }
-                if (frame.optString("res").isBlank())
-                    errors.add("已使用动作 $name 的帧 $i 没有图片资源")
-                // Delay is essential for frame progression; inactive settings
-                // (including duration/finishCycle and other frame properties)
-                // must not cause a whole package to be rejected.
-                val delay = frame.opt("delay")
-                val valid = when (delay) {
-                    is Number -> delay.toLong() > 0
-                    is JSONArray -> delay.length() == 2 &&
-                        delay.opt(0) is Number && delay.opt(1) is Number &&
-                        delay.optLong(0) > 0 && delay.optLong(1) >= delay.optLong(0)
-                    else -> false
-                }
-                if (!valid) errors.add("已使用动作 $name 帧 $i 的播放延时无效")
-            }
+        val candidates = functions[MaterialFunctionSupport.STATIC].orEmpty()
+        if (candidates.none { modeErrors(modes, it).isEmpty() }) {
+            errors.add("静止待机池至少需要一个可播放的完整动作")
         }
         return ValidationResult(errors.isEmpty(), json.optString("version"), errors)
     }
@@ -147,46 +97,68 @@ object RolePackageContract {
         }
     }
 
-    /** Only check images needed by mapped functions and active nextMode chains. */
-    fun verifyAssets(dest: File, json: JSONObject): List<String> {
+    /**
+     * Examine only a single chosen animation and its active continuation.
+     * Broken optional clips and broken alternatives in the same pool do not
+     * invalidate a pack if at least one static standby candidate works.
+     */
+    private fun modeErrors(modes: JSONObject, start: String, directory: File? = null): List<String> {
         val errors = mutableListOf<String>()
-        val modes = json.optJSONObject("modes") ?: return errors
-        val functions = runCatching { parseFunctions(json) }.getOrNull() ?: return errors
-        // Optional functions may be absent or broken without blocking import.
-        // Verify only assets reachable from the minimum startup pool.
-        val used = linkedSetOf<String>()
-        for (name in functions[listOf("standby", "static_pool")].orEmpty()) {
-            if (modes.optJSONObject(name) != null) used.add(name)
-        }
-        val pending = java.util.ArrayDeque<String>()
-        used.forEach { pending.add(it) }
-        while (!pending.isEmpty()) {
-            val mode = modes.optJSONObject(pending.removeFirst()) ?: continue
-            if (playbackMode(mode) == "infinite") continue
-            val next = mode.optString("nextMode")
-            if (next.isNotBlank() && next != "null" &&
-                modes.optJSONObject(next) != null && used.add(next)) pending.add(next)
-        }
-
-        val root = dest.canonicalFile
-        val checked = mutableSetOf<String>()
-        for (name in used) {
-            val frames = modes.optJSONObject(name)?.optJSONArray("frames") ?: continue
+        val seen = mutableSetOf<String>()
+        var current: String? = start
+        while (!current.isNullOrBlank() && seen.add(current)) {
+            val mode = modes.optJSONObject(current)
+            if (mode == null) {
+                errors.add("动作不存在：$current")
+                break
+            }
+            val frames = mode.optJSONArray("frames")
+            if (frames == null || frames.length() == 0) {
+                errors.add("动作 $current 没有可播放帧")
+                break
+            }
             for (i in 0 until frames.length()) {
-                val res = frames.optJSONObject(i)?.optString("res").orEmpty()
-                if (res.isBlank() || !checked.add(res)) continue
-                val file = File(root, res).canonicalFile
-                if (!file.toPath().startsWith(root.toPath()) || !file.isFile || file.length() <= 0L) {
-                    errors.add("缺失或非法图片：$res")
+                val frame = frames.optJSONObject(i)
+                if (frame == null) {
+                    errors.add("动作 $current 第 $i 帧结构无效")
                     continue
                 }
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(file.absolutePath, bounds)
-                if (bounds.outWidth <= 0 || bounds.outHeight <= 0)
-                    errors.add("图片无法解码：$res")
+                val res = frame.optString("res")
+                if (res.isBlank()) errors.add("动作 $current 第 $i 帧图片为空")
+                val delay = frame.opt("delay")
+                val validDelay = when (delay) {
+                    is Number -> delay.toLong() > 0
+                    is JSONArray -> delay.length() == 2 &&
+                        delay.opt(0) is Number && delay.opt(1) is Number &&
+                        delay.optLong(0) > 0 && delay.optLong(1) >= delay.optLong(0)
+                    else -> false
+                }
+                if (!validDelay) errors.add("动作 $current 第 $i 帧延时无效")
+                if (directory != null && res.isNotBlank()) {
+                    val base = directory.canonicalFile
+                    val file = File(base, res).canonicalFile
+                    if (!file.toPath().startsWith(base.toPath()) || !file.isFile || file.length() == 0L) {
+                        errors.add("缺失图片：$res")
+                    } else {
+                        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeFile(file.absolutePath, options)
+                        if (options.outWidth <= 0 || options.outHeight <= 0)
+                            errors.add("图片无法解码：$res")
+                    }
+                }
             }
+            if (playbackMode(mode) == "infinite") break
+            current = mode.optString("nextMode").takeIf { it.isNotBlank() && it != "null" }
         }
         return errors
+    }
+
+    /** Missing, empty and damaged optional functions never block an export. */
+    fun verifyAssets(dest: File, json: JSONObject): List<String> {
+        val modes = json.optJSONObject("modes") ?: return emptyList()
+        val candidates = parseFunctions(json)[MaterialFunctionSupport.STATIC].orEmpty()
+        if (candidates.any { modeErrors(modes, it, dest).isEmpty() }) return emptyList()
+        return listOf("静止待机池没有可解码的有效动画，请补齐后再启动角色")
     }
 
     /** 校验字段为非空字符串（非布尔/数字/空串）。 */
