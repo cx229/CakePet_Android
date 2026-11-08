@@ -75,13 +75,14 @@ class RoleManageActivity : AppCompatActivity() {
     private fun askMaterialName(title: String, initial: String, submit: (String) -> Unit) {
         val view = layoutInflater.inflate(R.layout.dialog_rename_role, null)
         view.findViewById<TextView>(R.id.tv_title).text = title
-        val card = (view as ViewGroup).getChildAt(0) as ViewGroup
-        val content = card.getChildAt(0) as LinearLayout
-        (content.getChildAt(1) as TextView).text = "素材包名称"
-        content.getChildAt(3).visibility = View.GONE
-        view.findViewById<EditText>(R.id.et_short).visibility = View.GONE
+        // Reference stable field IDs instead of child positions: XML now uses
+        // the same outlined label field as the other form dialogs.
+        view.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.til_name).apply {
+            hint = "素材包名称"
+            placeholderText = "请输入素材包名称"
+        }
+        view.findViewById<View>(R.id.til_short).visibility = View.GONE
         val input = view.findViewById<EditText>(R.id.et_name)
-        input.hint = "请输入素材包名称"
         input.setText(initial)
         input.setSelectAllOnFocus(initial.isNotBlank())
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
