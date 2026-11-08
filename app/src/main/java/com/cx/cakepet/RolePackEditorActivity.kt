@@ -1017,6 +1017,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
         })
         return field
     }
+    /** TextInputLayout internally wraps EditText in a FrameLayout. The actual
+     * horizontally weighted layout child is the outer FormInputField. */
+    private fun formFieldOf(input: EditText): FormInputField {
+        var node: android.view.ViewParent? = input.parent
+        while (node != null && node !is FormInputField) node = node.parent
+        return node as? FormInputField ?: error("Input has no form field container")
+    }
+
     private fun ids(): List<String> = root.getJSONObject("modes").keys().asSequence().toList().sorted()
     private fun home() {
         section("素材包编辑", "home")
@@ -1503,9 +1511,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 (previous?.optLong("min", 3000) ?: 3000).toString(), compact = true)
             val max = entry(timerRow, "最长时长（ms）",
                 (previous?.optLong("max", 4000) ?: 4000).toString(), compact = true)
-            (min.parent as View).layoutParams =
+            formFieldOf(min).layoutParams =
                 LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
-            (max.parent as View).layoutParams =
+            formFieldOf(max).layoutParams =
                 LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
             timedFields.addView(timerRow)
             val finish = Switch(this).apply {
@@ -2510,10 +2518,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val left = entry(row, a, av, compact = true)
         val right = entry(row, b, bv, compact = true)
-        (left.parent as View).layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
-        (right.parent as View).layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
-        if (ah.isNotBlank()) (left.parent as FormInputField).setPlaceholderText(ah)
-        if (bh.isNotBlank()) (right.parent as FormInputField).setPlaceholderText(bh)
+        formFieldOf(left).layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
+        formFieldOf(right).layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
+        if (ah.isNotBlank()) formFieldOf(left).setPlaceholderText(ah)
+        if (bh.isNotBlank()) formFieldOf(right).setPlaceholderText(bh)
         box.addView(row)
         return left to right
     }
@@ -4259,9 +4267,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 }
                                 val minField = entry(rangeRow, "Min（毫秒）", time.first.toString(), compact = true)
                                 val maxField = entry(rangeRow, "Max（毫秒）", time.second.toString(), compact = true)
-                                (minField.parent as View).layoutParams =
+                                formFieldOf(minField).layoutParams =
                                     LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = px(5) }
-                                (maxField.parent as View).layoutParams =
+                                formFieldOf(maxField).layoutParams =
                                     LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = px(5) }
                                 timeCard.addView(rangeRow)
                                 addDetailSection(box, timeCard)
