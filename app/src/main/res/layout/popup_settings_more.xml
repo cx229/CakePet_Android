@@ -64,6 +64,18 @@
         android:textColor="@color/cp_title"
         android:background="?attr/selectableItemBackground" />
 
+    <TextView
+        android:id="@+id/item_edit_material"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="编辑所属素材包"
+        android:textSize="11sp"
+        android:textColor="@color/cp_title"
+        android:background="?attr/selectableItemBackground" />
+
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
