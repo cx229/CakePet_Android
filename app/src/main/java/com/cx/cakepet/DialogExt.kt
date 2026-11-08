@@ -62,6 +62,7 @@ fun AppCompatActivity.showConfirmDialog(
         android.view.ViewGroup.LayoutParams.WRAP_CONTENT
     )
     dialog.setCancelable(true)
+    dialog.setCanceledOnTouchOutside(true)
 
     btnNegative.setOnClickListener { dialog.dismiss() }
     btnPositive.setOnClickListener {
