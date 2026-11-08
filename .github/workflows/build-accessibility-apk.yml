@@ -55,10 +55,11 @@ jobs:
           set -o pipefail
           { sdkmanager --list --channel=3 | grep -E "platforms;android-37|build-tools;37" || true; sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0"; } 2>&1 | tee sdk-install.log
 
-      - name: Set up Gradle 9.5.0 and cache
+      - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "9.5.0"
+        # Use the checked-in wrapper with its verified Tencent mirror rather than
+        # provisioning a distribution through the action (GitHub HTTP 504).
+
 
       - name: Verify shared debug signing key
         run: |
@@ -74,7 +75,7 @@ jobs:
       - name: Build debug APK
         run: |
           set -o pipefail
-          gradle --no-daemon --stacktrace assembleDebug 2>&1 | tee build-debug.log
+          ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee build-debug.log
 
       - name: Name GitHub test APK
         run: |
