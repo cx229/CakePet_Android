@@ -115,18 +115,20 @@ class ImageModeManager(
             val visited = mutableSetOf<String>()
             var next: String? = start
             while (!next.isNullOrBlank()) {
-                if (!visited.add(next)) return@getOrPut false
+                if (!visited.add(next)) return@getOrPut true
                 val mode = modes[next] ?: return@getOrPut false
                 if (mode.frames.isEmpty()) return@getOrPut false
                 for (frame in mode.frames) {
                     if (frame.resName.isBlank()) return@getOrPut false
                     val valid = imageReadyCache.getOrPut(frame.resName) {
-                        val resource = currentPack.resolve(frame.resName) ?: return@getOrPut false
-                        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                        runCatching {
-                            openPackStream(resource)?.use { BitmapFactory.decodeStream(it, null, opts) }
-                            opts.outWidth > 0 && opts.outHeight > 0
-                        }.getOrDefault(false)
+                        val resource = currentPack.resolve(frame.resName)
+                        if (resource == null) false else {
+                            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            runCatching {
+                                openPackStream(resource)?.use { BitmapFactory.decodeStream(it, null, opts) }
+                                opts.outWidth > 0 && opts.outHeight > 0
+                            }.getOrDefault(false)
+                        }
                     }
                     if (!valid) return@getOrPut false
                 }
