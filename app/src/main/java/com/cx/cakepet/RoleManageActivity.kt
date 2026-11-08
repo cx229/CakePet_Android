@@ -231,15 +231,13 @@ class RoleManageActivity : AppCompatActivity() {
             RolePackEditing.validationErrorsForRole(this, role)
         }.getOrElse { listOf("读取素材包失败：${it.message}") }
         if (errors.isNotEmpty()) {
-            val summary = errors.mapIndexed { index, error ->
-                "${index + 1}. $error"
-            }.joinToString("\n")
-            showConfirmDialog(
-                title = "素材包暂时无法加入角色",
-                bodyHtml = android.text.TextUtils.htmlEncode(summary).replace("\n", "<br>"),
-                positiveText = "知道了",
-                showNegative = false
-            ) { }
+            if (!MaterialFunctionSupport.hasPlayable(this, role.id, MaterialFunctionSupport.NORMAL)) {
+                RolePackEditing.showMissingStandby(this, role.id)
+            } else {
+                showConfirmDialog(title = "素材包暂时无法加入首页",
+                    bodyHtml = android.text.TextUtils.htmlEncode(errors.joinToString("\n")).replace("\n", "<br>"),
+                    positiveText = "知道了", showNegative = false) { }
+            }
             return
         }
         val instanceId = "inst_${System.currentTimeMillis()}_${(Math.random() * 10000).toInt()}"
