@@ -14,7 +14,10 @@ internal object RolePackNormalizer {
 
     // Existing runtime contract + additional active paths represented by the shipped v1.10 template.
     val supportedPaths: List<List<String>> = (
-        RolePackageContract.REQUIRED_FUNCTION_PATHS + listOf(
+        // climb/move and climb/jump_up are legacy contract aliases, not active engine paths.
+        RolePackageContract.REQUIRED_FUNCTION_PATHS.filterNot {
+            it == listOf("climb", "move") || it == listOf("climb", "jump_up")
+        } + listOf(
             listOf("climb", "leap", "leap"),
             listOf("climb", "leap", "landing"),
             listOf("climb", "forage", "move")
@@ -117,7 +120,7 @@ internal object RolePackNormalizer {
                 val value = node.opt(key)
                 if (next !in knownNodes) {
                     issues += Issue("未定义", "functions/${next.joinToString("/")}",
-                        "当前软件未定义该功能路径；已保留原值，不作为已支持功能使用",
+                        "当前软件没有对应的内置功能路径；已保留原值，是否执行取决于调用方",
                         value?.toString())
                 }
                 if (value is JSONObject && value.optJSONArray("modes") == null) scan(value, next)
