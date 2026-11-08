@@ -79,6 +79,25 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
+    /** Localized entry points start fully expanded; the full material editor retains its own folding state. */
+    private fun expandLinkedFolders(node: JSONObject, parent: List<String>) {
+        node.keys().asSequence().filter {
+            it !in setOf("thinking", "modes", "note", "usage")
+        }.forEach { name ->
+            val path = parent + name
+            val key = path.joinToString("/")
+            val relevant = linkedPaths.any {
+                it == key || it.startsWith(key + "/") || key.startsWith(it + "/")
+            }
+            if (!relevant) return@forEach
+            val child = node.optJSONObject(name) ?: return@forEach
+            if (!child.has("modes")) {
+                openedFunctionFolders.add(key)
+                expandLinkedFolders(child, path)
+            }
+        }
+    }
+
     private fun showLinkedFunctions() {
         val count = RoleStore.getHomeRoles(this).count { it.templateId == id }
         val dialog = editor("${linkedTitle} · 功能/动画", compact = true, readOnly = true) { form ->
@@ -101,6 +120,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             form.addView(tree)
             linkedTreeContainer = tree
             openedFunctionFolders.clear()
+            expandLinkedFolders(root.getJSONObject("functions"), emptyList())
             functionTree(tree, root.getJSONObject("functions"), emptyList())
             ({ })
         }
