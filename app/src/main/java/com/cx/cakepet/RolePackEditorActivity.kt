@@ -125,11 +125,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun linkedReadonlyFunction(path: List<String>, selected: List<String>) {
         val config = PackThinking.parse(root).functions[path] ?: ThinkingConfig()
-        editor(functionPathName(path), compact = true, readOnly = true) { form ->
-            form.addView(text(functionDescription(path), 12f).apply {
-                setTextColor(getColor(R.color.cp_note))
-                setPadding(px(3), 0, 0, px(8))
-            })
+        editor(functionPathName(path), compact = true, readOnly = true,
+            subtitle = functionDescription(path)) { form ->
             val note = dialogSection()
             val summary = when (config.policy) {
                 "off" -> "不播放"
@@ -157,7 +154,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun linkedReadonlyThinking(path: List<String>) {
         val config = PackThinking.parse(root).functions[path] ?: ThinkingConfig()
-        editor("碎碎念配置", compact = true, readOnly = true) { form ->
+        editor("碎碎念配置", compact = true, readOnly = true,
+            subtitle = "功能 · ${functionPathName(path)}") { form ->
             val card = dialogSection()
             val policy = when (config.policy) {
                 "off" -> "不播放"
@@ -1453,7 +1451,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun renameMode(key: String, onRenamed: (String) -> Unit) {
-        editor("重命名动画", compact = true) { form ->
+        editor("重命名动画", compact = true, subtitle = "当前动画 · $key") { form ->
             val name = entry(form, "动画名称", key, compact = true)
             ({
                 val renamed = name.text.toString().trim()
@@ -1478,7 +1476,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     /** Playback-only entry, retaining the former attributes() loop semantics. */
     private fun playbackSettings(key: String, onSaved: () -> Unit) {
         val current = root.getJSONObject("modes").getJSONObject(key)
-        editor("播放循环", compact = true) { form ->
+        editor("播放循环", compact = true, subtitle = "动画 · $key") { form ->
             val options = listOf("播放一次", "定时循环", "无限循环")
             val spinner = Spinner(this)
             SettingsSpinnerBinder.bind(spinner, options,
@@ -3387,15 +3385,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun imageDetails(relative: String) {
         val uses = imageUses()[relative].orEmpty()
         var popup: android.app.Dialog? = null
-        popup = editor("图片详情", compact = true, readOnly = true, extraAction = {
+        popup = editor("图片详情", compact = true, readOnly = true,
+            subtitle = File(relative).name, extraAction = {
             popup?.dismiss()
             renameDialog(relative, false)
         }) { box ->
-            box.addView(text(File(relative).name, 12f).apply {
-                gravity = Gravity.CENTER
-                setTextColor(getColor(R.color.cp_note))
-                setPadding(px(2), 0, px(2), px(10))
-            }, LinearLayout.LayoutParams(-1, -2))
             val previewCard = dialogSection()
             previewCard.addView(ImageView(this).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
@@ -3721,12 +3715,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         // The body and group membership share one local draft until Save is pressed.
         val originalText = id?.let(::thinkingBody).orEmpty()
         val draftGroups = id?.let(::thinkingGroups)?.toMutableList() ?: mutableListOf()
-        editor(if (id == null) "新建碎碎念" else "碎碎念详情", compact = true) { box ->
-            box.addView(text("编辑角色的底部消息文本", 12f).apply {
-                gravity = Gravity.CENTER
-                setTextColor(getColor(R.color.cp_note))
-                setPadding(0, 0, 0, px(10))
-            }, LinearLayout.LayoutParams(-1, -2))
+        editor(if (id == null) "新建碎碎念" else "碎碎念详情",
+            compact = true, subtitle = "角色底部消息文本") { box ->
             val textCard = dialogSection()
             textCard.addView(text("文本内容", 15f))
             val field = EditText(this).apply {
@@ -3889,12 +3879,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             else -> "轮播 · ${effective.pool.size} 条"
         }
         var popup: android.app.Dialog? = null
-        popup = editor(functionPathName(path), compact = true, readOnly = true) { box ->
-            box.addView(text(functionDescription(path), 12f).apply {
-                gravity = Gravity.CENTER
-                setTextColor(getColor(R.color.cp_note))
-                setPadding(px(2), 0, px(2), px(12))
-            }, LinearLayout.LayoutParams(-1, -2))
+        popup = editor(functionPathName(path), compact = true, readOnly = true,
+            subtitle = functionDescription(path)) { box ->
 
             val thinkingCard = dialogSection()
             thinkingCard.addView(detailSectionHeader("碎碎念配置", thinkingSummary) {
@@ -3973,12 +3959,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
             else listOf("轮播", "持续", "不播放")
         val codes = if (modeId != null) listOf("inherit", "cycle", "hold", "off")
             else listOf("cycle", "hold", "off")
-        editor("碎碎念配置", compact = true) { box ->
-            box.addView(text(if (modeId != null) "动画 · $modeId" else "功能 · ${functionPathName(requireNotNull(functionPath))}", 12f).apply {
-                gravity = Gravity.CENTER
-                setTextColor(getColor(R.color.cp_note))
-                setPadding(0, 0, 0, px(10))
-            }, LinearLayout.LayoutParams(-1, -2))
+        editor("碎碎念配置", compact = true,
+            subtitle = if (modeId != null) "动画 · $modeId"
+                else "功能 · ${functionPathName(requireNotNull(functionPath))}") { box ->
             val strategyCard = dialogSection()
             val strategyRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -4133,8 +4116,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                     setPadding(px(10), px(10), px(10), px(10))
                                 }
                                 textCard.addView(field, LinearLayout.LayoutParams(-1, -2))
-                                textCard.addView(text("将影响全部引用位置（${thinkingUses(id).size}次引用）", 10f).apply {
-                                    setTextColor(getColor(R.color.cp_note))
+                                textCard.addView(text("将影响全部引用位置（${thinkingUses(id).size}次引用）", 12f).apply {
+                                    setTextColor(getColor(R.color.cp_sub))
                                     setPadding(0, px(3), 0, 0)
                                 })
                                 addDetailSection(box, textCard)
