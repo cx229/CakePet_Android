@@ -52,4 +52,11 @@
     <color name="cp_danger">#B00020</color>
     <!-- 强调色：日间用深青（与 teal_700 一致），夜间在 values-night 覆盖为浅青 -->
     <color name="cp_accent">#FF018786</color>
+    <!-- Animation editor overlays: theme-aware, independent of source image pixels. -->
+    <color name="cp_preview_canvas">#F2F4F6</color>
+    <color name="cp_preview_guide">#6E7B8C</color>
+    <color name="cp_preview_bounds">#278BCB</color>
+    <color name="cp_preview_anchor">#DE4236</color>
+    <color name="cp_preview_hud_bg">#D5FFFFFF</color>
+    <color name="cp_preview_hud_text">#2C3743</color>
 </resources>
