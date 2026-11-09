@@ -35,4 +35,11 @@
     <color name="switch_off_night">#9AA0A6</color>
     <!-- 选项入口右侧箭头（chevron）夜间颜色：浅色，在暗底上可见 -->
     <color name="icon_chevron">#8A8A90</color>
+    <!-- Night preview retains contrast without tinting pet artwork. -->
+    <color name="cp_preview_canvas">#303238</color>
+    <color name="cp_preview_guide">#AFB6C3</color>
+    <color name="cp_preview_bounds">#62B8F0</color>
+    <color name="cp_preview_anchor">#FF7770</color>
+    <color name="cp_preview_hud_bg">#E52E2F33</color>
+    <color name="cp_preview_hud_text">#F2F2F4</color>
 </resources>
