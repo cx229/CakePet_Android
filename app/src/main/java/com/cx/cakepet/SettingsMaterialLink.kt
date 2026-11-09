@@ -79,6 +79,11 @@ object SettingsMaterialLink {
                 putStringArrayListExtra("linked_paths", ArrayList(paths.toList()))
             })
         }
+        val inline = heading.parent as? LinearLayout ?: return
+        val owner = inline.parent as? LinearLayout ?: return
+        val position = owner.indexOfChild(inline)
+        val density = activity.resources.displayMetrics.density
+        fun dp(value: Int) = (value * density + .5f).toInt()
         // Keep the stored preference untouched; only runtime capability gates behavior.
         // This note belongs to the same card and never conflates sibling features.
         val availabilityNote = TextView(activity).apply {
