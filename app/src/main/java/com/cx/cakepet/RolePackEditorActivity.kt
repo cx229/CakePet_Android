@@ -1344,13 +1344,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setBackgroundResource(R.drawable.card_bg)
                 rippleCard(this)
                 setPadding(px(12), px(6), px(12), px(6))
+                minimumHeight = px(folderMinHeightDp)
             }
-            val folderGlyph = text("", 16f)
-            header.addView(folderGlyph, LinearLayout.LayoutParams(px(43), -2))
-            val heading = text(group, 16f)
+            val folderGlyph = text("", folderHeadingSp)
+            header.addView(folderGlyph, LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
+            val heading = text(group, folderHeadingSp)
             val folderLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             folderLabels.addView(heading)
-            folderLabels.addView(text("${names.size}个动画", 11f).apply {
+            folderLabels.addView(text("${names.size}个动画", folderSubtitleSp).apply {
                 setTextColor(getColor(R.color.cp_note))
                 setPadding(0, px(2), 0, 0)
             })
@@ -3120,6 +3121,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
         else -> "展开查看该分类下的功能"
     }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
+    // Folder presentation only: keep each page's tree operations and data semantics intact.
+    private val folderGlyphWidthDp = 43
+    private val folderMinHeightDp = 56
+    private val folderHeadingSp = 15f
+    private val folderSubtitleSp = 10f
+
     private fun functionDescendantCount(node: JSONObject, parent: List<String>): Int {
         var count = 0
         node.keys().asSequence().filter { it !in setOf("thinking", "modes", "note", "usage") }.forEach { key ->
@@ -3147,16 +3154,18 @@ open class RolePackEditorActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundResource(R.drawable.card_bg)
             rippleCard(this)
-            setPadding(if (examplePath != null) px(6) else px(12), px(5),
-                px(8), px(5))
+            setPadding(if (examplePath != null) px(6) else px(12),
+                px(if (folderCount != null) 6 else 5), px(8),
+                px(if (folderCount != null) 6 else 5))
             isClickable = true
             if (immediate) setOnClickListener { click() }
             else rippleClick(this) { click() }
         }
         if (folderCount != null) {
-            card.addView(text(if (folderOpened) "▾ 📂" else "▸ 📁", 15f).apply {
+            card.minimumHeight = px(folderMinHeightDp)
+            card.addView(text(if (folderOpened) "▾ 📂" else "▸ 📁", folderHeadingSp).apply {
                 gravity = Gravity.CENTER_VERTICAL
-            }, LinearLayout.LayoutParams(px(43), -2))
+            }, LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
         }
         if (examplePath != null) {
             val bitmap = templateRandomFrame(examplePath)
@@ -3175,11 +3184,27 @@ open class RolePackEditorActivity : AppCompatActivity() {
             })
         }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(text(title, if (examplePath != null) 13f else 15f).apply {
-            setPadding(0, 0, 0, 0)
-        })
-        if (description.isNotBlank()) content.addView(text(description, 10f).apply {
-            setPadding(0, px(3), 0, 0)
+        if (folderCount != null) {
+            val headingRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            headingRow.addView(text(title, folderHeadingSp).apply {
+                setPadding(0, 0, 0, 0)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            headingRow.addView(text(folderCount, folderSubtitleSp).apply {
+                setTextColor(getColor(R.color.cp_note))
+                gravity = Gravity.END
+                setPadding(px(6), 0, 0, 0)
+            })
+            content.addView(headingRow)
+        } else {
+            content.addView(text(title, if (examplePath != null) 13f else 15f).apply {
+                setPadding(0, 0, 0, 0)
+            })
+        }
+        if (description.isNotBlank()) content.addView(text(description, folderSubtitleSp).apply {
+            setPadding(0, px(if (folderCount != null) 2 else 3), 0, 0)
             setTextColor(getColor(R.color.cp_note))
         })
         if (examplePath != null) {
@@ -3202,13 +3227,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
             })
         }
         card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
-        if (folderCount != null) {
-            card.addView(text(folderCount, 11f).apply {
-                setTextColor(getColor(R.color.cp_note))
-                gravity = Gravity.CENTER_VERTICAL or Gravity.END
-                setPadding(px(5), 0, 0, 0)
-            }, LinearLayout.LayoutParams(-2, -2))
-        }
         if (examplePath != null) {
             card.addView(text("⋮", 23f).apply {
                 gravity = Gravity.CENTER
@@ -3610,21 +3628,32 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 orientation = LinearLayout.HORIZONTAL
                                 gravity = Gravity.CENTER_VERTICAL
                                 selectionSurface(this, isFolder = true)
-                                setPadding(px(12), px(5), px(10), px(5))
+                                setPadding(px(12), px(6), px(8), px(6))
+                                minimumHeight = px(folderMinHeightDp)
                             }
-                            folder.addView(text(if (open) "▾ 📂" else "▸ 📁", 15f),
-                                LinearLayout.LayoutParams(px(43), -2))
+                            folder.addView(text(if (open) "▾ 📂" else "▸ 📁", folderHeadingSp),
+                                LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
                             val folderText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-                            folderText.addView(text(functionSegment(path), 15f))
-                            folderText.addView(text(functionFolderDescription(path), 10f).apply {
+                            val headingRow = LinearLayout(this).apply {
+                                orientation = LinearLayout.HORIZONTAL
+                                gravity = Gravity.CENTER_VERTICAL
+                            }
+                            headingRow.addView(text(functionSegment(path), folderHeadingSp),
+                                LinearLayout.LayoutParams(0, -2, 1f))
+                            headingRow.addView(text(
+                                "${descendantPaths.count { it in selected }}/${descendantPaths.size}",
+                                folderSubtitleSp
+                            ).apply {
+                                setTextColor(getColor(R.color.cp_note))
+                                setPadding(px(6), 0, 0, 0)
+                            })
+                            folderText.addView(headingRow)
+                            folderText.addView(text(functionFolderDescription(path), folderSubtitleSp).apply {
                                 setTextColor(getColor(R.color.cp_note))
                                 setPadding(0, px(2), 0, 0)
                             })
                             folder.addView(folderText, LinearLayout.LayoutParams(0, -2, 1f))
-                            folder.addView(text(
-                                "${descendantPaths.count { it in selected }}/${descendantPaths.size}", 11f
-                            ).apply { setTextColor(getColor(R.color.cp_note)) })
-                            listing.addView(folder, selectionRowParams(depth).apply { height = px(58) })
+                            listing.addView(folder, selectionRowParams(depth).apply { height = -2 })
                             rippleClick(folder) {
                                 if (!expanded.add(key)) expanded.remove(key)
                                 redraw()
@@ -4035,7 +4064,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     selectionSurface(this, isFolder = file.isDirectory)
-                    setPadding(px(8), px(4), px(4), px(4))
+                    setPadding(if (file.isDirectory) px(12) else px(8),
+                        if (file.isDirectory) px(6) else px(4), px(4),
+                        if (file.isDirectory) px(6) else px(4))
+                    if (file.isDirectory) minimumHeight = px(folderMinHeightDp)
                 }
                 val main = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -4043,8 +4075,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     isClickable = false
                 }
                 if (file.isDirectory) {
-                    main.addView(text(if (path in expandedResourceFolders) "▾ 📂" else "▸ 📁", 15f),
-                        LinearLayout.LayoutParams(px(54), -2))
+                    main.addView(text(if (path in expandedResourceFolders) "▾ 📂" else "▸ 📁",
+                        folderHeadingSp), LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
                 } else {
                     main.addView(ImageView(this).apply {
                         scaleType = ImageView.ScaleType.FIT_CENTER
@@ -4053,9 +4085,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
                 val words = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
-                    setPadding(px(8), 0, 0, 0)
+                    setPadding(if (file.isDirectory) 0 else px(8), 0, 0, 0)
                 }
-                words.addView(text(file.name, 14f).apply {
+                words.addView(text(file.name, if (file.isDirectory) folderHeadingSp else 14f).apply {
                     maxLines = 2
                     ellipsize = TextUtils.TruncateAt.END
                     setPadding(0, 0, 0, 0)
@@ -4067,9 +4099,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     if (refs.isEmpty()) "未使用"
                     else "${refs.map { it.first }.distinct().take(2).joinToString("、")} · ${refs.size} 帧引用"
                 }
-                words.addView(text(subtitle, 11f).apply {
+                words.addView(text(subtitle, if (file.isDirectory) folderSubtitleSp else 11f).apply {
                     setTextColor(getColor(R.color.cp_note))
-                    setPadding(0, 0, 0, 0)
+                    setPadding(0, if (file.isDirectory) px(2) else 0, 0, 0)
                     maxLines = 2
                 })
                 main.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
@@ -4204,12 +4236,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setBackgroundResource(R.drawable.card_bg)
                 rippleCard(this)
                 setPadding(px(12), px(6), px(12), px(6))
+                minimumHeight = px(folderMinHeightDp)
             }
-            folder.addView(text(if (opened) "▾ 📂" else "▸ 📁", 15f),
-                LinearLayout.LayoutParams(px(43), -2))
+            folder.addView(text(if (opened) "▾ 📂" else "▸ 📁", folderHeadingSp),
+                LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
             val groupLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            groupLabels.addView(text(group, 15f))
-            groupLabels.addView(text("${ids.size}条碎碎念", 11f).apply {
+            groupLabels.addView(text(group, folderHeadingSp))
+            groupLabels.addView(text("${ids.size}条碎碎念", folderSubtitleSp).apply {
                 setTextColor(getColor(R.color.cp_note))
                 setPadding(0, px(2), 0, 0)
             })
