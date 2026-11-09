@@ -63,14 +63,14 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
             }
 
         fun selector(card: LinearLayout, title: String, choices: List<String>,
-                     selected: Int, indent: Boolean = false, choose: (Int) -> Unit): SettingsRippleRow {
+                     selected: Int, indent: Boolean = false, note: String? = null, choose: (Int) -> Unit): SettingsRippleRow {
             val row = SettingsRippleRow(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(if (indent) 32 else 20), dp(8), dp(20), dp(8))
                 minimumHeight = dp(60)
             }
-            row.addView(caption(title), LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(caption(title, note), LinearLayout.LayoutParams(0, -2, 1f))
             val spinner = Spinner(this).apply { minimumHeight = dp(44) }
             row.addView(spinner, LinearLayout.LayoutParams(dp(148), dp(44)))
             SettingsSpinnerBinder.bind(spinner, choices, selected, choose)
@@ -80,7 +80,8 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
 
         val home = module("首页")
         selector(home, "召唤位置", listOf("底部中间", "随机位置"),
-            if (PersonalizationPrefs.summonPosition(this) == PersonalizationPrefs.RANDOM) 1 else 0) {
+            if (PersonalizationPrefs.summonPosition(this) == PersonalizationPrefs.RANDOM) 1 else 0,
+            note = "每次召唤「酥」的初始位置") {
             PersonalizationPrefs.setSummonPosition(this, if (it == 1) PersonalizationPrefs.RANDOM
                 else PersonalizationPrefs.BOTTOM_CENTER)
         }
@@ -92,7 +93,7 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
             setPadding(dp(20), dp(8), dp(20), dp(8))
             minimumHeight = dp(60)
         }
-        mainRow.addView(caption("动态预览", "播放角色预览动画"),
+        mainRow.addView(caption("动态预览", "在角色卡片中播放动画"),
             LinearLayout.LayoutParams(0, -2, 1f))
         val toggle = SwitchCompat(this).apply {
             isChecked = PersonalizationPrefs.animatedPreview(this@PersonalizationSettingsActivity)
@@ -105,11 +106,13 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
         previews.addView(mainRow, LinearLayout.LayoutParams(-1, -2))
 
         val patRow = selector(previews, "预览摸摸头", listOf("开启", "关闭"),
-            if (PersonalizationPrefs.previewPat(this)) 0 else 1, true) {
+            if (PersonalizationPrefs.previewPat(this)) 0 else 1, true,
+            note = "点击预览角色触发摸摸头") {
             PersonalizationPrefs.setPreviewPat(this, it == 0)
         }
         val modeRow = selector(previews, "首页预览模式", listOf("常驻", "动态"),
-            if (PersonalizationPrefs.homePreviewMode(this) == PersonalizationPrefs.DYNAMIC) 1 else 0, true) {
+            if (PersonalizationPrefs.homePreviewMode(this) == PersonalizationPrefs.DYNAMIC) 1 else 0, true,
+            note = "召唤后是否保留角色预览") {
             PersonalizationPrefs.setHomePreviewMode(this,
                 if (it == 1) PersonalizationPrefs.DYNAMIC else PersonalizationPrefs.ALWAYS)
         }
