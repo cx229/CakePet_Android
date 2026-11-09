@@ -31,7 +31,10 @@ object SettingsSpinnerBinder {
                     gravity = Gravity.END or Gravity.CENTER_VERTICAL
                     textAlignment = View.TEXT_ALIGNMENT_GRAVITY
                     setTextColor(ctx.getColor(R.color.cp_title))
-                    setCompoundDrawablesWithIntrinsicBounds(0, 0, android.R.drawable.arrow_down_float, 0)
+                    val arrow = androidx.core.content.ContextCompat.getDrawable(ctx,
+                        android.R.drawable.arrow_down_float)?.mutate()
+                    arrow?.setTint(android.graphics.Color.BLACK)
+                    setCompoundDrawablesWithIntrinsicBounds(null, null, arrow, null)
                     compoundDrawablePadding = dp(8)
                     setPadding(dp(12), 0, dp(12), 0)
                     minHeight = dp(44)
