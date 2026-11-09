@@ -1345,8 +1345,16 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 rippleCard(this)
                 setPadding(px(12), px(6), px(12), px(6))
             }
-            val heading = text("", 16f)
-            header.addView(heading, LinearLayout.LayoutParams(0, -2, 1f))
+            val folderGlyph = text("", 16f)
+            header.addView(folderGlyph, LinearLayout.LayoutParams(px(43), -2))
+            val heading = text(group, 16f)
+            val folderLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            folderLabels.addView(heading)
+            folderLabels.addView(text("${names.size}个动画", 11f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(0, px(2), 0, 0)
+            })
+            header.addView(folderLabels, LinearLayout.LayoutParams(0, -2, 1f))
             if (group != "全部") header.addView(text("+", 23f).apply {
                 gravity = Gravity.CENTER
                 isClickable = true
@@ -1429,8 +1437,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             fun refreshHeader() {
                 val opened = group in expandedModeGroups
-                heading.text = (if (opened) "▾ 📂  " else "▸ 📁  ") + group +
-                    "  (${names.size})"
+                folderGlyph.text = if (opened) "▾ 📂" else "▸ 📁"
                 if (opened && children.childCount == 0) fillChildren()
                 children.visibility = if (opened) View.VISIBLE else View.GONE
             }
@@ -3113,9 +3120,28 @@ open class RolePackEditorActivity : AppCompatActivity() {
         else -> "展开查看该分类下的功能"
     }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
+    private fun functionDescendantCount(node: JSONObject, parent: List<String>): Int {
+        var count = 0
+        node.keys().asSequence().filter { it !in setOf("thinking", "modes", "note", "usage") }.forEach { key ->
+            val path = parent + key
+            val value = node.opt(key)
+            when {
+                path !in RolePackNormalizer.supportedPaths &&
+                    RolePackNormalizer.supportedPaths.none { it.size > path.size && it.take(path.size) == path } -> Unit
+                value is JSONArray -> count++
+                value is JSONObject && value.has("modes") -> count++
+                value is JSONObject -> count += functionDescendantCount(value, path)
+            }
+        }
+        return count
+    }
+
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
                              level: Int, immediate: Boolean = false, description: String = "",
-                             examplePath: List<String>? = null, click: () -> Unit): LinearLayout {
+                             examplePath: List<String>? = null,
+                             folderCount: String? = null,
+                             folderOpened: Boolean = false,
+                             click: () -> Unit): LinearLayout {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -3126,6 +3152,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
             isClickable = true
             if (immediate) setOnClickListener { click() }
             else rippleClick(this) { click() }
+        }
+        if (folderCount != null) {
+            card.addView(text(if (folderOpened) "▾ 📂" else "▸ 📁", 15f).apply {
+                gravity = Gravity.CENTER_VERTICAL
+            }, LinearLayout.LayoutParams(px(43), -2))
         }
         if (examplePath != null) {
             val bitmap = templateRandomFrame(examplePath)
@@ -3171,6 +3202,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
             })
         }
         card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
+        if (folderCount != null) {
+            card.addView(text(folderCount, 11f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                gravity = Gravity.CENTER_VERTICAL or Gravity.END
+                setPadding(px(5), 0, 0, 0)
+            }, LinearLayout.LayoutParams(-2, -2))
+        }
         if (examplePath != null) {
             card.addView(text("⋮", 23f).apply {
                 gravity = Gravity.CENTER
@@ -3269,17 +3307,19 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     lateinit var folderCard: LinearLayout
                     fun refreshFolder() {
                         val opened = fullKey in openedFunctionFolders
-                        ((folderCard.getChildAt(0) as LinearLayout).getChildAt(0) as TextView).text =
-                            (if (opened) "▾ 📂  " else "▸ 📁  ") + displayName
+                        (folderCard.getChildAt(0) as TextView).text =
+                            if (opened) "▾ 📂" else "▸ 📁"
                         if (opened && !populated) {
                             populated = true
                             functionTree(children, child, currentPath)
                         }
                         children.visibility = if (opened) View.VISIBLE else View.GONE
                     }
-                    folderCard = functionItem(parent, "",
-                        if (undefined) "未定义文件夹 · 原配置已保留" else functionFolderDescription(currentPath),
-                        path.size, immediate = true) {
+                    folderCard = functionItem(parent, displayName, "",
+                        path.size, immediate = true,
+                        description = functionFolderDescription(currentPath),
+                        folderCount = "${functionDescendantCount(child, currentPath)}个功能",
+                        folderOpened = fullKey in openedFunctionFolders) {
                         if (!openedFunctionFolders.add(fullKey)) openedFunctionFolders.remove(fullKey)
                         refreshFolder()
                     }
@@ -3385,9 +3425,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         val open = "undefined" in openedFunctionFolders
         val wrapper = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        functionItem(panel,
-            (if (open) "▾ 📂  " else "▸ 📁  ") + "未定义 (${entries.size})",
-            "", 0, immediate = true) {
+        functionItem(panel, "未定义", "", 0, immediate = true,
+            folderCount = "${entries.size}项", folderOpened = open) {
             if (!openedFunctionFolders.add("undefined")) openedFunctionFolders.remove("undefined")
             functions()
         }.also { card ->
@@ -3515,16 +3554,27 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     setPadding(px(10), px(4), px(8), px(4))
                 }
                 val check = CheckBox(this).apply {
-                    text = functionSegment(path)
-                    textSize = 14f
+                    text = ""
                     isChecked = wasSelected
-                    setTextColor(getColor(R.color.cp_title))
+                    minWidth = 0
+                    minimumWidth = 0
+                    setPadding(0, 0, 0, 0)
                 }
-                row.addView(check, LinearLayout.LayoutParams(-1, px(42)))
-                row.addView(text(functionDescription(path), 11f).apply {
-                    setTextColor(getColor(R.color.cp_note))
-                    setPadding(px(10), 0, px(6), px(4))
+                val inline = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                inline.addView(check, LinearLayout.LayoutParams(px(42), px(42)))
+                val words = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                words.addView(text(functionSegment(path), 14f).apply {
+                    setTextColor(getColor(R.color.cp_title))
                 })
+                words.addView(text(functionDescription(path), 10f).apply {
+                    setTextColor(getColor(R.color.cp_note))
+                    setPadding(0, px(2), 0, 0)
+                })
+                inline.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(inline, LinearLayout.LayoutParams(-1, -2))
                 listing.addView(row, selectionRowParams(depth + 1))
                 var restoringCheck = false
                 check.setOnCheckedChangeListener { _, nowChecked ->
@@ -3562,13 +3612,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 selectionSurface(this, isFolder = true)
                                 setPadding(px(12), px(5), px(10), px(5))
                             }
+                            folder.addView(text(if (open) "▾ 📂" else "▸ 📁", 15f),
+                                LinearLayout.LayoutParams(px(43), -2))
                             val folderText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-                            folderText.addView(text(
-                                (if (open) "▾ 📂  " else "▸ 📁  ") + functionSegment(path), 15f
-                            ).apply { setPadding(0, 0, 0, 0) })
+                            folderText.addView(text(functionSegment(path), 15f))
                             folderText.addView(text(functionFolderDescription(path), 10f).apply {
                                 setTextColor(getColor(R.color.cp_note))
-                                setPadding(px(22), 0, 0, 0)
+                                setPadding(0, px(2), 0, 0)
                             })
                             folder.addView(folderText, LinearLayout.LayoutParams(0, -2, 1f))
                             folder.addView(text(
@@ -4155,8 +4205,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 rippleCard(this)
                 setPadding(px(12), px(6), px(12), px(6))
             }
-            folder.addView(text((if (opened) "▾ 📂  " else "▸ 📁  ") +
-                "$group（${ids.size}）", 15f), LinearLayout.LayoutParams(0, -2, 1f))
+            folder.addView(text(if (opened) "▾ 📂" else "▸ 📁", 15f),
+                LinearLayout.LayoutParams(px(43), -2))
+            val groupLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            groupLabels.addView(text(group, 15f))
+            groupLabels.addView(text("${ids.size}条碎碎念", 11f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(0, px(2), 0, 0)
+            })
+            folder.addView(groupLabels, LinearLayout.LayoutParams(0, -2, 1f))
             if (!linkedPreview && group != "全部") folder.addView(text("+", 23f).apply {
                 gravity = Gravity.CENTER
                 isClickable = true
