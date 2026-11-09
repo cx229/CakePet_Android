@@ -63,7 +63,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             return
         }
         setContentView(FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.TRANSPARENT) })
-        showLinkedFunctions()
+        if (intent.getBooleanExtra("linked_thinking", false)) showLinkedThinking()
+        else showLinkedFunctions()
     }
 
     private fun linkedConsent(action: () -> Unit) {
@@ -108,6 +109,59 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 description = functionDescription(path), examplePath = path) {
                 functionDetails(path, functionAnimationsAt(path))
             }
+        }
+    }
+
+    /** The same editor dialog shell and shared-content warning as Function/Animation. */
+    private fun showLinkedThinking() {
+        val count = RoleStore.getHomeRoles(this).count { it.templateId == id }
+        val dialog = editor("碎碎念 · 素材包", compact = true, readOnly = true,
+            subtitle = "素材包：$linkedPackName") { form ->
+            addDetailSection(form, sharedNotice(
+                if (linkedReadOnly) "预装素材包 · 只读" else "共享素材配置",
+                count,
+                if (linkedReadOnly) "预装素材包不能直接修改，请在素材包管理中复制后编辑。"
+                else "修改碎碎念文本会影响使用此素材包的所有角色。",
+                linkedReadOnly
+            ))
+            val entries = root.optJSONObject("thinkings") ?: JSONObject()
+            val ids = entries.keys().asSequence().toList().sorted()
+            val card = dialogSection()
+            card.addView(detailSectionHeader("碎碎念文本", "${ids.size} 条"))
+            if (ids.isEmpty()) card.addView(text("暂无碎碎念文本", 12f).apply {
+                setTextColor(getColor(R.color.cp_note))
+            })
+            ids.forEach { key ->
+                val raw = entries.opt(key)
+                val body = if (raw is JSONObject) raw.optString("text")
+                    else (raw as? String).orEmpty()
+                val row = detailListRow()
+                row.addView(text(body.ifBlank { "空白文本 · 可修复" }, 12f).apply {
+                    if (body.isBlank()) setTextColor(getColor(R.color.cp_danger))
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                card.addView(row)
+            }
+            addDetailSection(form, card)
+            if (!linkedReadOnly) {
+                val action = dialogSection()
+                action.addView(detailSectionHeader("编辑碎碎念",
+                    "进入当前素材包的碎碎念文本页") {
+                    linkedConsent {
+                        dismissDetailDialogs()
+                        startActivity(Intent(this, RolePackEditorActivity::class.java).apply {
+                            putExtra("role_id", id)
+                            putExtra("initial_thinking_resources", true)
+                        })
+                        finish()
+                    }
+                })
+                addDetailSection(form, action)
+            }
+            ({ })
+        }
+        dialog.setOnDismissListener {
+            detailDialogs.remove(dialog)
+            if (!isFinishing) finish()
         }
     }
 
