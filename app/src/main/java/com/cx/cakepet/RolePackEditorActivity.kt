@@ -1022,6 +1022,25 @@ open class RolePackEditorActivity : AppCompatActivity() {
             bottomMargin = px(2)
         }
 
+    /** Group header shared by animation and thinking pickers: count stays on the title line. */
+    private fun pickerGroupHeader(title: String, open: Boolean, selected: Int, total: Int,
+                                  toggle: () -> Unit): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            selectionSurface(this, isFolder = true)
+            setPadding(px(12), px(6), px(8), px(6))
+            minimumHeight = px(folderMinHeightDp)
+            addView(text(if (open) "▾ 📂" else "▸ 📁", folderHeadingSp),
+                LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
+            addView(text(title, folderHeadingSp), LinearLayout.LayoutParams(0, -2, 1f))
+            addView(text("$selected/$total", folderSubtitleSp).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(6), 0, 0, 0)
+            })
+            rippleClick(this) { toggle() }
+        }
+
     /** Existing editor-page card styling. Do not change when adjusting dialogs. */
     private fun detailSection(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -3724,10 +3743,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val selectionInfo = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(selectionInfo)
         val listing = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        body.addView(ScrollView(this).apply { addView(listing) },
+        val viewport = ScrollView(this).apply { addView(listing) }
+        body.addView(viewport,
             LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * .55f).toInt()))
         lateinit var redraw: () -> Unit
         redraw = {
+            val scrollY = viewport.scrollY
             listing.removeAllViews()
             selectionInfo.text = "已选 ${selected.size} 个动画"
             if (single) {
@@ -3745,12 +3766,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     if (group == "未分组") memberships.isEmpty() else group in memberships
                 }
                 if (candidates.isEmpty()) continue
-                listing.addView(text((if (group in expanded) "▾ 📂 " else "▸ 📁 ") +
-                    "$group（${candidates.count { it in selected }}/${candidates.size}）", 15f).apply {
-                    selectionSurface(this, isFolder = true)
-                    setPadding(px(12), px(6), px(8), px(6))
-                    isClickable = true
-                    setOnClickListener { if (!expanded.add(group)) expanded.remove(group); redraw() }
+                listing.addView(pickerGroupHeader(group, group in expanded,
+                    candidates.count { it in selected }, candidates.size) {
+                    if (!expanded.add(group)) expanded.remove(group)
+                    redraw()
                 }, selectionRowParams())
                 if (group in expanded) {
                     for (name in candidates) {
@@ -3768,16 +3787,19 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 redraw()
                             }
                         }
-                        row.addView(check, LinearLayout.LayoutParams(px(42), px(58)))
-                        row.addView(pickerChain(name).apply {
+                        row.minimumHeight = px(48)
+                        row.addView(check, LinearLayout.LayoutParams(px(42), px(48)))
+                        row.addView(linkedModeChains(listOf(name), root.getJSONObject("modes"),
+                            "", 12f) { mode -> openModeFromDetail(mode) }.apply {
                             gravity = Gravity.CENTER_VERTICAL
-                            setPadding(0, px(5), px(6), px(5))
+                            setPadding(0, px(2), px(6), px(2))
                         }, LinearLayout.LayoutParams(0, -2, 1f))
                         listing.addView(row, selectionRowParams(1))
                         rippleClick(row) { check.isChecked = !check.isChecked }
                     }
                 }
             }
+            viewport.post { viewport.scrollTo(0, scrollY) }
         }
         redraw()
 
@@ -4804,13 +4826,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 else groups.forEach { grouped.getOrPut(it) { mutableListOf() }.add(id) }
             }
             for ((group, ids) in grouped) {
-                list.addView(text((if (group in opened) "▾ 📂 " else "▸ 📁 ") + "$group（${ids.size}）", 15f).apply {
-                    selectionSurface(this, isFolder = true)
-                    setPadding(px(12), px(6), px(8), px(6))
-                    setOnClickListener {
-                        if (!opened.add(group)) opened.remove(group)
-                        redraw()
-                    }
+                list.addView(pickerGroupHeader(group, group in opened,
+                    ids.count { it in chosen }, ids.size) {
+                    if (!opened.add(group)) opened.remove(group)
+                    redraw()
                 }, selectionRowParams())
                 if (group in opened) for (id in ids) {
                     val row = LinearLayout(this).apply {
@@ -4819,25 +4838,30 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         selectionSurface(this)
                         setPadding(px(7), px(4), px(6), px(4))
                     }
-                    val itemText = LinearLayout(this).apply {
-                        orientation = LinearLayout.VERTICAL
-                    }
-                    itemText.addView(CheckBox(this).apply {
-                        text = thinkingBody(id)
-                        textSize = 12f
+                    val check = CheckBox(this).apply {
+                        text = ""
                         isChecked = id in chosen
+                        minWidth = 0
+                        minimumWidth = 0
+                        setPadding(0, 0, 0, 0)
                         setOnCheckedChangeListener { _, enabled ->
                             if (enabled) chosen.putIfAbsent(id, DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS)
                             else chosen.remove(id)
                             redraw()
                         }
-                    }, LinearLayout.LayoutParams(-1, -2))
+                    }
+                    row.addView(check, LinearLayout.LayoutParams(px(42), px(44)))
+                    val itemText = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                    }
+                    itemText.addView(text(thinkingBody(id), 12f))
                     val range = chosen[id] ?: (DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS)
                     itemText.addView(text("持续时间：${range.first}–${range.second}ms", 10f).apply {
                         setTextColor(getColor(R.color.cp_note))
-                        setPadding(px(36), 0, 0, px(4))
+                        setPadding(0, px(2), 0, 0)
                     })
                     row.addView(itemText, LinearLayout.LayoutParams(0, -2, 1f))
+                    rippleClick(row) { check.isChecked = !check.isChecked }
                     row.addView(text("⋮", 23f).apply {
                         gravity = Gravity.CENTER
                         setOnClickListener {
