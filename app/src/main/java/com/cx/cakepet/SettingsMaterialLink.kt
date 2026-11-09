@@ -157,10 +157,10 @@ object SettingsMaterialLink {
         val title = ((row.getChildAt(0) as? LinearLayout)?.getChildAt(0) as? TextView) ?: return
         val preset = RoleStore.descriptorForInstance(activity, instanceId)?.source == RoleSource.ASSETS
         addInlineLink(activity, row, title, toggle,
-            if (preset) "查看碎碎念 ›" else "编辑碎碎念 ›") {
+            if (preset) "查看碎碎念文本 ›" else "编辑碎碎念文本 ›") {
             activity.startActivity(Intent(activity, RolePackLinkedActivity::class.java).apply {
                 putExtra("source_instance_id", instanceId)
-                putExtra("linked_title", "碎碎念")
+                putExtra("linked_title", "碎碎念文本")
                 putExtra("linked_thinking", true)
             })
         }
