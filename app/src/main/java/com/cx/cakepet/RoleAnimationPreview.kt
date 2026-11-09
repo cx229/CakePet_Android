@@ -11,6 +11,10 @@ import kotlin.math.min
 
 /** Full-width 2:1 editor view with a centered, unwarped 1:1 logical canvas. */
 class RoleAnimationPreview(context: Context) : View(context) {
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        invalidate()
+    }
     var showGuides = true
     private var loops = false
     private var frameIndex = 0
@@ -47,7 +51,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(Color.rgb(242, 244, 246))
+        canvas.drawColor(resources.getColor(R.color.cp_preview_canvas, context.theme))
         val margin = 20f * resources.displayMetrics.density
         val side = (min(width, height) - 2 * margin).coerceAtLeast(1f)
         val left = (width - side) / 2f
@@ -58,20 +62,21 @@ class RoleAnimationPreview(context: Context) : View(context) {
         image?.let { bitmap ->
             paint.style = Paint.Style.FILL
             paint.color = Color.WHITE
+            paint.alpha = 255
             canvas.save()
             if (frameFlipX) canvas.scale(-1f, 1f, imageRect.centerX(), imageRect.centerY())
             canvas.drawBitmap(bitmap, null, imageRect, paint)
             canvas.restore()
         }
         if (showGuides) {
-            paint.color = Color.rgb(110, 123, 140)
+            paint.color = resources.getColor(R.color.cp_preview_guide, context.theme)
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 6f
             paint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(9f, 6f), 0f)
             canvas.drawRect(left, top, left + side, top + side, paint)
             paint.pathEffect = null
             paint.strokeWidth = 2f
-            paint.color = Color.rgb(39, 139, 203)
+            paint.color = resources.getColor(R.color.cp_preview_bounds, context.theme)
             // Guide coordinates follow source flip while dx/dy stay unchanged.
             val bx0 = if (frameFlipX) canvasRes - bounds.right else bounds.left
             val bx1 = if (frameFlipX) canvasRes - bounds.left else bounds.right
@@ -82,7 +87,7 @@ class RoleAnimationPreview(context: Context) : View(context) {
             canvas.drawRect(content, paint)
             val ax = left + ((if (frameFlipX) canvasRes - anchor.first else anchor.first) + dx) * ratio
             val ay = top + (anchor.second + dy) * ratio
-            paint.color = Color.rgb(222, 66, 54)
+            paint.color = resources.getColor(R.color.cp_preview_anchor, context.theme)
             paint.strokeWidth = 3.5f
             canvas.drawCircle(ax, ay, 7f, paint)
             canvas.drawLine(ax - 24f, ay, ax + 24f, ay, paint)
@@ -104,9 +109,9 @@ class RoleAnimationPreview(context: Context) : View(context) {
         paint.textSize = 10f * scale
         val lineHeight = 14f * scale
         val hudWidth = hud.maxOf { paint.measureText(it) } + 14f * scale
-        paint.color = Color.argb(213, 255, 255, 255)
+        paint.color = resources.getColor(R.color.cp_preview_hud_bg, context.theme)
         canvas.drawRoundRect(4f, 4f, hudWidth + 4f, lineHeight * hud.size + 9f, 6f, 6f, paint)
-        paint.color = Color.rgb(44, 55, 67)
+        paint.color = resources.getColor(R.color.cp_preview_hud_text, context.theme)
         hud.forEachIndexed { i, line ->
             canvas.drawText(line, 11f, lineHeight * (i + 1), paint)
         }
