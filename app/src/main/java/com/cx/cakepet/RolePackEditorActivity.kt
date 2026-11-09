@@ -686,10 +686,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = navigateBack()
         })
-        if (intent.getBooleanExtra("initial_thinking_resources", false)) thinkingResources()
         val initialMode = intent.getStringExtra("initial_mode_id")
         val initialFunction = intent.getStringExtra("initial_function_path")
         home()
+        if (intent.getBooleanExtra("initial_thinking_resources", false)) thinkingResources()
         if (!initialFunction.isNullOrBlank()) {
             val path = initialFunction.split("/")
             functions()
