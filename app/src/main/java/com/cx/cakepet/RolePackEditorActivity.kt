@@ -113,9 +113,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     /** The same editor dialog shell and shared-content warning as Function/Animation. */
+    /** Same grouped text tree used by material editor, hosted in the linked dialog. */
     private fun showLinkedThinking() {
         val count = RoleStore.getHomeRoles(this).count { it.templateId == id }
-        val dialog = editor("碎碎念 · 素材包", compact = true, readOnly = true,
+        val dialog = editor("碎碎念文本 · 素材包", compact = true, readOnly = true,
             subtitle = "素材包：$linkedPackName") { form ->
             addDetailSection(form, sharedNotice(
                 if (linkedReadOnly) "预装素材包 · 只读" else "共享素材配置",
@@ -124,36 +125,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 else "修改碎碎念文本会影响使用此素材包的所有角色。",
                 linkedReadOnly
             ))
-            val entries = root.optJSONObject("thinkings") ?: JSONObject()
-            val ids = entries.keys().asSequence().toList().sorted()
-            val card = dialogSection()
-            card.addView(detailSectionHeader("碎碎念文本", "${ids.size} 条"))
-            if (ids.isEmpty()) card.addView(text("暂无碎碎念文本", 12f).apply {
-                setTextColor(getColor(R.color.cp_note))
-            })
-            ids.forEach { key ->
-                val raw = entries.opt(key)
-                val body = if (raw is JSONObject) raw.optString("text")
-                    else (raw as? String).orEmpty()
-                val row = detailListRow()
-                row.addView(text(body.ifBlank { "空白文本 · 可修复" }, 12f).apply {
-                    if (body.isBlank()) setTextColor(getColor(R.color.cp_danger))
-                }, LinearLayout.LayoutParams(0, -2, 1f))
-                card.addView(row)
-            }
-            addDetailSection(form, card)
+            val tree = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            form.addView(tree)
+            expandedThinkingGroups.add("全部")
+            renderThinkingGroups(tree, linkedPreview = true)
             if (!linkedReadOnly) {
                 val action = dialogSection()
-                action.addView(detailSectionHeader("编辑碎碎念",
+                action.addView(detailSectionHeader("编辑碎碎念文本",
                     "进入当前素材包的碎碎念文本页") {
-                    linkedConsent {
-                        detailDialogs.toList().forEach { it.dismiss() }
-                        startActivity(Intent(this, RolePackEditorActivity::class.java).apply {
-                            putExtra("role_id", id)
-                            putExtra("initial_thinking_resources", true)
-                        })
-                        finish()
-                    }
+                    openLinkedThinkingEditor()
                 })
                 addDetailSection(form, action)
             }
@@ -4146,6 +4126,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.cp_note))
         })
         action("＋ 新建碎碎念") { thinkingDetails(null) }
+        renderThinkingGroups(panel)
+    }
+
+    /** Single shared grouped tree renderer for the full editor and linked preview dialog. */
+    private fun renderThinkingGroups(target: LinearLayout, linkedPreview: Boolean = false) {
         val grouped = linkedMapOf<String, MutableList<String>>()
         grouped["全部"] = allThinkingIds().toMutableList()
         allThinkingGroups().filter { it != "全部" }.forEach { grouped[it] = mutableListOf() }
@@ -4166,7 +4151,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             folder.addView(text((if (opened) "▾ 📂  " else "▸ 📁  ") +
                 "$group（${ids.size}）", 15f), LinearLayout.LayoutParams(0, -2, 1f))
-            if (group != "全部") folder.addView(text("+", 23f).apply {
+            if (!linkedPreview && group != "全部") folder.addView(text("+", 23f).apply {
                 gravity = Gravity.CENTER
                 isClickable = true
                 contentDescription = if (group == "未分组") "新建未分组碎碎念" else "在${group}中新建碎碎念"
@@ -4174,17 +4159,20 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     thinkingDetails(null, group.takeUnless { it == "未分组" })
                 }
             }, LinearLayout.LayoutParams(px(38), px(44)))
-            if (group != "全部" && group != "未分组")
+            if (!linkedPreview && group != "全部" && group != "未分组")
                 folder.addView(text("⋮", 23f).apply {
                     gravity = Gravity.CENTER
                     isClickable = true
                     contentDescription = "$group 分组操作"
                     setOnClickListener { anchor -> showThinkingGroupOptions(anchor, group) }
                 }, LinearLayout.LayoutParams(px(38), px(44)))
-            panel.addView(folder, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
+            target.addView(folder, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
             folder.setOnClickListener {
                 if (!expandedThinkingGroups.add(group)) expandedThinkingGroups.remove(group)
-                thinkingResources()
+                if (linkedPreview) {
+                    target.removeAllViews()
+                    renderThinkingGroups(target, true)
+                } else thinkingResources()
             }
             if (opened) for (id in ids) {
                 val row = LinearLayout(this).apply {
@@ -4206,7 +4194,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     setPadding(0, px(2), 0, 0)
                 })
                 row.addView(textContainer, LinearLayout.LayoutParams(0, -2, 1f))
-                row.addView(text("⋮", 23f).apply {
+                if (!linkedPreview) row.addView(text("⋮", 23f).apply {
                     gravity = Gravity.CENTER
                     setOnClickListener { view ->
                         UnifiedOptionMenu.show(view, listOf("详情 / 编辑", "选择碎碎念组", "删除"),
@@ -4232,14 +4220,30 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         }
                     }
                 }, LinearLayout.LayoutParams(px(42), px(42)))
-                rippleClick(row) { thinkingDetails(id) }
-                panel.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                if (linkedPreview) {
+                    if (!linkedReadOnly) rippleClick(row) { openLinkedThinkingEditor() }
+                } else rippleClick(row) { thinkingDetails(id) }
+                target.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
                     leftMargin = px(12)
                     topMargin = px(4)
                 })
             }
         }
     }
+    }
+
+    /** Editing a shared pack is confirmed by the same existing material consent. */
+    private fun openLinkedThinkingEditor() {
+        if (linkedReadOnly) return
+        linkedConsent {
+            startActivity(Intent(this, RolePackEditorActivity::class.java).apply {
+                putExtra("role_id", id)
+                putExtra("initial_thinking_resources", true)
+            })
+            finish()
+        }
+    }
+
     private val expandedThinkingGroups = mutableSetOf<String>()
 
     /** Reuse the animation-group menu semantics; membership is stored on each text. */
