@@ -112,155 +112,36 @@
         android:layout_marginStart="12dp"
         android:clickable="false" android:focusable="false"/>
 </com.cx.cakepet.SettingsRippleRow>
+        <com.cx.cakepet.SettingsRippleRow
+            android:id="@+id/row_personalization_settings"
+            style="@style/SettingsSwitchRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            android:layout_marginBottom="0dp"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:clickable="true"
+            android:focusable="true">
+            <LinearLayout style="@style/SettingsSwitchTexts">
+                <TextView style="@style/SettingsOptionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="个性化设置"/>
+                <TextView style="@style/SettingsOptionNote"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="首页与角色预览"/>
+            </LinearLayout>
+            <ImageView android:layout_width="22dp" android:layout_height="22dp"
+                android:src="@drawable/ic_chevron_right"
+                app:tint="@color/icon_chevron"
+                android:layout_marginStart="12dp"
+                android:clickable="false"
+                android:focusable="false"/>
+        
     </LinearLayout>
 </LinearLayout>
                 <LinearLayout  android:layout_width="match_parent"
-    android:layout_height="wrap_content" android:orientation="vertical"
-    android:layout_marginTop="24dp">
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="数据与备份" android:textSize="14sp" android:textColor="@color/cp_sub"
-        android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="vertical" android:background="@drawable/card_bg"
-        android:divider="@drawable/item_divider" android:showDividers="middle"
-        android:dividerPadding="16dp" android:paddingTop="8dp" android:paddingBottom="8dp">
-        <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_backup_export"
-    style="@style/SettingsSwitchRow"
-    android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
-    android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:paddingStart="20dp" android:paddingEnd="20dp"
-    android:paddingTop="8dp" android:paddingBottom="8dp"
-    android:clickable="true" android:focusable="true">
-    <LinearLayout style="@style/SettingsSwitchTexts">
-    <TextView style="@style/SettingsOptionTitle" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="导出软件备份"/>
-    <TextView style="@style/SettingsOptionNote" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="将软件设置与数据保存为备份文件"/>
-</LinearLayout>
-    <ImageView android:layout_width="22dp" android:layout_height="22dp"
-        android:src="@drawable/ic_chevron_right" app:tint="@color/icon_chevron"
-        android:layout_marginStart="12dp"
-        android:clickable="false" android:focusable="false"/>
-</com.cx.cakepet.SettingsRippleRow><com.cx.cakepet.SettingsRippleRow android:id="@+id/row_backup_import"
-    style="@style/SettingsSwitchRow"
-    android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
-    android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:paddingStart="20dp" android:paddingEnd="20dp"
-    android:paddingTop="8dp" android:paddingBottom="8dp"
-    android:clickable="true" android:focusable="true">
-    <LinearLayout style="@style/SettingsSwitchTexts">
-    <TextView style="@style/SettingsOptionTitle" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="导入软件备份"/>
-    <TextView style="@style/SettingsOptionNote" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="从备份文件恢复软件设置与数据"/>
-</LinearLayout>
-    <ImageView android:layout_width="22dp" android:layout_height="22dp"
-        android:src="@drawable/ic_chevron_right" app:tint="@color/icon_chevron"
-        android:layout_marginStart="12dp"
-        android:clickable="false" android:focusable="false"/>
-</com.cx.cakepet.SettingsRippleRow>
-    </LinearLayout>
-</LinearLayout>
-            </LinearLayout>
-            <LinearLayout android:id="@+id/system_section_container" android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:orientation="vertical" android:layout_marginTop="24dp">
-    <TextView android:id="@+id/system_section_heading"
-        android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="系统与调试" android:textSize="14sp" android:textColor="@color/cp_sub"
-        android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
-    <LinearLayout android:id="@+id/system_group" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:orientation="vertical"
-        android:background="@drawable/card_bg" android:divider="@drawable/item_divider"
-        android:showDividers="middle" android:dividerPadding="16dp"
-        android:paddingTop="8dp" android:paddingBottom="8dp">
-        <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_accessibility"
-    style="@style/SettingsSwitchRow"
-    android:layout_marginTop="0dp" android:layout_marginBottom="0dp" android:layout_width="match_parent"
-    android:layout_height="wrap_content" android:paddingStart="20dp"
-    android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp"
-    android:clickable="true" android:focusable="true">
-    <LinearLayout style="@style/SettingsSwitchTexts">
-    <TextView style="@style/SettingsOptionTitle" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="无障碍权限"/>
-    <TextView style="@style/SettingsOptionNote" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="查看与管理无障碍权限"/>
-</LinearLayout>
-    <TextView android:id="@+id/tv_accessibility_status" android:layout_width="wrap_content"
-        android:layout_height="wrap_content" android:text="未开启" android:textSize="14sp"
-        android:textColor="@color/cp_note"/>
-    <ImageView android:layout_width="22dp" android:layout_height="22dp"
-        android:layout_marginStart="12dp" android:src="@drawable/ic_chevron_right"
-        app:tint="@color/icon_chevron" android:clickable="false"
-        android:focusable="false" android:contentDescription="前往设置"/>
-</com.cx.cakepet.SettingsRippleRow>
-        <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_next"
-    style="@style/SettingsSwitchRow"
-    android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
-    android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:paddingStart="20dp" android:paddingEnd="20dp"
-    android:paddingTop="8dp" android:paddingBottom="8dp"
-    android:clickable="true" android:focusable="true">
-    <LinearLayout style="@style/SettingsSwitchTexts">
-    <TextView style="@style/SettingsOptionTitle" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:id="@+id/tv_next" android:text="调试"/>
-    <TextView style="@style/SettingsOptionNote" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="测试与排查软件运行问题"/>
-</LinearLayout>
-    <ImageView android:layout_width="22dp" android:layout_height="22dp"
-        android:src="@drawable/ic_chevron_right" app:tint="@color/icon_chevron"
-        android:layout_marginStart="12dp"
-        android:clickable="false" android:focusable="false"/>
-</com.cx.cakepet.SettingsRippleRow>
-    </LinearLayout>
-</LinearLayout>
-            <LinearLayout android:id="@+id/test_buttons"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
-                <TextView android:id="@+id/btn_create_test"
-                    android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:gravity="center"
-                    android:background="@drawable/bg_btn_primary"
-                    android:textColor="@color/cp_btn_primary_text"
-                    android:textSize="14sp"
-                    android:text="实验 C：全屏画布 + 独立控制窗口" />
-                <TextView android:id="@+id/btn_passive_test"
-                    android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:layout_marginTop="12dp"
-                    android:gravity="center"
-                    android:background="@drawable/bg_btn_primary"
-                    android:textColor="@color/cp_btn_primary_text"
-                    android:textSize="14sp"
-                    android:text="实验 A：全屏无触摸（验证透传）" />
-                <TextView android:id="@+id/btn_full_test"
-                    android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:layout_marginTop="12dp"
-                    android:gravity="center"
-                    android:background="@drawable/bg_btn_primary"
-                    android:textColor="@color/cp_btn_primary_text"
-                    android:textSize="14sp"
-                    android:text="实验 B：全屏可触摸（对照）" />
-                <TextView android:id="@+id/btn_close_test"
-                    android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:layout_marginTop="12dp"
-                    android:gravity="center"
-                    android:background="@drawable/bg_btn_primary"
-                    android:textColor="@color/cp_btn_primary_text"
-                    android:textSize="14sp"
-                    android:text="关闭测试窗口" />
-                <TextView android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="青色：全屏画布；黄色：图片矩形；红色：非透明像素外接矩形。A 不能拖动；B 可拖动但可能吞触摸；C 可拖动且画布外应透传。测试后回本页关闭窗口。"
-                    android:textColor="@color/cp_sub"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-        </LinearLayout>
-    </ScrollView>
-</LinearLayout>
