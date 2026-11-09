@@ -6,115 +6,177 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.view.MotionEvent
 import android.view.View
 import kotlin.math.min
 
-/** Full-width 2:1 editor view with a centered, unwarped 1:1 logical canvas. */
+/** Unified live debugger: editor page and detail dialog share exactly this view. */
 class RoleAnimationPreview(context: Context) : View(context) {
-    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
-        super.onConfigurationChanged(newConfig)
-        invalidate()
-    }
+    data class State(
+        val chain: List<String> = emptyList(),
+        val current: String = "",
+        val frame: Int = 0,
+        val frameCount: Int = 1,
+        val frameFraction: Float = 0f,
+        val loopKind: String = "off",
+        val duration: String = "",
+        val status: String = "播放中"
+    )
     var showGuides = true
-    private var loops = false
-    private var frameIndex = 0
+    var onReplay: (() -> Unit)? = null
+    private var state = State()
     private var image: Bitmap? = null
     private var bounds = RectF()
     private var anchor = 0 to 0
     private var dx = 0
     private var dy = 0
-    private var frameFlipX = false
-    private var canvasRes = 128
-    private var mode = ""
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 2f }
-
+    private var resolution = 128
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val density get() = resources.displayMetrics.density
+    private val scaled get() = resources.displayMetrics.scaledDensity
+    private fun dp(n: Float) = n * density
+    private fun chainLines(widthPx: Int): Int {
+        paint.textSize = 10f * scaled
+        var lines = 1
+        var x = dp(12f)
+        val maxX = (widthPx - dp(110f)).coerceAtLeast(dp(110f))
+        state.chain.forEachIndexed { index, name ->
+            val label = if (index == 0) name else " → $name"
+            val w = paint.measureText(label) + dp(6f)
+            if (x > dp(12f) && x + w > maxX) { ++lines; x = dp(12f) }
+            x += w
+        }
+        return lines
+    }
     fun update(bitmap: Bitmap?, contentBounds: RectF, at: Pair<Int, Int>,
-               offsetX: Int, offsetY: Int, resolution: Int, name: String,
-               isLooping: Boolean, currentFrameIndex: Int, flipX: Boolean = false) {
+               offsetX: Int, offsetY: Int, canvasResolution: Int, playback: State) {
         image = bitmap
         bounds = RectF(contentBounds)
         anchor = at
         dx = offsetX
         dy = offsetY
-        frameFlipX = flipX
-        canvasRes = resolution.coerceAtLeast(1)
-        mode = name
-        loops = isLooping
-        frameIndex = currentFrameIndex
+        resolution = canvasResolution.coerceAtLeast(1)
+        state = playback
+        requestLayout()
         invalidate()
     }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val width = MeasureSpec.getSize(widthMeasureSpec)
-        setMeasuredDimension(width, (width / 2).coerceAtLeast(1))
+    override fun onMeasure(wSpec: Int, hSpec: Int) {
+        val w = MeasureSpec.getSize(wSpec).coerceAtLeast(1)
+        setMeasuredDimension(w, w / 2 + dp(40f + chainLines(w) * 18f).toInt())
     }
-
     override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
         canvas.drawColor(resources.getColor(R.color.cp_preview_canvas, context.theme))
-        val margin = 20f * resources.displayMetrics.density
-        val side = (min(width, height) - 2 * margin).coerceAtLeast(1f)
+        val artHeight = width / 2f
+        val side = (min(width.toFloat(), artHeight) - dp(50f)).coerceAtLeast(1f)
         val left = (width - side) / 2f
-        val top = (height - side) / 2f
-        val ratio = side / canvasRes
-        val imageRect = RectF(left + dx * ratio, top + dy * ratio,
-            left + (canvasRes + dx) * ratio, top + (canvasRes + dy) * ratio)
-        image?.let { bitmap ->
-            paint.style = Paint.Style.FILL
-            paint.color = Color.WHITE
-            paint.alpha = 255
-            canvas.save()
-            if (frameFlipX) canvas.scale(-1f, 1f, imageRect.centerX(), imageRect.centerY())
-            canvas.drawBitmap(bitmap, null, imageRect, paint)
-            canvas.restore()
-        }
+        val top = (artHeight - side) / 2f
+        val ratio = side / resolution
+        val bitmapRect = RectF(left + dx * ratio, top + dy * ratio,
+            left + (resolution + dx) * ratio, top + (resolution + dy) * ratio)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.WHITE
+        image?.let { canvas.drawBitmap(it, null, bitmapRect, paint) }
         if (showGuides) {
-            paint.color = resources.getColor(R.color.cp_preview_guide, context.theme)
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 6f
-            paint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(9f, 6f), 0f)
+            paint.strokeWidth = dp(2f)
+            paint.color = resources.getColor(R.color.cp_preview_guide, context.theme)
+            paint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(5f), dp(3f)), 0f)
             canvas.drawRect(left, top, left + side, top + side, paint)
             paint.pathEffect = null
-            paint.strokeWidth = 2f
             paint.color = resources.getColor(R.color.cp_preview_bounds, context.theme)
-            // Guide coordinates follow source flip while dx/dy stay unchanged.
-            val bx0 = if (frameFlipX) canvasRes - bounds.right else bounds.left
-            val bx1 = if (frameFlipX) canvasRes - bounds.left else bounds.right
-            val content = RectF(left + (bx0 + dx) * ratio,
-                top + (bounds.top + dy) * ratio,
-                left + (bx1 + dx) * ratio,
-                top + (bounds.bottom + dy) * ratio)
-            canvas.drawRect(content, paint)
-            val ax = left + ((if (frameFlipX) canvasRes - anchor.first else anchor.first) + dx) * ratio
+            canvas.drawRect(left + (bounds.left + dx) * ratio,
+                top + (bounds.top + dy) * ratio, left + (bounds.right + dx) * ratio,
+                top + (bounds.bottom + dy) * ratio, paint)
+            val ax = left + (anchor.first + dx) * ratio
             val ay = top + (anchor.second + dy) * ratio
             paint.color = resources.getColor(R.color.cp_preview_anchor, context.theme)
-            paint.strokeWidth = 3.5f
-            canvas.drawCircle(ax, ay, 7f, paint)
-            canvas.drawLine(ax - 24f, ay, ax + 24f, ay, paint)
-            canvas.drawLine(ax, ay - 24f, ax, ay + 24f, paint)
-            paint.style = Paint.Style.FILL
+            canvas.drawCircle(ax, ay, dp(3f), paint)
+            canvas.drawLine(ax - dp(9f), ay, ax + dp(9f), ay, paint)
+            canvas.drawLine(ax, ay - dp(9f), ax, ay + dp(9f), paint)
         }
-        // Non-layout HUD in the upper-left corner of the 2:1 preview.
-        val scale = resources.displayMetrics.scaledDensity
-        val hud = listOf(
-            "画布：灰色虚线",
-            "图片：蓝色矩形",
-            "锚点：红十字 (${anchor.first}, ${anchor.second})",
-            "位移：($dx, $dy)",
-            "帧镜像：${if (frameFlipX) "开" else "关"}",
-            "当前动作：$mode",
-            "（帧$frameIndex，循环${if (loops) "开" else "关"}）"
-        )
         paint.style = Paint.Style.FILL
-        paint.textSize = 10f * scale
-        val lineHeight = 14f * scale
-        val hudWidth = hud.maxOf { paint.measureText(it) } + 14f * scale
-        paint.color = resources.getColor(R.color.cp_preview_hud_bg, context.theme)
-        canvas.drawRoundRect(4f, 4f, hudWidth + 4f, lineHeight * hud.size + 9f, 6f, 6f, paint)
         paint.color = resources.getColor(R.color.cp_preview_hud_text, context.theme)
-        hud.forEachIndexed { i, line ->
-            canvas.drawText(line, 11f, lineHeight * (i + 1), paint)
-        }
+        paint.textSize = 9f * scaled
+        listOf("画布：灰色虚线", "内容：蓝色边框", "锚点：红色十字",
+            "锚点：(${anchor.first}, ${anchor.second})", "位移：($dx, $dy)")
+            .forEachIndexed { i, label -> canvas.drawText(label, dp(8f), dp(13f + i * 13f), paint) }
 
+        paint.color = resources.getColor(R.color.cp_preview_hud_bg, context.theme)
+        canvas.drawRect(0f, artHeight, width.toFloat(), height.toFloat(), paint)
+        var x = dp(12f)
+        var line = 0
+        paint.textSize = 10f * scaled
+        val maxX = (width - dp(110f)).coerceAtLeast(dp(110f))
+        state.chain.forEachIndexed { index, name ->
+            val label = if (index == 0) name else " → $name"
+            val w = paint.measureText(label)
+            if (x > dp(12f) && x + w + dp(6f) > maxX) { ++line; x = dp(12f) }
+            val terminal = name == "◎" || name == "∞" ||
+                (state.chain.lastOrNull() == "◎" && index == state.chain.lastIndex - 1)
+            val baseline = artHeight + dp(16f + line * 18f)
+            if (!terminal && name == state.current) {
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = dp(1.5f)
+                paint.color = resources.getColor(R.color.cp_preview_bounds, context.theme)
+                canvas.drawRoundRect(x - dp(2f), baseline - dp(11f), x + w + dp(2f),
+                    baseline + dp(3f), dp(3f), dp(3f), paint)
+                paint.style = Paint.Style.FILL
+            }
+            paint.color = resources.getColor(R.color.cp_preview_hud_text, context.theme)
+            paint.textSize = 10f * scaled
+            canvas.drawText(label, x, baseline, paint)
+            x += w + dp(6f)
+        }
+        paint.textSize = 8f * scaled
+        paint.color = when (state.status) {
+            "播放中" -> Color.rgb(38, 150, 89)
+            "已结束" -> Color.rgb(208, 62, 62)
+            else -> resources.getColor(R.color.cp_preview_hud_text, context.theme)
+        }
+        canvas.drawText("● ${state.status}", width - dp(107f), artHeight + dp(16f), paint)
+        paint.color = resources.getColor(R.color.cp_preview_hud_text, context.theme)
+        paint.textSize = 21f * scaled
+        canvas.drawText("↺", width - dp(34f), artHeight + dp(21f), paint)
+        paint.textSize = 8f * scaled
+        val infoY = artHeight + dp(16f + (chainLines(width) - 1) * 18f + 16f)
+        val kind = when (state.loopKind) {
+            "timed" -> "定时循环" + state.duration
+            "infinite" -> "无限循环"
+            else -> "播放一次"
+        }
+        val info = "${state.current} · $kind"
+        val allowedWidth = width - dp(93f)
+        val infoText = android.text.TextUtils.ellipsize(info,
+            android.text.TextPaint(paint), allowedWidth,
+            android.text.TextUtils.TruncateAt.END).toString()
+        canvas.drawText(infoText, dp(12f), infoY, paint)
+        val frameText = "${state.frame + 1}/${state.frameCount}帧"
+        canvas.drawText(frameText, width - dp(12f) - paint.measureText(frameText), infoY, paint)
+        val barY = infoY + dp(7f)
+        val x0 = dp(12f)
+        val x1 = width - dp(12f)
+        paint.color = resources.getColor(R.color.cp_preview_guide, context.theme)
+        canvas.drawRoundRect(x0, barY, x1, barY + dp(3f), dp(2f), dp(2f), paint)
+        val fraction = ((state.frame + state.frameFraction.coerceIn(0f, 1f)) /
+            state.frameCount.coerceAtLeast(1)).coerceIn(0f, 1f)
+        paint.color = resources.getColor(R.color.cp_preview_bounds, context.theme)
+        canvas.drawRoundRect(x0, barY, x0 + (x1 - x0) * fraction,
+            barY + dp(3f), dp(2f), dp(2f), paint)
+    }
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        val cy = width / 2f + dp(14f)
+        val hit = event.x >= width - dp(48f) &&
+            event.y >= cy - dp(24f) && event.y <= cy + dp(24f)
+        return when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> hit
+            MotionEvent.ACTION_UP -> if (hit) { performClick(); true } else false
+            else -> hit
+        }
+    }
+    override fun performClick(): Boolean {
+        super.performClick()
+        performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+        onReplay?.invoke()
+        return true
     }
 }
