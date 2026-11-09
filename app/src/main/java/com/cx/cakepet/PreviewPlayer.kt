@@ -50,6 +50,39 @@ class PreviewPlayer(
         handler.removeCallbacksAndMessages(null)
     }
 
+    /** Keep a stable frame without scheduling periodic animation ticks. */
+    fun showStatic() {
+        stop()
+        mgr.useStaticPool = true
+        mgr.modeOf("static", "sit")?.let { mgr.setMode(it) }
+        renderCurrent()
+    }
+
+    /** Small neutral placeholder: the pet has left the home preview and is on screen. */
+    fun showSummonedPlaceholder() {
+        stop()
+        val bitmap = Bitmap.createBitmap(boxPx, boxPx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF999999.toInt()
+            style = Paint.Style.STROKE
+            strokeWidth = boxPx * .035f
+            strokeCap = Paint.Cap.ROUND
+        }
+        // A few little footprints, rather than a blank/broken resource view.
+        val centers = listOf(.34f to .65f, .59f to .42f)
+        centers.forEach { (x, y) ->
+            canvas.drawOval(RectF(boxPx * (x - .075f), boxPx * (y - .025f),
+                boxPx * (x + .075f), boxPx * (y + .065f)), paint)
+            for (offset in listOf(-.055f, .0f, .055f)) {
+                canvas.drawCircle(boxPx * (x + offset), boxPx * (y - .085f),
+                    boxPx * .021f, paint)
+            }
+        }
+        imageView.setImageBitmap(bitmap)
+        imageView.contentDescription = "已召唤"
+    }
+
     /**
      * 触发“摸摸头”一次性动作（PAT_HEAD → SHAKE_HEAD → SIT_PUFFED → 回待机池），
      * 与悬浮宠物 playOnce(PAT_HEAD) 同源同链。playOnce 无 forcedSeq 守卫会覆盖重播；
