@@ -234,8 +234,14 @@ class RoleHomeManageActivity : AppCompatActivity() {
                 }
                 val player = PreviewPlayer(mgr, thumb, ctx.resources.displayMetrics.density)
                 players[inst.instanceId] = player
-                thumb.setOnClickListener { player.triggerPat() }
-                player.start()
+                if (PersonalizationPrefs.animatedPreview(ctx)) player.start()
+                else player.showStatic()
+                val allowPat = PersonalizationPrefs.animatedPreview(ctx) &&
+                    PersonalizationPrefs.previewPat(ctx)
+                thumb.setOnClickListener(if (allowPat) View.OnClickListener {
+                    player.triggerPat()
+                } else null)
+                thumb.isClickable = allowPat
             } else {
                 thumb.setImageDrawable(null)
             }
