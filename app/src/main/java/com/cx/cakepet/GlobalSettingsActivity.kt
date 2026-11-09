@@ -116,19 +116,15 @@ class GlobalSettingsActivity : AppCompatActivity() {
         when (page) {
             PAGE_SETTINGS -> {
                 val watermarkLevelRow = findViewById<View>(R.id.row_import_watermark_level)
-                val levelGroup = findViewById<android.widget.RadioGroup>(R.id.rg_import_watermark_level)
-                levelGroup.check(when (ImportWatermark.level(this)) {
-                    ImportWatermark.Level.LOW -> R.id.rb_watermark_low
-                    ImportWatermark.Level.MEDIUM -> R.id.rb_watermark_medium
-                    ImportWatermark.Level.HIGH -> R.id.rb_watermark_high
-                })
-                levelGroup.setOnCheckedChangeListener { _, checkedId ->
-                    val strength = when (checkedId) {
-                        R.id.rb_watermark_low -> ImportWatermark.Level.LOW
-                        R.id.rb_watermark_high -> ImportWatermark.Level.HIGH
-                        else -> ImportWatermark.Level.MEDIUM
-                    }
-                    ImportWatermark.setLevel(this, strength)
+                val levelSpinner = findViewById<android.widget.Spinner>(R.id.sp_import_watermark_level)
+                val watermarkLevels = listOf(
+                    ImportWatermark.Level.LOW,
+                    ImportWatermark.Level.MEDIUM,
+                    ImportWatermark.Level.HIGH
+                )
+                SettingsSpinnerBinder.bind(levelSpinner, listOf("低", "中", "高"),
+                    watermarkLevels.indexOf(ImportWatermark.level(this)).coerceAtLeast(0)) { index ->
+                    ImportWatermark.setLevel(this, watermarkLevels[index])
                 }
                 findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.sw_import_watermark).apply {
                     isChecked = ImportWatermark.enabled(this@GlobalSettingsActivity)
