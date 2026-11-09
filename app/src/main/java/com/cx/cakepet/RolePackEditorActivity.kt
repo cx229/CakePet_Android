@@ -1782,32 +1782,19 @@ open class RolePackEditorActivity : AppCompatActivity() {
             // Keep nextMode and loop settings in a single playback dialog.
             // Infinite looping hides this field but must not erase its stored value.
             var nextModeId = current.optString("nextMode").takeUnless { it == "null" }.orEmpty()
-            val nextRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, px(6), 0, px(4))
-            }
-            nextRow.addView(text("后续动画", 14f), LinearLayout.LayoutParams(0, -2, 1f))
-            val nextChoice = text("", 13f).apply {
-                setBackgroundResource(R.drawable.bg_input)
-                gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                setSingleLine(true)
-                ellipsize = TextUtils.TruncateAt.END
-                setPadding(px(9), 0, px(9), 0)
-            }
-            fun redrawNext() {
-                nextChoice.text = if (nextModeId.isEmpty()) "自动（由系统决定）  ▾" else "$nextModeId  ▾"
-            }
-            redrawNext()
-            nextChoice.setOnClickListener {
+            lateinit var nextInfo: TextView
+            val nextRow = detailSectionHeader("后续动画",
+                if (nextModeId.isEmpty()) "自动（由系统决定）"
+                else modeChainText(nextModeId, root.getJSONObject("modes"))) {
                 chooseModes(single = true,
                     initial = listOfNotNull(nextModeId.takeIf { it.isNotEmpty() }),
                     headerDescription = "当前动画 · $key") { selected ->
                     nextModeId = selected.firstOrNull().orEmpty()
-                    redrawNext()
+                    nextInfo.text = (if (nextModeId.isEmpty()) "自动（由系统决定）"
+                        else modeChainText(nextModeId, root.getJSONObject("modes"))) + "  ›"
                 }
             }
-            nextRow.addView(nextChoice, LinearLayout.LayoutParams(0, px(44), 1f))
+            nextInfo = nextRow.getChildAt(1) as TextView
             val nextDivider = View(this).apply {
                 setBackgroundColor(getColor(R.color.cp_divider))
             }
@@ -1892,14 +1879,30 @@ open class RolePackEditorActivity : AppCompatActivity() {
         // Mode-level controls remain visible, but don't dominate the frame editor.
         val mode = root.getJSONObject("modes").getJSONObject(key)
         val playbackCard = detailSection()
-        val playbackSummary = when (playbackKind(mode)) {
-            "infinite" -> "无限循环"
-            "timed" -> "定时循环"
-            else -> "播放一次"
-        }
-        playbackCard.addView(detailSectionHeader("播放循环", playbackSummary) {
+        playbackCard.addView(detailSectionHeader("播放循环", playbackSummary(mode)) {
             playbackSettings(key) { showMode(key) }
-        })
+        }.apply { setPadding(0, px(8), 0, px(8)) })
+        if (playbackKind(mode) != "infinite") {
+            playbackCard.addView(View(this).apply {
+                setBackgroundColor(getColor(R.color.cp_divider))
+            }, LinearLayout.LayoutParams(-1, px(1)).apply {
+                leftMargin = px(4)
+                rightMargin = px(4)
+            })
+            playbackCard.addView(detailSectionHeader("后续动画", successorSummary(mode)) {
+                val previous = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+                chooseModes(single = true,
+                    initial = listOfNotNull(previous.takeIf { it.isNotEmpty() }),
+                    headerDescription = "当前动画 · $key") { selected ->
+                    val chosen = selected.firstOrNull().orEmpty()
+                    change { json ->
+                        json.getJSONObject("modes").getJSONObject(key).put("nextMode",
+                            if (chosen.isEmpty()) JSONObject.NULL else chosen)
+                    }
+                    showMode(key)
+                }
+            }.apply { setPadding(0, px(8), 0, px(8)) })
+        }
         panel.addView(playbackCard, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(10) })
 
         val associations = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -2272,6 +2275,21 @@ open class RolePackEditorActivity : AppCompatActivity() {
             mode.optJSONObject("duration") != null -> "timed"
             else -> "infinite"
         }
+    }
+
+    private fun playbackSummary(mode: JSONObject): String {
+        val duration = mode.optJSONObject("duration")
+        return when (playbackKind(mode)) {
+            "infinite" -> "无限循环"
+            "timed" -> "定时循环 · ${duration?.optLong("min", 3000) ?: 3000}–${duration?.optLong("max", 4000) ?: 4000}ms"
+            else -> "播放一次"
+        }
+    }
+
+    private fun successorSummary(mode: JSONObject): String {
+        val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+        return if (next.isEmpty()) "自动（由系统决定）"
+            else modeChainText(next, root.getJSONObject("modes"))
     }
 
     private fun attributes(key: String) {
