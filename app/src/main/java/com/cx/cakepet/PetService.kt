@@ -3911,6 +3911,46 @@ class PetService : Service() {
      * 多角色引擎入口（对应之前在 onCreate 直接初始化的逻辑）：
      * 为指定角色按 pet_config_<id>/pet_bounds_<id> 构造配置，建宠物窗与物理循环并启动。
      */
+    /**
+     * 首次召唤的最终落点。createPetInstance 先挂浮窗，loadConfig 随后才加载实际
+     * 素材尺寸并确定物理活动范围；素材切换时的首帧回调也可能在边界初始化前
+     * 将位置钳到 (0,0)。因此必须在配置、素材和边界均就绪后决定真正的出生点。
+     * 仅用于新召唤，不修改“归位”或角色之后的正常物理运动。
+     */
+    private fun positionNewlySummonedRole(roleId: String) {
+        val random = PersonalizationPrefs.summonPosition(this) == PersonalizationPrefs.RANDOM
+        val vis = getScreenBounds()
+        pets.filter { it.roleId == roleId }.forEachIndexed { index, inst ->
+            val view = inst.view
+            val physics = view.physics
+            val (width, _) = view.getBaseBitmapSize()
+            val minX = physics.minX
+            val maxX = physics.maxX.coerceAtLeast(minX)
+            val minY = physics.minY
+            val maxY = physics.maxY.coerceAtLeast(minY)
+            physics.x = if (random && maxX > minX) {
+                minX + Random.nextFloat() * (maxX - minX)
+            } else if (random) {
+                minX
+            } else {
+                ((vis.left + vis.right) / 2f - width / 2f + index * 12f).coerceIn(minX, maxX)
+            }
+            physics.y = if (random && maxY > minY) {
+                minY + Random.nextFloat() * (maxY - minY)
+            } else if (random) {
+                minY
+            } else {
+                maxY
+            }
+            // 显示层与控制层在第一帧之前同步到同一出生位置，避免先闪到左上角。
+            placeControlWindow(view, inst.layoutParams, inst.lastW, inst.lastH)
+            if (inst.controlAdded) {
+                try { windowManager.updateViewLayout(view, inst.layoutParams) } catch (_: Exception) {}
+            }
+            syncDisplayWindow(inst)
+        }
+    }
+
     private fun startRole(roleId: String) {
         // External intents and service restoration must obey the same minimum
         // requirement as the home-screen summon button; never erase the instance.
@@ -3937,6 +3977,7 @@ class PetService : Service() {
         registerConfigObserver(rt)
         lastVisRect = getScreenBounds()
         recalcBounds()
+        positionNewlySummonedRole(roleId)
         startLoop()
         startRandomLoop(rt)
         // 通知首页：该角色已进入在屏状态（覆盖“服务异步启动”场景，避免卡片不刷新）。
