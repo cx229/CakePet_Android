@@ -107,8 +107,8 @@ class MainActivity : AppCompatActivity() {
         previewPlayers.values.forEach { it.stop() }
         previewPlayers.clear()
         buildRoleCards()   // 重建首页实例列表（加入新角色/重复加入后需刷新），内部末尾调用 refreshCards()
-        // 恢复时启动所有预览播放器（onPause 已停止），继续“静坐一遍→随机动作”。
-        previewPlayers.values.forEach { it.start() }
+        // Each card applies its own presentation state (animated / still / summoned).
+        // Do not unconditionally restart placeholders or static previews here.
     }
 
     override fun onPause() {
@@ -171,6 +171,23 @@ class MainActivity : AppCompatActivity() {
         return circle + by
     }
 
+    /** Render this instance's preview according to global preferences and active status. */
+    private fun applyHomePreview(instanceId: String, active: Boolean,
+                                 thumb: ImageView, player: PreviewPlayer) {
+        val away = active &&
+            PersonalizationPrefs.homePreviewMode(this) == PersonalizationPrefs.DYNAMIC
+        when {
+            away -> player.showSummonedPlaceholder()
+            PersonalizationPrefs.animatedPreview(this) -> player.start()
+            else -> player.showStatic()
+        }
+        val canPat = !away && PersonalizationPrefs.animatedPreview(this) &&
+            PersonalizationPrefs.previewPat(this)
+        thumb.setOnClickListener(if (canPat) View.OnClickListener { player.triggerPat() } else null)
+        thumb.isClickable = canPat
+        if (!away) thumb.contentDescription = "角色预览"
+    }
+
     /** 依据当前已召唤角色刷新各卡片状态（仅更新可见项的文字/按钮，不重建列表）。 */
     private fun refreshCards() {
         val svc = PetService.instance
@@ -184,6 +201,9 @@ class MainActivity : AppCompatActivity() {
             holder.summon?.text = if (activeHere) "归位" else "召唤"
             // 未召唤：召回 GONE → 召唤独占全宽；已召唤：归位与召回各占一半（XML 中两者 weight=1）。
             holder.recall?.visibility = if (activeHere) View.VISIBLE else View.GONE
+            val thumb = holder.thumb
+            val player = previewPlayers[inst.instanceId]
+            if (thumb != null && player != null) applyHomePreview(inst.instanceId, activeHere, thumb, player)
         }
     }
 
@@ -230,9 +250,9 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 val player = PreviewPlayer(mgr, thumb, ctx.resources.displayMetrics.density)
+                previewPlayers[inst.instanceId]?.stop()
                 previewPlayers[inst.instanceId] = player
-                thumb.setOnClickListener { player.triggerPat() }
-                player.start()
+                applyHomePreview(inst.instanceId, activeHere, thumb, player)
             }
             val iid = inst.instanceId
             summon.setOnClickListener { onSummon(iid) }
