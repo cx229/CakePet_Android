@@ -332,6 +332,13 @@ class ImageModeManager(
         val currentResName: String get() = def.frames[frameIndex].resName
         val currentModeId: String get() = def.name
         val currentFrameIndex: Int get() = frameIndex
+        val debugFrameCount: Int get() = def.frames.size
+        val debugFrameElapsedMs: Long get() = elapsed
+        val debugFrameDurationMs: Long get() = frameDelay
+        val debugLoopKind: String get() = def.loopMode
+        val debugDurationMinMs: Long? get() = def.durationMin
+        val debugDurationMaxMs: Long? get() = def.durationMax
+        val debugWaitingForCycle: Boolean get() = pendingFinish
         val isInfiniteLoop: Boolean get() = def.loopMode == "infinite"
         val currentDx: Int get() = def.frames[frameIndex].dx
         val currentDy: Int get() = def.frames[frameIndex].dy
