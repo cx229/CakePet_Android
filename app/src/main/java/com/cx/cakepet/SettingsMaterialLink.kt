@@ -97,7 +97,6 @@ object SettingsMaterialLink {
     private fun addInlineLink(activity: Activity, settingRow: SettingsRippleRow,
                               heading: TextView, toggle: View,
                               linkLabel: String, onClick: () -> Unit) {
-            val heading = findTitle(settingRow) ?: return
             val owner = heading.parent as? LinearLayout ?: return
             val position = owner.indexOfChild(heading)
             val originalParams = heading.layoutParams
