@@ -252,7 +252,7 @@ class MainActivity : AppCompatActivity() {
                 val player = PreviewPlayer(mgr, thumb, ctx.resources.displayMetrics.density)
                 previewPlayers[inst.instanceId]?.stop()
                 previewPlayers[inst.instanceId] = player
-                applyHomePreview(inst.instanceId, activeHere, thumb, player)
+                applyHomePreview(activeHere, thumb, player)
             }
             val iid = inst.instanceId
             summon.setOnClickListener { onSummon(iid) }
