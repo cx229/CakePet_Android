@@ -366,22 +366,24 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun modeChainText(start: String, modes: JSONObject): String =
         "[" + modeChain(start, modes).joinToString(" > ") + "]"
 
-    /** Read-only selection chain: names and loop terminators have distinct meanings. */
+    /** Single title for a picker option: the complete chain, with no subtitle. */
     private fun pickerChain(start: String): TextView {
         val modes = root.getJSONObject("modes")
-        val rich = SpannableStringBuilder()
+        val rich = SpannableStringBuilder("[")
         modeChain(start, modes).forEachIndexed { index, id ->
-            if (index > 0) rich.append(" → ")
+            if (index > 0) rich.append(" > ")
             val begin = rich.length
             val marker = id == "◎" || id == "∞"
             rich.append(id)
-            if (!marker && !playableMode(id)) rich.append("（异常）")
-            rich.setSpan(android.text.style.ForegroundColorSpan(
-                getColor(if (marker) R.color.cp_note
-                    else if (playableMode(id)) R.color.cp_sub else R.color.cp_danger)),
-                begin, rich.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            val valid = marker || playableMode(id)
+            if (!valid) rich.append("（异常）")
+            if (!valid) rich.setSpan(
+                android.text.style.ForegroundColorSpan(getColor(R.color.cp_danger)),
+                begin, rich.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
         }
-        return text("", 10f).apply {
+        rich.append("]")
+        return text("", 12f).apply {
             setText(rich, TextView.BufferType.SPANNABLE)
             setPadding(0, 0, 0, 0)
         }
@@ -1667,7 +1669,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         })
                         val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
                         playbackCard.addView(detailSectionHeader("后续动画",
-                            next.ifBlank { "自动（由系统决定）" }) {
+                            successorSummary(mode)) {
                             linkedConsent { chooseModes(single = true,
                                 initial = listOfNotNull(next.takeIf { it.isNotEmpty() }),
                                 headerDescription = "当前动画 · $currentKey") { selected ->
@@ -3702,12 +3704,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             }
                         }
                         row.addView(check, LinearLayout.LayoutParams(px(42), px(58)))
-                        row.addView(LinearLayout(this).apply {
-                            orientation = LinearLayout.VERTICAL
+                        row.addView(pickerChain(name).apply {
                             gravity = Gravity.CENTER_VERTICAL
-                            setPadding(0, px(4), px(6), px(4))
-                            addView(text(name, 12f).apply { setPadding(0, 0, 0, px(2)) })
-                            addView(pickerChain(name))
+                            setPadding(0, px(5), px(6), px(5))
                         }, LinearLayout.LayoutParams(0, -2, 1f))
                         listing.addView(row, selectionRowParams(1))
                         rippleClick(row) { check.isChecked = !check.isChecked }
