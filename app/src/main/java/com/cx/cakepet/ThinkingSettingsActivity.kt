@@ -154,6 +154,7 @@ class ThinkingSettingsActivity : AppCompatActivity() {
         folding = SettingsFoldController(this).apply {
             add(R.id.sw_thinking_enabled, listOf(R.id.card_display, R.id.card_flash, R.id.card_bg))
         }
+        SettingsMaterialLink.attachThinking(this, roleId, R.id.sw_thinking_enabled)
         // ===== 滑块：业务范围来自 PetBounds（阈值页可改上下界），滑块内部 0..100 归一化 =====
         refreshUI()
 
