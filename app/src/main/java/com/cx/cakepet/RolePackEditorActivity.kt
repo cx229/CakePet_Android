@@ -4230,7 +4230,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
     }
-    }
 
     /** Editing a shared pack is confirmed by the same existing material consent. */
     private fun openLinkedThinkingEditor() {
