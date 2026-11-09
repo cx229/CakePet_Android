@@ -554,8 +554,14 @@ class RoleManageActivity : AppCompatActivity() {
             }
             val player = PreviewPlayer(mgr, thumb, ctx.resources.displayMetrics.density)
             players[role.id] = player
-            thumb.setOnClickListener { player.triggerPat() }
-            player.start()
+            if (PersonalizationPrefs.animatedPreview(ctx)) player.start()
+            else player.showStatic()
+            val allowPat = PersonalizationPrefs.animatedPreview(ctx) &&
+                PersonalizationPrefs.previewPat(ctx)
+            thumb.setOnClickListener(if (allowPat) View.OnClickListener {
+                player.triggerPat()
+            } else null)
+            thumb.isClickable = allowPat
 
             // 删除统一置于更多菜单，预装模板通过弹窗提示不可删除。
             holder.itemView.setOnClickListener {
