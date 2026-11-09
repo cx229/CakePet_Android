@@ -1195,8 +1195,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 PreviewPlayer(mgr, preview, resources.displayMetrics.density)
             }.onSuccess { player ->
                 homePreviewPlayer = player
-                preview.setOnClickListener { player.triggerPat() }
-                player.start()
+                if (PersonalizationPrefs.animatedPreview(this)) player.start()
+                else player.showStatic()
+                val allowPat = PersonalizationPrefs.animatedPreview(this) &&
+                    PersonalizationPrefs.previewPat(this)
+                preview.setOnClickListener(if (allowPat) View.OnClickListener {
+                    player.triggerPat()
+                } else null)
+                preview.isClickable = allowPat
             }
         }
         if (!standbyReady()) {
