@@ -147,7 +147,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 action.addView(detailSectionHeader("编辑碎碎念",
                     "进入当前素材包的碎碎念文本页") {
                     linkedConsent {
-                        dismissDetailDialogs()
+                        detailDialogs.toList().forEach { it.dismiss() }
                         startActivity(Intent(this, RolePackEditorActivity::class.java).apply {
                             putExtra("role_id", id)
                             putExtra("initial_thinking_resources", true)
@@ -665,6 +665,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = navigateBack()
         })
+        if (intent.getBooleanExtra("initial_thinking_resources", false)) thinkingResources()
         val initialMode = intent.getStringExtra("initial_mode_id")
         val initialFunction = intent.getStringExtra("initial_function_path")
         home()
