@@ -33,7 +33,7 @@ object SettingsSpinnerBinder {
                     setTextColor(ctx.getColor(R.color.cp_title))
                     val arrow = androidx.core.content.ContextCompat.getDrawable(ctx,
                         android.R.drawable.arrow_down_float)?.mutate()
-                    arrow?.setTint(android.graphics.Color.BLACK)
+                    arrow?.setTint(ctx.getColor(R.color.cp_title))
                     setCompoundDrawablesWithIntrinsicBounds(null, null, arrow, null)
                     compoundDrawablePadding = dp(8)
                     setPadding(dp(12), 0, dp(12), 0)
@@ -43,7 +43,7 @@ object SettingsSpinnerBinder {
             override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View =
                 LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
-                    setBackgroundColor(android.graphics.Color.WHITE)
+                    setBackgroundColor(ctx.getColor(R.color.cp_card_bg))
                     if (position > 0) addView(View(ctx).apply {
                         setBackgroundColor(ctx.getColor(R.color.cp_subtle))
                     }, LinearLayout.LayoutParams(-1, dp(1)).apply {
@@ -59,7 +59,7 @@ object SettingsSpinnerBinder {
                     }, LinearLayout.LayoutParams(-1, dp(48)))
                 }
         }
-        spinner.setPopupBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.WHITE))
+        spinner.setPopupBackgroundDrawable(android.graphics.drawable.ColorDrawable(ctx.getColor(R.color.cp_card_bg)))
         spinner.minimumHeight = dp(44)
         if (entries.isNotEmpty()) spinner.setSelection(selected.coerceIn(0, entries.lastIndex))
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
