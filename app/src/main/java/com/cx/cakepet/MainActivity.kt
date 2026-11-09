@@ -172,7 +172,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Render this instance's preview according to global preferences and active status. */
-    private fun applyHomePreview(instanceId: String, active: Boolean,
+    private fun applyHomePreview(active: Boolean,
                                  thumb: ImageView, player: PreviewPlayer) {
         val away = active &&
             PersonalizationPrefs.homePreviewMode(this) == PersonalizationPrefs.DYNAMIC
@@ -203,7 +203,7 @@ class MainActivity : AppCompatActivity() {
             holder.recall?.visibility = if (activeHere) View.VISIBLE else View.GONE
             val thumb = holder.thumb
             val player = previewPlayers[inst.instanceId]
-            if (thumb != null && player != null) applyHomePreview(inst.instanceId, activeHere, thumb, player)
+            if (thumb != null && player != null) applyHomePreview(activeHere, thumb, player)
         }
     }
 
