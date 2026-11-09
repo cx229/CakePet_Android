@@ -134,6 +134,9 @@ class GlobalSettingsActivity : AppCompatActivity() {
                         watermarkLevelRow.visibility = if (checked) View.VISIBLE else View.GONE
                     }
                 }
+                findViewById<View>(R.id.row_personalization_settings).setOnClickListener {
+                    startActivity(Intent(this, PersonalizationSettingsActivity::class.java))
+                }
                 findViewById<View>(R.id.row_user_habits).setOnClickListener {
                     startActivity(Intent(this, UserHabitsActivity::class.java))
                 }
