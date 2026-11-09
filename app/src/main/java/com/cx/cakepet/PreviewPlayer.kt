@@ -27,6 +27,7 @@ class PreviewPlayer(
     private val mgr = PetAnimationController(assets)
     private val boxPx = (64f * density).toInt().coerceAtLeast(1)
     private val composedCache = mutableMapOf<String, Bitmap?>()
+    private var summonedPlaceholder: Bitmap? = null
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
     private var lastTick = 0L
@@ -61,7 +62,8 @@ class PreviewPlayer(
     /** Small neutral placeholder: the pet has left the home preview and is on screen. */
     fun showSummonedPlaceholder() {
         stop()
-        val bitmap = Bitmap.createBitmap(boxPx, boxPx, Bitmap.Config.ARGB_8888)
+        val bitmap = summonedPlaceholder ?: Bitmap.createBitmap(
+            boxPx, boxPx, Bitmap.Config.ARGB_8888).also { summonedPlaceholder = it }
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xFF999999.toInt()
