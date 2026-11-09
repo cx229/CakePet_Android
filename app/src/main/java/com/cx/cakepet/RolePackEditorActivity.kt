@@ -2285,7 +2285,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         editor("动画属性") { box ->
             val name = entry(box, "动画名称", key)
             (name.parent as? LinearLayout)?.let { field ->
-                (field.getChildAt(0) as? TextView)?.setTextColor(android.graphics.Color.BLACK)
+                (field.getChildAt(0) as? TextView)?.setTextColor(getColor(R.color.cp_title))
             }
             val playbackModes = listOf("播放一次", "定时循环", "无限循环")
             val previous = mode.optJSONObject("duration")
@@ -2302,7 +2302,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setPadding(0, px(12), 0, px(8))
             }
             playbackRow.addView(text("播放循环", 14f).apply {
-                setTextColor(android.graphics.Color.BLACK)
+                setTextColor(getColor(R.color.cp_title))
                 setPadding(0, 0, px(12), 0)
             })
             playbackRow.addView(playback, LinearLayout.LayoutParams(0, px(48), 1f))
