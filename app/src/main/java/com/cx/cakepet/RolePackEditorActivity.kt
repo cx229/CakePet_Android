@@ -237,17 +237,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val mode = root.optJSONObject("modes")?.optJSONObject(key) ?: return
         editor(key, compact = true, readOnly = true) { form ->
             val frames = mode.optJSONArray("frames")
-            val firstRes = frames?.optJSONObject(0)?.optString("res").orEmpty()
-            if (firstRes.isNotBlank()) {
-                runCatching {
-                    assets.open("${linkedPack.rootPath}/" + firstRes).use { BitmapFactory.decodeStream(it) }
-                }.getOrNull()?.let { preview ->
-                    form.addView(ImageView(this).apply {
-                        setImageBitmap(preview)
-                        scaleType = ImageView.ScaleType.FIT_CENTER
-                    }, LinearLayout.LayoutParams(-1, px(136)))
-                }
-            }
+            addDialogPreview(form, key)
             val playback = dialogSection()
             playback.addView(detailSectionHeader("播放循环", when (playbackKind(mode)) {
                 "timed" -> "定时循环"
@@ -683,6 +673,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
     override fun onDestroy() {
         removeBulkBar()
         stopAnimation()
+        detailPreviewTasks.values.toList().forEach { handler.removeCallbacks(it) }
+        detailPreviewTasks.clear()
         homePreviewPlayer?.stop()
         homePreviewPlayer = null
         if (::draft.isInitialized) draft.deleteRecursively()
@@ -1660,6 +1652,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 form.removeAllViews()
                 val mode = root.optJSONObject("modes")?.optJSONObject(currentKey)
                 if (mode != null) {
+                    addDialogPreview(form, currentKey)
                     val loop = playbackKind(mode)
                     val duration = mode.optJSONObject("duration")
                     val summary = when (loop) {
@@ -1863,33 +1856,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
         section("动画·$key", "mode")
         val m = root.getJSONObject("modes").getJSONObject(key)
 
-        val preview = RoleAnimationPreview(this)
-        val previewContainer = FrameLayout(this).apply {
-            addView(preview, FrameLayout.LayoutParams(-1, -2))
-            addView(TextView(this@RolePackEditorActivity).apply {
-                text = "↺"
-                textSize = 22f
-                gravity = Gravity.CENTER
-                setTextColor(getColor(R.color.cp_title))
-                setPadding(0, 0, 0, 0)
-                contentDescription = "从头播放"
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(0xDDFFFFFF.toInt())
-                }
-                elevation = px(3).toFloat()
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
-                    animate(preview, key)
-                }
-            }, FrameLayout.LayoutParams(px(36), px(36), Gravity.END or Gravity.BOTTOM).apply {
-                rightMargin = px(8)
-                bottomMargin = px(8)
-            })
+        val preview = RoleAnimationPreview(this).apply {
+            onReplay = { animate(this, key) }
+            contentDescription = "动画实时预览，右上角重新播放"
         }
-        panel.addView(previewContainer, LinearLayout.LayoutParams(-1, -2))
+        panel.addView(preview, LinearLayout.LayoutParams(-1, -2))
         animate(preview, key)
         // Mode-level controls remain visible, but don't dominate the frame editor.
         val mode = root.getJSONObject("modes").getJSONObject(key)
@@ -2145,7 +2116,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 val image = card.getChildAt(0) as ImageView
                 val labels = card.getChildAt(1) as LinearLayout
                 val headline = labels.getChildAt(0) as LinearLayout
-                (headline.getChildAt(0) as TextView).text = "帧 $frameIndex"
+                (headline.getChildAt(0) as TextView).text = "帧 ${frameIndex + 1}"
                 val rawDelay = frame.opt("delay")
                 val delayText = when (rawDelay) {
                     is JSONArray -> "${rawDelay.optLong(0)}-${rawDelay.optLong(1)}ms"
@@ -2259,23 +2230,95 @@ open class RolePackEditorActivity : AppCompatActivity() {
         scroll.visibility = View.GONE
         modePageRecycler = recycler
     }
+    private val detailPreviewTasks = mutableMapOf<RoleAnimationPreview, Runnable>()
+
+    /** Render actual ModeClip state; never infer frame timings from the UI clock. */
+    private fun renderModePreview(view: RoleAnimationPreview, manager: ImageModeManager,
+                                  clip: ImageModeManager.ModeClip, start: String,
+                                  status: String) {
+        val duration = if (clip.debugLoopKind == "timed") {
+            val min = clip.debugDurationMinMs ?: 3000L
+            val max = clip.debugDurationMaxMs ?: min
+            "（$min–${max}ms）"
+        } else ""
+        view.update(
+            clip.currentBitmap(),
+            manager.previewContentBounds(clip.currentResName, clip.currentVerticalAlign, clip.currentTransform),
+            clip.currentAnchor(), clip.currentDx, clip.currentDy,
+            manager.currentPack.anchorRes,
+            RoleAnimationPreview.State(
+                chain = modeChain(start, root.getJSONObject("modes")),
+                current = clip.currentModeId,
+                frame = clip.currentFrameIndex,
+                frameCount = clip.debugFrameCount,
+                frameFraction = if (clip.isEnded) 1f
+                    else (clip.debugFrameElapsedMs.toFloat() /
+                        clip.debugFrameDurationMs.coerceAtLeast(1L)).coerceIn(0f, 1f),
+                loopKind = clip.debugLoopKind,
+                duration = duration,
+                status = status
+            )
+        )
+    }
+
+    /** Page preview uses the same renderer as dialogs but follows the page lifecycle. */
     private fun animate(view: RoleAnimationPreview, key: String) {
         stopAnimation()
         val manager = ImageModeManager(this, loadPackMeta(this, id, RoleSource.FILES))
         val clip = manager.createClip(key) ?: return
         val tick = object : Runnable {
             override fun run() {
-                if (screen != "mode" || modeId != key) return
-                view.update(clip.currentBitmap(), manager.previewContentBounds(clip.currentResName, clip.currentVerticalAlign, clip.currentTransform),
-                    clip.currentAnchor(), clip.currentDx, clip.currentDy, manager.currentPack.anchorRes,
-                    clip.currentModeId, manager.currentPack.modeLoops[clip.currentModeId] == true,
-                    clip.currentFrameIndex, false)
+                if (screen != "mode" || modeId != key || !view.isAttachedToWindow) return
                 val step = clip.advance(50, allowModeSwitch = true)
+                renderModePreview(view, manager, clip, key, when {
+                    step.ended -> "已结束"
+                    step.timerRequested -> "等待调度"
+                    else -> "播放中"
+                })
                 if (!step.ended && !step.timerRequested) handler.postDelayed(this, 50)
             }
         }
         animation = tick
-        tick.run()
+        view.post { if (screen == "mode" && modeId == key) tick.run() }
+    }
+
+    /** Each dialog owns its playback clock, replay control, and cancellation. */
+    private fun addDialogPreview(parent: LinearLayout, key: String) {
+        val preview = RoleAnimationPreview(this).apply {
+            contentDescription = "动画实时预览，右上角重新播放"
+        }
+        parent.addView(preview, LinearLayout.LayoutParams(-1, -2))
+        val source = if (linkedReadOnly) RoleSource.ASSETS else RoleSource.FILES
+        val manager = ImageModeManager(this, loadPackMeta(this, id, source))
+        var tick: Runnable? = null
+        fun cancel() {
+            tick?.let { handler.removeCallbacks(it) }
+            detailPreviewTasks.remove(preview)
+        }
+        fun replay() {
+            cancel()
+            val clip = manager.createClip(key) ?: return
+            val runner = object : Runnable {
+                override fun run() {
+                    if (!preview.isAttachedToWindow) return
+                    val step = clip.advance(50, allowModeSwitch = true)
+                    renderModePreview(preview, manager, clip, key, when {
+                        step.ended -> "已结束"
+                        step.timerRequested -> "等待调度"
+                        else -> "播放中"
+                    })
+                    if (!step.ended && !step.timerRequested) handler.postDelayed(this, 50)
+                }
+            }
+            tick = runner
+            detailPreviewTasks[preview] = runner
+            preview.post { if (preview.isAttachedToWindow) runner.run() }
+        }
+        preview.onReplay = { replay() }
+        preview.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { replay() }
+            override fun onViewDetachedFromWindow(v: View) { cancel() }
+        })
     }
     private fun stopAnimation() {
         animation?.let { handler.removeCallbacks(it) }
@@ -2954,7 +2997,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 "在下方插入" -> showImageChooser(ImagePickRequest(key, "after", index))
                 "删除" -> showConfirmDialog(
                     title = "删除帧",
-                    bodyHtml = "确认删除帧 $index？",
+                    bodyHtml = "确认删除帧 ${index + 1}？",
                     positiveText = "删除",
                     titleColorRes = R.color.cp_danger
                 ) {
@@ -2974,7 +3017,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun editFrame(key: String, index: Int) {
         val frame = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").getJSONObject(index)
-        editor("编辑第 $index 帧", compact = true,
+        editor("编辑第 ${index + 1} 帧", compact = true,
             subtitle = "动画 · $key") { box ->
             val time = frameGroup(box, "播放时间", "每帧播放的时间，单位毫秒；最短到最长为随机范围。")
             val range = delayRange(frame)
