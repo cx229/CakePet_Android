@@ -33,6 +33,11 @@
         </activity>
 
         <activity
+            android:name=".PersonalizationSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CakePet.FullscreenTitle" />
+
+        <activity
             android:name=".UserHabitsActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize"
