@@ -3919,28 +3919,19 @@ class PetService : Service() {
      */
     private fun positionNewlySummonedRole(roleId: String) {
         val random = PersonalizationPrefs.summonPosition(this) == PersonalizationPrefs.RANDOM
-        val vis = getScreenBounds()
-        pets.filter { it.roleId == roleId }.forEachIndexed { index, inst ->
+        pets.filter { it.roleId == roleId }.forEach { inst ->
             val view = inst.view
             val physics = view.physics
-            val (width, _) = view.getBaseBitmapSize()
             val minX = physics.minX
             val maxX = physics.maxX.coerceAtLeast(minX)
             val minY = physics.minY
             val maxY = physics.maxY.coerceAtLeast(minY)
-            physics.x = if (random && maxX > minX) {
-                minX + Random.nextFloat() * (maxX - minX)
-            } else if (random) {
-                minX
+            if (random) {
+                physics.x = if (maxX > minX) minX + Random.nextFloat() * (maxX - minX) else minX
+                physics.y = if (maxY > minY) minY + Random.nextFloat() * (maxY - minY) else minY
             } else {
-                ((vis.left + vis.right) / 2f - width / 2f + index * 12f).coerceIn(minX, maxX)
-            }
-            physics.y = if (random && maxY > minY) {
-                minY + Random.nextFloat() * (maxY - minY)
-            } else if (random) {
-                minY
-            } else {
-                maxY
+                // Same physical target and reset semantics as Return Home.
+                physics.resetTo((minX + maxX) / 2f, maxY)
             }
             // 显示层与控制层在第一帧之前同步到同一出生位置，避免先闪到左上角。
             placeControlWindow(view, inst.layoutParams, inst.lastW, inst.lastH)
@@ -3976,6 +3967,11 @@ class PetService : Service() {
         applyNightMode(config.getBlocking())
         registerConfigObserver(rt)
         lastVisRect = getScreenBounds()
+        // Return Home resets the visual/physics state before calculating its floor.
+        // Match that order for bottom-center summon; random summon stays untouched.
+        if (PersonalizationPrefs.summonPosition(this) != PersonalizationPrefs.RANDOM) {
+            pets.filter { it.roleId == roleId }.forEach { it.view.forceReset() }
+        }
         recalcBounds()
         positionNewlySummonedRole(roleId)
         startLoop()
