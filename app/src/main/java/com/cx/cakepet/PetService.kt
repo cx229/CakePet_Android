@@ -1062,8 +1062,22 @@ class PetService : Service() {
         val (w, h) = view.getBaseBitmapSize()
         // physics.x/y = 窗口左上角真值。脚落屏幕底部中心 → 窗口 = 脚位置 - 锚点偏移。
         // 等价于原“脚在 vis.bottom - (h - ay)、窗口 = 脚 - ay = vis.bottom - h”，保持落点与原来一致。
-        val baseX = (vis.left + vis.right) / 2f - w / 2f + index * 12f
-        val baseY = vis.bottom.toFloat() - h
+        val randomStart = PersonalizationPrefs.summonPosition(this) == PersonalizationPrefs.RANDOM
+        val baseX: Float
+        val baseY: Float
+        if (randomStart) {
+            // Choose valid top-left coordinates within the current physical canvas.
+            // Keep display and control windows anchored to the same location.
+            val minX = vis.left.toFloat()
+            val maxX = (vis.right - w).toFloat().coerceAtLeast(minX)
+            val minY = vis.top.toFloat()
+            val maxY = (vis.bottom - h).toFloat().coerceAtLeast(minY)
+            baseX = if (maxX <= minX) minX else Random.nextFloat() * (maxX - minX) + minX
+            baseY = if (maxY <= minY) minY else Random.nextFloat() * (maxY - minY) + minY
+        } else {
+            baseX = (vis.left + vis.right) / 2f - w / 2f + index * 12f
+            baseY = vis.bottom.toFloat() - h
+        }
         view.physics.x = baseX
         view.physics.y = baseY
         if (view.hitMode == ConfigDefaults.HIT_CORE) {
