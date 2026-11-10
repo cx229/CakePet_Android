@@ -125,6 +125,7 @@ object RolePackEditing {
             if (!original.exists()) original.writeText(source)
         }
         normalizeThinkingPack(json)
+        RolePackNormalizer.syncOrders(json, directory)
         cleanPackReferences(json)
         if (parseError != null || issues.isNotEmpty() ||
             !File(directory, RolePackNormalizer.REPORT_FILE).exists()) {
@@ -163,6 +164,7 @@ object RolePackEditing {
     }
     fun commit(ctx: Context, id: String, draft: File, json: JSONObject) {
         require(json.optString("id") == id) { "角色 ID 不可变更" }
+        RolePackNormalizer.syncOrders(json, draft)
         cleanPackReferences(json)
         val configFile = File(draft, "modes.jsonc")
         configFile.writeText(CompactJsoncWriter.write(json, configFile.readText()))
