@@ -3914,7 +3914,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         if (selected.isNotEmpty()) {
                             selected.clear()
                             redraw()
-                        }
+                        } else isChecked = true
                     }
                 }
                 automatic.addView(autoRadio, LinearLayout.LayoutParams(px(42), px(46)))
@@ -3957,7 +3957,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                         selected.clear()
                                         selected.add(name)
                                         redraw()
-                                    }
+                                    } else isChecked = true
                                 }
                             }
                         } else {
