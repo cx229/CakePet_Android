@@ -1870,7 +1870,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
         val preview = RoleAnimationPreview(this).apply {
             onReplay = { animate(this, key) }
-            contentDescription = "动画实时预览，右上角重新播放"
+            onModeClick = { selected ->
+                if (root.optJSONObject("modes")?.has(selected) == true) modeDetails(selected)
+            }
+            contentDescription = "动画实时预览，点击动画链名称查看详情，右上角重新播放"
         }
         panel.addView(preview, LinearLayout.LayoutParams(-1, -2))
         animate(preview, key)
@@ -2330,7 +2333,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
     /** Each dialog owns its playback clock, replay control, and cancellation. */
     private fun addDialogPreview(parent: LinearLayout, key: String) {
         val preview = RoleAnimationPreview(this).apply {
-            contentDescription = "动画实时预览，右上角重新播放"
+            onModeClick = { selected ->
+                // Do not stack a duplicate dialog when its own mode is tapped.
+                if (selected != key && root.optJSONObject("modes")?.has(selected) == true)
+                    modeDetails(selected)
+            }
+            contentDescription = "动画实时预览，点击动画链名称查看详情，右上角重新播放"
         }
         parent.addView(preview, LinearLayout.LayoutParams(-1, -2))
         // For embedded read-only packs use the actual descriptor asset directory,
