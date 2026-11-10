@@ -1576,10 +1576,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
             clipToPadding = false
         }
         val offset = if (header != null) 1 else 0
+        lateinit var touch: ItemTouchHelper
         val adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             override fun getItemCount(): Int = items.size + offset
             override fun onCreateViewHolder(parent: android.view.ViewGroup, type: Int): RecyclerView.ViewHolder {
-                val slot = FrameLayout(this@RolePackEditorActivity)
+                val slot = FrameLayout(this@RolePackEditorActivity).apply {
+                    layoutParams = RecyclerView.LayoutParams(-1, -2)
+                }
                 return object : RecyclerView.ViewHolder(slot) {}
             }
             override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
@@ -1588,14 +1591,23 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 val view = if (position == 0 && header != null) header else items[position - offset].second
                 (view.parent as? android.view.ViewGroup)?.removeView(view)
                 slot.addView(view, FrameLayout.LayoutParams(-1, -2))
+                // Drag starts only from the folder card, never from expanded
+                // animation/text/image cards or nested folders.
+                val index = position - offset
+                if (index in items.indices && canMove(items[index].first)) {
+                    (view.getChildAt(0) as? View)?.setOnLongClickListener {
+                        touch.startDrag(holder)
+                        true
+                    }
+                }
             }
         }
         recycler.adapter = adapter
         var dirty = false
-        val touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+        touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
         ) {
-            override fun isLongPressDragEnabled(): Boolean = true
+            override fun isLongPressDragEnabled(): Boolean = false
             override fun getMovementFlags(rv: RecyclerView, holder: RecyclerView.ViewHolder): Int {
                 val index = holder.bindingAdapterPosition - offset
                 return if (index in items.indices && canMove(items[index].first))
