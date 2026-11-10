@@ -68,8 +68,7 @@ internal object RolePackNormalizer {
         }
         val modes = root.getJSONObject("modes")
         if (root.opt("modeGroups") !is JSONArray) {
-            // New root list owns group existence. Seed it from existing animations only
-            // if absent; a present list must never invent undeclared groups.
+            // Keep declared empty groups; referenced names are appended by syncOrders().
             val names = linkedSetOf<String>()
             modes.keys().forEach { key ->
                 val groups = modes.optJSONObject(key)?.optJSONArray("groups")
@@ -144,6 +143,48 @@ internal object RolePackNormalizer {
         }
         scan(functions, emptyList())
         return issues
+    }
+
+    /** Preserve declared empty groups, append undeclared memberships, and reconcile
+     * the image directory order against the actual disk tree. Only directory names
+     * are sorted; image files and frame references are never moved or rewritten.
+     */
+    fun syncOrders(root: JSONObject, directory: File) {
+        fun names(array: JSONArray?): List<String> =
+            if (array == null) emptyList() else (0 until array.length())
+                .map { array.optString(it) }.filter { it.isNotBlank() }.distinct()
+        fun groupOrder(field: String, catalog: JSONObject?) {
+            val ordered = LinkedHashSet(names(root.optJSONArray(field)).filter {
+                it != "全部" && it != "未分组"
+            })
+            catalog?.keys()?.asSequence()?.toList()?.sorted()?.forEach { id ->
+                val refs = catalog.optJSONObject(id)?.optJSONArray("groups")
+                names(refs).filter { it != "全部" && it != "未分组" }
+                    .forEach { ordered.add(it) }
+            }
+            root.put(field, JSONArray().apply { ordered.forEach { put(it) } })
+        }
+        groupOrder("modeGroups", root.optJSONObject("modes"))
+        groupOrder("thinkingGroups", root.optJSONObject("thinkings"))
+
+        val previous = root.optJSONObject("resourceOrder")
+        val updated = JSONObject()
+        fun traverse(folder: File, relative: String) {
+            val actual = folder.listFiles().orEmpty()
+                .filter { it.isDirectory && !it.name.startsWith(".") }
+                .sortedBy { it.name.lowercase() }
+            val byName = actual.associateBy { it.name }
+            val ordered = LinkedHashSet(names(previous?.optJSONArray(relative))
+                .filter { it in byName })
+            actual.forEach { ordered.add(it.name) }
+            updated.put(relative, JSONArray().apply { ordered.forEach { put(it) } })
+            ordered.forEach { name ->
+                val childPath = if (relative.isEmpty()) name else "$relative/$name"
+                traverse(byName.getValue(name), childPath)
+            }
+        }
+        traverse(directory, "")
+        root.put("resourceOrder", updated)
     }
 
     fun writeReport(directory: File, sourceVersion: String?, issues: List<Issue>, parseError: String? = null) {
