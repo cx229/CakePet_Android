@@ -207,7 +207,7 @@ class MainActivity : AppCompatActivity() {
         val away = active &&
             PersonalizationPrefs.homePreviewMode(this) == PersonalizationPrefs.DYNAMIC
         when {
-            away -> player.showSummonedPlaceholder()
+            away -> player.startSummonedPreview()
             PersonalizationPrefs.animatedPreview(this) -> player.start()
             else -> player.showStatic()
         }

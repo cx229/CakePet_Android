@@ -30,30 +30,57 @@ class PreviewPlayer(
     private var summonedPlaceholder: Bitmap? = null
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
+    private var previewScene = ""
     private var lastTick = 0L
     private val FRAME_MS = 33L   // 约 30fps 推进状态机，足够平滑且省电
 
     fun start() {
-        if (running) return
+        if (running && previewScene == "normal") return
+        stop()
+        previewScene = "normal"
         running = true
-        // 进入“无重力静止池”，从静坐开始（正式配置的自然起点，等同“静坐一遍”的起点）。
-        // 起点动作由素材包 functions 的 [static, sit] 提供（v1.01），代码不写死模式名；
-        // 包未提供该功能则保持当前动作（跳过，不回退）。
+        // Ordinary home previews retain their existing independent static-pool behavior.
+        mgr.setActiveStateFunction(null)
         mgr.useStaticPool = true
         mgr.modeOf("static", "sit")?.let { mgr.setMode(it) }
         lastTick = System.currentTimeMillis()
-        renderCurrent()     // 立即渲染起始帧
+        renderCurrent()
+        postTick()
+    }
+
+    /** Summoned cards use their own optional function pool, not a frozen placeholder.
+     * Normal Mode frames, continuation links and pool reselection are unchanged.
+     */
+    fun startSummonedPreview() {
+        if (running && previewScene == "summoned") return
+        val path = MaterialFunctionSupport.SUMMONED
+        val startMode = mgr.modeOf(*path.toTypedArray())
+        if (startMode == null) {
+            showSummonedPlaceholder()
+            return
+        }
+        stop()
+        previewScene = "summoned"
+        mgr.useStaticPool = true
+        mgr.setActiveStateFunction(path)
+        mgr.setMode(startMode)
+        running = true
+        lastTick = System.currentTimeMillis()
+        renderCurrent()
+        imageView.contentDescription = "已召唤 · 展示动画"
         postTick()
     }
 
     fun stop() {
         running = false
+        previewScene = ""
         handler.removeCallbacksAndMessages(null)
     }
 
     /** Keep a stable frame without scheduling periodic animation ticks. */
     fun showStatic() {
         stop()
+        mgr.setActiveStateFunction(null)
         mgr.useStaticPool = true
         mgr.modeOf("static", "sit")?.let { mgr.setMode(it) }
         renderCurrent()
@@ -62,6 +89,8 @@ class PreviewPlayer(
     /** Small neutral placeholder: the pet has left the home preview and is on screen. */
     fun showSummonedPlaceholder() {
         stop()
+        mgr.setActiveStateFunction(null)
+        previewScene = "placeholder"
         val bitmap = summonedPlaceholder ?: Bitmap.createBitmap(
             boxPx, boxPx, Bitmap.Config.ARGB_8888).also { summonedPlaceholder = it }
         val canvas = Canvas(bitmap)

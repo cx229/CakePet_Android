@@ -9,6 +9,8 @@ import org.json.JSONObject
  */
 internal object MaterialFunctionSupport {
     val STATIC = listOf("standby", "static_pool")
+    /** Optional home-card preview pool while this role is summoned onto the screen. */
+    val SUMMONED = listOf("menu", "summoned")
     val NORMAL = listOf("standby", "pool")
     val THROW = listOf("touch", "roll")
     val SNAP = listOf("snap", "snap_head")

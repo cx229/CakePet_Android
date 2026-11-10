@@ -20,7 +20,8 @@ internal object RolePackNormalizer {
         } + listOf(
             listOf("climb", "leap", "leap"),
             listOf("climb", "leap", "landing"),
-            listOf("climb", "forage", "move")
+            listOf("climb", "forage", "move"),
+            MaterialFunctionSupport.SUMMONED
         )
     ).distinct()
 

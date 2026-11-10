@@ -3352,6 +3352,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             "feed/food" -> "食物"
             "standby/pool" -> "待机池"
             "standby/static_pool" -> "静止待机池"
+            "menu/pool" -> "手动选择"
+            "menu/summoned" -> "已召唤"
             else -> when (path.last()) {
                 "standby" -> "待机"
                 "touch" -> "抛掷"
@@ -3359,7 +3361,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 "climb" -> "攀岩"
                 "pat_head" -> if (path.size == 1) "摸摸头" else "摸头"
                 "feed" -> "投食"
-                "menu" -> "菜单动画"
+                "menu" -> "角色展示"
                 "pool" -> "动画池"
                 "roll" -> "滚动"
                 "lift_up" -> "提起"
@@ -3404,7 +3406,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         "pat_head/pat_head" -> "正常状态下摸头互动时播放"
         "feed/eat" -> "角色接受投喂并进食时播放"
         "feed/food" -> "投喂时显示的食物动画"
-        "menu/pool" -> "菜单中供手动选择的动画"
+        "menu/pool" -> "在长按菜单中手动选择播放的动画"
+        "menu/summoned" -> "召唤到桌面后，首页角色预览播放的动画"
         else -> "执行该功能时，从关联动画中选择播放"
     }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
@@ -3420,7 +3423,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         "climb/forage" -> "角色自动寻找食物时的动画"
         "pat_head" -> "角色被摸头时的互动动画"
         "feed" -> "角色接受投喂时的动画"
-        "menu" -> "菜单中可手动选择的动画"
+        "menu" -> "首页角色预览与长按菜单使用的展示动画"
         else -> "展开查看该分类下的功能"
     }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
