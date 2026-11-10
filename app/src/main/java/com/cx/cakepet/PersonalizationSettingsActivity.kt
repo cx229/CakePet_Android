@@ -18,24 +18,20 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
 
     /** Global preferences are not owned by one pack; choose a home role before editing. */
     private fun choosePreviewMaterial() {
-        val roles = RoleStore.getHomeRoles(this)
-            .distinctBy { it.templateId }
-            .filter { RoleStore.descriptorForInstance(this, it.instanceId) != null }
-        if (roles.isEmpty()) {
+        // Global settings can edit any installed pack, even without a home role.
+        val packs = RoleStore.orderedCatalog(this)
+        if (packs.isEmpty()) {
             AlertDialog.Builder(this)
-                .setMessage("首页还没有可编辑的角色，请先创建或导入角色。")
+                .setMessage("还没有素材包，请先创建或导入素材包。")
                 .setPositiveButton("知道了", null)
                 .show()
             return
         }
         AlertDialog.Builder(this)
             .setTitle("选择素材包")
-            .setItems(roles.map { role ->
-                RoleStore.descriptorForInstance(this, role.instanceId)?.displayName
-                    ?: RoleStore.resolveDisplayName(this, role.instanceId)
-            }.toTypedArray()) { _, index ->
+            .setItems(packs.map { it.displayName }.toTypedArray()) { _, index ->
                 startActivity(Intent(this, RolePackLinkedActivity::class.java).apply {
-                    putExtra("source_instance_id", roles[index].instanceId)
+                    putExtra("source_instance_id", packs[index].id)
                     putExtra("linked_title", "角色预览")
                     putStringArrayListExtra("linked_paths",
                         arrayListOf("standby/static_pool", "menu/summoned"))
