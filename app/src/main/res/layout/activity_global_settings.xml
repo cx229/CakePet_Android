@@ -192,6 +192,94 @@
     </LinearLayout>
 </LinearLayout>
             </LinearLayout>
+            <LinearLayout android:id="@+id/background_group"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:layout_marginTop="24dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="后台运行" android:textSize="14sp" android:textColor="@color/cp_sub"
+                    android:layout_marginStart="4dp" android:layout_marginBottom="6dp"/>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:background="@drawable/card_bg"
+                    android:divider="@drawable/item_divider" android:showDividers="middle"
+                    android:dividerPadding="16dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                    <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_keep_after_task_removed"
+                        style="@style/SettingsSwitchRow"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:paddingStart="20dp" android:paddingEnd="20dp"
+                        android:paddingTop="8dp" android:paddingBottom="8dp"
+                        android:clickable="true" android:focusable="true">
+                        <LinearLayout style="@style/SettingsSwitchTexts">
+                            <TextView style="@style/SettingsOptionTitle"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="划掉任务后继续运行"/>
+                            <TextView style="@style/SettingsOptionNote"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="从最近任务划掉 CakePet，桌宠仍会继续活动"/>
+                        </LinearLayout>
+                        <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_keep_after_task_removed"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:minWidth="0dp" android:minHeight="0dp"
+                            android:thumbTint="@color/switch_black_selector"
+                            android:trackTint="@color/switch_black_selector"/>
+                    </com.cx.cakepet.SettingsRippleRow>
+                    <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_battery_optimization"
+                        style="@style/SettingsSwitchRow"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:paddingStart="20dp" android:paddingEnd="20dp"
+                        android:paddingTop="8dp" android:paddingBottom="8dp"
+                        android:clickable="true" android:focusable="true">
+                        <LinearLayout style="@style/SettingsSwitchTexts">
+                            <TextView style="@style/SettingsOptionTitle"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="电池优化"/>
+                            <TextView style="@style/SettingsOptionNote"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="减少桌宠被系统自动关闭的情况"/>
+                        </LinearLayout>
+                        <TextView android:id="@+id/tv_battery_status" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="检查中"
+                            android:textSize="11sp" android:textColor="@color/cp_note"/>
+                        <ImageView android:layout_width="22dp" android:layout_height="22dp"
+                            android:layout_marginStart="12dp" android:src="@drawable/ic_chevron_right"
+                            app:tint="@color/icon_chevron"/>
+                    </com.cx.cakepet.SettingsRippleRow>
+                    <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_background_management"
+                        style="@style/SettingsSwitchRow"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:paddingStart="20dp" android:paddingEnd="20dp"
+                        android:paddingTop="8dp" android:paddingBottom="8dp"
+                        android:clickable="true" android:focusable="true">
+                        <LinearLayout style="@style/SettingsSwitchTexts">
+                            <TextView style="@style/SettingsOptionTitle"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="其他后台限制"/>
+                            <TextView style="@style/SettingsOptionNote"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="部分手机还需允许后台活动或自启动"/>
+                        </LinearLayout>
+                        <ImageView android:layout_width="22dp" android:layout_height="22dp"
+                            android:layout_marginStart="12dp" android:src="@drawable/ic_chevron_right"
+                            app:tint="@color/icon_chevron"/>
+                    </com.cx.cakepet.SettingsRippleRow>
+                    <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_service_status"
+                        style="@style/SettingsSwitchRow"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:paddingStart="20dp" android:paddingEnd="20dp"
+                        android:paddingTop="8dp" android:paddingBottom="8dp">
+                        <LinearLayout style="@style/SettingsSwitchTexts">
+                            <TextView style="@style/SettingsOptionTitle"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="桌宠运行状态"/>
+                            <TextView style="@style/SettingsOptionNote"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:text="查看桌宠服务是否正在运行"/>
+                        </LinearLayout>
+                        <TextView android:id="@+id/tv_background_status"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="检查中" android:textSize="11sp" android:textColor="@color/cp_note"/>
+                    </com.cx.cakepet.SettingsRippleRow>
+                </LinearLayout>
+            </LinearLayout>
             <LinearLayout android:id="@+id/system_section_container" android:layout_width="match_parent" android:layout_height="wrap_content"
     android:orientation="vertical" android:layout_marginTop="24dp">
     <TextView android:id="@+id/system_section_heading"
