@@ -675,6 +675,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         stopAnimation()
         detailPreviewTasks.values.toList().forEach { handler.removeCallbacks(it) }
         detailPreviewTasks.clear()
+        previewRefreshers.clear()
         homePreviewPlayer?.stop()
         homePreviewPlayer = null
         if (::draft.isInitialized) draft.deleteRecursively()
@@ -868,6 +869,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         RolePackEditing.commit(this, id, draft, candidate)
         root = candidate
         draft = RolePackEditing.draft(this, id)
+        refreshLivePreviews()
         // JSON has changed, but existing View text and lists are not live bindings.
         // Refresh underlying cards without navigating or collapsing folders, then
         // refresh any visible read-only function details from the current root.
@@ -2231,6 +2233,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
         modePageRecycler = recycler
     }
     private val detailPreviewTasks = mutableMapOf<RoleAnimationPreview, Runnable>()
+    /** All live previews observe successful material edits instead of retaining stale managers. */
+    private val previewRefreshers = mutableMapOf<RoleAnimationPreview, () -> Unit>()
+    private fun refreshLivePreviews() {
+        previewRefreshers.toMap().forEach { (view, refresh) ->
+            if (view.isAttachedToWindow) view.post { if (view.isAttachedToWindow) refresh() }
+            else previewRefreshers.remove(view)
+        }
+    }
 
     /** Render actual ModeClip state; never infer frame timings from the UI clock. */
     private fun renderModePreview(view: RoleAnimationPreview, manager: ImageModeManager,
@@ -2244,13 +2254,24 @@ open class RolePackEditorActivity : AppCompatActivity() {
         view.update(
             clip.currentBitmap(),
             manager.previewContentBounds(clip.currentResName, clip.currentVerticalAlign, clip.currentTransform),
-            clip.currentAnchor(), clip.currentDx, clip.currentDy,
+            clip.currentAnchor(), clip.debugMotionX, clip.debugMotionY,
             manager.currentPack.anchorRes,
             RoleAnimationPreview.State(
                 chain = modeChain(start, root.getJSONObject("modes")),
                 current = clip.currentModeId,
                 frame = clip.currentFrameIndex,
                 frameCount = clip.debugFrameCount,
+                primaryProgress = when {
+                    clip.debugLoopKind == "timed" -> {
+                        val target = clip.debugTargetMs
+                        if (target != null && target > 0L)
+                            (clip.debugElapsedMs.toFloat() / target).coerceIn(0f, 1f)
+                        else if (status == "等待调度" || clip.debugWaitingForCycle) 1f
+                        else -1f
+                    }
+                    clip.isEnded || clip.debugCycleCount > 0 -> 1f
+                    else -> -1f
+                },
                 frameFraction = if (clip.isEnded) 1f
                     else (clip.debugFrameElapsedMs.toFloat() /
                         clip.debugFrameDurationMs.coerceAtLeast(1L)).coerceIn(0f, 1f),
@@ -2264,8 +2285,16 @@ open class RolePackEditorActivity : AppCompatActivity() {
     /** Page preview uses the same renderer as dialogs but follows the page lifecycle. */
     private fun animate(view: RoleAnimationPreview, key: String) {
         stopAnimation()
+        previewRefreshers[view] = { animate(view, key) }
+        view.resetReference()
         val manager = ImageModeManager(this, loadPackMeta(this, id, RoleSource.FILES))
-        val clip = manager.createClip(key) ?: return
+        val clip = manager.createClip(key)
+        if (clip == null) {
+            view.update(null, android.graphics.RectF(), 0 to 0, 0, 0, 128,
+                RoleAnimationPreview.State(chain = modeChain(key, root.getJSONObject("modes")),
+                    current = key, status = "无法播放"))
+            return
+        }
         val tick = object : Runnable {
             override fun run() {
                 if (screen != "mode" || modeId != key || !view.isAttachedToWindow) return
@@ -2280,6 +2309,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         animation = tick
         view.post { if (screen == "mode" && modeId == key) tick.run() }
+        view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {}
+            override fun onViewDetachedFromWindow(v: View) {
+                if (previewRefreshers.containsKey(view)) previewRefreshers.remove(view)
+            }
+        })
     }
 
     /** Each dialog owns its playback clock, replay control, and cancellation. */
@@ -2288,8 +2323,18 @@ open class RolePackEditorActivity : AppCompatActivity() {
             contentDescription = "动画实时预览，右上角重新播放"
         }
         parent.addView(preview, LinearLayout.LayoutParams(-1, -2))
-        val source = if (linkedReadOnly) RoleSource.ASSETS else RoleSource.FILES
-        val manager = ImageModeManager(this, loadPackMeta(this, id, source))
+        // For embedded read-only packs use the actual descriptor asset directory,
+        // not a guessed files/roles path. The editor's root already comes from here.
+        fun freshManager(): ImageModeManager {
+            val pack = if (linkedReadOnly) SpritePack(
+                id = linkedPack.id,
+                base = linkedPack.rootPath,
+                source = RoleSource.ASSETS,
+                resolve = { file -> "${linkedPack.rootPath}/$file" },
+                configPath = "${linkedPack.rootPath}/modes.jsonc"
+            ) else loadPackMeta(this, id, RoleSource.FILES)
+            return ImageModeManager(this, pack)
+        }
         var tick: Runnable? = null
         fun cancel() {
             tick?.let { handler.removeCallbacks(it) }
@@ -2297,7 +2342,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         fun replay() {
             cancel()
-            val clip = manager.createClip(key) ?: return
+            preview.resetReference()
+            val manager = freshManager()
+            val clip = manager.createClip(key)
+            if (clip == null) {
+                preview.update(null, android.graphics.RectF(), 0 to 0, 0, 0,
+                    manager.currentPack.anchorRes,
+                    RoleAnimationPreview.State(
+                        chain = modeChain(key, root.getJSONObject("modes")),
+                        current = key, status = "无法播放"))
+                return
+            }
             val runner = object : Runnable {
                 override fun run() {
                     if (!preview.isAttachedToWindow) return
@@ -2315,9 +2370,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
             preview.post { if (preview.isAttachedToWindow) runner.run() }
         }
         preview.onReplay = { replay() }
+        previewRefreshers[preview] = { replay() }
         preview.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) { replay() }
-            override fun onViewDetachedFromWindow(v: View) { cancel() }
+            override fun onViewDetachedFromWindow(v: View) {
+                cancel()
+                previewRefreshers.remove(preview)
+            }
         })
     }
     private fun stopAnimation() {
