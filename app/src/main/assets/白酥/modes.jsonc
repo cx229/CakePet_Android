@@ -532,10 +532,10 @@
         {"res":"扒鱼/pull_fish-3.png","delay":[160,200],"verticalAlign":"top"},
         {"res":"扒鱼/pull_fish-4.png","delay":[130,160],"verticalAlign":"top"},
         {"res":"扒鱼/pull_fish-5.png","delay":70,"verticalAlign":"top"},
-        {"res":"扒鱼/pull_fish-6.png","delay":70,"dx":130,"verticalAlign":"top"},
-        {"res":"扒鱼/pull_fish-6.png","delay":70,"dx":125,"verticalAlign":"top"},
-        {"res":"扒鱼/pull_fish-6.png","delay":70,"dx":120,"verticalAlign":"top"},
-        {"res":"蠕动/wriggle-1.png","delay":500,"dx":120,"verticalAlign":"top"}
+        {"res":"扒鱼/pull_fish-6.png","delay":70,"dx":-130,"verticalAlign":"top"},
+        {"res":"扒鱼/pull_fish-6.png","delay":70,"dx":-125,"verticalAlign":"top"},
+        {"res":"扒鱼/pull_fish-6.png","delay":70,"dx":-120,"verticalAlign":"top"},
+        {"res":"蠕动/wriggle-1.png","delay":500,"dx":-120,"verticalAlign":"top"}
       ],
       "groups": ["待机"],
       "note": "待机觅食动作，结束后接入「趴着」。"
