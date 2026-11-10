@@ -882,7 +882,7 @@ class PetView @JvmOverloads constructor(
      * 把 ImageModeManager 的当前帧同步到 currentBitmap（含尺寸/锚点快照）。
      * 不触发任何边界重算 / 窗口尺寸变更（窗口恒定）。
      */
-    private fun syncCurrentBitmap() {
+    private fun syncCurrentBitmap(notifyPosition: Boolean = true) {
         val (fw, fh) = imageManager.currentBitmapSize()
         val (fax, fay) = imageManager.currentAnchor()
         currentBitmap = imageManager.currentBitmap()
@@ -904,7 +904,7 @@ class PetView @JvmOverloads constructor(
         // 以彻底消除投喂/直接输入等大跨度瞬变时“先变尺寸、左上角固定、过一瞬才跳到锚点对齐”的一帧竞态。
         // 锚点变化才按新锚点重发浮窗位置：与位图同步在同一调用内完成 → 动作与位置严格同帧更新。
         // 拖拽/抛掷期间由 touch 链路负责位置，此处跳过避免覆盖抓取偏移语义。
-        if (!physics.isDragging && !physics.isThrowing) {
+        if (notifyPosition && !physics.isDragging && !physics.isThrowing) {
             if (fax != lastEmittedAnchorX || fay != lastEmittedAnchorY) {
                 lastEmittedAnchorX = fax
                 lastEmittedAnchorY = fay
@@ -914,7 +914,7 @@ class PetView @JvmOverloads constructor(
         // 帧锚点偏移或重力方向变化（非拖拽/非吸附）→ 旧边界盒可能不再适用（尤其吸附拉出后 SNAP_HEAD
         // 旋转帧切到 SIT/ROLL 0° 帧，anchorOff 剧变），通知外部按新帧重算并钳制边界，脚回到界内。
         // 用阈值避免正常动画亚像素抖动触发每帧重算；拖拽中不触发（由 touch 链路负责位置，不与之冲突）。
-        if (!physics.isDragging && !physics.isSnapped) {
+        if (notifyPosition && !physics.isDragging && !physics.isSnapped) {
             val dx = kotlin.math.abs(physics.anchorOffX - lastBoundsAnchorOffX)
             val dy = kotlin.math.abs(physics.anchorOffY - lastBoundsAnchorOffY)
             if (dx > 0.5f || dy > 0.5f || gravityDir != lastBoundsGravityDir) {
@@ -1777,6 +1777,12 @@ class PetView @JvmOverloads constructor(
         snapFlipX = false
         climbRotation = 0f
         climbFlipX = false
+        // Refresh the bitmap and anchor as one snapshot *before* Return Home
+        // computes physics bounds. Otherwise a fresh summon can still use the
+        // previous mode's anchor until its first animation tick, unlike Return Home.
+        // This reset is immediately followed by recalcBounds and resetTo by the
+        // service; do not emit a transient position from the old bounds here.
+        syncCurrentBitmap(notifyPosition = false)
     }
 
     /** 仅切回静坐 sit_clam（清除一次性动画，但保留吸附态/物理位置），用于移动总开关关闭时进入静坐。 */
