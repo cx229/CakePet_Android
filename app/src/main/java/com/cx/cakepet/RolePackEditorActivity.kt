@@ -1571,7 +1571,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val items = rows.toMutableList()
         val recycler = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@RolePackEditorActivity)
-            isNestedScrollingEnabled = header == null && false
+            isNestedScrollingEnabled = false
             itemAnimator = null
             clipToPadding = false
         }
@@ -4467,6 +4467,31 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             val updated = to.relativeTo(working).invariantSeparatorsPath
+            if (directory) {
+                // Rename order entries in place, including the entire descendant tree.
+                // The normalizer then reconciles them against the renamed disk tree.
+                val oldOrder = candidate.optJSONObject("resourceOrder")
+                if (oldOrder != null) {
+                    val renamed = JSONObject()
+                    val parent = relative.substringBeforeLast('/', "")
+                    val oldName = from.name
+                    oldOrder.keys().asSequence().toList().forEach { path ->
+                        val newPath = when {
+                            path == relative -> updated
+                            path.startsWith("$relative/") -> updated + path.removePrefix(relative)
+                            else -> path
+                        }
+                        val previous = oldOrder.optJSONArray(path) ?: JSONArray()
+                        renamed.put(newPath, JSONArray().apply {
+                            for (index in 0 until previous.length()) {
+                                val name = previous.optString(index)
+                                put(if (path == parent && name == oldName) newBase else name)
+                            }
+                        })
+                    }
+                    candidate.put("resourceOrder", renamed)
+                }
+            }
             val prefix = "$relative/"
             val modes = candidate.getJSONObject("modes")
             modes.keys().forEach { mode ->
@@ -4635,9 +4660,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun resourceBranch(directory: File, level: Int,
                                uses: Map<String, List<Pair<String, Int>>>,
                                target: LinearLayout = panel) {
+        val parentPath = if (level == 0) "" else directory.relativeTo(draft).invariantSeparatorsPath
+        val order = jsonStrings(root.optJSONObject("resourceOrder")?.optJSONArray(parentPath))
+        val ranks = order.withIndex().associate { it.value to it.index }
+        val rows = mutableListOf<Pair<String, LinearLayout>>()
         directory.listFiles().orEmpty()
             .filter { isImage(it) || it.isDirectory && !it.name.startsWith(".") }
-            .sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase() }))
+            .sortedWith(compareBy<File>({ !it.isDirectory },
+                { if (it.isDirectory) ranks[it.name] ?: Int.MAX_VALUE else Int.MAX_VALUE },
+                { it.name.lowercase() }))
             .forEach { file ->
                 val path = file.relativeTo(draft).invariantSeparatorsPath
                 val row = LinearLayout(this).apply {
@@ -4726,15 +4757,34 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         else imageOptions(anchor, path)
                     }
                 }, LinearLayout.LayoutParams(px(40), px(48)))
-                target.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                val item = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                item.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
                     leftMargin = px((level * 12).coerceAtMost(48))
                     topMargin = px(4)
                 })
                 if (file.isDirectory) {
-                    target.addView(children, LinearLayout.LayoutParams(-1, -2))
+                    item.addView(children, LinearLayout.LayoutParams(-1, -2))
                     refreshResourceFolder()
                 }
+                rows.add((if (file.isDirectory) "d:" else "f:") + file.name to item)
             }
+        val canReorder: (String) -> Boolean = { it.startsWith("d:") }
+        val persist: (List<String>) -> Unit = { names ->
+            change { json ->
+                val catalog = json.optJSONObject("resourceOrder") ?: JSONObject().also {
+                    json.put("resourceOrder", it)
+                }
+                catalog.put(parentPath, JSONArray().apply {
+                    names.forEach { put(it.removePrefix("d:")) }
+                })
+            }
+        }
+        if (target === panel && level == 0) {
+            installSortableFolderPage(rows, canReorder, persist)
+        } else {
+            target.addView(sortableFolderRecycler(rows, canReorder, persist),
+                LinearLayout.LayoutParams(-1, -2))
+        }
     }
 
 
