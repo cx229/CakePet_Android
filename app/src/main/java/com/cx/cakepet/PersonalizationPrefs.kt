@@ -36,8 +36,8 @@ object PersonalizationPrefs {
         prefs(context).edit().putBoolean(PAT, enabled).apply()
 
     fun homePreviewMode(context: Context): String =
-        prefs(context).getString(PRESENCE, ALWAYS)
-            .takeIf { it == ALWAYS || it == DYNAMIC } ?: ALWAYS
+        prefs(context).getString(PRESENCE, DYNAMIC)
+            .takeIf { it == ALWAYS || it == DYNAMIC } ?: DYNAMIC
 
     fun setHomePreviewMode(context: Context, mode: String) {
         require(mode == ALWAYS || mode == DYNAMIC)
