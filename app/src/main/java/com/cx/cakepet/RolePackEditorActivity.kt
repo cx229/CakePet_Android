@@ -283,7 +283,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
         if (linkedMode) {
             linkedConsent {
                 startActivity(Intent(this, RolePackEditorActivity::class.java)
-                    .putExtra("role_id", id).putExtra("initial_mode_id", key))
+                    .putExtra("role_id", id)
+                    .putExtra("initial_mode_id", key)
+                    .putExtra("return_to_linked_settings", true))
                 finish()
             }
             return
@@ -685,6 +687,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun navigateBack() {
         val previous = pageHistory.pollLast() ?: run { finish(); return }
+        // A page launched from the settings-linked dialog uses the internal home
+        // only as a startup stepping stone. Returning to it should reveal the
+        // original Settings activity, not the unrelated material-pack home.
+        if (intent.getBooleanExtra("return_to_linked_settings", false) &&
+            previous.name == "home") {
+            finish()
+            return
+        }
         restoringPage = true
         try {
             modeId = previous.mode
@@ -4458,6 +4468,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             startActivity(Intent(this, RolePackEditorActivity::class.java).apply {
                 putExtra("role_id", id)
                 putExtra("initial_thinking_resources", true)
+                putExtra("return_to_linked_settings", true)
             })
             finish()
         }
