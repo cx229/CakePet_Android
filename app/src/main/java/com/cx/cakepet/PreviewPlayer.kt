@@ -3,7 +3,6 @@ package com.cx.cakepet
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
@@ -26,7 +25,9 @@ class PreviewPlayer(
 ) {
     private val mgr = PetAnimationController(assets)
     private val boxPx = (64f * density).toInt().coerceAtLeast(1)
-    private val composedCache = mutableMapOf<String, Bitmap?>()
+    // Same decoded frame + its declared anchor always produce the same preview.
+    // Never key by resName alone: one resource may use different alignment/transform.
+    private val composedCache = mutableMapOf<Pair<Bitmap, Pair<Int, Int>>, Bitmap?>()
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
     private var previewScene = ""
@@ -125,56 +126,39 @@ class PreviewPlayer(
     }
 
     private fun renderCurrent() {
-        val res = mgr.currentResName() ?: return
-        val bmp = compose(res)
+        // Use the current clip's actual padded bitmap and frame anchor, including
+        // its verticalAlign/transform. Never crop each frame to alpha bounds:
+        // doing so re-centers changing silhouettes and makes patting jitter.
+        val frame = mgr.currentBitmap() ?: return
+        val anchor = mgr.currentAnchor()
+        val key = frame to anchor
+        val bmp = composedCache.getOrPut(key) {
+            composePreviewBitmap(frame, boxPx, anchor)
+        }
         if (bmp != null) imageView.setImageBitmap(bmp)
-    }
-
-    private fun compose(resName: String): Bitmap? {
-        composedCache[resName]?.let { return it }
-        val frame = mgr.previewFrame(resName) ?: return null
-        val out = composePreviewBitmap(frame, boxPx)
-        composedCache[resName] = out
-        return out
     }
 }
 
 /**
- * 合成单帧预览位图：复用引擎“复杂变换”（由调用方先经 [ImageModeManager.previewFrame] 取得统一画布位图），
- * 使不同资源图（芝麻酥 1000px 高清 / 芝麻球促销 128px 原生）在预览框内尺寸一致、锚点正确。
- *
- * 关键：与实时浮动宠物统一到【128 逻辑坐标系】——实时宠物 1.0× 窗口即 128 屏幕像素（见 PetView
- * getBaseBitmapSize = baseFrameW*scaleFactor，baseFrameW=统一画布逻辑尺寸 128），内容在 128 逻辑下
- * 的占比即实时屏幕占比。预览直接把内容按【1.4×】绘制到【预览框像素尺寸 boxPx=64dp@density】的位图里、
- * 锚点（内容底部中心）对齐底部居中；因位图尺寸=框尺寸，ImageView(fitCenter) 不再二次缩放，
- * 故倍率恰为【浮动宠物的 1.4×】、密度无关（同时消除之前输出 128px 再经 fitCenter 放大导致的倍率飘移）。
+ * Draw the *entire* already padded frame, rather than cropping its alpha bounds.
+ * The actual frame anchor (not a per-frame silhouette center) stays at the fixed
+ * preview position. Frame dx/dy are intentionally ignored: previews only change
+ * the image, never the preview pet's physical position.
  */
-private fun composePreviewBitmap(frame: Bitmap, boxPx: Int): Bitmap? {
+private fun composePreviewBitmap(frame: Bitmap, boxPx: Int, anchor: Pair<Int, Int>): Bitmap? {
     return try {
-        // 统一回 128 逻辑（256 位图→factor 0.5、128 位图→1.0）；基准 = 实时 1.0× 窗口(128px) 的内容占比。
-        val factor = 128f / frame.width.coerceAtLeast(1)
-        val cb = petContentBounds(frame)
-        val lw = cb.width() * factor
-        val lh = cb.height() * factor
-        val scale = 1.4f                              // 用户期望：预览为浮动宠物的 1.4 倍（只施加一次）
-        val dw = lw * scale
-        val dh = lh * scale
-        val dx = (boxPx - dw) / 2f                    // 水平居中
-        val dy = boxPx - dh                           // 内容底部（脚）贴框底部中心
+        // Engine anchor coordinates are logical 128-space; frame.width can be
+        // a higher-resolution decoded canvas (e.g. 256) without changing scale.
+        val scale = 1.4f
+        val logicalToPreview = 128f / frame.width.coerceAtLeast(1) * scale
+        val width = frame.width * logicalToPreview
+        val height = frame.height * logicalToPreview
+        val left = boxPx / 2f - anchor.first * scale
+        val top = boxPx.toFloat() - anchor.second * scale
         val out = Bitmap.createBitmap(boxPx, boxPx, Bitmap.Config.ARGB_8888)
-        val c = Canvas(out)
-        val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        c.drawBitmap(
-            frame,
-            Rect(cb.left.toInt(), cb.top.toInt(), cb.right.toInt(), cb.bottom.toInt()),
-            RectF(dx, dy, dx + dw, dy + dh),
-            p
-        )
+        val canvas = Canvas(out)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        canvas.drawBitmap(frame, null, RectF(left, top, left + width, top + height), paint)
         out
     } catch (_: Exception) { null }
 }
-
-/** 预览版式与图片透明边界计算解耦，使用与其余动画相同的图像处理器。 */
-private fun petContentBounds(bmp: Bitmap): RectF =
-    ModeImageProcessing.alphaBounds(bmp, threshold = 12)?.let { RectF(it) }
-        ?: RectF(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat())
