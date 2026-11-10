@@ -26,6 +26,8 @@ class RoleAnimationPreview(context: Context) : View(context) {
     )
     var showGuides = true
     var onReplay: (() -> Unit)? = null
+    /** Page/dialog decides which existing detail popup to open. */
+    var onModeClick: ((String) -> Unit)? = null
     private var state = State()
     private var image: Bitmap? = null
     private var bounds = RectF()
@@ -39,18 +41,47 @@ class RoleAnimationPreview(context: Context) : View(context) {
     private val density get() = resources.displayMetrics.density
     private val scaled get() = resources.displayMetrics.scaledDensity
     private fun dp(n: Float) = n * density
-    private fun chainLines(widthPx: Int): Int {
+    private data class ChainNode(
+        val id: String, val text: String, val prefix: String,
+        val prefixX: Float, val nameX: Float, val baseline: Float,
+        val nameWidth: Float, val interactive: Boolean
+    )
+
+    /** One layout for measurement, drawing and hit testing; separators never enter the node border. */
+    private fun chainNodes(widthPx: Int): List<ChainNode> {
         paint.textSize = 10f * scaled
-        var lines = 1
-        var x = dp(12f)
-        val maxX = (widthPx - dp(110f)).coerceAtLeast(dp(110f))
+        val left = dp(12f)
+        val limit = (widthPx - dp(54f)).coerceAtLeast(left + dp(40f))
+        val space = dp(6f)
+        val result = mutableListOf<ChainNode>()
+        var x = left
+        var row = 0
         state.chain.forEachIndexed { index, name ->
-            val label = if (index == 0) name else " → $name"
-            val w = paint.measureText(label) + dp(6f)
-            if (x > dp(12f) && x + w > maxX) { ++lines; x = dp(12f) }
-            x += w
+            val terminal = name == "◎" || name == "∞" ||
+                (state.chain.lastOrNull() == "◎" && index == state.chain.lastIndex - 1)
+            val displayed = android.text.TextUtils.ellipsize(name,
+                android.text.TextPaint(paint), (limit - left - dp(18f)).coerceAtLeast(dp(12f)),
+                android.text.TextUtils.TruncateAt.END).toString()
+            val prefix = if (index == 0) "" else " > "
+            val prefixWidth = paint.measureText(prefix)
+            val nameWidth = paint.measureText(displayed)
+            if (x > left && x + prefixWidth + nameWidth > limit) {
+                x = left
+                row++
+            }
+            val nameX = x + prefixWidth
+            val baseline = widthPx / 2f + dp(16f + 18f * row)
+            result += ChainNode(name, displayed, prefix, x, nameX,
+                baseline, nameWidth, !terminal)
+            x = nameX + nameWidth + space
         }
-        return lines
+        return result
+    }
+
+    private fun chainLines(widthPx: Int): Int {
+        val nodes = chainNodes(widthPx)
+        return if (nodes.isEmpty()) 1 else
+            ((nodes.last().baseline - widthPx / 2f - dp(16f)) / dp(18f)).toInt() + 1
     }
     fun resetReference() { anchorReferenceSet = false }
 
@@ -121,40 +152,28 @@ class RoleAnimationPreview(context: Context) : View(context) {
 
         paint.color = resources.getColor(R.color.cp_preview_hud_bg, context.theme)
         canvas.drawRect(0f, artHeight, width.toFloat(), height.toFloat(), paint)
-        var x = dp(12f)
-        var line = 0
         paint.textSize = 10f * scaled
-        val maxX = (width - dp(110f)).coerceAtLeast(dp(110f))
-        state.chain.forEachIndexed { index, name ->
-            val label = if (index == 0) name else " → $name"
-            val w = paint.measureText(label)
-            if (x > dp(12f) && x + w + dp(6f) > maxX) { ++line; x = dp(12f) }
-            val terminal = name == "◎" || name == "∞" ||
-                (state.chain.lastOrNull() == "◎" && index == state.chain.lastIndex - 1)
-            val baseline = artHeight + dp(16f + line * 18f)
-            if (!terminal && name == state.current) {
+        chainNodes(width).forEach { node ->
+            if (node.interactive && node.id == state.current) {
                 paint.style = Paint.Style.STROKE
                 paint.strokeWidth = dp(1.5f)
                 paint.color = resources.getColor(R.color.cp_preview_bounds, context.theme)
-                canvas.drawRoundRect(x - dp(2f), baseline - dp(11f), x + w + dp(2f),
-                    baseline + dp(3f), dp(3f), dp(3f), paint)
+                canvas.drawRoundRect(node.nameX - dp(2f), node.baseline - dp(11f),
+                    node.nameX + node.nameWidth + dp(2f), node.baseline + dp(3f),
+                    dp(3f), dp(3f), paint)
                 paint.style = Paint.Style.FILL
             }
-            paint.color = resources.getColor(R.color.cp_preview_hud_text, context.theme)
             paint.textSize = 10f * scaled
-            canvas.drawText(label, x, baseline, paint)
-            x += w + dp(6f)
+            paint.color = resources.getColor(R.color.cp_preview_hud_text, context.theme)
+            if (node.prefix.isNotEmpty())
+                canvas.drawText(node.prefix, node.prefixX, node.baseline, paint)
+            canvas.drawText(node.text, node.nameX, node.baseline, paint)
         }
-        paint.textSize = 8f * scaled
-        paint.color = when (state.status) {
-            "播放中" -> Color.rgb(38, 150, 89)
-            "已结束" -> Color.rgb(208, 62, 62)
-            else -> resources.getColor(R.color.cp_preview_hud_text, context.theme)
-        }
-        canvas.drawText("● ${state.status}", width - dp(107f), artHeight + dp(16f), paint)
         paint.color = resources.getColor(R.color.cp_preview_hud_text, context.theme)
         paint.textSize = 21f * scaled
         canvas.drawText("↺", width - dp(34f), artHeight + dp(21f), paint)
+
+        // One compact information line above the two progress strips.
         paint.textSize = 8f * scaled
         val infoY = artHeight + dp(16f + (chainLines(width) - 1) * 18f + 16f)
         val loopText = when (state.loopKind) {
@@ -162,14 +181,21 @@ class RoleAnimationPreview(context: Context) : View(context) {
             "infinite" -> "无限循环"
             else -> "播放一次"
         }
-        val rightWidth = paint.measureText(loopText)
-        val leftWidth = (width - rightWidth - dp(34f)).coerceAtLeast(dp(20f))
-        val leftText = "${state.current} · 第${state.frame + 1}/${state.frameCount}帧"
+        val leftText = "${state.current} · 第${state.frame + 1}/${state.frameCount}帧 · $loopText"
+        val statusText = "● ${state.status}"
+        val statusWidth = paint.measureText(statusText)
+        val leftWidth = (width - statusWidth - dp(34f)).coerceAtLeast(dp(20f))
         val clippedLeft = android.text.TextUtils.ellipsize(leftText,
             android.text.TextPaint(paint), leftWidth,
             android.text.TextUtils.TruncateAt.END).toString()
+        paint.color = resources.getColor(R.color.cp_preview_hud_text, context.theme)
         canvas.drawText(clippedLeft, dp(12f), infoY, paint)
-        canvas.drawText(loopText, width - dp(12f) - rightWidth, infoY, paint)
+        paint.color = when (state.status) {
+            "播放中" -> Color.rgb(38, 150, 89)
+            "已结束" -> Color.rgb(208, 62, 62)
+            else -> resources.getColor(R.color.cp_preview_hud_text, context.theme)
+        }
+        canvas.drawText(statusText, width - dp(12f) - statusWidth, infoY, paint)
 
         val x0 = dp(12f)
         val x1 = width - dp(12f)
@@ -180,34 +206,65 @@ class RoleAnimationPreview(context: Context) : View(context) {
         paint.color = guideColor
         canvas.drawRoundRect(x0, mainY, x1, mainY + dp(5f), dp(2f), dp(2f), paint)
         paint.color = fillColor
-        if (state.primaryProgress < 0f) {
-            val bandLeft = x0 + (x1 - x0) * 0.34f
-            canvas.drawRoundRect(bandLeft, mainY, bandLeft + (x1 - x0) * 0.24f,
-                mainY + dp(5f), dp(2f), dp(2f), paint)
-        } else {
-            canvas.drawRoundRect(x0, mainY,
-                x0 + (x1 - x0) * state.primaryProgress.coerceIn(0f, 1f),
-                mainY + dp(5f), dp(2f), dp(2f), paint)
-        }
+        // Single/infinite first cycle: a full-width bar filled halfway (stage, not time).
+        val progress = if (state.primaryProgress < 0f) 0.5f
+            else state.primaryProgress.coerceIn(0f, 1f)
+        canvas.drawRoundRect(x0, mainY, x0 + (x1 - x0) * progress,
+            mainY + dp(5f), dp(2f), dp(2f), paint)
         // Secondary bar always represents the currently playing frame sequence.
         val frameY = mainY + dp(8f)
         paint.color = guideColor
         canvas.drawRoundRect(x0, frameY, x1, frameY + dp(3f), dp(2f), dp(2f), paint)
-        val fraction = ((state.frame + state.frameFraction.coerceIn(0f, 1f)) /
+        val fraction = ((state.frame + 1).toFloat() /
             state.frameCount.coerceAtLeast(1)).coerceIn(0f, 1f)
         paint.color = Color.rgb(195, 155, 83)
         canvas.drawRoundRect(x0, frameY, x0 + (x1 - x0) * fraction,
             frameY + dp(3f), dp(2f), dp(2f), paint)
     }
-    override fun onTouchEvent(event: MotionEvent): Boolean {
+    private var pressedMode: String? = null
+    private var pressedReplay = false
+
+    private fun replayHit(x: Float, y: Float): Boolean {
         val cy = width / 2f + dp(14f)
-        val hit = event.x >= width - dp(48f) &&
-            event.y >= cy - dp(24f) && event.y <= cy + dp(24f)
-        return when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> hit
-            MotionEvent.ACTION_UP -> if (hit) { performClick(); true } else false
-            else -> hit
+        return x >= width - dp(48f) && y >= cy - dp(24f) && y <= cy + dp(24f)
+    }
+
+    private fun modeAt(x: Float, y: Float): String? {
+        return chainNodes(width).firstOrNull { node ->
+            node.interactive && x >= node.nameX - dp(3f) &&
+                x <= node.nameX + node.nameWidth + dp(3f) &&
+                y >= node.baseline - dp(13f) && y <= node.baseline + dp(6f)
+        }?.id
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                pressedReplay = replayHit(event.x, event.y)
+                pressedMode = if (pressedReplay) null else modeAt(event.x, event.y)
+                return pressedReplay || pressedMode != null
+            }
+            MotionEvent.ACTION_UP -> {
+                val replay = pressedReplay && replayHit(event.x, event.y)
+                val mode = pressedMode?.takeIf { it == modeAt(event.x, event.y) }
+                pressedReplay = false
+                pressedMode = null
+                if (replay) { performClick(); return true }
+                if (mode != null) {
+                    performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                    onModeClick?.invoke(mode)
+                    return true
+                }
+                return false
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                pressedReplay = false
+                pressedMode = null
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> return pressedReplay || pressedMode != null
         }
+        return false
     }
     override fun performClick(): Boolean {
         super.performClick()
