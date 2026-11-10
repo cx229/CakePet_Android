@@ -4205,7 +4205,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 val row = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    selectionSurface(this, isFolder = file.isDirectory)
+                    // Resource tree items are cards, not picker options: keep the
+                    // same white rounded surface as other editor cards.
+                    setBackgroundResource(R.drawable.card_bg)
+                    rippleCard(this)
                     setPadding(if (file.isDirectory) px(12) else px(8),
                         if (file.isDirectory) px(6) else px(4), px(4),
                         if (file.isDirectory) px(6) else px(4))
