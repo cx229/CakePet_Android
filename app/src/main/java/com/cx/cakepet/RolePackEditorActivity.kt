@@ -4734,7 +4734,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 row.addView(text(reference.label(::functionPathName), 12f).apply {
                     setPadding(0, px(3), 0, px(3))
                 }, LinearLayout.LayoutParams(0, -2, 1f))
-                row.addView(text("›", 18f).apply {
+                if (!readOnly) row.addView(text("›", 18f).apply {
                     gravity = Gravity.CENTER
                     setTextColor(getColor(R.color.cp_note))
                     setPadding(0, 0, 0, 0)
