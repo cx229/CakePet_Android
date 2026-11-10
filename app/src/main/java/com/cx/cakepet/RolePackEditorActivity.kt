@@ -3865,9 +3865,20 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun chooseModes(single: Boolean, initial: List<String>,
                             headerTitle: String? = null, headerDescription: String? = null,
                             footerNote: String? = null, onConfirm: (List<String>) -> Unit) {
-        val selected = linkedSetOf<String>().apply { addAll(initial.filter { it in ids() }) }
-        val groups = knownGroups() + "未分组"
+        val selected = linkedSetOf<String>().apply {
+            val valid = initial.filter { it in ids() }
+            addAll(if (single) valid.take(1) else valid)
+        }
+        val groups = (knownGroups() + "未分组").distinct()
+        // A successor is single-choice: open only its first containing group.
+        // When it is set to automatic (null), all groups start collapsed.
         val expanded = mutableSetOf<String>()
+        if (single) selected.firstOrNull()?.let { mode ->
+            expanded.add(groups.firstOrNull { group ->
+                if (group == "未分组") modeGroups(mode).isEmpty()
+                else group in modeGroups(mode)
+            } ?: "未分组")
+        }
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
         val (frame, body) = pickerShell(dialog,
             headerTitle ?: if (single) "选择后续动画" else "选择功能动画",
@@ -3886,15 +3897,37 @@ open class RolePackEditorActivity : AppCompatActivity() {
         redraw = {
             val scrollY = viewport.scrollY
             listing.removeAllViews()
-            selectionInfo.text = "已选 ${selected.size} 个动画"
+            selectionInfo.text = if (single) "后续动画：${selected.firstOrNull() ?: "自动（由系统决定）"}"
+                else "已选 ${selected.size} 个动画"
             if (single) {
-                listing.addView(text("○  自动（由系统决定）", 15f).apply {
+                val automatic = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
                     selectionSurface(this)
-                    setPadding(px(12), px(6), px(8), px(6))
-                    isClickable = true
-                    setOnClickListener { selected.clear(); redraw() }
-                    setTextColor(getColor(if (selected.isEmpty()) R.color.cp_title else R.color.cp_note))
-                }, selectionRowParams().apply { height = px(46) })
+                    setPadding(px(10), 0, px(8), 0)
+                    minimumHeight = px(46)
+                }
+                val autoRadio = android.widget.RadioButton(this).apply {
+                    isChecked = selected.isEmpty()
+                    contentDescription = "自动（由系统决定）"
+                    setOnClickListener {
+                        if (selected.isNotEmpty()) {
+                            selected.clear()
+                            redraw()
+                        }
+                    }
+                }
+                automatic.addView(autoRadio, LinearLayout.LayoutParams(px(42), px(46)))
+                automatic.addView(text("自动（由系统决定）", 15f).apply {
+                    setPadding(0, 0, 0, 0)
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                rippleClick(automatic) {
+                    if (selected.isNotEmpty()) {
+                        selected.clear()
+                        redraw()
+                    }
+                }
+                listing.addView(automatic, selectionRowParams())
             }
             for (group in groups.distinct()) {
                 val candidates = ids().filter { modeId ->
@@ -3915,12 +3948,25 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             selectionSurface(this)
                             setPadding(px(10), 0, px(5), 0)
                         }
-                        val check = CheckBox(this).apply {
-                            isChecked = name in selected
-                            setOnCheckedChangeListener { _, checked ->
-                                if (single) selected.clear()
-                                if (checked) selected.add(name) else selected.remove(name)
-                                redraw()
+                        val check: android.widget.CompoundButton = if (single) {
+                            android.widget.RadioButton(this).apply {
+                                isChecked = name in selected
+                                contentDescription = "选择后续动画：$name"
+                                setOnClickListener {
+                                    if (name !in selected) {
+                                        selected.clear()
+                                        selected.add(name)
+                                        redraw()
+                                    }
+                                }
+                            }
+                        } else {
+                            CheckBox(this).apply {
+                                isChecked = name in selected
+                                setOnCheckedChangeListener { _, checked ->
+                                    if (checked) selected.add(name) else selected.remove(name)
+                                    redraw()
+                                }
                             }
                         }
                         row.minimumHeight = px(48)
@@ -3931,7 +3977,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             setPadding(0, px(2), px(6), px(2))
                         }, LinearLayout.LayoutParams(0, -2, 1f))
                         listing.addView(row, selectionRowParams(1))
-                        rippleClick(row) { check.isChecked = !check.isChecked }
+                        rippleClick(row) {
+                            if (single) {
+                                if (name !in selected) {
+                                    selected.clear()
+                                    selected.add(name)
+                                    redraw()
+                                }
+                            } else check.isChecked = !check.isChecked
+                        }
                     }
                 }
             }
