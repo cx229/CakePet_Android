@@ -121,16 +121,22 @@ class RoleAnimationPreview(context: Context) : View(context) {
         val bitmapRect = RectF(canvasLeft + pictureX, canvasTop + pictureY,
             canvasLeft + resolution * ratio + pictureX,
             canvasTop + resolution * ratio + pictureY)
+        // Canvas outline belongs behind the art, with a heavier dashed stroke
+        // than the fine content boundary. Both still follow their own motion.
+        if (showGuides) {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = dp(3f)
+            paint.color = resources.getColor(R.color.cp_preview_guide, context.theme)
+            paint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(6f), dp(4f)), 0f)
+            canvas.drawRect(canvasLeft, canvasTop, canvasLeft + side, canvasTop + side, paint)
+            paint.pathEffect = null
+        }
         paint.style = Paint.Style.FILL
         paint.color = Color.WHITE
         image?.let { canvas.drawBitmap(it, null, bitmapRect, paint) }
         if (showGuides) {
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = dp(2f)
-            paint.color = resources.getColor(R.color.cp_preview_guide, context.theme)
-            paint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(5f), dp(3f)), 0f)
-            canvas.drawRect(canvasLeft, canvasTop, canvasLeft + side, canvasTop + side, paint)
-            paint.pathEffect = null
+            paint.strokeWidth = dp(1.5f)
             paint.color = resources.getColor(R.color.cp_preview_bounds, context.theme)
             canvas.drawRect(canvasLeft + bounds.left * ratio + pictureX,
                 canvasTop + bounds.top * ratio + pictureY,
