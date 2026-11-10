@@ -129,6 +129,7 @@ class PreviewPlayer(
         // Use the current clip's actual padded bitmap and frame anchor, including
         // its verticalAlign/transform. Never crop each frame to alpha bounds:
         // doing so re-centers changing silhouettes and makes patting jitter.
+        // Full-frame preview intentionally never consumes animation displacement.
         val frame = mgr.currentBitmap() ?: return
         val anchor = mgr.currentAnchor()
         val key = frame to anchor
