@@ -1572,7 +1572,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val recycler = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@RolePackEditorActivity)
             isNestedScrollingEnabled = false
-            itemAnimator = null
             clipToPadding = false
         }
         val offset = if (header != null) 1 else 0
