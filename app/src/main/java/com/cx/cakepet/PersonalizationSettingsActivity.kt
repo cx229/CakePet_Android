@@ -1,5 +1,7 @@
 package com.cx.cakepet
 
+import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -13,6 +15,35 @@ import androidx.appcompat.widget.SwitchCompat
 /** App-level display preferences. Uses the same titlebar, module cards and spinner as other settings. */
 class PersonalizationSettingsActivity : AppCompatActivity() {
     private fun dp(value: Int) = (resources.displayMetrics.density * value + .5f).toInt()
+
+    /** Global preferences are not owned by one pack; choose a home role before editing. */
+    private fun choosePreviewMaterial() {
+        val roles = RoleStore.getHomeRoles(this)
+            .distinctBy { it.templateId }
+            .filter { RoleStore.descriptorForInstance(this, it.instanceId) != null }
+        if (roles.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setMessage("首页还没有可编辑的角色，请先创建或导入角色。")
+                .setPositiveButton("知道了", null)
+                .show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("选择素材包")
+            .setItems(roles.map { role ->
+                RoleStore.descriptorForInstance(this, role.instanceId)?.displayName
+                    ?: RoleStore.resolveDisplayName(this, role.instanceId)
+            }.toTypedArray()) { _, index ->
+                startActivity(Intent(this, RolePackLinkedActivity::class.java).apply {
+                    putExtra("source_instance_id", roles[index].instanceId)
+                    putExtra("linked_title", "角色预览")
+                    putStringArrayListExtra("linked_paths",
+                        arrayListOf("standby/static_pool", "menu/summoned"))
+                })
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,21 +136,34 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
         mainRow.addView(toggle, LinearLayout.LayoutParams(-2, -2))
         previews.addView(mainRow, LinearLayout.LayoutParams(-1, -2))
 
-        val patRow = selector(previews, "预览摸摸头", listOf("开启", "关闭"),
+        val patRow = selector(previews, "摸摸头", listOf("开启", "关闭"),
             if (PersonalizationPrefs.previewPat(this)) 0 else 1, true,
             note = "点击预览角色触发摸摸头") {
             PersonalizationPrefs.setPreviewPat(this, it == 0)
         }
-        val modeRow = selector(previews, "首页预览模式", listOf("常驻", "动态"),
+        val modeRow = selector(previews, "召唤后", listOf("预览·常驻", "动画·已召唤"),
             if (PersonalizationPrefs.homePreviewMode(this) == PersonalizationPrefs.DYNAMIC) 1 else 0, true,
-            note = "召唤后是否保留角色预览") {
+            note = "召唤后首页的预览方式") {
             PersonalizationPrefs.setHomePreviewMode(this,
                 if (it == 1) PersonalizationPrefs.DYNAMIC else PersonalizationPrefs.ALWAYS)
         }
+        // Keep the same action name and linked function/animation editor used by role settings.
+        val editRow = SettingsRippleRow(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(32), dp(8), dp(20), dp(8))
+            minimumHeight = dp(56)
+        }
+        editRow.addView(caption("编辑功能/动画 ›", "选择素材包，调整预览使用的动画"),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        editRow.setOnClickListener { choosePreviewMaterial() }
+        previews.addView(editRow, LinearLayout.LayoutParams(-1, -2))
+
         fun refreshChildren() {
             val visible = if (toggle.isChecked) View.VISIBLE else View.GONE
             patRow.visibility = visible
             modeRow.visibility = visible
+            editRow.visibility = visible
         }
         toggle.setOnCheckedChangeListener { _, value ->
             PersonalizationPrefs.setAnimatedPreview(this, value)
