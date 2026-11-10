@@ -389,6 +389,9 @@ class MainActivity : AppCompatActivity() {
         filesDir.resolve("roles").deleteRecursively()
         // 4. A full software reset recreates the first-install pack and one home role.
         RoleStore.ensureInitialRole(this)
+        // Remove remembered active pets: reset must not restore removed instances.
+        getSharedPreferences("cakepet_background", MODE_PRIVATE).edit()
+            .remove("summoned_roles").apply()
         // 5. Restart the foreground service with clean in-memory material state;
         //    带 EXTRA_NO_AUTO_SUMMON：重置后不自动召唤任何角色，屏幕上不留宠物，
         //    由用户在首页卡片自行召唤。再重建首页以刷新卡片。
