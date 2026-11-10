@@ -255,12 +255,6 @@ class SettingsActivity : AppCompatActivity() {
                 positiveText = "知道了", showNegative = false) { }
             return
         }
-        if (pack.source == RoleSource.ASSETS) {
-            showConfirmDialog(title = "模板不可编辑",
-                bodyHtml = "模板「${pack.displayName}」不可编辑，请通过复制或新建素材包创建可编辑副本。",
-                positiveText = "知道了", showNegative = false) { }
-            return
-        }
         showConfirmDialog(
             title = "编辑所属素材包",
             bodyHtml = "即将进入「${pack.displayName}」的素材包编辑页。",
