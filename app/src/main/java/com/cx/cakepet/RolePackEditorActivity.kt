@@ -47,7 +47,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun launchLinkedEditor(target: Intent) {
         if (linkedEditorOpen) return
         linkedReturnRevision = RolePackEditing.revision(id)
-        linkedHiddenDialogs = detailDialogs.filter { it.isShowing }
+        linkedHiddenDialogs = navigationDialogs.filter { it.isShowing }
         linkedHiddenDialogs.asReversed().forEach { it.hide() }
         linkedEditorOpen = true
         startActivity(target)
@@ -211,8 +211,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
             ({ })
         }
         dialog.setOnDismissListener {
+            navigationDialogs.remove(dialog)
             detailDialogs.remove(dialog)
-            if (!isFinishing) finish()
+            if (!isFinishing && !isDestroyed) finish()
         }
     }
 
@@ -242,8 +243,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
             ({ })
         }
         dialog.setOnDismissListener {
+            navigationDialogs.remove(dialog)
             detailDialogs.remove(dialog)
-            if (!isFinishing) finish()
+            if (!isFinishing && !isDestroyed) finish()
         }
     }
 
@@ -354,6 +356,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private val pageHistory = java.util.ArrayDeque<EditorPage>()
     private var restoringPage = false
     private val detailDialogs = mutableListOf<android.app.Dialog>()
+    // Includes editable and selection dialogs below a Mode detail.
+    private val navigationDialogs = mutableListOf<android.app.Dialog>()
     private val functionDetailRefreshers = mutableMapOf<android.app.Dialog, () -> Unit>()
     private val modeDetailRefreshers = mutableMapOf<android.app.Dialog, () -> Unit>()
     private data class SuspendedDetailStack(
@@ -380,7 +384,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             return
         }
         val alreadyHidden = suspendedDetailStacks.flatMap { it.dialogs }.toSet()
-        val visible = detailDialogs.filter { it.isShowing && it !in alreadyHidden }
+        val visible = navigationDialogs.filter { it.isShowing && it !in alreadyHidden }
         if (visible.isNotEmpty()) {
             suspendedDetailStacks.addLast(SuspendedDetailStack(
                 screen, modeId, key, visible.toList(), RolePackEditing.revision(id)))
@@ -407,7 +411,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             pending.dialogs.forEach { dialog ->
-                if (dialog in detailDialogs) dialog.show()
+                if (dialog in navigationDialogs) dialog.show()
             }
         }
     }
@@ -800,7 +804,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
         // Hidden Dialog windows must not outlive the Activity that owns them.
         linkedHiddenDialogs = emptyList()
         suspendedDetailStacks.clear()
-        detailDialogs.toList().asReversed().forEach { it.dismiss() }
+        navigationDialogs.toList().asReversed().forEach { it.dismiss() }
+        navigationDialogs.clear()
+        detailDialogs.clear()
         modeDetailRefreshers.clear()
         functionDetailRefreshers.clear()
         removeBulkBar()
@@ -1096,9 +1102,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
         dialog.setCanceledOnTouchOutside(true)
         dialog.show()
         dialog.window?.setLayout(-1, -2)
-        if (readOnly) {
-            detailDialogs.add(dialog)
-            dialog.setOnDismissListener { detailDialogs.remove(dialog) }
+        navigationDialogs.add(dialog)
+        if (readOnly) detailDialogs.add(dialog)
+        dialog.setOnDismissListener {
+            navigationDialogs.remove(dialog)
+            detailDialogs.remove(dialog)
         }
         // Keep title and footer anchored, with only the content scrolling.
         fun resizeForm() {
@@ -1872,6 +1880,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         refreshHeading()
         modeDetailRefreshers[dialog] = redraw
         dialog.setOnDismissListener {
+            navigationDialogs.remove(dialog)
             detailDialogs.remove(dialog)
             modeDetailRefreshers.remove(dialog)
         }
@@ -4149,6 +4158,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
         dialog.window?.setLayout(-1, -2)
+        navigationDialogs.add(dialog)
+        dialog.setOnDismissListener { navigationDialogs.remove(dialog) }
     }
 
     private fun chooseFunctions(path: List<String>, chosen: List<String>) {
@@ -5009,6 +5020,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         functionDetailRefreshers[popup] = refresh
         popup.setOnDismissListener {
+            navigationDialogs.remove(popup)
             detailDialogs.remove(popup)
             functionDetailRefreshers.remove(popup)
         }
