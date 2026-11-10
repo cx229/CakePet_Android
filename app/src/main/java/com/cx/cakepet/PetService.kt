@@ -644,6 +644,25 @@ class PetService : Service() {
     private fun markExitingCommit() { isExiting = true; exitPrefs.edit().putBoolean("exiting", true).commit() }
     private fun clearExiting() { isExiting = false; exitPrefs.edit().putBoolean("exiting", false).apply() }
     private fun loadExiting() { isExiting = exitPrefs.getBoolean("exiting", false) }
+
+    // The recent-task entry is only UI; keep the foreground pet service unless
+    // the player explicitly chooses the old "swipe to exit" behavior.
+    private val backgroundPrefs by lazy { getSharedPreferences("cakepet_background", MODE_PRIVATE) }
+    private fun keepAfterTaskRemoved(): Boolean =
+        backgroundPrefs.getBoolean("keep_after_task_removed", true)
+
+    /** Persist the summoned instances, not merely the first home-card instance. */
+    private fun saveSummonedRoles() {
+        backgroundPrefs.edit()
+            .putStringSet("summoned_roles", engines.keys.toSet())
+            .apply()
+    }
+    private fun restoreSummonedRoles() {
+        val active = RoleStore.getHomeRoles(this).map { it.instanceId }.toSet()
+        val remembered = backgroundPrefs.getStringSet("summoned_roles", emptySet())
+            .orEmpty().filter { it in active }
+        remembered.forEach { if (!engines.containsKey(it)) startRole(it) }
+    }
     private var lastFrameTime = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
     // 驱动间隔：对齐 error/show（已验证不卡）的 postDelayed 方案。
@@ -3811,8 +3830,8 @@ class PetService : Service() {
             // 「重置软件」重启：只重新初始化服务，不召唤任何角色（重置后屏幕上不该冒出宠物，
             // 由用户在首页卡片自行召唤）。仅【系统重启/START_STICKY 重建】才走下面的默认角色恢复。
             noAutoSummon -> Unit
-            // 无意图（系统重启/START_STICKY 重建）：恢复默认角色（exiting 已在 onCreate 拦截）
-            else -> RoleStore.getHomeRoles(this).firstOrNull()?.let { summonRole(it.instanceId) }
+            // START_STICKY recreation: restore only the roles the player actually summoned.
+            else -> restoreSummonedRoles()
         }
         // 退出态下返回 NOT_STICKY，避免 START_STICKY 在进程被回收后重建服务，
         // 造成“非活非死”（通知残留 + 服务反复复活）。
@@ -3882,6 +3901,7 @@ class PetService : Service() {
 
     /** 彻底退出：持久化退出意图，释放资源，停止服务并结束整个应用进程。 */
     private fun exitApp() {
+        backgroundPrefs.edit().remove("summoned_roles").apply()
         // 1) 持久化退出意图（commit 同步落盘，保证进程被 kill 前已写入，
         //    避免系统杀后台后 Service 因标志丢失而复活）。
         markExitingCommit()
@@ -3898,7 +3918,8 @@ class PetService : Service() {
     /** 任务栈被移除（用户从最近任务划掉）时的兜底退出，避免前台服务残留。 */
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        if (!isExiting) exitApp()
+        if (!isExiting && !keepAfterTaskRemoved()) exitApp()
+        // Otherwise the task disappears, but the foreground service stays running.
     }
 
     override fun onDestroy() {
@@ -3976,6 +3997,7 @@ class PetService : Service() {
         positionNewlySummonedRole(roleId)
         startLoop()
         startRandomLoop(rt)
+        saveSummonedRoles()
         // 通知首页：该角色已进入在屏状态（覆盖“服务异步启动”场景，避免卡片不刷新）。
         onActiveRolesChanged?.invoke()
         // 新角色召唤后，重新置顶辅助浮层（宠物窗叠放保持召唤顺序、不再重排）。
@@ -4007,6 +4029,7 @@ class PetService : Service() {
         // 仅清除该角色的定格层（不串其它角色）。
         clearAllFreeze(roleId)
         engines.remove(roleId)
+        saveSummonedRoles()
         imeShiftY.remove(roleId)
         imeLastMode.remove(roleId)
         imeLastTop.remove(roleId)
@@ -4076,6 +4099,7 @@ class PetService : Service() {
 
     /** 角色是否已在屏（已召唤）。 */
     fun isRoleActive(roleId: String): Boolean = engines.containsKey(roleId)
+    fun activeRoleCount(): Int = engines.size
 
     /**
      * 召唤指定角色（多角色并存，互不干扰）：
