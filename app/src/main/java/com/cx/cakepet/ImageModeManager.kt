@@ -326,6 +326,10 @@ class ImageModeManager(
         private var timeElapsed = 0L
         private var timeTarget = sampleTimeTarget()
         private var pendingFinish = false
+        private var completedCycles = 0
+        /** Read-only preview motion; each entered frame contributes once, as in PetView. */
+        private var previewMotionX = def.frames[0].dx
+        private var previewMotionY = def.frames[0].dy
         var isEnded: Boolean = false
             private set
 
@@ -339,6 +343,16 @@ class ImageModeManager(
         val debugDurationMinMs: Long? get() = def.durationMin
         val debugDurationMaxMs: Long? get() = def.durationMax
         val debugWaitingForCycle: Boolean get() = pendingFinish
+        val debugCycleCount: Int get() = completedCycles
+        val debugElapsedMs: Long get() = timeElapsed
+        val debugTargetMs: Long? get() =
+            if (def.loopMode == "timed" && timeTarget != Long.MAX_VALUE) timeTarget else null
+        val debugMotionX: Int get() = previewMotionX
+        val debugMotionY: Int get() = previewMotionY
+        private fun countEnteredFrame() {
+            previewMotionX += def.frames[frameIndex].dx
+            previewMotionY += def.frames[frameIndex].dy
+        }
         val isInfiniteLoop: Boolean get() = def.loopMode == "infinite"
         val currentDx: Int get() = def.frames[frameIndex].dx
         val currentDy: Int get() = def.frames[frameIndex].dy
@@ -366,6 +380,7 @@ class ImageModeManager(
             elapsed = 0L
             frameDelay = def.frames[0].delay().coerceAtLeast(1L)
             if (restartTimer) {
+                completedCycles = 0
                 timeElapsed = 0L
                 timeTarget = sampleTimeTarget()
                 pendingFinish = false
@@ -374,17 +389,23 @@ class ImageModeManager(
         }
 
         /** Reuse the cursor when a function pool selects its current mode again. */
-        fun restart() = resetPlayback(restartTimer = true)
+        fun restart() {
+            previewMotionX = def.frames[0].dx
+            previewMotionY = def.frames[0].dy
+            resetPlayback(restartTimer = true)
+        }
 
         private fun switchTo(id: String): Boolean {
             if (id == def.name) {
                 // A self nextMode is a new cycle, not a real mode transition.
                 resetPlayback(restartTimer = true)
+                countEnteredFrame()
                 return true
             }
             val next = modes[id] ?: return false
             def = next
             resetPlayback(restartTimer = true)
+            countEnteredFrame()
             return true
         }
 
@@ -420,12 +441,15 @@ class ImageModeManager(
                 if (elapsed >= frameDelay) {
                     if (frameIndex < def.frames.lastIndex) {
                         frameIndex++
+                        countEnteredFrame()
                         elapsed = 0L
                         frameDelay = def.frames[frameIndex].delay().coerceAtLeast(1L)
                         changed = true
                     } else if (def.loop && !pendingFinish) {
                         // Looping frames retain their sampled timer; no mode switch.
+                        completedCycles++
                         resetPlayback(restartTimer = false)
+                        countEnteredFrame()
                         changed = true
                     } else {
                         val next = def.nextModeName
