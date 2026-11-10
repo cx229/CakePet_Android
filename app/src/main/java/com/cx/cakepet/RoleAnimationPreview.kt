@@ -12,6 +12,10 @@ import kotlin.math.min
 
 /** Unified live debugger: editor page and detail dialog share exactly this view. */
 class RoleAnimationPreview(context: Context) : View(context) {
+    private companion object {
+        val PLAYBACK_STATUSES = listOf("播放中", "已结束", "等待调度", "无法播放")
+    }
+
     data class State(
         val chain: List<String> = emptyList(),
         val current: String = "",
@@ -47,11 +51,20 @@ class RoleAnimationPreview(context: Context) : View(context) {
         val nameWidth: Float, val interactive: Boolean
     )
 
+    private fun statusRight(widthPx: Int) = widthPx - dp(50f)
+
+    /** Reserve the same width through status changes so the action chain stays in place. */
+    private fun statusWidth(widthPx: Int): Float {
+        paint.textSize = 8f * scaled
+        val available = (statusRight(widthPx) - dp(60f)).coerceAtLeast(0f)
+        return PLAYBACK_STATUSES.maxOf { paint.measureText("● $it") }.coerceAtMost(available)
+    }
+
     /** One layout for measurement, drawing and hit testing; separators never enter the node border. */
     private fun chainNodes(widthPx: Int): List<ChainNode> {
-        paint.textSize = 10f * scaled
         val left = dp(12f)
-        val limit = (widthPx - dp(54f)).coerceAtLeast(left + dp(40f))
+        val limit = statusRight(widthPx) - statusWidth(widthPx) - dp(8f)
+        paint.textSize = 10f * scaled
         val space = dp(6f)
         val result = mutableListOf<ChainNode>()
         var x = left
@@ -59,11 +72,11 @@ class RoleAnimationPreview(context: Context) : View(context) {
         state.chain.forEachIndexed { index, name ->
             val terminal = name == "◎" || name == "∞" ||
                 (state.chain.lastOrNull() == "◎" && index == state.chain.lastIndex - 1)
-            val displayed = android.text.TextUtils.ellipsize(name,
-                android.text.TextPaint(paint), (limit - left - dp(18f)).coerceAtLeast(dp(12f)),
-                android.text.TextUtils.TruncateAt.END).toString()
             val prefix = if (index == 0) "" else " > "
             val prefixWidth = paint.measureText(prefix)
+            val displayed = android.text.TextUtils.ellipsize(name,
+                android.text.TextPaint(paint), (limit - left - prefixWidth).coerceAtLeast(0f),
+                android.text.TextUtils.TruncateAt.END).toString()
             val nameWidth = paint.measureText(displayed)
             if (x > left && x + prefixWidth + nameWidth > limit) {
                 x = left
@@ -179,6 +192,18 @@ class RoleAnimationPreview(context: Context) : View(context) {
         paint.textSize = 21f * scaled
         canvas.drawText("↺", width - dp(34f), artHeight + dp(21f), paint)
 
+        val statusTextWidth = statusWidth(width)
+        val statusText = android.text.TextUtils.ellipsize("● ${state.status}",
+            android.text.TextPaint(paint), statusTextWidth,
+            android.text.TextUtils.TruncateAt.END).toString()
+        paint.color = when (state.status) {
+            "播放中" -> Color.rgb(38, 150, 89)
+            "已结束" -> Color.rgb(208, 62, 62)
+            else -> resources.getColor(R.color.cp_preview_hud_text, context.theme)
+        }
+        canvas.drawText(statusText, statusRight(width) - paint.measureText(statusText),
+            artHeight + dp(16f), paint)
+
         // One compact information line above the two progress strips.
         paint.textSize = 8f * scaled
         val infoY = artHeight + dp(16f + (chainLines(width) - 1) * 18f + 16f)
@@ -188,20 +213,12 @@ class RoleAnimationPreview(context: Context) : View(context) {
             else -> "播放一次"
         }
         val leftText = "${state.current} · 第${state.frame + 1}/${state.frameCount}帧 · $loopText"
-        val statusText = "● ${state.status}"
-        val statusWidth = paint.measureText(statusText)
-        val leftWidth = (width - statusWidth - dp(34f)).coerceAtLeast(dp(20f))
+        val leftWidth = (width - dp(24f)).coerceAtLeast(0f)
         val clippedLeft = android.text.TextUtils.ellipsize(leftText,
             android.text.TextPaint(paint), leftWidth,
             android.text.TextUtils.TruncateAt.END).toString()
         paint.color = resources.getColor(R.color.cp_preview_hud_text, context.theme)
         canvas.drawText(clippedLeft, dp(12f), infoY, paint)
-        paint.color = when (state.status) {
-            "播放中" -> Color.rgb(38, 150, 89)
-            "已结束" -> Color.rgb(208, 62, 62)
-            else -> resources.getColor(R.color.cp_preview_hud_text, context.theme)
-        }
-        canvas.drawText(statusText, width - dp(12f) - statusWidth, infoY, paint)
 
         val x0 = dp(12f)
         val x1 = width - dp(12f)
