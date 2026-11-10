@@ -158,7 +158,7 @@ internal object RolePackNormalizer {
                 it != "全部" && it != "未分组"
             })
             catalog?.keys()?.asSequence()?.toList()?.sorted()?.forEach { id ->
-                val refs = catalog.optJSONObject(id)?.optJSONArray("groups")
+                val refs = catalog?.optJSONObject(id)?.optJSONArray("groups")
                 names(refs).filter { it != "全部" && it != "未分组" }
                     .forEach { ordered.add(it) }
             }
