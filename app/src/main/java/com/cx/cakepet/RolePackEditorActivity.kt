@@ -1042,7 +1042,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 setTextColor(getColor(R.color.cp_note))
                 setPadding(px(6), 0, 0, 0)
             })
-            rippleClick(this) { toggle() }
+            // Folder expansion is immediate; keep the ripple without delaying redraw.
+            setOnClickListener { toggle() }
         }
 
     /** Existing editor-page card styling. Do not change when adjusting dialogs. */
