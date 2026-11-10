@@ -1558,14 +1558,115 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
+    /** Reuse the same RecyclerView + ItemTouchHelper drag lifecycle as home,
+     * catalog and frame lists. One expanded folder (including its children) is
+     * a single movable item; fixed groups never enter the drag targets.
+     */
+    private fun sortableFolderRecycler(
+        rows: List<Pair<String, LinearLayout>>,
+        canMove: (String) -> Boolean,
+        persist: (List<String>) -> Unit,
+        header: LinearLayout? = null
+    ): RecyclerView {
+        val items = rows.toMutableList()
+        val recycler = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@RolePackEditorActivity)
+            isNestedScrollingEnabled = header == null && false
+            itemAnimator = null
+            clipToPadding = false
+        }
+        val offset = if (header != null) 1 else 0
+        val adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun getItemCount(): Int = items.size + offset
+            override fun onCreateViewHolder(parent: android.view.ViewGroup, type: Int): RecyclerView.ViewHolder {
+                val slot = FrameLayout(this@RolePackEditorActivity)
+                return object : RecyclerView.ViewHolder(slot) {}
+            }
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val slot = holder.itemView as FrameLayout
+                slot.removeAllViews()
+                val view = if (position == 0 && header != null) header else items[position - offset].second
+                (view.parent as? android.view.ViewGroup)?.removeView(view)
+                slot.addView(view, FrameLayout.LayoutParams(-1, -2))
+            }
+        }
+        recycler.adapter = adapter
+        var dirty = false
+        val touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+        ) {
+            override fun isLongPressDragEnabled(): Boolean = true
+            override fun getMovementFlags(rv: RecyclerView, holder: RecyclerView.ViewHolder): Int {
+                val index = holder.bindingAdapterPosition - offset
+                return if (index in items.indices && canMove(items[index].first))
+                    makeMovementFlags(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) else 0
+            }
+            override fun onMove(rv: RecyclerView, from: RecyclerView.ViewHolder,
+                                target: RecyclerView.ViewHolder): Boolean {
+                val a = from.bindingAdapterPosition - offset
+                val b = target.bindingAdapterPosition - offset
+                if (a !in items.indices || b !in items.indices ||
+                    !canMove(items[a].first) || !canMove(items[b].first)) return false
+                items.add(b, items.removeAt(a))
+                adapter.notifyItemMoved(a + offset, b + offset)
+                dirty = true
+                return true
+            }
+            override fun onSwiped(holder: RecyclerView.ViewHolder, direction: Int) {}
+            override fun clearView(rv: RecyclerView, holder: RecyclerView.ViewHolder) {
+                super.clearView(rv, holder)
+                if (dirty) {
+                    dirty = false
+                    attempt { persist(items.map { it.first }.filter(canMove)) }
+                }
+            }
+        })
+        touch.attachToRecyclerView(recycler)
+        return recycler
+    }
+
+    private fun installSortableFolderPage(rows: List<Pair<String, LinearLayout>>,
+                                          canMove: (String) -> Boolean,
+                                          persist: (List<String>) -> Unit) {
+        val heading = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        while (panel.childCount > 0) {
+            val child = panel.getChildAt(0)
+            panel.removeViewAt(0)
+            heading.addView(child)
+        }
+        val recycler = sortableFolderRecycler(rows, canMove, persist, heading)
+        recycler.isNestedScrollingEnabled = true
+        val parent = scroll.parent as android.view.ViewGroup
+        parent.addView(recycler, parent.indexOfChild(scroll) + 1,
+            LinearLayout.LayoutParams(-1, 0, 1f))
+        scroll.visibility = View.GONE
+        modePageRecycler = recycler
+    }
+
+    /** Match the existing image-page two-button toolbar without new UI components. */
+    private fun twoActions(first: String, firstClick: () -> Unit,
+                           second: String, secondClick: () -> Unit) {
+        val toolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        toolbar.addView(button(first, firstClick),
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { rightMargin = px(5) })
+        toolbar.addView(button(second, secondClick),
+            LinearLayout.LayoutParams(0, px(44), 1f).apply { leftMargin = px(5) })
+        panel.addView(toolbar, LinearLayout.LayoutParams(-1, px(44)).apply {
+            topMargin = px(8)
+            bottomMargin = px(8)
+        })
+    }
+
     private fun modes() {
         section("动作动画", "modes")
         panel.addView(text("管理角色的动作动画与播放规则。\n点击“+”创建动画，点击卡片编辑。", 12f).apply {
             setPadding(px(4), 0, px(4), px(4))
             setTextColor(getColor(R.color.cp_note))
         })
-        action("＋ 新建动画") { newMode() }
-        action("＋ 新建动画组") { newModeGroup() }
+        twoActions("＋ 新建动画", { newMode() }, "＋ 新建动画组", { newModeGroup() })
         val grouped = linkedMapOf<String, MutableList<String>>()
         grouped["全部"] = ids().toMutableList()
         knownGroups().forEach { grouped[it] = mutableListOf() }
@@ -1577,6 +1678,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         grouped["未分组"] = ungrouped
         val thumbnails = mutableMapOf<String, android.graphics.Bitmap?>()
+        val folderRows = mutableListOf<Pair<String, LinearLayout>>()
         for ((group, names) in grouped) {
             val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val header = LinearLayout(this).apply {
@@ -1687,46 +1789,18 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 if (!expandedModeGroups.add(group)) expandedModeGroups.remove(group)
                 refreshHeader()
             }
-            if (group != "全部" && group != "未分组") {
-                // Long-press the normal folder card to rearrange; no drag icon.
-                header.setOnLongClickListener {
-                    val data = android.content.ClipData.newPlainText("mode-group", group)
-                    header.startDragAndDrop(data, View.DragShadowBuilder(header), group, 0)
-                    true
-                }
-                header.setOnDragListener { _, event ->
-                    when (event.action) {
-                        android.view.DragEvent.ACTION_DRAG_STARTED ->
-                            event.localState is String && event.localState in knownGroups()
-                        android.view.DragEvent.ACTION_DROP -> {
-                            val source = event.localState as? String
-                            val order = knownGroups().toMutableList()
-                            val from = order.indexOf(source)
-                            val to = order.indexOf(group)
-                            if (from >= 0 && to >= 0 && from != to) {
-                                order.add(to, order.removeAt(from))
-                                attempt {
-                                    change { json ->
-                                        json.put("modeGroups", JSONArray().apply {
-                                            order.forEach { put(it) }
-                                        })
-                                    }
-                                    val previousScroll = scroll.scrollY
-                                    modes()
-                                    scroll.post {
-                                        if (screen == "modes") scroll.scrollTo(0, previousScroll)
-                                    }
-                                }
-                            }
-                            true
-                        }
-                        else -> true
-                    }
-                }
-            }
-            panel.addView(header, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
-            panel.addView(children, LinearLayout.LayoutParams(-1, -2))
+            val groupRow = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            groupRow.addView(header, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = px(6)
+            })
+            groupRow.addView(children, LinearLayout.LayoutParams(-1, -2))
+            folderRows.add(group to groupRow)
             refreshHeader()
+        }
+        installSortableFolderPage(folderRows, { it != "全部" && it != "未分组" }) { order ->
+            change { json ->
+                json.put("modeGroups", JSONArray().apply { order.forEach { put(it) } })
+            }
         }
     }
 
