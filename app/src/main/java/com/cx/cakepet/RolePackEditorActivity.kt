@@ -4018,19 +4018,26 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun chooseModes(single: Boolean, initial: List<String>,
                             headerTitle: String? = null, headerDescription: String? = null,
                             footerNote: String? = null, onConfirm: (List<String>) -> Unit) {
+        val modeIds = ids()
         val selected = linkedSetOf<String>().apply {
-            val valid = initial.filter { it in ids() }
+            val valid = initial.filter { it in modeIds }
             addAll(if (single) valid.take(1) else valid)
         }
         val groups = (knownGroups() + "未分组").distinct()
-        // A successor is single-choice: open only its first containing group.
-        // When it is set to automatic (null), all groups start collapsed.
+        val memberships = modeIds.associateWith { modeGroups(it) }
+        val groupedModes = groups.mapNotNull { group ->
+            val candidates = modeIds.filter { modeId ->
+                val belonging = memberships[modeId].orEmpty()
+                if (group == "未分组") belonging.isEmpty() else group in belonging
+            }
+            if (candidates.isEmpty()) null else group to candidates
+        }
+        // A successor initially expands only the group containing the current choice.
         val expanded = mutableSetOf<String>()
         if (single) selected.firstOrNull()?.let { mode ->
-            expanded.add(groups.firstOrNull { group ->
-                if (group == "未分组") modeGroups(mode).isEmpty()
-                else group in modeGroups(mode)
-            } ?: "未分组")
+            expanded.add(groupedModes.firstOrNull { (group, candidates) ->
+                mode in candidates
+            }?.first ?: "未分组")
         }
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
         val (frame, body) = pickerShell(dialog,
@@ -4046,105 +4053,131 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val viewport = ScrollView(this).apply { addView(listing) }
         body.addView(viewport,
             LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * .55f).toInt()))
-        lateinit var redraw: () -> Unit
-        redraw = {
-            val scrollY = viewport.scrollY
-            listing.removeAllViews()
+
+        // Keep each group's views alive. Expanding only changes its child container,
+        // exactly as the main animation folder list does.
+        val choiceButtons = mutableMapOf<String, MutableList<android.widget.CompoundButton>>()
+        val groupCounts = mutableMapOf<String, TextView>()
+        var automaticRadio: android.widget.RadioButton? = null
+        var syncingChoices = false
+        fun refreshSelection() {
+            syncingChoices = true
             selectionInfo.text = if (single) "后续动画：${selected.firstOrNull() ?: "自动（由系统决定）"}"
                 else "已选 ${selected.size} 个动画"
+            automaticRadio?.isChecked = selected.isEmpty()
+            choiceButtons.forEach { (name, controls) ->
+                controls.forEach { it.isChecked = name in selected }
+            }
+            groupedModes.forEach { (group, candidates) ->
+                groupCounts[group]?.text = "${candidates.count { it in selected }}/${candidates.size}"
+            }
+            syncingChoices = false
+        }
+        fun selectMode(name: String) {
             if (single) {
-                val automatic = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    selectionSurface(this)
-                    setPadding(px(10), 0, px(8), 0)
-                    minimumHeight = px(46)
+                if (selected.size != 1 || name !in selected) {
+                    selected.clear()
+                    selected.add(name)
                 }
-                val autoRadio = android.widget.RadioButton(this).apply {
-                    isChecked = selected.isEmpty()
-                    contentDescription = "自动（由系统决定）"
-                    setOnClickListener {
-                        if (selected.isNotEmpty()) {
-                            selected.clear()
-                            redraw()
-                        } else isChecked = true
-                    }
-                }
-                automatic.addView(autoRadio, LinearLayout.LayoutParams(px(42), px(46)))
-                automatic.addView(text("自动（由系统决定）", 15f).apply {
-                    setPadding(0, 0, 0, 0)
-                }, LinearLayout.LayoutParams(0, -2, 1f))
-                rippleClick(automatic) {
+            } else if (!selected.add(name)) selected.remove(name)
+            refreshSelection()
+        }
+        if (single) {
+            val automatic = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                selectionSurface(this)
+                setPadding(px(10), 0, px(8), 0)
+                minimumHeight = px(46)
+            }
+            automaticRadio = android.widget.RadioButton(this).apply {
+                isChecked = selected.isEmpty()
+                contentDescription = "自动（由系统决定）"
+                setOnClickListener {
                     if (selected.isNotEmpty()) {
                         selected.clear()
-                        redraw()
-                    }
-                }
-                listing.addView(automatic, selectionRowParams())
-            }
-            for (group in groups.distinct()) {
-                val candidates = ids().filter { modeId ->
-                    val memberships = modeGroups(modeId)
-                    if (group == "未分组") memberships.isEmpty() else group in memberships
-                }
-                if (candidates.isEmpty()) continue
-                listing.addView(pickerGroupHeader(group, group in expanded,
-                    candidates.count { it in selected }, candidates.size) {
-                    if (!expanded.add(group)) expanded.remove(group)
-                    redraw()
-                }, selectionRowParams())
-                if (group in expanded) {
-                    for (name in candidates) {
-                        val row = LinearLayout(this).apply {
-                            orientation = LinearLayout.HORIZONTAL
-                            gravity = Gravity.CENTER_VERTICAL
-                            selectionSurface(this)
-                            setPadding(px(10), 0, px(5), 0)
-                        }
-                        val check: android.widget.CompoundButton = if (single) {
-                            android.widget.RadioButton(this).apply {
-                                isChecked = name in selected
-                                contentDescription = "选择后续动画：$name"
-                                setOnClickListener {
-                                    if (name !in selected) {
-                                        selected.clear()
-                                        selected.add(name)
-                                        redraw()
-                                    } else isChecked = true
-                                }
-                            }
-                        } else {
-                            CheckBox(this).apply {
-                                isChecked = name in selected
-                                setOnCheckedChangeListener { _, checked ->
-                                    if (checked) selected.add(name) else selected.remove(name)
-                                    redraw()
-                                }
-                            }
-                        }
-                        row.minimumHeight = px(48)
-                        row.addView(check, LinearLayout.LayoutParams(px(42), px(48)))
-                        row.addView(linkedModeChains(listOf(name), root.getJSONObject("modes"),
-                            "", 12f) { mode -> openModeFromDetail(mode) }.apply {
-                            gravity = Gravity.CENTER_VERTICAL
-                            setPadding(0, px(2), px(6), px(2))
-                        }, LinearLayout.LayoutParams(0, -2, 1f))
-                        listing.addView(row, selectionRowParams(1))
-                        rippleClick(row) {
-                            if (single) {
-                                if (name !in selected) {
-                                    selected.clear()
-                                    selected.add(name)
-                                    redraw()
-                                }
-                            } else check.isChecked = !check.isChecked
-                        }
-                    }
+                        refreshSelection()
+                    } else isChecked = true
                 }
             }
-            viewport.post { viewport.scrollTo(0, scrollY) }
+            automatic.addView(automaticRadio, LinearLayout.LayoutParams(px(42), px(46)))
+            automatic.addView(text("自动（由系统决定）", 15f).apply {
+                setPadding(0, 0, 0, 0)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            rippleClick(automatic) {
+                if (selected.isNotEmpty()) {
+                    selected.clear()
+                    refreshSelection()
+                }
+            }
+            listing.addView(automatic, selectionRowParams())
         }
-        redraw()
+        groupedModes.forEach { (group, candidates) ->
+            val children = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                visibility = if (group in expanded) View.VISIBLE else View.GONE
+            }
+            fun fillChildren() {
+                if (children.childCount != 0) return
+                candidates.forEach { name ->
+                    val row = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        selectionSurface(this)
+                        setPadding(px(10), 0, px(5), 0)
+                        minimumHeight = px(48)
+                    }
+                    val check: android.widget.CompoundButton = if (single) {
+                        android.widget.RadioButton(this).apply {
+                            isChecked = name in selected
+                            contentDescription = "选择后续动画：$name"
+                            setOnClickListener { selectMode(name) }
+                        }
+                    } else {
+                        CheckBox(this).apply {
+                            isChecked = name in selected
+                            setOnCheckedChangeListener { _, checked ->
+                                if (syncingChoices) return@setOnCheckedChangeListener
+                                if (checked) selected.add(name) else selected.remove(name)
+                                refreshSelection()
+                            }
+                        }
+                    }
+                    choiceButtons.getOrPut(name) { mutableListOf() }.add(check)
+                    row.addView(check, LinearLayout.LayoutParams(px(42), px(48)))
+                    row.addView(linkedModeChains(listOf(name), root.getJSONObject("modes"),
+                        "", 12f) { mode -> openModeFromDetail(mode) }.apply {
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(0, px(2), px(6), px(2))
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    children.addView(row, selectionRowParams(1))
+                    rippleClick(row) {
+                        if (single) selectMode(name) else check.isChecked = !check.isChecked
+                    }
+                }
+            }
+            lateinit var header: LinearLayout
+            header = pickerGroupHeader(group, group in expanded,
+                candidates.count { it in selected }, candidates.size) {
+                // Do not rebuild the list or wait for the ripple to finish.
+                val open = if (group in expanded) {
+                    expanded.remove(group)
+                    false
+                } else {
+                    expanded.add(group)
+                    true
+                }
+                if (open) fillChildren()
+                children.visibility = if (open) View.VISIBLE else View.GONE
+                (header.getChildAt(0) as TextView).text =
+                    if (open) "▾ 📂" else "▸ 📁"
+            }
+            groupCounts[group] = header.getChildAt(2) as TextView
+            listing.addView(header, selectionRowParams())
+            listing.addView(children)
+            if (group in expanded) fillChildren()
+        }
+        refreshSelection()
 
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, px(12), 0, 0) }
         actions.addView(dialogButton("取消", primary = false) { dialog.dismiss() },
