@@ -88,9 +88,8 @@ object RoleRegistry {
         }
     }
 
-    /** 全部角色（预装 ∪ 用户上传）。 */
-    fun all(): List<RoleDescriptor> = PRESETS + cachedUser
+    /** Only player-owned packs appear in the catalog. APK templates are creation sources. */
+    fun all(): List<RoleDescriptor> = cachedUser
 
-    fun byId(id: String): RoleDescriptor? =
-        PRESETS.firstOrNull { it.id == id } ?: cachedUser.firstOrNull { it.id == id }
+    fun byId(id: String): RoleDescriptor? = cachedUser.firstOrNull { it.id == id }
 }
