@@ -136,19 +136,6 @@ class GlobalSettingsActivity : AppCompatActivity() {
                         watermarkLevelRow.visibility = if (checked) View.VISIBLE else View.GONE
                     }
                 }
-                val prefs = getSharedPreferences("cakepet_background", MODE_PRIVATE)
-                findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.sw_keep_after_task_removed).apply {
-                    isChecked = prefs.getBoolean("keep_after_task_removed", true)
-                    setOnCheckedChangeListener { _, checked ->
-                        prefs.edit().putBoolean("keep_after_task_removed", checked).apply()
-                        if (!checked) Toast.makeText(this@GlobalSettingsActivity,
-                            "划掉最近任务时将彻底退出 CakePet", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                findViewById<View>(R.id.row_keep_after_task_removed).setOnClickListener {
-                    findViewById<androidx.appcompat.widget.SwitchCompat>(
-                        R.id.sw_keep_after_task_removed).toggle()
-                }
                 findViewById<View>(R.id.row_battery_optimization).setOnClickListener {
                     openSystemSettings(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                 }
