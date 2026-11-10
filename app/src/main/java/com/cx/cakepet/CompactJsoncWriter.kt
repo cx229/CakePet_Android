@@ -37,7 +37,7 @@ internal object CompactJsoncWriter {
             val keys = obj.keys().asSequence().toList()
             val preferred = when {
                 path.isEmpty() -> listOf("version","id","name","shortName","authors",
-                    "decodeTarget","anchorRes","note","usage","functions","modeGroups","modes","thinkings")
+                    "decodeTarget","anchorRes","note","usage","functions","modeGroups","modes","thinkingGroups","thinkings","resourceOrder")
                 path.size == 2 && path[0] == "modes" -> listOf("note","usage","loopMode",
                     "loop","duration","finishCycle","nextMode","groups","thinking","frames")
                 else -> listOf("note","usage")
@@ -115,7 +115,7 @@ internal object CompactJsoncWriter {
                     val keys = if (depth == 0) {
                         val preferred = listOf("version", "id", "name", "shortName", "authors",
                             "decodeTarget", "anchorRes", "note", "usage", "functions", "modeGroups",
-                            "modes", "thinkings")
+                            "modes", "thinkingGroups", "thinkings", "resourceOrder")
                         preferred.filter { it in rawKeys } + rawKeys.filter { it !in preferred }
                     } else rawKeys
                     keys.forEachIndexed { index, key ->
