@@ -23,13 +23,17 @@ class CakePetApplication : Application() {
         appCtx = this
         // Keep the APK template available for creation, but register only player-owned packs.
         RoleRegistry.init(this)
-        RoleStore.ensureInitialRole(this)
-        val firstRoleId = RoleStore.getHomeRoles(this).firstOrNull()?.instanceId
-            ?: RoleRegistry.DEFAULT.id
-        val cfg = PetConfig.forRole(this, firstRoleId).getBlocking()
+        val cfg = try {
+            val firstRoleId = RoleStore.getHomeRoles(this).firstOrNull()?.instanceId
+                ?: RoleRegistry.PRESETS.firstOrNull()?.id
+            firstRoleId?.let { PetConfig.forRole(this, it).getBlocking() }
+        } catch (error: Exception) {
+            android.util.Log.e("CakePetApplication", "Unable to read startup night mode", error)
+            null
+        }
         val mode = when {
-            cfg.forceNightOn -> AppCompatDelegate.MODE_NIGHT_YES
-            cfg.forceNightOff -> AppCompatDelegate.MODE_NIGHT_NO
+            cfg?.forceNightOn == true -> AppCompatDelegate.MODE_NIGHT_YES
+            cfg?.forceNightOff == true -> AppCompatDelegate.MODE_NIGHT_NO
             else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
         }
         AppCompatDelegate.setDefaultNightMode(mode)

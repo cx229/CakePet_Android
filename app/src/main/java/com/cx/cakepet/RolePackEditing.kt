@@ -52,9 +52,11 @@ object RolePackEditing {
         if (!live.exists() && backup.exists()) backup.renameTo(live)
         return live
     }
-    fun duplicate(ctx: Context, source: RoleDescriptor, displayName: String): String {
+    fun duplicate(ctx: Context, source: RoleDescriptor, displayName: String): String =
+        duplicate(ctx, source, displayName, newId())
+
+    internal fun duplicate(ctx: Context, source: RoleDescriptor, displayName: String, id: String): String {
         require(displayName.isNotBlank() && displayName.length <= 60) { "请填写有效的素材包名称" }
-        val id = newId()
         val target = dir(ctx, id)
         try {
             if (source.source == RoleSource.ASSETS) copyAssets(ctx, source.rootPath, target)

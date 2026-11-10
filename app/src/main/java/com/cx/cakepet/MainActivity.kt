@@ -22,7 +22,12 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -37,6 +42,7 @@ import com.cx.cakepet.AppVersion
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private var initialRoleCheckFinished = false
 
     private val overlayLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -63,8 +69,32 @@ class MainActivity : AppCompatActivity() {
         binding.statusBarSpacer.requestLayout()
         binding.tvAuthor.text = "初心丶CX  ·  ${AppVersion.name}"
         setupHomeRecycler()
-        buildRoleCards()
         setupMainMenu()
+        initializeHome()
+    }
+
+    private fun initializeHome() {
+        binding.btnAddRole.isEnabled = false
+        binding.btnMenu.isEnabled = false
+        val appContext = applicationContext
+        lifecycleScope.launch {
+            val error = withContext(Dispatchers.IO) {
+                try {
+                    RoleStore.ensureInitialRole(appContext)
+                    null
+                } catch (error: Exception) {
+                    android.util.Log.e("MainActivity", "Unable to create the initial role", error)
+                    error
+                }
+            }
+            initialRoleCheckFinished = true
+            binding.btnAddRole.isEnabled = true
+            binding.btnMenu.isEnabled = true
+            buildRoleCards()
+            if (error != null) {
+                Toast.makeText(this@MainActivity, "白酥初始化失败，请重新打开应用后重试", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     /** 首页右上角“更多”入口：复用设置页右上角浮窗逻辑（PopupMenuHelper）。 */
@@ -106,7 +136,7 @@ class MainActivity : AppCompatActivity() {
         }
         previewPlayers.values.forEach { it.stop() }
         previewPlayers.clear()
-        buildRoleCards()   // 重建首页实例列表（加入新角色/重复加入后需刷新），内部末尾调用 refreshCards()
+        if (initialRoleCheckFinished) buildRoleCards()
         // Each card applies its own presentation state (animated / still / summoned).
         // Do not unconditionally restart placeholders or static previews here.
     }
@@ -387,8 +417,7 @@ class MainActivity : AppCompatActivity() {
         RoleStore.resetAllSoftwareData(this)
         // 3. Remove the now-unified player material library.
         filesDir.resolve("roles").deleteRecursively()
-        // 4. A full software reset recreates the first-install pack and one home role.
-        RoleStore.ensureInitialRole(this)
+        // The recreated home initializes the first-install pack after the file cleanup.
         // Remove remembered active pets: reset must not restore removed instances.
         getSharedPreferences("cakepet_background", MODE_PRIVATE).edit()
             .remove("summoned_roles").apply()

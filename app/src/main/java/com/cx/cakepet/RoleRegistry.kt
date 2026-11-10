@@ -18,7 +18,7 @@ object RoleRegistry {
         get() = PRESETS.firstOrNull { it.id == "baiasu" } ?: PRESETS.first()
 
     /** 用户上传素材模板缓存（由 [refreshUserRoles] 从 RoleStore 载入，避免每次走 DataStore）。 */
-    private var cachedUser: List<RoleDescriptor> = emptyList()
+    @Volatile private var cachedUser: List<RoleDescriptor> = emptyList()
 
     /** 程序启动最早点调用：扫描预装包 + 载入用户上传模板。 */
     fun init(ctx: Context) {

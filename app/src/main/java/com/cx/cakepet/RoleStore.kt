@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.UUID
 
 /**
  * 角色持久化层（两个 app 级 DataStore）：
@@ -49,23 +48,44 @@ object RoleStore {
      * must never silently recreate a character on the next launch.
      */
     @Synchronized fun ensureInitialRole(ctx: Context) {
-        val initialized = runBlocking {
-            ctx.homeRolesStore.data.first()[KEY_INITIAL_ROLE_CREATED] == true
+        val prefs = runBlocking { ctx.homeRolesStore.data.first() }
+        if (prefs[KEY_INITIAL_ROLE_CREATED] == true) return
+
+        // Keep the package ID until both the catalog entry and home instance are ready.
+        // If the process dies halfway through, the next attempt can remove just that package.
+        val pendingId = prefs[KEY_INITIAL_ROLE_PENDING]
+            ?.takeIf { it.matches(Regex("custom_[0-9a-f]{16}")) }
+        val id = pendingId ?: RolePackEditing.newId()
+        if (pendingId == null) {
+            runBlocking { ctx.homeRolesStore.edit { it[KEY_INITIAL_ROLE_PENDING] = id } }
+        } else {
+            removeIncompleteInitialRole(ctx, id)
         }
-        if (initialized) return
-        val template = RoleRegistry.DEFAULT
-        val id = RolePackEditing.duplicate(ctx, template, template.displayName)
         try {
-            addHomeRole(ctx, HomeRoleInstance("inst_" + UUID.randomUUID().toString(), id))
+            val template = RoleRegistry.DEFAULT
+            RolePackEditing.duplicate(ctx, template, template.displayName, id)
+            val instanceId = "inst_" + id.removePrefix("custom_")
+            addHomeRole(ctx, HomeRoleInstance(instanceId, id))
             runBlocking {
-                ctx.homeRolesStore.edit { it[KEY_INITIAL_ROLE_CREATED] = true }
+                ctx.homeRolesStore.edit {
+                    it[KEY_INITIAL_ROLE_CREATED] = true
+                    it.remove(KEY_INITIAL_ROLE_PENDING)
+                }
             }
         } catch (error: Exception) {
-            removeHomeRolesByTemplate(ctx, id)
-            removeUserRole(ctx, id)
-            RolePackEditing.dir(ctx, id).deleteRecursively()
+            try {
+                removeIncompleteInitialRole(ctx, id)
+            } catch (cleanupError: Exception) {
+                error.addSuppressed(cleanupError)
+            }
             throw error
         }
+    }
+
+    private fun removeIncompleteInitialRole(ctx: Context, id: String) {
+        removeHomeRolesByTemplate(ctx, id)
+        removeUserRole(ctx, id)
+        check(RolePackEditing.dir(ctx, id).deleteRecursively()) { "Cannot remove incomplete starter pack" }
     }
 
     /** Include app-level registry metadata and initial-install marker. */
@@ -387,5 +407,6 @@ object RoleStore {
     private val KEY_USER_ROLES = stringPreferencesKey("user_roles")
     private val KEY_HOME_ROLES = stringPreferencesKey("home_roles")
     private val KEY_INITIAL_ROLE_CREATED = booleanPreferencesKey("initial_role_created")
+    private val KEY_INITIAL_ROLE_PENDING = stringPreferencesKey("initial_role_pending")
     private val KEY_CATALOG_ORDER = stringPreferencesKey("catalog_order")
 }
