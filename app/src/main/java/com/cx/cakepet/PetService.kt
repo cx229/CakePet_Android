@@ -962,7 +962,7 @@ class PetService : Service() {
         }
         registerReceiver(screenReceiver, filter)
 
-        // 角色召唤交由 onStartCommand 处理（EXTRA_ROLE_ID 指定角色；无意图则恢复默认角色）。
+        // 角色召唤交由 onStartCommand 处理（指定角色或按玩家上次实际召唤状态恢复）。
     }
 
     private fun initPetView(roleId: String) {
