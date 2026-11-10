@@ -1,7 +1,5 @@
 package com.cx.cakepet
 
-import android.app.AlertDialog
-import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -15,31 +13,6 @@ import androidx.appcompat.widget.SwitchCompat
 /** App-level display preferences. Uses the same titlebar, module cards and spinner as other settings. */
 class PersonalizationSettingsActivity : AppCompatActivity() {
     private fun dp(value: Int) = (resources.displayMetrics.density * value + .5f).toInt()
-
-    /** Global preferences are not owned by one pack; choose a home role before editing. */
-    private fun choosePreviewMaterial() {
-        // Global settings can edit any installed pack, even without a home role.
-        val packs = RoleStore.orderedCatalog(this)
-        if (packs.isEmpty()) {
-            AlertDialog.Builder(this)
-                .setMessage("还没有素材包，请先创建或导入素材包。")
-                .setPositiveButton("知道了", null)
-                .show()
-            return
-        }
-        AlertDialog.Builder(this)
-            .setTitle("选择素材包")
-            .setItems(packs.map { it.displayName }.toTypedArray()) { _, index ->
-                startActivity(Intent(this, RolePackLinkedActivity::class.java).apply {
-                    putExtra("source_instance_id", packs[index].id)
-                    putExtra("linked_title", "角色预览")
-                    putStringArrayListExtra("linked_paths",
-                        arrayListOf("standby/static_pool", "menu/summoned"))
-                })
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -143,23 +116,20 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
             PersonalizationPrefs.setHomePreviewMode(this,
                 if (it == 1) PersonalizationPrefs.DYNAMIC else PersonalizationPrefs.ALWAYS)
         }
-        // Keep the same action name and linked function/animation editor used by role settings.
-        val editRow = SettingsRippleRow(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(32), dp(8), dp(20), dp(8))
-            minimumHeight = dp(56)
+        // Same inline title action and linked editor used throughout role settings.
+        SettingsMaterialLink.attachInline(this, modeRow, "召唤后",
+            modeRow.getChildAt(1), "编辑功能/动画 ›") {
+            startActivity(android.content.Intent(this, RolePackLinkedActivity::class.java).apply {
+                putExtra("linked_global_preview", true)
+                putExtra("linked_title", "已召唤")
+                putStringArrayListExtra("linked_paths", arrayListOf("menu/summoned"))
+            })
         }
-        editRow.addView(caption("编辑功能/动画 ›", "选择素材包，调整预览使用的动画"),
-            LinearLayout.LayoutParams(0, -2, 1f))
-        editRow.setOnClickListener { choosePreviewMaterial() }
-        previews.addView(editRow, LinearLayout.LayoutParams(-1, -2))
 
         fun refreshChildren() {
             val visible = if (toggle.isChecked) View.VISIBLE else View.GONE
             patRow.visibility = visible
             modeRow.visibility = visible
-            editRow.visibility = visible
         }
         toggle.setOnCheckedChangeListener { _, value ->
             PersonalizationPrefs.setAnimatedPreview(this, value)
