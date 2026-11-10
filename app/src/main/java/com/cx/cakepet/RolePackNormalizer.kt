@@ -67,6 +67,22 @@ internal object RolePackNormalizer {
             }
         }
         val modes = root.getJSONObject("modes")
+        if (root.opt("modeGroups") !is JSONArray) {
+            // New root list owns group existence. Seed it from existing animations only
+            // if absent; a present list must never invent undeclared groups.
+            val names = linkedSetOf<String>()
+            modes.keys().forEach { key ->
+                val groups = modes.optJSONObject(key)?.optJSONArray("groups")
+                if (groups != null) for (i in 0 until groups.length()) {
+                    val name = groups.optString(i)
+                    if (name.isNotBlank() && name != "全部" && name != "未分组") names.add(name)
+                }
+            }
+            if (root.has("modeGroups")) issues += Issue("格式不支持", "modeGroups",
+                "预期 Array，已重新建立列表", root.opt("modeGroups")?.toString())
+            else issues += Issue("已补全", "modeGroups", "已建立动画组列表")
+            root.put("modeGroups", JSONArray().apply { names.forEach { put(it) } })
+        }
         for (id in modes.keys().asSequence().toList()) {
             val raw = modes.opt(id)
             if (raw !is JSONObject) {

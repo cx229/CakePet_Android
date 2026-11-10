@@ -1479,11 +1479,36 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private val expandedModeGroups = mutableSetOf<String>()
-    private fun modeGroups(key: String): List<String> {
-        val groups = root.getJSONObject("modes").getJSONObject(key).optJSONArray("groups") ?: return emptyList()
-        return (0 until groups.length()).map { groups.optString(it) }.filter { it.isNotBlank() }.distinct()
+    private fun knownGroups(): List<String> {
+        val order = root.optJSONArray("modeGroups") ?: return emptyList()
+        return (0 until order.length()).map { order.optString(it) }
+            .filter { it.isNotBlank() && it != "全部" && it != "未分组" }.distinct()
     }
-    private fun knownGroups(): List<String> = ids().flatMap { modeGroups(it) }.distinct()
+    private fun modeGroups(key: String): List<String> {
+        val valid = knownGroups().toSet()
+        val groups = root.getJSONObject("modes").getJSONObject(key).optJSONArray("groups") ?: return emptyList()
+        return (0 until groups.length()).map { groups.optString(it) }.filter { it in valid }.distinct()
+    }
+    private fun validModeGroupName(name: String): Boolean =
+        name.isNotBlank() && name.length <= 40 && name != "全部" && name != "未分组" &&
+            name.none { it == '/' || it.code == 92 || it.code == 10 || it.code == 13 }
+    private fun newModeGroup() {
+        editor("新建动画组", compact = true) { box ->
+            val field = entry(box, "动画组名称", "", compact = true)
+            val save: () -> Unit = {
+                val name = field.text.toString().trim()
+                require(validModeGroupName(name)) { "动画组名称不合法" }
+                require(name !in knownGroups()) { "动画组已存在" }
+                change { json ->
+                    val groups = json.optJSONArray("modeGroups") ?: JSONArray()
+                    groups.put(name)
+                    json.put("modeGroups", groups)
+                }
+                modes()
+            }
+            save
+        }
+    }
 
     private fun modes() {
         section("动作动画", "modes")
@@ -1492,14 +1517,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.cp_note))
         })
         action("＋ 新建动画") { newMode() }
+        action("＋ 新建动画组") { newModeGroup() }
         val grouped = linkedMapOf<String, MutableList<String>>()
         grouped["全部"] = ids().toMutableList()
-        knownGroups().filter { it != "全部" }.forEach { grouped[it] = mutableListOf() }
+        knownGroups().forEach { grouped[it] = mutableListOf() }
+        val ungrouped = mutableListOf<String>()
         ids().forEach { key ->
             val groups = modeGroups(key)
-            if (groups.isEmpty()) grouped.getOrPut("未分组") { mutableListOf() }.add(key)
-            else groups.forEach { grouped.getOrPut(it) { mutableListOf() }.add(key) }
+            if (groups.isEmpty()) ungrouped.add(key)
+            else groups.forEach { grouped.getValue(it).add(key) }
         }
+        grouped["未分组"] = ungrouped
         val thumbnails = mutableMapOf<String, android.graphics.Bitmap?>()
         for ((group, names) in grouped) {
             val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1611,6 +1639,43 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 if (!expandedModeGroups.add(group)) expandedModeGroups.remove(group)
                 refreshHeader()
             }
+            if (group != "全部" && group != "未分组") {
+                // Long-press the normal folder card to rearrange; no drag icon.
+                header.setOnLongClickListener {
+                    val data = android.content.ClipData.newPlainText("mode-group", group)
+                    header.startDragAndDrop(data, View.DragShadowBuilder(header), group, 0)
+                    true
+                }
+                header.setOnDragListener { _, event ->
+                    when (event.action) {
+                        android.view.DragEvent.ACTION_DRAG_STARTED ->
+                            event.localState is String && event.localState in knownGroups()
+                        android.view.DragEvent.ACTION_DROP -> {
+                            val source = event.localState as? String
+                            val order = knownGroups().toMutableList()
+                            val from = order.indexOf(source)
+                            val to = order.indexOf(group)
+                            if (from >= 0 && to >= 0 && from != to) {
+                                order.add(to, order.removeAt(from))
+                                attempt {
+                                    change { json ->
+                                        json.put("modeGroups", JSONArray().apply {
+                                            order.forEach { put(it) }
+                                        })
+                                    }
+                                    val previousScroll = scroll.scrollY
+                                    modes()
+                                    scroll.post {
+                                        if (screen == "modes") scroll.scrollTo(0, previousScroll)
+                                    }
+                                }
+                            }
+                            true
+                        }
+                        else -> true
+                    }
+                }
+            }
             panel.addView(header, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
             panel.addView(children, LinearLayout.LayoutParams(-1, -2))
             refreshHeader()
@@ -1648,29 +1713,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             box.addView(choices)
             redraw()
-            // A floating outline label replaces the separate heading.
-            val addRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            val inputField = FormInputField(this)
-            val input = inputField.configure("新组名称", placeholder = "输入新组名称")
-            addRow.addView(inputField, LinearLayout.LayoutParams(0, -2, 1f))
-            addRow.addView(button("√") {
-                val name = input.text.toString().trim()
-                if (name.isBlank() || name.length > 40 || name == "未分组" || name == "全部" ||
-                    name.any { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
-                    input.error = "动画组名称不合法"
-                } else {
-                    if (name !in groups) groups.add(name)
-                    selected.add(name)
-                    input.setText("")
-                    redraw()
-                }
-            }, LinearLayout.LayoutParams(px(48), px(42)).apply { leftMargin = px(8) })
-            box.addView(addRow)
             val save: () -> Unit = {
-                require(input.text.toString().isBlank()) { "请先点击添加新组" }
                 change { json ->
                     val arr = JSONArray()
                     groups.filter { it in selected }.forEach { arr.put(it) }
@@ -1695,8 +1738,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             "动画组名称不合法"
                         }
                         require(target == group || target !in knownGroups()) { "动画组已存在" }
+                        require(validModeGroupName(target)) { "动画组名称不合法" }
                         if (target != group) {
                             change { json ->
+                                val order = json.getJSONArray("modeGroups")
+                                for (i in 0 until order.length()) {
+                                    if (order.optString(i) == group) order.put(i, target)
+                                }
                                 val all = json.getJSONObject("modes")
                                 all.keys().forEach { id ->
                                     val mode = all.getJSONObject(id)
@@ -1719,6 +1767,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 ) {
                     attempt {
                         change { json ->
+                            val order = json.getJSONArray("modeGroups")
+                            json.put("modeGroups", JSONArray().apply {
+                                for (i in 0 until order.length()) {
+                                    val name = order.optString(i)
+                                    if (name != group) put(name)
+                                }
+                            })
                             val all = json.getJSONObject("modes")
                             all.keys().forEach { id ->
                                 val mode = all.getJSONObject(id)
