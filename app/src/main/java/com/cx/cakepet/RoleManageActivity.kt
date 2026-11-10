@@ -124,14 +124,8 @@ class RoleManageActivity : AppCompatActivity() {
     }
 
     private fun editRole(role: RoleDescriptor) {
-        if (role.source == RoleSource.ASSETS) {
-            showConfirmDialog(
-                title = "模板不可编辑",
-                bodyHtml = "模板「${role.displayName}」不可编辑，请通过复制或新建素材包创建可编辑副本。",
-                positiveText = "知道了",
-                showNegative = false
-            ) { }
-        } else startActivity(android.content.Intent(this, RolePackEditorActivity::class.java).putExtra("role_id", role.id))
+        startActivity(android.content.Intent(this, RolePackEditorActivity::class.java)
+            .putExtra("role_id", role.id))
     }
 
     private fun showRoleOperations(anchor: View, role: RoleDescriptor) {
@@ -408,17 +402,8 @@ class RoleManageActivity : AppCompatActivity() {
         Toast.makeText(this, "已导入：$displayName", Toast.LENGTH_SHORT).show()
     }
 
-    /** 删除素材包：二次确认（沿用设置页确认弹窗样式）。 */
+    /** All catalog packs, including first-install Bai Su, use normal deletion. */
     private fun confirmDelete(role: RoleDescriptor) {
-        if (role.source == RoleSource.ASSETS) {
-            showConfirmDialog(
-                title = "无法删除",
-                bodyHtml = "预装素材包「${role.displayName}」不可删除。",
-                positiveText = "知道了",
-                showNegative = false
-            ) { }
-            return
-        }
         showConfirmDialog(
             title = "删除角色素材",
             bodyHtml = "确定删除「${role.displayName}」？",
@@ -427,7 +412,7 @@ class RoleManageActivity : AppCompatActivity() {
         ) { doDelete(role) }
     }
 
-    /** 级联删除：召回激活实例 → 清配置 DataStore → 移实例 → 移素材清单 → 删私有目录。 */
+    /** Delete the pack and its home instances, configs and private files. */
     private fun doDelete(role: RoleDescriptor) {
         if (role.source != RoleSource.FILES) return
         val home = RoleStore.getHomeRoles(this).filter { it.templateId == role.id }
