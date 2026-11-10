@@ -185,16 +185,16 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val missingOnly = intent.getBooleanExtra("missing_only", false)
         val count = RoleStore.getHomeRoles(this).count { it.templateId == id }
         val dialog = editor("${linkedTitle} · 功能/动画", compact = true,
-            readOnly = true, subtitle = "素材包：${linkedPackName}") { form ->
-            if (!missingOnly) {
-                addDetailSection(form, sharedNotice(
-                    if (linkedReadOnly) "预装素材包 · 只读" else "共享素材配置",
-                    count,
-                    if (linkedReadOnly) "可查看功能、动画与碎碎念，复制素材包后可编辑。"
-                    else "修改后将影响使用此素材包的所有角色。",
-                    linkedReadOnly
-                ))
-            }
+            readOnly = true, subtitle = "素材包：${linkedPackName}",
+            readOnlyActionLabel = "编辑全部功能 ›",
+            extraAction = if (linkedReadOnly) null else ({ openLinkedFunctionsEditor() })) { form ->
+            addDetailSection(form, sharedNotice(
+                if (linkedReadOnly) "预装素材包 · 只读" else "共享素材配置",
+                count,
+                if (linkedReadOnly) "可查看功能、动画与碎碎念，复制素材包后可编辑。"
+                else "修改后将影响使用此素材包的所有角色。",
+                linkedReadOnly
+            ))
             val tree = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             form.addView(tree)
             linkedTreeContainer = tree
@@ -209,6 +209,19 @@ open class RolePackEditorActivity : AppCompatActivity() {
         dialog.setOnDismissListener {
             detailDialogs.remove(dialog)
             if (!isFinishing) finish()
+        }
+    }
+
+    /** Enter the complete Function mapping page from either settings-linked dialog. */
+    private fun openLinkedFunctionsEditor() {
+        if (linkedReadOnly) return
+        linkedConsent {
+            startActivity(Intent(this, RolePackEditorActivity::class.java).apply {
+                putExtra("role_id", id)
+                putExtra("initial_functions_page", true)
+                putExtra("return_to_linked_settings", true)
+            })
+            finish()
         }
     }
 
@@ -700,6 +713,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val initialFunction = intent.getStringExtra("initial_function_path")
         home()
         if (intent.getBooleanExtra("initial_thinking_resources", false)) thinkingResources()
+        if (intent.getBooleanExtra("initial_functions_page", false)) functions()
         if (!initialFunction.isNullOrBlank()) {
             val path = initialFunction.split("/")
             functions()
@@ -3344,8 +3358,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundResource(R.drawable.card_bg)
-            rippleCard(this)
+            // The full editor uses page cards; linked dialogs need visible
+            // folder outlines and contrasting option surfaces.
+            if (linkedMode) selectionSurface(this, isFolder = folderCount != null)
+            else {
+                setBackgroundResource(R.drawable.card_bg)
+                rippleCard(this)
+            }
             setPadding(if (examplePath != null) px(6) else px(12),
                 px(if (folderCount != null) 6 else 5), px(8),
                 px(if (folderCount != null) 6 else 5))
