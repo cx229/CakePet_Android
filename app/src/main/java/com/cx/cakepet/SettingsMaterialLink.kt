@@ -150,6 +150,15 @@ object SettingsMaterialLink {
             }
     }
 
+    /** Same title-adjacent link as a role setting, for dynamically built global rows. */
+    fun attachInline(activity: Activity, settingRow: SettingsRippleRow,
+                     title: String, trailing: View, label: String, onClick: () -> Unit) {
+        val owner = settingRow.getChildAt(0) as? ViewGroup ?: return
+        val heading = (0 until owner.childCount).map { owner.getChildAt(it) }
+            .filterIsInstance<TextView>().firstOrNull { it.text.toString() == title } ?: return
+        addInlineLink(activity, settingRow, heading, trailing, label, onClick)
+    }
+
     /** Text resource entry behaves exactly like the existing Function/Animation link. */
     fun attachThinking(activity: Activity, instanceId: String, switchId: Int) {
         val toggle = activity.findViewById<View>(switchId) ?: return
