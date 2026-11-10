@@ -82,6 +82,16 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     /** Reuses the existing editor's actual recursive folder tree and Function dialogs. */
     private fun setupLinkedOverlay() {
+        // Global settings has no owning role. Keep selection within the existing
+        // material editor dialog style instead of opening an Android AlertDialog.
+        if (intent.getBooleanExtra("linked_global_preview", false) &&
+            intent.getStringExtra("source_instance_id") == null) {
+            setContentView(FrameLayout(this).apply {
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            })
+            showLinkedPackChooser()
+            return
+        }
         val instance = intent.getStringExtra("source_instance_id") ?: run { finish(); return }
         val pack = RoleStore.descriptorForInstance(this, instance) ?: run { finish(); return }
         linkedPack = pack
@@ -105,6 +115,44 @@ open class RolePackEditorActivity : AppCompatActivity() {
         setContentView(FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.TRANSPARENT) })
         if (intent.getBooleanExtra("linked_thinking", false)) showLinkedThinking()
         else showLinkedFunctions()
+    }
+
+    /** Choose a material only where unavoidable: the app-wide setting has no role ID.
+     * Reuse the normal editor dialog shell and selection row styling.
+     */
+    private fun showLinkedPackChooser() {
+        val packs = RoleStore.orderedCatalog(this)
+        if (packs.size == 1) {
+            intent.putExtra("source_instance_id", packs.first().id)
+            setupLinkedOverlay()
+            return
+        }
+        val dialog = editor("选择素材包", compact = true, readOnly = true,
+            subtitle = "已召唤 · 功能/动画") { form ->
+            if (packs.isEmpty()) {
+                form.addView(text("暂无素材包", 13f))
+            } else packs.forEach { pack ->
+                val row = detailListRow()
+                row.addView(text(pack.displayName, 14f),
+                    LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text("›", 18f))
+                selectionSurface(row)
+                row.setOnClickListener {
+                    intent.putExtra("source_instance_id", pack.id)
+                    // Do not keep the selector behind the function editor.
+                    navigationDialogs.toList().forEach { it.dismiss() }
+                    setupLinkedOverlay()
+                }
+                form.addView(row, selectionRowParams())
+            }
+            ({ })
+        }
+        dialog.setOnDismissListener {
+            navigationDialogs.remove(dialog)
+            detailDialogs.remove(dialog)
+            if (intent.getStringExtra("source_instance_id") == null &&
+                !isFinishing && !isDestroyed) finish()
+        }
     }
 
     private fun linkedConsent(action: () -> Unit) {
