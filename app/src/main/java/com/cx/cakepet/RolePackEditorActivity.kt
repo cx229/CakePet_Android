@@ -1876,7 +1876,18 @@ open class RolePackEditorActivity : AppCompatActivity() {
             contentDescription = "动画实时预览，点击动画链名称查看详情，右上角重新播放"
         }
         panel.addView(preview, LinearLayout.LayoutParams(-1, -2))
-        animate(preview, key)
+        // The preview is moved into the RecyclerView header later in this method.
+        // Start only after its final attachment; a tick during reparenting would
+        // otherwise return early and leave an empty preview until manual replay.
+        preview.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                if (screen == "mode" && modeId == key) animate(preview, key)
+            }
+            override fun onViewDetachedFromWindow(v: View) {
+                stopAnimation()
+                previewRefreshers.remove(preview)
+            }
+        })
         // Mode-level controls remain visible, but don't dominate the frame editor.
         val mode = root.getJSONObject("modes").getJSONObject(key)
         val playbackCard = detailSection()
@@ -2244,6 +2255,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(-1, 0, 1f))
         scroll.visibility = View.GONE
         modePageRecycler = recycler
+        // The RecyclerView header is attached asynchronously; its attach
+        // listener above starts the playback after it becomes visible.
     }
     private val detailPreviewTasks = mutableMapOf<RoleAnimationPreview, Runnable>()
     /** All live previews observe successful material edits instead of retaining stale managers. */
@@ -2297,6 +2310,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     /** Page preview uses the same renderer as dialogs but follows the page lifecycle. */
     private fun animate(view: RoleAnimationPreview, key: String) {
+        if (!view.isAttachedToWindow || screen != "mode" || modeId != key) return
         stopAnimation()
         previewRefreshers[view] = { animate(view, key) }
         view.resetReference()
@@ -2308,6 +2322,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     current = key, status = "无法播放"))
             return
         }
+        // Show frame one immediately, rather than leaving a blank area while
+        // the playback runnable waits for the next UI message.
+        renderModePreview(view, manager, clip, key, "播放中")
         val tick = object : Runnable {
             override fun run() {
                 if (screen != "mode" || modeId != key || !view.isAttachedToWindow) return
@@ -2321,13 +2338,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         animation = tick
-        view.post { if (screen == "mode" && modeId == key) tick.run() }
-        view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {}
-            override fun onViewDetachedFromWindow(v: View) {
-                if (previewRefreshers.containsKey(view)) previewRefreshers.remove(view)
-            }
-        })
+        handler.postDelayed(tick, 50)
     }
 
     /** Each dialog owns its playback clock, replay control, and cancellation. */
@@ -2360,6 +2371,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         fun replay() {
             cancel()
+            if (!preview.isAttachedToWindow) return
             preview.resetReference()
             val manager = freshManager()
             val clip = manager.createClip(key)
@@ -2371,6 +2383,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         current = key, status = "无法播放"))
                 return
             }
+            // New material configuration is already loaded; render immediately
+            // before scheduling the next frame so a refreshed dialog never
+            // displays an uninitialized canvas.
+            renderModePreview(preview, manager, clip, key, "播放中")
             val runner = object : Runnable {
                 override fun run() {
                     if (!preview.isAttachedToWindow) return
@@ -2385,7 +2401,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             tick = runner
             detailPreviewTasks[preview] = runner
-            preview.post { if (preview.isAttachedToWindow) runner.run() }
+            handler.postDelayed(runner, 50)
         }
         preview.onReplay = { replay() }
         previewRefreshers[preview] = { replay() }
