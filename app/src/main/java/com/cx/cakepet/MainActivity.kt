@@ -385,9 +385,11 @@ class MainActivity : AppCompatActivity() {
         //    不删活动角色的文件——删文件会让进程内单例缓存残留旧值，导致重置不生效/被旧值写回污染）；
         //    清素材库、顺序、首页清单（下次读取自动播种预装角色）。
         RoleStore.resetAllSoftwareData(this)
-        // 3. 删除用户上传的素材文件目录（服务重启会连带清掉派生的位图/资源包内存缓存）。
+        // 3. Remove the now-unified player material library.
         filesDir.resolve("roles").deleteRecursively()
-        // 4. 重启前台服务以重新初始化（清内存态、重读已清空的角色数据）；
+        // 4. A full software reset recreates the first-install pack and one home role.
+        RoleStore.ensureInitialRole(this)
+        // 5. Restart the foreground service with clean in-memory material state;
         //    带 EXTRA_NO_AUTO_SUMMON：重置后不自动召唤任何角色，屏幕上不留宠物，
         //    由用户在首页卡片自行召唤。再重建首页以刷新卡片。
         stopService(Intent(this, PetService::class.java))
