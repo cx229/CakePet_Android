@@ -645,11 +645,8 @@ class PetService : Service() {
     private fun clearExiting() { isExiting = false; exitPrefs.edit().putBoolean("exiting", false).apply() }
     private fun loadExiting() { isExiting = exitPrefs.getBoolean("exiting", false) }
 
-    // The recent-task entry is only UI; keep the foreground pet service unless
-    // the player explicitly chooses the old "swipe to exit" behavior.
+    // Persist the set of summoned roles for system-initiated service recreation.
     private val backgroundPrefs by lazy { getSharedPreferences("cakepet_background", MODE_PRIVATE) }
-    private fun keepAfterTaskRemoved(): Boolean =
-        backgroundPrefs.getBoolean("keep_after_task_removed", true)
 
     /** Persist the summoned instances, not merely the first home-card instance. */
     private fun saveSummonedRoles() {
@@ -3913,13 +3910,6 @@ class PetService : Service() {
         // 4) 兜底：直接结束整个应用进程，确保 MainActivity 等所有界面一并退出，
         //    彻底摆脱“非活非死”。资源已在 cleanup 中释放，此处无泄漏。
         try { Process.killProcess(Process.myPid()) } catch (_: Exception) {}
-    }
-
-    /** 任务栈被移除（用户从最近任务划掉）时的兜底退出，避免前台服务残留。 */
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        if (!isExiting && !keepAfterTaskRemoved()) exitApp()
-        // Otherwise the task disappears, but the foreground service stays running.
     }
 
     override fun onDestroy() {
