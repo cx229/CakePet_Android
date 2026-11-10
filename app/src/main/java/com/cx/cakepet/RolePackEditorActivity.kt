@@ -4755,7 +4755,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         jsonStrings(thinkingObject().optJSONObject(id)?.optJSONArray("groups"))
 
     private fun allThinkingGroups(): List<String> =
-        thinkingObject().keys().asSequence().toList().flatMap(::thinkingGroups).distinct().sorted()
+        jsonStrings(root.optJSONArray("thinkingGroups"))
 
     private fun allThinkingIds(): List<String> =
         thinkingObject().keys().asSequence().toList()
@@ -4796,8 +4796,27 @@ open class RolePackEditorActivity : AppCompatActivity() {
         panel.addView(text("管理角色的底部消息文本。\n点击“+”创建文本；点击“文本卡片”进行编辑。", 12f).apply {
             setTextColor(getColor(R.color.cp_note))
         })
-        action("＋ 新建碎碎念") { thinkingDetails(null) }
+        twoActions("＋ 新建碎碎念", { thinkingDetails(null) },
+            "＋ 新建碎碎念组", { newThinkingGroup() })
         renderThinkingGroups(panel)
+    }
+
+    private fun newThinkingGroup() {
+        editor("新建碎碎念组", compact = true) { box ->
+            val field = entry(box, "碎碎念组名称", "", compact = true)
+            val save: () -> Unit = {
+                val name = field.text.toString().trim()
+                require(validModeGroupName(name)) { "碎碎念组名称不合法" }
+                require(name !in allThinkingGroups()) { "碎碎念组已存在" }
+                change { json ->
+                    val groups = json.optJSONArray("thinkingGroups") ?: JSONArray()
+                    groups.put(name)
+                    json.put("thinkingGroups", groups)
+                }
+                thinkingResources()
+            }
+            save
+        }
     }
 
     /** Single shared grouped tree renderer for the full editor and linked preview dialog. */
@@ -4810,7 +4829,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
             if (groups.isEmpty()) grouped.getOrPut("未分组") { mutableListOf() }.add(id)
             else groups.forEach { grouped.getOrPut(it) { mutableListOf() }.add(id) }
         }
+        val folderRows = mutableListOf<Pair<String, LinearLayout>>()
         for ((group, ids) in grouped) {
+            val groupRow = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val opened = expandedThinkingGroups.contains(group)
             // Match the action layout already used by animation group headers.
             val folder = LinearLayout(this).apply {
@@ -4845,7 +4866,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     contentDescription = "$group 分组操作"
                     setOnClickListener { anchor -> showThinkingGroupOptions(anchor, group) }
                 }, LinearLayout.LayoutParams(px(38), px(44)))
-            target.addView(folder, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
+            groupRow.addView(folder, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
             folder.setOnClickListener {
                 if (!expandedThinkingGroups.add(group)) expandedThinkingGroups.remove(group)
                 if (linkedPreview) {
@@ -4902,10 +4923,21 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 if (linkedPreview) {
                     if (!linkedReadOnly) rippleClick(row) { openLinkedThinkingEditor() }
                 } else rippleClick(row) { thinkingDetails(id) }
-                target.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                groupRow.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
                     leftMargin = px(12)
                     topMargin = px(4)
                 })
+            }
+            if (linkedPreview) target.addView(groupRow)
+            else folderRows.add(group to groupRow)
+        }
+        if (!linkedPreview && target === panel) {
+            installSortableFolderPage(folderRows, { it != "全部" && it != "未分组" }) { order ->
+                change { json ->
+                    json.put("thinkingGroups", JSONArray().apply {
+                        order.forEach { put(it) }
+                    })
+                }
             }
         }
     }
@@ -4944,6 +4976,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         }
                         if (target != group) {
                             change { json ->
+                                val order = json.getJSONArray("thinkingGroups")
+                                for (index in 0 until order.length()) {
+                                    if (order.optString(index) == group) order.put(index, target)
+                                }
                                 val texts = json.getJSONObject("thinkings")
                                 texts.keys().asSequence().toList().forEach { id ->
                                     val item = texts.optJSONObject(id) ?: return@forEach
@@ -4966,6 +5002,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 ) {
                     attempt {
                         change { json ->
+                            val order = json.getJSONArray("thinkingGroups")
+                            json.put("thinkingGroups", JSONArray().apply {
+                                for (index in 0 until order.length()) {
+                                    val value = order.optString(index)
+                                    if (value != group) put(value)
+                                }
+                            })
                             val texts = json.getJSONObject("thinkings")
                             texts.keys().asSequence().toList().forEach { id ->
                                 val item = texts.optJSONObject(id) ?: return@forEach
@@ -5105,8 +5148,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     /** Mirror animation group selection: add candidates locally, then confirm once. */
     private fun chooseThinkingGroups(initialGroups: List<String>, onConfirm: (List<String>) -> Unit) {
         editor("选择碎碎念组", compact = true, confirmLabel = "确认") { box ->
-            val groups = (allThinkingGroups() + initialGroups)
-                .filter { it != "全部" && it != "未分组" }.distinct().toMutableList()
+            val groups = allThinkingGroups()
             val checked = initialGroups.toMutableSet()
             val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             fun redraw() {
@@ -5123,29 +5165,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             box.addView(choices)
             redraw()
-            // A floating outline label replaces the separate heading.
-            val addRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            val inputField = FormInputField(this)
-            val input = inputField.configure("新组名称", placeholder = "输入新组名称")
-            addRow.addView(inputField, LinearLayout.LayoutParams(0, -2, 1f))
-            addRow.addView(button("√") {
-                val name = input.text.toString().trim()
-                if (name.isBlank() || name.length > 40 || name == "全部" || name == "未分组" ||
-                    name.any { it == '/' || it == '\\' || it == '\n' || it == '\r' }) {
-                    input.error = "碎碎念组名称不合法"
-                } else {
-                    if (name !in groups) groups.add(name)
-                    checked.add(name)
-                    input.setText("")
-                    redraw()
-                }
-            }, LinearLayout.LayoutParams(px(48), px(42)).apply { leftMargin = px(8) })
-            box.addView(addRow)
             ({
-                require(input.text.toString().isBlank()) { "请先点击添加新组" }
                 onConfirm(groups.filter { it in checked })
             })
         }
