@@ -204,7 +204,7 @@ class MainActivity : AppCompatActivity() {
     /** Render this instance's preview according to global preferences and active status. */
     private fun applyHomePreview(active: Boolean,
                                  thumb: ImageView, player: PreviewPlayer) {
-        val away = active &&
+        val away = active && PersonalizationPrefs.animatedPreview(this) &&
             PersonalizationPrefs.homePreviewMode(this) == PersonalizationPrefs.DYNAMIC
         when {
             away -> player.startSummonedPreview()
