@@ -116,7 +116,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun showLinkedThinking() {
         val count = RoleStore.getHomeRoles(this).count { it.templateId == id }
         val dialog = editor("碎碎念文本 · 素材包", compact = true, readOnly = true,
-            subtitle = "素材包：$linkedPackName") { form ->
+            subtitle = "素材包：$linkedPackName",
+            readOnlyActionLabel = "编辑碎碎念 ›",
+            extraAction = if (linkedReadOnly) null else ({ openLinkedThinkingEditor() })) { form ->
             addDetailSection(form, sharedNotice(
                 if (linkedReadOnly) "预装素材包 · 只读" else "共享素材配置",
                 count,
@@ -165,14 +167,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             redrawList()
             addDetailSection(form, listCard)
-            if (!linkedReadOnly) {
-                val action = dialogSection()
-                action.addView(detailSectionHeader("编辑碎碎念",
-                    "进入当前素材包的碎碎念文本页") {
-                    openLinkedThinkingEditor()
-                })
-                addDetailSection(form, action)
-            }
             ({ })
         }
         dialog.setOnDismissListener {
