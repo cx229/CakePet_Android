@@ -38,6 +38,46 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private var linkedPaths = emptySet<String>()
     private var linkedPackName = ""
     private var linkedTreeContainer: LinearLayout? = null
+    private var linkedOverviewRefresher: (() -> Unit)? = null
+    private var linkedEditorOpen = false
+    private var linkedReturnRevision = 0L
+    private var linkedHiddenDialogs: List<android.app.Dialog> = emptyList()
+
+    /** Keep the transparent dialog host alive while a real editor Activity is on top. */
+    private fun launchLinkedEditor(target: Intent) {
+        if (linkedEditorOpen) return
+        linkedReturnRevision = RolePackEditing.revision(id)
+        linkedHiddenDialogs = detailDialogs.filter { it.isShowing }
+        linkedHiddenDialogs.asReversed().forEach { it.hide() }
+        linkedEditorOpen = true
+        startActivity(target)
+    }
+
+    /** Only reload material data after an edit; never recreate the original dialogs. */
+    private fun resumeLinkedEditor() {
+        if (!linkedEditorOpen) return
+        linkedEditorOpen = false
+        if (!linkedReadOnly && RolePackEditing.revision(id) != linkedReturnRevision) {
+            runCatching {
+                if (::draft.isInitialized) draft.deleteRecursively()
+                draft = RolePackEditing.draft(this, id)
+                root = RolePackEditing.prepareEditable(draft, id, linkedPackName)
+                linkedTreeContainer?.let { tree ->
+                    tree.removeAllViews()
+                    if (intent.getBooleanExtra("missing_only", false)) renderMissingLinkedCards(tree)
+                    else functionTree(tree, root.getJSONObject("functions"), emptyList())
+                }
+                linkedOverviewRefresher?.invoke()
+                functionDetailRefreshers.values.toList().forEach { it() }
+                modeDetailRefreshers.values.toList().forEach { it() }
+            }.onFailure { error ->
+                android.util.Log.e("RolePackEditor", "Unable to refresh linked dialogs", error)
+            }
+        }
+        val toRestore = linkedHiddenDialogs
+        linkedHiddenDialogs = emptyList()
+        toRestore.forEach { if (!isFinishing && !isDestroyed) it.show() }
+    }
     private lateinit var linkedPack: RoleDescriptor
 
     /** Reuses the existing editor's actual recursive folder tree and Function dialogs. */
@@ -166,6 +206,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             redrawList()
+            linkedOverviewRefresher = { redrawList() }
             addDetailSection(form, listCard)
             ({ })
         }
@@ -210,12 +251,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun openLinkedFunctionsEditor() {
         if (linkedReadOnly) return
         linkedConsent {
-            startActivity(Intent(this, RolePackEditorActivity::class.java).apply {
+            launchLinkedEditor(Intent(this, RolePackEditorActivity::class.java).apply {
                 putExtra("role_id", id)
                 putExtra("initial_functions_page", true)
                 putExtra("return_to_linked_settings", true)
             })
-            finish()
         }
     }
 
@@ -315,26 +355,61 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private var restoringPage = false
     private val detailDialogs = mutableListOf<android.app.Dialog>()
     private val functionDetailRefreshers = mutableMapOf<android.app.Dialog, () -> Unit>()
+    private val modeDetailRefreshers = mutableMapOf<android.app.Dialog, () -> Unit>()
+    private data class SuspendedDetailStack(
+        val originScreen: String,
+        val originMode: String,
+        val editorMode: String,
+        val dialogs: List<android.app.Dialog>,
+        val materialRevision: Long
+    )
+    private val suspendedDetailStacks = java.util.ArrayDeque<SuspendedDetailStack>()
     private fun openModeFromDetail(key: String) = modeDetails(key)
 
-    /** Enter a real page from nested detail dialogs.
-     * Dismiss the whole detail stack rather than hide it: Dialog.hide() retains
-     * windows and leaves stale popups when returning through multiple sources.
-     * Page history still returns to the originating resource/function list.
+    /** Preserve the exact dialog instances and their input/scroll state while visiting a page.
+     * A stack is necessary when a Mode editor opens another Mode editor.
      */
     private fun openModeEditorFromDetail(key: String) {
         if (linkedMode) {
             linkedConsent {
-                startActivity(Intent(this, RolePackEditorActivity::class.java)
+                launchLinkedEditor(Intent(this, RolePackEditorActivity::class.java)
                     .putExtra("role_id", id)
                     .putExtra("initial_mode_id", key)
                     .putExtra("return_to_linked_settings", true))
-                finish()
             }
             return
         }
-        detailDialogs.toList().asReversed().forEach { it.dismiss() }
+        val alreadyHidden = suspendedDetailStacks.flatMap { it.dialogs }.toSet()
+        val visible = detailDialogs.filter { it.isShowing && it !in alreadyHidden }
+        if (visible.isNotEmpty()) {
+            suspendedDetailStacks.addLast(SuspendedDetailStack(
+                screen, modeId, key, visible.toList(), RolePackEditing.revision(id)))
+            visible.asReversed().forEach { it.hide() }
+        }
+        // section() records changes of page type, but not Mode -> another Mode.
+        if (screen == "mode") pageHistory.addLast(EditorPage(screen, modeId, currentPageScrollY()))
         showMode(key)
+    }
+
+    private fun restoreDetailsAfterBack(leavingScreen: String, leavingMode: String) {
+        val pending = suspendedDetailStacks.peekLast() ?: return
+        if (leavingScreen != "mode" || leavingMode != pending.editorMode ||
+            screen != pending.originScreen ||
+            (screen == "mode" && modeId != pending.originMode)) return
+        suspendedDetailStacks.removeLast()
+        scroll.post {
+            if (isFinishing || isDestroyed) return@post
+            // Refresh changed content in the existing windows before making them visible.
+            if (RolePackEditing.revision(id) != pending.materialRevision) {
+                pending.dialogs.forEach { dialog ->
+                    functionDetailRefreshers[dialog]?.invoke()
+                    modeDetailRefreshers[dialog]?.invoke()
+                }
+            }
+            pending.dialogs.forEach { dialog ->
+                if (dialog in detailDialogs) dialog.show()
+            }
+        }
     }
     private val openedFunctionFolders = mutableSetOf<String>()
     // 仅缓存当前功能页的白酥静态图片；链路计算始终读取最新 modes JSON。
@@ -716,7 +791,18 @@ open class RolePackEditorActivity : AppCompatActivity() {
         if (initialMode != null && root.optJSONObject("modes")?.has(initialMode) == true)
             showMode(initialMode)
     }
+    override fun onResume() {
+        super.onResume()
+        if (linkedMode) resumeLinkedEditor()
+    }
+
     override fun onDestroy() {
+        // Hidden Dialog windows must not outlive the Activity that owns them.
+        linkedHiddenDialogs = emptyList()
+        suspendedDetailStacks.clear()
+        detailDialogs.toList().asReversed().forEach { it.dismiss() }
+        modeDetailRefreshers.clear()
+        functionDetailRefreshers.clear()
         removeBulkBar()
         stopAnimation()
         detailPreviewTasks.values.toList().forEach { handler.removeCallbacks(it) }
@@ -730,6 +816,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun currentPageScrollY(): Int = modePageRecycler?.scrollY ?: scroll.scrollY
 
     private fun navigateBack() {
+        val leavingScreen = screen
+        val leavingMode = modeId
         val previous = pageHistory.pollLast() ?: run { finish(); return }
         // A page launched from the settings-linked dialog uses the internal home
         // only as a startup stepping stone. Returning to it should reveal the
@@ -759,6 +847,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     ?.scrollToPositionWithOffset(0, -previous.scrollY)
             }
         } else scroll.post { scroll.scrollTo(0, previous.scrollY) }
+        restoreDetailsAfterBack(leavingScreen, leavingMode)
     }
     private fun getStatusBarHeight(): Int {
         val resId = resources.getIdentifier("status_bar_height", "dimen", "android")
@@ -1781,6 +1870,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         refreshHeading()
+        modeDetailRefreshers[dialog] = redraw
+        dialog.setOnDismissListener {
+            detailDialogs.remove(dialog)
+            modeDetailRefreshers.remove(dialog)
+        }
     }
 
     private fun renameMode(key: String, onRenamed: (String) -> Unit) {
@@ -4596,12 +4690,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun openLinkedThinkingEditor() {
         if (linkedReadOnly) return
         linkedConsent {
-            startActivity(Intent(this, RolePackEditorActivity::class.java).apply {
+            launchLinkedEditor(Intent(this, RolePackEditorActivity::class.java).apply {
                 putExtra("role_id", id)
                 putExtra("initial_thinking_resources", true)
                 putExtra("return_to_linked_settings", true)
             })
-            finish()
         }
     }
 
