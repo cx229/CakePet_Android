@@ -3,6 +3,8 @@ package com.cx.cakepet
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
+import android.os.PowerManager
+import android.net.Uri
 import android.provider.Settings
 import android.view.View
 import android.widget.TextView
@@ -134,6 +136,29 @@ class GlobalSettingsActivity : AppCompatActivity() {
                         watermarkLevelRow.visibility = if (checked) View.VISIBLE else View.GONE
                     }
                 }
+                val prefs = getSharedPreferences("cakepet_background", MODE_PRIVATE)
+                findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.sw_keep_after_task_removed).apply {
+                    isChecked = prefs.getBoolean("keep_after_task_removed", true)
+                    setOnCheckedChangeListener { _, checked ->
+                        prefs.edit().putBoolean("keep_after_task_removed", checked).apply()
+                        if (!checked) Toast.makeText(this@GlobalSettingsActivity,
+                            "划掉最近任务时将彻底退出 CakePet", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                findViewById<View>(R.id.row_keep_after_task_removed).setOnClickListener {
+                    findViewById<androidx.appcompat.widget.SwitchCompat>(
+                        R.id.sw_keep_after_task_removed).toggle()
+                }
+                findViewById<View>(R.id.row_battery_optimization).setOnClickListener {
+                    openSystemSettings(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                }
+                findViewById<View>(R.id.row_background_management).setOnClickListener {
+                    showConfirmDialog(
+                        title = "后台运行设置",
+                        bodyHtml = "部分手机需要在系统设置中允许 CakePet 后台活动、自启动，或将电池策略设为「无限制」。这些项目由手机系统管理。",
+                        positiveText = "前往应用设置"
+                    ) { openAppInfo() }
+                }
                 findViewById<View>(R.id.row_personalization_settings).setOnClickListener {
                     startActivity(Intent(this, PersonalizationSettingsActivity::class.java))
                 }
@@ -169,6 +194,7 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 nextRow.setOnClickListener { openPage(PAGE_DEBUG) }
             }
             PAGE_DEBUG -> {
+                findViewById<View>(R.id.background_group).visibility = View.GONE
                 findViewById<View>(R.id.system_section_heading).visibility = View.GONE
                 // With prior modules hidden, this is the first visible section.
                 (findViewById<View>(R.id.system_section_container).layoutParams as android.widget.LinearLayout.LayoutParams)
@@ -181,6 +207,7 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 nextRow.setOnClickListener { openPage(PAGE_ACCESSIBILITY_TEST) }
             }
             else -> {
+                findViewById<View>(R.id.background_group).visibility = View.GONE
                 // Hide the entire unused module, including its outer margin.
                 findViewById<View>(R.id.system_section_container).visibility = View.GONE
                 findViewById<View>(R.id.row_import_watermark).visibility = View.GONE
@@ -216,6 +243,35 @@ class GlobalSettingsActivity : AppCompatActivity() {
             )?.split(":")?.any { it.equals(expected, ignoreCase = true) } == true
             findViewById<TextView>(R.id.tv_accessibility_status).text =
                 if (enabled) "已开启" else "未开启"
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            findViewById<TextView>(R.id.tv_battery_status).text =
+                if (pm.isIgnoringBatteryOptimizations(packageName)) "不受电池优化限制" else "受电池优化限制"
+            val svc = PetService.instance
+            findViewById<TextView>(R.id.tv_background_status).text = when {
+                svc == null -> "服务未运行"
+                svc.activeRoleCount() == 0 -> "运行中 · 无桌宠"
+                else -> "运行中 · ${svc.activeRoleCount()} 个桌宠"
+            }
+        }
+    }
+
+    private fun openAppInfo() {
+        openSystemSettings(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:$packageName"))
+    }
+
+    private fun openSystemSettings(action: String, uri: Uri? = null) {
+        try {
+            startActivity(Intent(action).apply { data = uri })
+        } catch (_: Exception) {
+            if (action != Settings.ACTION_APPLICATION_DETAILS_SETTINGS) {
+                try {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:$packageName")))
+                } catch (_: Exception) {
+                    Toast.makeText(this, "无法打开系统设置", Toast.LENGTH_SHORT).show()
+                }
+            } else Toast.makeText(this, "无法打开系统设置", Toast.LENGTH_SHORT).show()
         }
     }
 
