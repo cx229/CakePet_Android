@@ -198,10 +198,19 @@ object RolePackEditing {
                     if (normalized.opt("decodeTarget") !is Number) normalized.put("decodeTarget", 256)
                     if (normalized.opt("anchorRes") !is Number) normalized.put("anchorRes", 128)
                     normalizeThinkingPack(normalized)
+                    RolePackNormalizer.syncOrders(normalized, root)
                     cleanPackReferences(normalized)
                     zip.putNextEntry(ZipEntry("modes.jsonc"))
                     zip.write(CompactJsoncWriter.writeExport(normalized, original).toByteArray(Charsets.UTF_8))
                     zip.closeEntry()
+                    // Keep empty image folders when exporting; the directory tree
+                    // remains authoritative for resourceOrder on the next import.
+                    if (root.isDirectory) root.walkTopDown().filter {
+                        it.isDirectory && it != root
+                    }.forEach { folder ->
+                        zip.putNextEntry(ZipEntry(folder.relativeTo(root).invariantSeparatorsPath + "/"))
+                        zip.closeEntry()
+                    }
                     if (root.isDirectory) root.walkTopDown().filter {
                         it.isFile && it != config &&
                         it.name != RolePackNormalizer.ORIGINAL_FILE &&
