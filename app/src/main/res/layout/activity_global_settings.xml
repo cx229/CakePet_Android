@@ -202,26 +202,6 @@
                     android:orientation="vertical" android:background="@drawable/card_bg"
                     android:divider="@drawable/item_divider" android:showDividers="middle"
                     android:dividerPadding="16dp" android:paddingTop="8dp" android:paddingBottom="8dp">
-                    <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_keep_after_task_removed"
-                        style="@style/SettingsSwitchRow"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:paddingStart="20dp" android:paddingEnd="20dp"
-                        android:paddingTop="8dp" android:paddingBottom="8dp"
-                        android:clickable="true" android:focusable="true">
-                        <LinearLayout style="@style/SettingsSwitchTexts">
-                            <TextView style="@style/SettingsOptionTitle"
-                                android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="划掉任务后继续运行"/>
-                            <TextView style="@style/SettingsOptionNote"
-                                android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:text="从最近任务划掉 CakePet，桌宠仍会继续活动"/>
-                        </LinearLayout>
-                        <androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_keep_after_task_removed"
-                            android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:minWidth="0dp" android:minHeight="0dp"
-                            android:thumbTint="@color/switch_black_selector"
-                            android:trackTint="@color/switch_black_selector"/>
-                    </com.cx.cakepet.SettingsRippleRow>
                     <com.cx.cakepet.SettingsRippleRow android:id="@+id/row_battery_optimization"
                         style="@style/SettingsSwitchRow"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
