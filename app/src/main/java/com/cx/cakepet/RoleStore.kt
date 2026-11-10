@@ -9,10 +9,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 /**
  * 角色持久化层（两个 app 级 DataStore）：
- * - [user_roles]：用户导入/上传的素材模板清单（source=FILES）。预装角色不在此（来自 RoleRegistry.PRESETS）。
+ * - [user_roles]：全部玩家素材包清单（source=FILES），包括首次安装的白酥。
  * - [home_roles]：首页实例清单。每个实例绑定某素材模板（templateId），但 pet_config_<instanceId> /
  *   pet_bounds_<instanceId> 完全独立，故同模板可多次导入成互不干扰的多个实例。
  *
@@ -41,7 +42,33 @@ data class HomeRoleInstance(
 
 object RoleStore {
 
-    /** Include app-level registry metadata and one-time preset-seeding marker. */
+    /**
+     * The APK's Bai Su pack is only a source for initial installation and for
+     * creating new packs. Once installed it is an ordinary FILES package.
+     * The marker is independent of catalog/home emptiness: deleting everything
+     * must never silently recreate a character on the next launch.
+     */
+    @Synchronized fun ensureInitialRole(ctx: Context) {
+        val initialized = runBlocking {
+            ctx.homeRolesStore.data.first()[KEY_INITIAL_ROLE_CREATED] == true
+        }
+        if (initialized) return
+        val template = RoleRegistry.DEFAULT
+        val id = RolePackEditing.duplicate(ctx, template, template.displayName)
+        try {
+            addHomeRole(ctx, HomeRoleInstance("inst_" + UUID.randomUUID().toString(), id))
+            runBlocking {
+                ctx.homeRolesStore.edit { it[KEY_INITIAL_ROLE_CREATED] = true }
+            }
+        } catch (error: Exception) {
+            removeHomeRolesByTemplate(ctx, id)
+            removeUserRole(ctx, id)
+            RolePackEditing.dir(ctx, id).deleteRecursively()
+            throw error
+        }
+    }
+
+    /** Include app-level registry metadata and initial-install marker. */
     suspend fun exportRegistries(ctx: Context): JSONObject = JSONObject().apply {
         put("userRoles", PreferenceCodec.snapshot(ctx.userRolesStore))
         put("homeRoles", PreferenceCodec.snapshot(ctx.homeRolesStore))
@@ -105,16 +132,11 @@ object RoleStore {
         RoleRegistry.refreshUserRoles(ctx)
     }
 
-    /**
-     * Experimental preset pack rollout: migrate existing home lists once, without
-     * deleting or reordering any user's instances. After migration, removing a
-     * preset stays removed (no repeated automatic insertion).
-     */
+    /** Home instances exist only when explicitly created, including first installation. */
     fun getHomeRoles(ctx: Context): List<HomeRoleInstance> = runBlocking {
-        val presets = RoleRegistry.PRESETS
         val raw = ctx.homeRolesStore.data.first()[KEY_HOME_ROLES] ?: ""
         if (raw.isEmpty()) {
-            // An intentionally empty home screen is valid. Never reseed presets.
+            // An intentionally empty home screen remains empty after deletion.
             emptyList()
         } else {
             val arr = JSONArray(raw)
@@ -209,7 +231,7 @@ object RoleStore {
         catch (e: Exception) { android.util.Log.e("RoleStore", "clearCatalogOrder failed", e) }
     }
 
-    /** 清空首页角色清单（home_roles），下次读取将重新播种预装清单。 */
+    /** Clear home instances and the first-install marker; reset explicitly reinstalls once. */
     fun clearHomeRoles(ctx: Context) {
         try { runBlocking { ctx.homeRolesStore.edit { it.clear() } } }
         catch (e: Exception) { android.util.Log.e("RoleStore", "clearHomeRoles failed", e) }
@@ -242,9 +264,9 @@ object RoleStore {
         }
     }
 
-    /** 当前已知的角色 id：首页实例清单 + 默认角色（预装角色重置后仍会被播种）。 */
+    /** Only actual home instances own per-character settings. */
     private fun knownRoleIds(ctx: Context): List<String> =
-        (getHomeRoles(ctx).map { it.instanceId } + RoleRegistry.DEFAULT.id).distinct()
+        getHomeRoles(ctx).map { it.instanceId }.distinct()
 
     /** 删除【无活跃实例】的孤儿 pet_config/pet_bounds 文件（keepIds 内的角色保留，其数据已就地重置）。 */
     private fun clearOrphanRoleConfigAndBounds(ctx: Context, keepIds: Set<String>) {
@@ -257,14 +279,14 @@ object RoleStore {
         }
     }
 
-    /** 一键重置软件：所有角色设置就地回到系统默认、清素材库与顺序、首页清单归位预装角色。 */
+    /** Reset stored role data; caller removes material files and then reinstalls the initial pack. */
     fun resetAllSoftwareData(ctx: Context) {
         val keepIds = knownRoleIds(ctx).toSet()
         // 1. 有活跃实例的角色：就地写回默认值（内存+磁盘同时生效，见方法注释）。
         resetAllRoleConfigAndBoundsInPlace(ctx)
         // 2. 无实例的孤儿配置文件：无活跃 DataStore，直接删除安全。
         clearOrphanRoleConfigAndBounds(ctx, keepIds)
-        // 3. 素材库/顺序/首页清单：均经各自活跃的 DataStore 清空，读取侧自动重新播种。
+        // 3. Clear registries and initialization marker; reinstall happens explicitly after file cleanup.
         clearUserRoles(ctx)
         clearCatalogOrder(ctx)
         clearHomeRoles(ctx)
@@ -364,6 +386,6 @@ object RoleStore {
 
     private val KEY_USER_ROLES = stringPreferencesKey("user_roles")
     private val KEY_HOME_ROLES = stringPreferencesKey("home_roles")
-    private val KEY_ADDITIONAL_PRESETS_SEEDED = booleanPreferencesKey("extra_presets_seeded_v102")
+    private val KEY_INITIAL_ROLE_CREATED = booleanPreferencesKey("initial_role_created")
     private val KEY_CATALOG_ORDER = stringPreferencesKey("catalog_order")
 }
