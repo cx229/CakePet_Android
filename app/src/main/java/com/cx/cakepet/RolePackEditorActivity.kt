@@ -112,8 +112,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
-    /** The same editor dialog shell and shared-content warning as Function/Animation. */
-    /** Same grouped text tree used by material editor, hosted in the linked dialog. */
+    /** Flat material text overview, with both existing edit entry points. */
     private fun showLinkedThinking() {
         val count = RoleStore.getHomeRoles(this).count { it.templateId == id }
         val dialog = editor("碎碎念文本 · 素材包", compact = true, readOnly = true,
@@ -125,13 +124,50 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 else "修改碎碎念文本会影响使用此素材包的所有角色。",
                 linkedReadOnly
             ))
-            val tree = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            form.addView(tree)
-            expandedThinkingGroups.add("全部")
-            renderThinkingGroups(tree, linkedPreview = true)
+            val listCard = dialogSection()
+            fun redrawList() {
+                listCard.removeAllViews()
+                val textIds = allThinkingIds()
+                listCard.addView(detailSectionHeader("碎碎念文本", "${textIds.size} 条",
+                    if (linkedReadOnly) null else ({ openLinkedThinkingEditor() })))
+                if (textIds.isEmpty()) {
+                    listCard.addView(text("暂无碎碎念文本", 12f).apply {
+                        setTextColor(getColor(R.color.cp_note))
+                    })
+                }
+                textIds.forEachIndexed { index, textId ->
+                    val row = detailListRow()
+                    row.addView(detailNumber(index))
+                    val body = thinkingBody(textId)
+                    row.addView(text(body.ifBlank { "无效碎碎念 · 文本为空" }, 12f).apply {
+                        if (body.isBlank()) setTextColor(getColor(R.color.cp_danger))
+                        setPadding(0, px(3), 0, px(3))
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    val uses = thinkingUses(textId).size
+                    row.addView(text(if (uses == 0) "未被引用" else "${uses}次引用", 10f).apply {
+                        setTextColor(getColor(R.color.cp_note))
+                        setPadding(px(5), px(3), 0, px(3))
+                    })
+                    row.addView(text("›", 17f).apply {
+                        setTextColor(getColor(R.color.cp_note))
+                        setPadding(px(4), 0, 0, 0)
+                    })
+                    rippleCard(row)
+                    rippleClick(row) {
+                        if (linkedReadOnly) thinkingDetails(textId, readOnly = true)
+                        else linkedConsent { thinkingDetails(textId, onSaved = { redrawList() }) }
+                    }
+                    listCard.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                        leftMargin = px(8)
+                        topMargin = px(4)
+                    })
+                }
+            }
+            redrawList()
+            addDetailSection(form, listCard)
             if (!linkedReadOnly) {
                 val action = dialogSection()
-                action.addView(detailSectionHeader("编辑碎碎念文本",
+                action.addView(detailSectionHeader("编辑碎碎念",
                     "进入当前素材包的碎碎念文本页") {
                     openLinkedThinkingEditor()
                 })
@@ -4638,7 +4674,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     /** Autosave valid text with debounce, and flush before closing or navigating. */
-    private fun thinkingDetails(id: String?, initialGroup: String? = null) {
+    private fun thinkingDetails(id: String?, initialGroup: String? = null,
+                                readOnly: Boolean = false, onSaved: (() -> Unit)? = null) {
         // Group-local creation prefills membership; nothing is committed until Save.
         val originalText = id?.let(::thinkingBody).orEmpty()
         val draftGroups = id?.let(::thinkingGroups)?.toMutableList()
@@ -4647,11 +4684,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     add(initialGroup)
             }
         editor(if (id == null) "新建碎碎念" else "碎碎念详情",
-            compact = true, subtitle = "角色底部消息文本") { box ->
+            compact = true, readOnly = readOnly, subtitle = "角色底部消息文本") { box ->
             val textCard = dialogSection()
             val textField = FormInputField(this)
             val field = textField.configure("文本内容", originalText,
                 placeholder = "输入碎碎念文本", multiline = true)
+            if (readOnly) field.isEnabled = false
             textCard.addView(textField, LinearLayout.LayoutParams(-1, -2))
             addDetailSection(box, textCard)
 
@@ -4664,20 +4702,21 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 groupInfo.text = draftGroups.ifEmpty { listOf("未分组") }.joinToString("、")
             }
             refreshGroups()
-            val groupHeader = detailSectionHeader("所属分组", "") {
-                chooseThinkingGroups(draftGroups) { selected ->
-                    draftGroups.clear()
-                    draftGroups.addAll(selected)
-                    refreshGroups()
-                }
-            }
+            val groupHeader = detailSectionHeader("所属分组", "",
+                if (readOnly) null else ({
+                    chooseThinkingGroups(draftGroups) { selected ->
+                        draftGroups.clear()
+                        draftGroups.addAll(selected)
+                        refreshGroups()
+                    }
+                }))
             groupHeader.removeViewAt(1)
             val groupValue = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
             groupValue.addView(groupInfo, LinearLayout.LayoutParams(0, -2, 1f))
-            groupValue.addView(text("›", 17f).apply {
+            if (!readOnly) groupValue.addView(text("›", 17f).apply {
                 setTextColor(getColor(R.color.cp_note))
                 setPadding(px(4), 0, 0, 0)
             })
@@ -4700,7 +4739,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     setTextColor(getColor(R.color.cp_note))
                     setPadding(0, 0, 0, 0)
                 }, LinearLayout.LayoutParams(px(22), -2))
-                rippleClick(row) {
+                if (!readOnly) rippleClick(row) {
                     val functionPath = reference.functionPath
                     if (functionPath != null) functionDetails(functionPath, functionAnimationsAt(functionPath))
                     else reference.modeId?.let { openModeFromDetail(it) }
@@ -4728,6 +4767,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     texts.put(key, item)
                 }
                 if (screen == "thinkings") thinkingResources()
+                onSaved?.invoke()
             })
         }
     }
