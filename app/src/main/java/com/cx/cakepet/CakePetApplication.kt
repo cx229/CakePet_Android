@@ -21,10 +21,12 @@ class CakePetApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         appCtx = this
-        // 先扫描 assets 注册预装角色（喂 PRESET_PACKS + PRESETS），再载入用户上传模板，
-        // 使 RoleRegistry.all()/byId()/DEFAULT 可在无 Activity 处解析（含 PetService）。
+        // Keep the APK template available for creation, but register only player-owned packs.
         RoleRegistry.init(this)
-        val cfg = PetConfig.forRole(this, RoleRegistry.DEFAULT.id).getBlocking()
+        RoleStore.ensureInitialRole(this)
+        val firstRoleId = RoleStore.getHomeRoles(this).firstOrNull()?.instanceId
+            ?: RoleRegistry.DEFAULT.id
+        val cfg = PetConfig.forRole(this, firstRoleId).getBlocking()
         val mode = when {
             cfg.forceNightOn -> AppCompatDelegate.MODE_NIGHT_YES
             cfg.forceNightOff -> AppCompatDelegate.MODE_NIGHT_NO
