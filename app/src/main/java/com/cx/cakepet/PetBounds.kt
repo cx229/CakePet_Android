@@ -261,6 +261,40 @@ class PetBounds private constructor(private val dataStore: DataStore<Preferences
     private fun ck(page: SettingsPage, key: String) =
         intPreferencesKey("${page.tag}_${key}_default")
 
+    /** Valid keys and dropdown values are derived from the same system-page schema as the UI. */
+    fun supportedPreferenceKeys(): Set<String> = buildSet {
+        SettingsPage.entries.forEach { page ->
+            val b = systemItems(page)
+            b.sliders.forEach { s ->
+                listOf("from", "to", "step", "default").forEach { add("${page.tag}_${s.key}_$it") }
+            }
+            b.duals.forEach { d ->
+                listOf("fromA", "toA", "stepA", "defaultA",
+                    "fromB", "toB", "stepB", "defaultB").forEach {
+                    add("${page.tag}_${d.key}_$it")
+                }
+            }
+            b.switches.forEach { add("${page.tag}_${it.key}_default") }
+            b.colors.forEach { add("${page.tag}_${it.key}_default") }
+            if (b.keyboardModeDefault != null) add("${page.tag}_imeMode_default")
+            b.choices.forEach { add("${page.tag}_${it.key}_default") }
+        }
+    }
+
+    fun acceptsImportedValue(name: String, value: org.json.JSONObject): Boolean {
+        for (page in SettingsPage.entries) {
+            val b = systemItems(page)
+            if (name == "${page.tag}_imeMode_default")
+                return b.keyboardModeDefault != null &&
+                    AppBounds.KEYBOARD_MODES.any { it.second == value.optString("value") }
+            b.choices.forEach { choice ->
+                if (name == "${page.tag}_${choice.key}_default")
+                    return choice.options.any { it.second == value.optString("value") }
+            }
+        }
+        return true
+    }
+
     /** 读取某页的当前（用户）阈值清单；未设置的字段回落基础款。 */
     fun boundsFlow(page: SettingsPage): Flow<PageBounds> = dataStore.data.map { prefs ->
         val sys = systemPage(page)
