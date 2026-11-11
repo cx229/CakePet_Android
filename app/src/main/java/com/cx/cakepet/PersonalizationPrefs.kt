@@ -6,7 +6,6 @@ import android.content.Context
 object PersonalizationPrefs {
     private const val FILE = "cakepet_personalization"
     private const val SPAWN = "summon_position"
-    private const val ANIMATE = "animated_preview" // Legacy toggle; read once for migration.
     private const val PREVIEW_SOURCE = "preview_source"
     private const val PAT = "preview_pat"
     private const val PRESENCE = "home_preview_mode"
@@ -23,14 +22,9 @@ object PersonalizationPrefs {
 
     /** App-wide selection of a *playing* Function pool, never a frozen image. */
     fun previewSource(context: Context): String {
-        val store = prefs(context)
-        return store.getString(PREVIEW_SOURCE, null)
+        return prefs(context).getString(PREVIEW_SOURCE, STATIC_POOL)
             ?.takeIf { it in listOf(PREVIEW, STANDBY, STATIC_POOL, BLANK) }
-            ?: if (store.contains(ANIMATE)) {
-                // Existing disabled previews become blank; enabled previews keep
-                // their former static-pool playback until the player chooses anew.
-                if (store.getBoolean(ANIMATE, true)) STATIC_POOL else BLANK
-            } else PREVIEW
+            ?: STATIC_POOL
     }
 
     fun setPreviewSource(context: Context, value: String) {
@@ -56,10 +50,6 @@ object PersonalizationPrefs {
         require(value == BOTTOM_CENTER || value == RANDOM)
         prefs(context).edit().putString(SPAWN, value).apply()
     }
-
-    fun animatedPreview(context: Context): Boolean = prefs(context).getBoolean(ANIMATE, true)
-    fun setAnimatedPreview(context: Context, enabled: Boolean) =
-        prefs(context).edit().putBoolean(ANIMATE, enabled).apply()
 
     fun previewPat(context: Context): Boolean = prefs(context).getBoolean(PAT, true)
     fun setPreviewPat(context: Context, enabled: Boolean) =
