@@ -5311,27 +5311,41 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun confirmThinkingDelete(id: String) {
-        val uses = thinkingUses(id)
-        if (uses.isNotEmpty()) {
-            val references = android.text.TextUtils.htmlEncode(
-                uses.joinToString("\n") { it.label(::functionPathName) }
-            ).replace("\n", "<br>")
-            showConfirmDialog(
-                title = "无法删除：仍被引用",
-                bodyHtml = references,
-                positiveText = "我知道了",
-                showNegative = false
-            ) { }
-            return
-        }
         showConfirmDialog(
             title = "删除碎碎念",
             bodyHtml = "确认删除「" + android.text.TextUtils.htmlEncode(thinkingBody(id)) + "」？",
-            subText = "此操作不可撤销。",
-            positiveText = "删除"
+            positiveText = "删除",
+            titleColorRes = R.color.cp_danger
         ) {
             attempt {
-                change { it.getJSONObject("thinkings").remove(id) }
+                change { json ->
+                    json.getJSONObject("thinkings").remove(id)
+                    fun prune(config: JSONObject?) {
+                        val thinking = config?.optJSONObject("thinking") ?: return
+                        when (val pool = thinking.opt("pool")) {
+                            is JSONObject -> pool.remove(id)
+                            is JSONArray -> {
+                                val kept = JSONArray()
+                                for (index in 0 until pool.length()) {
+                                    val value = pool.opt(index)
+                                    val refId = if (value is JSONObject) value.optString("id")
+                                        else value?.toString()
+                                    if (refId != id) kept.put(value)
+                                }
+                                thinking.put("pool", kept)
+                            }
+                        }
+                    }
+                    fun visit(node: JSONObject) {
+                        prune(node)
+                        node.keys().asSequence().toList().filter { it !in setOf("thinking", "modes") }
+                            .forEach { name -> node.optJSONObject(name)?.let(::visit) }
+                    }
+                    json.optJSONObject("functions")?.let(::visit)
+                    json.optJSONObject("modes")?.let { modes ->
+                        modes.keys().forEach { name -> prune(modes.optJSONObject(name)) }
+                    }
+                }
                 thinkingResources()
             }
         }
