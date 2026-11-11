@@ -3542,17 +3542,89 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
     }
+    /** Delete a Mode and remove every inbound Function/nextMode reference. */
+    private fun removeModeReferences(json: JSONObject, key: String) {
+        val modes = json.getJSONObject("modes")
+        modes.remove(key)
+        modes.keys().forEach { name ->
+            val mode = modes.optJSONObject(name) ?: return@forEach
+            if (mode.optString("nextMode") == key) mode.put("nextMode", JSONObject.NULL)
+        }
+        fun visit(node: JSONObject) {
+            node.keys().asSequence().toList().forEach { field ->
+                if (field in setOf("thinking", "note", "usage")) return@forEach
+                when (val child = node.opt(field)) {
+                    is JSONArray -> {
+                        val kept = JSONArray()
+                        for (i in 0 until child.length()) {
+                            val value = child.opt(i)
+                            if (value != key) kept.put(value)
+                        }
+                        node.put(field, kept)
+                    }
+                    is JSONObject -> if (child.has("modes")) {
+                        child.optJSONArray("modes")?.let { choices ->
+                            val kept = JSONArray()
+                            for (i in 0 until choices.length()) {
+                                val value = choices.opt(i)
+                                if (value != key) kept.put(value)
+                            }
+                            child.put("modes", kept)
+                        }
+                    } else visit(child)
+                }
+            }
+        }
+        visit(json.getJSONObject("functions"))
+    }
+
+    private fun modeRemovalConsequence(path: List<String>): String = when (path.joinToString("/")) {
+        "standby/pool" -> "正常待机将没有可用动画，召唤或归位后可能无法正常待机"
+        "standby/static_pool" -> "「移动」将被强制开启，无法关闭移动让角色静止"
+        "touch/roll" -> "「抛掷」将被强制关闭，无法触发抛掷滚动"
+        "snap/snap_head" -> "「吸附边缘」将被强制关闭，无法使用吸附功能"
+        "feed/food" -> "「投食」将被强制关闭，无法投喂"
+        "climb/leap/leap" -> "「飞跃」将被强制关闭，无法自动飞跃"
+        "climb/forage/move" -> "「自动觅食」将被强制关闭，不再主动奔向食物"
+        "menu/preview" -> "首页选择「动画：预览」时将没有动画可播放"
+        "menu/summoned" -> "首页已召唤角色的动画预览将不可播放"
+        "menu/pool" -> "长按菜单中将没有可手动选择的动画"
+        "touch/jump_down" -> "抛掷或滚动结束后将缺少落地动画"
+        "feed/eat" -> "接受投喂时将缺少进食动画"
+        "pat_head/pat_head" -> "正常摸头时将缺少互动动画"
+        "snap/pat_head/pat_head" -> "吸附状态摸头时将缺少互动动画"
+        "snap/feed/eat" -> "吸附状态投喂时将缺少进食动画"
+        "climb/leap/landing" -> "飞跃接触墙面时将缺少降落动画"
+        else -> "触发此功能时将没有可播放的动画"
+    }
+
     private fun deleteMode(key: String) {
+        val after = JSONObject(root.toString())
+        removeModeReferences(after, key)
+        val imageReady: (String) -> Boolean = { relative ->
+            runCatching {
+                val file = File(draft, relative).canonicalFile
+                file.toPath().startsWith(draft.canonicalFile.toPath()) && file.isFile
+            }.getOrDefault(false)
+        }
+        val risks = RolePackNormalizer.supportedPaths.filter { path ->
+            MaterialFunctionSupport.available(root, path, imageReady) &&
+                !MaterialFunctionSupport.available(after, path, imageReady)
+        }
+        val impact = risks.joinToString("<br>") { path ->
+            "<font color='#B3261E'>" +
+                android.text.TextUtils.htmlEncode(functionPathName(path)) + "：" +
+                android.text.TextUtils.htmlEncode(modeRemovalConsequence(path)) + "</font>"
+        }
         showConfirmDialog(
             title = "删除动画",
-            bodyHtml = "确定删除「$key」？",
-            subText = "仍被功能或其他动画引用时无法删除",
+            bodyHtml = "确定删除「" + android.text.TextUtils.htmlEncode(key) + "」？" +
+                if (impact.isEmpty()) "" else "<br><br>删除后以下功能将失去有效动画：<br>" + impact,
             positiveText = "删除",
             titleColorRes = R.color.cp_danger
         ) {
             attempt {
-                require(ids().size > 1) { "至少保留一个动画" }
-                change { it.getJSONObject("modes").remove(key) }
+                change { json -> removeModeReferences(json, key) }
                 modes()
             }
         }
