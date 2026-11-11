@@ -1804,6 +1804,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         val recycler = sortableFolderRecycler(rows, canMove, persist, heading,
             incrementalPage = screen.takeIf { it in setOf("modes", "images", "thinkings") })
+        // The regular editor_content has 16dp padding. These three pages
+        // replace its ScrollView with a RecyclerView, so restore that same
+        // horizontal/bottom inset only on the outer page list (not nested folders).
+        recycler.setPadding(px(16), 0, px(16), px(16))
+        recycler.clipToPadding = false
         recycler.isNestedScrollingEnabled = true
         val parent = scroll.parent as android.view.ViewGroup
         parent.addView(recycler, parent.indexOfChild(scroll) + 1,
