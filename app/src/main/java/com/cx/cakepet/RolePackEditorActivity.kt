@@ -70,6 +70,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 linkedOverviewRefresher?.invoke()
                 functionDetailRefreshers.values.toList().forEach { it() }
                 modeDetailRefreshers.values.toList().forEach { it() }
+                modeChainPickerRefreshers.values.toList().forEach { it() }
             }.onFailure { error ->
                 android.util.Log.e("RolePackEditor", "Unable to refresh linked dialogs", error)
             }
@@ -408,6 +409,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private val navigationDialogs = mutableListOf<android.app.Dialog>()
     private val functionDetailRefreshers = mutableMapOf<android.app.Dialog, () -> Unit>()
     private val modeDetailRefreshers = mutableMapOf<android.app.Dialog, () -> Unit>()
+    // Picker rows must update their linked animation-chain text after nested edits.
+    // Their checkbox state, expanded folders and ScrollView are never recreated.
+    private val modeChainPickerRefreshers = mutableMapOf<android.app.Dialog, () -> Unit>()
     private data class SuspendedDetailStack(
         val originScreen: String,
         val originMode: String,
@@ -456,6 +460,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 pending.dialogs.forEach { dialog ->
                     functionDetailRefreshers[dialog]?.invoke()
                     modeDetailRefreshers[dialog]?.invoke()
+                    modeChainPickerRefreshers[dialog]?.invoke()
                 }
             }
             pending.dialogs.forEach { dialog ->
@@ -857,6 +862,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         detailDialogs.clear()
         modeDetailRefreshers.clear()
         functionDetailRefreshers.clear()
+        modeChainPickerRefreshers.clear()
         removeBulkBar()
         stopAnimation()
         detailPreviewTasks.values.toList().forEach { handler.removeCallbacks(it) }
@@ -1077,6 +1083,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         functionDetailRefreshers.toMap().forEach { (dialog, refresh) ->
             if (dialog.isShowing) refresh() else functionDetailRefreshers.remove(dialog)
+        }
+        // A picker can be temporarily hidden while its linked Mode is edited.
+        // Update its existing text spans even while hidden, before it is shown again.
+        modeChainPickerRefreshers.toMap().forEach { (dialog, refresh) ->
+            if (dialog in navigationDialogs) refresh()
+            else modeChainPickerRefreshers.remove(dialog)
         }
         if (!linkedMode && screen == "home") {
             homePreviewPlayer?.stop()
@@ -4250,6 +4262,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         // Keep each group's views alive. Expanding only changes its child container,
         // exactly as the main animation folder list does.
         val choiceButtons = mutableMapOf<String, MutableList<android.widget.CompoundButton>>()
+        val chainLabels = mutableListOf<Pair<String, TextView>>()
         val groupCounts = mutableMapOf<String, TextView>()
         var automaticRadio: android.widget.RadioButton? = null
         var syncingChoices = false
@@ -4338,11 +4351,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     }
                     choiceButtons.getOrPut(name) { mutableListOf() }.add(check)
                     row.addView(check, LinearLayout.LayoutParams(px(42), px(48)))
-                    row.addView(linkedModeChains(listOf(name), root.getJSONObject("modes"),
+                    val chainLabel = linkedModeChains(listOf(name), root.getJSONObject("modes"),
                         "", 12f) { mode -> openModeFromDetail(mode) }.apply {
                         gravity = Gravity.CENTER_VERTICAL
                         setPadding(0, px(2), px(6), px(2))
-                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    }
+                    chainLabels.add(name to chainLabel)
+                    row.addView(chainLabel, LinearLayout.LayoutParams(0, -2, 1f))
                     children.addView(row, selectionRowParams(1))
                     rippleClick(row) {
                         if (single) selectMode(name) else check.isChecked = !check.isChecked
@@ -4385,7 +4400,18 @@ open class RolePackEditorActivity : AppCompatActivity() {
         dialog.show()
         dialog.window?.setLayout(-1, -2)
         navigationDialogs.add(dialog)
-        dialog.setOnDismissListener { navigationDialogs.remove(dialog) }
+        modeChainPickerRefreshers[dialog] = {
+            // Recompute only the displayed chain spans; do not rebuild option rows.
+            chainLabels.forEach { (name, label) ->
+                val latest = linkedModeChains(listOf(name), root.getJSONObject("modes"),
+                    "", 12f) { mode -> openModeFromDetail(mode) }
+                label.setText(latest.text, TextView.BufferType.SPANNABLE)
+            }
+        }
+        dialog.setOnDismissListener {
+            navigationDialogs.remove(dialog)
+            modeChainPickerRefreshers.remove(dialog)
+        }
     }
 
     private fun chooseFunctions(path: List<String>, chosen: List<String>) {
