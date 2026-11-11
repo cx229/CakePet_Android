@@ -98,69 +98,162 @@ object SoftwareBackup {
                 background.getStringSet("summoned_roles", emptySet()).orEmpty().sorted()))
     }
 
-    /** Validate optional global settings before the destructive confirmation.
-     * A malformed optional entry must not stop the running pets after approval.
-     */
-    private fun validateAppSettings(settings: JSONObject) {
+    /** Optional settings are independent: a bad value never rejects its siblings. */
+    private fun restoreAppSettings(ctx: Context, settings: JSONObject): Int {
+        var applied = 0
         settings.optJSONObject("personalization")?.let { p ->
-            val spawn = p.optString("summonPosition", PersonalizationPrefs.BOTTOM_CENTER)
-            require(spawn in listOf(PersonalizationPrefs.BOTTOM_CENTER, PersonalizationPrefs.RANDOM)) {
-                "召唤位置设置无效"
+            val spawn = p.opt("summonPosition") as? String
+            if (spawn in listOf(PersonalizationPrefs.BOTTOM_CENTER, PersonalizationPrefs.RANDOM)) {
+                PersonalizationPrefs.setSummonPosition(ctx, spawn!!)
+                applied++
             }
-            val source = p.optString("previewSource", PersonalizationPrefs.STATIC_POOL)
-            require(source in listOf(PersonalizationPrefs.PREVIEW, PersonalizationPrefs.STANDBY,
-                PersonalizationPrefs.STATIC_POOL, PersonalizationPrefs.BLANK)) {
-                "预览动画来源设置无效"
+            val source = p.opt("previewSource") as? String
+            if (source in listOf(PersonalizationPrefs.PREVIEW, PersonalizationPrefs.STANDBY,
+                    PersonalizationPrefs.STATIC_POOL, PersonalizationPrefs.BLANK)) {
+                PersonalizationPrefs.setPreviewSource(ctx, source!!)
+                applied++
             }
-            val mode = p.optString("homePreviewMode", PersonalizationPrefs.DYNAMIC)
-            require(mode in listOf(PersonalizationPrefs.ALWAYS, PersonalizationPrefs.DYNAMIC)) {
-                "召唤后预览方式无效"
+            (p.opt("previewPat") as? Boolean)?.let {
+                PersonalizationPrefs.setPreviewPat(ctx, it)
+                applied++
             }
-            if (p.has("previewPat")) require(p.opt("previewPat") is Boolean) {
-                "摸摸头设置类型无效"
+            val mode = p.opt("homePreviewMode") as? String
+            if (mode in listOf(PersonalizationPrefs.ALWAYS, PersonalizationPrefs.DYNAMIC)) {
+                PersonalizationPrefs.setHomePreviewMode(ctx, mode!!)
+                applied++
             }
         }
         settings.optJSONObject("watermark")?.let { w ->
-            if (w.has("enabled")) require(w.opt("enabled") is Boolean) {
-                "去水印开关类型无效"
+            (w.opt("enabled") as? Boolean)?.let {
+                ImportWatermark.setEnabled(ctx, it)
+                applied++
             }
-            if (w.has("level")) require(
-                ImportWatermark.Level.entries.any { it.name == w.optString("level") }) {
-                "去水印强度设置无效"
+            val level = (w.opt("level") as? String)
+                ?.let { name -> ImportWatermark.Level.entries.firstOrNull { it.name == name } }
+            if (level != null) {
+                ImportWatermark.setLevel(ctx, level)
+                applied++
             }
-        }
-        settings.optJSONArray("summonedRoles")?.let { arr ->
-            for (index in 0 until arr.length()) require(arr.opt(index) is String) {
-                "召唤角色列表格式无效"
-            }
-        }
-    }
-
-    /** Restore through the preference APIs so their in-process caches update too. */
-    private fun restoreAppSettings(ctx: Context, settings: JSONObject) {
-        settings.optJSONObject("personalization")?.let { p ->
-            if (p.has("summonPosition"))
-                PersonalizationPrefs.setSummonPosition(ctx, p.getString("summonPosition"))
-            if (p.has("previewSource"))
-                PersonalizationPrefs.setPreviewSource(ctx, p.getString("previewSource"))
-            if (p.has("previewPat"))
-                PersonalizationPrefs.setPreviewPat(ctx, p.getBoolean("previewPat"))
-            if (p.has("homePreviewMode"))
-                PersonalizationPrefs.setHomePreviewMode(ctx, p.getString("homePreviewMode"))
-        }
-        settings.optJSONObject("watermark")?.let { w ->
-            if (w.has("enabled")) ImportWatermark.setEnabled(ctx, w.getBoolean("enabled"))
-            if (w.has("level"))
-                ImportWatermark.setLevel(ctx, ImportWatermark.Level.valueOf(w.getString("level")))
         }
         settings.optJSONArray("summonedRoles")?.let { roles ->
-            val selected = (0 until roles.length()).map { roles.getString(it) }.toSet()
-            check(ctx.getSharedPreferences("cakepet_background", Context.MODE_PRIVATE)
-                .edit().putStringSet("summoned_roles", selected).commit()) {
-                "无法恢复已召唤角色状态"
+            val known = RoleStore.getHomeRoles(ctx).map { it.instanceId }.toSet()
+            val selected = (0 until roles.length()).mapNotNull { roles.opt(it) as? String }
+                .filter { it in known }.toSet()
+            if (ctx.getSharedPreferences("cakepet_background", Context.MODE_PRIVATE)
+                .edit().putStringSet("summoned_roles", selected).commit()) applied++
+        }
+        return applied
+    }
+
+    private fun registryArray(registry: JSONObject, section: String, name: String): JSONArray? =
+        runCatching {
+            JSONArray(registry.optJSONObject(section)?.optJSONObject(name)?.getString("value"))
+        }.getOrNull()
+
+    private fun setRegistryArray(registry: JSONObject, section: String,
+                                 name: String, values: JSONArray) {
+        val store = registry.optJSONObject(section) ?: JSONObject().also { registry.put(section, it) }
+        store.put(name, JSONObject().put("type", "string").put("value", values.toString()))
+    }
+
+    /**
+     * Overlay only well-formed package groups and valid home references.
+     * Preserve every existing entry and unrelated registry preference.
+     * Imported packs stay unnormalized, including their unknown JSONC members.
+     */
+    private fun mergeRegistries(ctx: Context, current: JSONObject, source: JSONObject,
+                                stagedRoles: File, liveRoles: File): Pair<JSONObject, Int> {
+        val merged = JSONObject(current.toString())
+        var applied = 0
+        val installed = RoleStore.getUserRoles(ctx).associateBy { it.id }.toMutableMap()
+        val candidates = registryArray(source, "userRoles", "user_roles")
+        if (candidates != null) {
+            for (i in 0 until candidates.length()) {
+                val value = candidates.optJSONObject(i) ?: continue
+                val id = value.optString("id")
+                val relative = value.optString("rootPath")
+                if (!id.matches(Regex("[a-zA-Z0-9_-]{1,100}")) ||
+                    relative != id || value.optString("source") != "FILES") continue
+                val sourceDir = File(stagedRoles, id)
+                val manifest = File(sourceDir, "modes.jsonc")
+                val parsed = runCatching { parseJsonc(manifest.readText()) }.getOrNull() ?: continue
+                if (!parsed.has("modes") || !parsed.has("functions")) continue
+                // Do not replace a working live pack with an incompatible payload.
+                val existing = installed[id]
+                if (existing != null && !RolePackageContract.validate(parsed).ok) continue
+                copyTree(sourceDir, File(liveRoles, id))
+                val authors = value.optJSONArray("authors")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { arr.opt(it) as? String }
+                }.orEmpty()
+                installed[id] = UserRoleTemplate(id,
+                    value.optString("displayName").ifBlank { parsed.optString("name", id) },
+                    id, -1, value.optString("shortName"), "FILES", authors)
+                applied++
             }
         }
+        val currentTemplates = registryArray(current, "userRoles", "user_roles")
+        val mergedTemplates = JSONArray()
+        val previous = mutableSetOf<String>()
+        currentTemplates?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val value = arr.optJSONObject(i) ?: continue
+                val id = value.optString("id")
+                if (id !in installed || !previous.add(id)) continue
+                val t = installed.getValue(id)
+                mergedTemplates.put(templateJson(t))
+            }
+        }
+        installed.values.forEach { t ->
+            if (previous.add(t.id)) mergedTemplates.put(templateJson(t))
+        }
+        setRegistryArray(merged, "userRoles", "user_roles", mergedTemplates)
+
+        val eligible = installed.keys.filter { id ->
+            val dir = File(liveRoles, id)
+            runCatching {
+                val config = parseJsonc(File(dir, "modes.jsonc").readText())
+                MaterialFunctionSupport.available(config, MaterialFunctionSupport.NORMAL) { path ->
+                    val root = dir.canonicalFile
+                    val image = File(root, path).canonicalFile
+                    image.toPath().startsWith(root.toPath()) && image.isFile
+                }
+            }.getOrDefault(false)
+        }.toSet()
+        val currentHome = RoleStore.getHomeRoles(ctx).associateBy { it.instanceId }.toMutableMap()
+        val incomingHome = registryArray(source, "homeRoles", "home_roles")
+        if (incomingHome != null) for (i in 0 until incomingHome.length()) {
+            val obj = incomingHome.optJSONObject(i) ?: continue
+            val id = obj.optString("instanceId")
+            val template = obj.optString("templateId")
+            if (!id.matches(Regex("[a-zA-Z0-9_-]{1,100}")) || template !in eligible) continue
+            currentHome[id] = HomeRoleInstance(id, template,
+                obj.optString("displayName"), obj.optString("shortName"))
+            applied++
+        }
+        val home = JSONArray()
+        currentHome.values.forEach { item ->
+            home.put(JSONObject().put("instanceId", item.instanceId)
+                .put("templateId", item.templateId)
+                .put("displayName", item.displayName).put("shortName", item.shortName))
+        }
+        setRegistryArray(merged, "homeRoles", "home_roles", home)
+
+        // The catalog order is cosmetic; preserve current order, append valid new IDs.
+        val order = RoleStore.getCatalogOrder(ctx).toMutableList()
+        val incomingOrder = registryArray(source, "catalogOrder", "catalog_order")
+        if (incomingOrder != null) for (i in 0 until incomingOrder.length()) {
+            val id = incomingOrder.optString(i)
+            if (id in installed && id !in order) order.add(id)
+        }
+        setRegistryArray(merged, "catalogOrder", "catalog_order", JSONArray(order))
+        return merged to applied
     }
+
+    private fun templateJson(item: UserRoleTemplate): JSONObject =
+        JSONObject().put("id", item.id).put("displayName", item.displayName)
+            .put("rootPath", item.rootPath).put("packId", item.packId)
+            .put("shortName", item.shortName).put("source", "FILES")
+            .put("authors", JSONArray(item.authors))
 
     fun export(ctx: Context, uri: Uri) {
         val (config, bounds) = runBlocking { configs(ctx) }
@@ -253,7 +346,7 @@ object SoftwareBackup {
             }
             // Backups from before the explicit app-wide settings record remain readable.
             File(root, "app-settings.json").takeIf { it.isFile }?.let {
-                validateAppSettings(JSONObject(it.readText()))
+                JSONObject(it.readText())
             }
             return root
         } catch (e: Exception) {
