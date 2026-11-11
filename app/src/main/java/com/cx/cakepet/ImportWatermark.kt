@@ -24,6 +24,12 @@ object ImportWatermark {
             .putBoolean(ENABLED_KEY, enabled).apply()
     }
 
+    fun reset(ctx: Context) {
+        check(ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()) {
+            "无法重置导入去水印设置"
+        }
+    }
+
     enum class Level(val label: String, val region: Float, val maxWidth: Float,
                      val maxHeight: Float, val maxArea: Float, val gapRatio: Float,
                      val stableRatio: Float) {
