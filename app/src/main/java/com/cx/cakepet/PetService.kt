@@ -1653,6 +1653,9 @@ class PetService : Service() {
         cur.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         fishLayers.removeAt(idx)
         imeFishOffsets.remove(cur.iv)
+        if (draggingFish?.iv === cur.iv) draggingFish = null
+        // A removed fish must not remain the forage target of any surviving pet.
+        forageFoodByView.entries.removeAll { it.value?.iv === cur.iv }
     }
 
     // 清除支鱼浮窗。roleId 为 null 时清除全部；否则仅清除【该角色】的支鱼（含其过期计时与边框）。
@@ -4024,41 +4027,71 @@ class PetService : Service() {
     }
 
     private fun teardownRole(roleId: String) {
-        val rt = engines[roleId] ?: return
-        rt.configJob?.cancel(); rt.configJob = null
-        rt.randomJob?.cancel(); rt.randomJob = null
-        // 停止该角色的投食循环并仅清除该角色的支鱼（不串其它角色）。
-        stopFishSpawning(rt)
-        
+        val rt = engines[roleId]
+        // Cleanup is idempotent: even an already-detached runtime may leave auxiliary
+        // windows behind. Never remove another role's fish, freezes or message window.
+        rt?.configJob?.cancel(); rt?.configJob = null
+        rt?.randomJob?.cancel(); rt?.randomJob = null
+        if (rt != null) stopFishSpawning(rt)
+        else clearAllFish(roleId)
+        clearAllFreeze(roleId)
         modeAssetManagers.remove(roleId)
+        pendingInitialPlacement.remove(roleId)
+
         val removed = pets.filter { it.roleId == roleId }
         for (inst in removed) {
-            if (inst.displayAdded) inst.displayView?.let { d -> inst.displayLp?.let { removeDisplay(d, it) } }
-            try { windowManager.removeView(inst.view) } catch (_: Exception) {}
-            try { inst.petMsg.destroy() } catch (_: Exception) {}
+            inst.displayView?.let { display ->
+                inst.displayLp?.let { removeDisplay(display, it) }
+            }
+            try {
+                if (inst.view.isAttachedToWindow) windowManager.removeViewImmediate(inst.view)
+            } catch (e: Exception) {
+                android.util.Log.w("PetService", "召回控制窗失败：$roleId", e)
+            }
+            try { inst.petMsg.destroy() } catch (e: Exception) {
+                android.util.Log.w("PetService", "召回碎碎念失败：$roleId", e)
+            }
+            imePetOffsets.remove(inst.view)
+            forageFoodByView.remove(inst.view)
         }
         pets.removeAll(removed)
-        removed.forEach { imePetOffsets.remove(it.view) }
-        // 别名 petView/layoutParams 仅“最后召唤角色”创建时赋值，移除后必须重指到当前 pets[0]，
-        // 否则它与实时列表错位（调试浮层/拖拽/帧循环其余引用会指向旧实例）。
-        pets.getOrNull(0)?.let { first ->
-            petView = first.view
-            layoutParams = first.layoutParams
-        }
-        // 仅清除该角色的定格层（不串其它角色）。
-        clearAllFreeze(roleId)
         engines.remove(roleId)
-        saveSummonedRoles()
         imeShiftY.remove(roleId)
         imeLastMode.remove(roleId)
         imeLastTop.remove(roleId)
-        // 通知首页：该角色已退场（在屏状态变化）。
-        onActiveRolesChanged?.invoke()
+
+        // Service-level aliases must refer only to surviving roles. In particular,
+        // don't leave the mutter manager pointing at a destroyed role.
+        val survivor = pets.firstOrNull()
+        if (survivor != null) {
+            petView = survivor.view
+            layoutParams = survivor.layoutParams
+            trayMsgManager = survivor.petMsg
+            val nextId = if (currentRoleId == roleId || currentRoleId !in engines)
+                survivor.roleId else currentRoleId
+            syncRole(nextId)
+        } else {
+            trayMsgManager = null
+            currentRoleId = ""
+            currentShortName = "角色"
+        }
+
         if (engines.isEmpty()) {
             running = false
             mainHandler.removeCallbacks(frameRunnable)
             try { sensorManager?.unregisterListener(tiltListener) } catch (_: Exception) {}
+            // These are service-level debug windows, not owned by a pet instance.
+            // With no role remaining, they must not linger on the desktop.
+            releaseGuide(DEBUG_BOUND_OWNER)
+            releaseGuide(DEBUG_SNAP_OWNER)
+            debugView?.visibility = View.GONE
+            if (guideAdded) {
+                guideLineView?.visibility = View.GONE
+                syncGuideWindow()
+            }
         }
+        saveSummonedRoles()
+        onActiveRolesChanged?.invoke()
     }
 
     /** 一次性创建调试浮层与四边吸附辅助线（不在 initPetView 内，避免随角色切换重复 addView）。 */
