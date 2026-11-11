@@ -3941,8 +3941,12 @@ class PetService : Service() {
                 physics.x = if (maxX > minX) minX + Random.nextFloat() * (maxX - minX) else minX
                 physics.y = if (maxY > minY) minY + Random.nextFloat() * (maxY - minY) else minY
             } else {
-                // Same physical target and reset semantics as Return Home.
-                physics.resetTo((minX + maxX) / 2f, maxY)
+                // Only a NEW bottom-center summon: spawn well beyond the bottom
+                // boundary and let the already-initialized physics bounds decide
+                // the exact landing point. Return Home keeps its existing path.
+                val outsideY = maxOf(5000f, physics.maxY * 2f, physics.maxY + 1f)
+                physics.resetTo((minX + maxX) / 2f, outsideY)
+                physics.clampToBounds()
             }
             // 显示层与控制层在第一帧之前同步到同一出生位置，避免先闪到左上角。
             placeControlWindow(view, inst.layoutParams, inst.lastW, inst.lastH)
@@ -3978,14 +3982,14 @@ class PetService : Service() {
         applyNightMode(config.getBlocking())
         registerConfigObserver(rt)
         lastVisRect = getScreenBounds()
-        // Bottom-center summon uses exactly the same reset and home placement
-        // as the existing Return Home action; random placement stays separate.
-        if (PersonalizationPrefs.summonPosition(this) == PersonalizationPrefs.RANDOM) {
-            recalcBounds()
-            positionNewlySummonedRole(roleId)
-        } else {
-            returnHome(roleId)
+        // Initialize the final animation/anchor snapshot before calculating
+        // physical bounds. Only newly summoned pets take the outside-bottom
+        // placement path; explicit Return Home remains unchanged.
+        if (PersonalizationPrefs.summonPosition(this) != PersonalizationPrefs.RANDOM) {
+            pets.filter { it.roleId == roleId }.forEach { it.view.forceReset() }
         }
+        recalcBounds()
+        positionNewlySummonedRole(roleId)
         startLoop()
         startRandomLoop(rt)
         saveSummonedRoles()
