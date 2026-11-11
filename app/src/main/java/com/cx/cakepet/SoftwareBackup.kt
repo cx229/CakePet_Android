@@ -23,7 +23,8 @@ import java.util.zip.ZipOutputStream
  */
 object SoftwareBackup {
     private fun roleIds(ctx: Context): Set<String> {
-        val ids = RoleStore.getHomeRoles(ctx).map { it.instanceId }.toMutableSet()
+        val ids = runCatching { RoleStore.getHomeRoles(ctx).map { it.instanceId }.toMutableSet() }
+            .getOrDefault(mutableSetOf())
         ids += RoleRegistry.DEFAULT.id
         File(ctx.filesDir, "datastore").listFiles().orEmpty().forEach {
             val name = it.name
@@ -196,7 +197,8 @@ object SoftwareBackup {
                                 stagedRoles: File, liveRoles: File): Pair<JSONObject, Int> {
         val merged = JSONObject(current.toString())
         var applied = 0
-        val installed = RoleStore.getUserRoles(ctx).associateBy { it.id }.toMutableMap()
+        val installed = runCatching { RoleStore.getUserRoles(ctx).associateBy { it.id }.toMutableMap() }
+            .getOrDefault(mutableMapOf())
         val candidates = registryArray(source, "userRoles", "user_roles")
         if (candidates != null) {
             for (i in 0 until candidates.length()) {
@@ -258,7 +260,8 @@ object SoftwareBackup {
                 }
             }.getOrDefault(false)
         }.toSet()
-        val currentHome = RoleStore.getHomeRoles(ctx).associateBy { it.instanceId }.toMutableMap()
+        val currentHome = runCatching { RoleStore.getHomeRoles(ctx).associateBy { it.instanceId }.toMutableMap() }
+            .getOrDefault(mutableMapOf())
         val incomingHome = registryArray(source, "homeRoles", "home_roles")
         val importedHomeOrder = mutableListOf<String>()
         if (incomingHome != null) for (i in 0 until incomingHome.length()) {
@@ -282,7 +285,7 @@ object SoftwareBackup {
         setRegistryArray(merged, "homeRoles", "home_roles", home)
 
         // The catalog order is cosmetic; preserve current order, append valid new IDs.
-        val oldOrder = RoleStore.getCatalogOrder(ctx)
+        val oldOrder = runCatching { RoleStore.getCatalogOrder(ctx) }.getOrDefault(emptyList())
         val order = mutableListOf<String>()
         val incomingOrder = registryArray(source, "catalogOrder", "catalog_order")
         if (incomingOrder != null) for (i in 0 until incomingOrder.length()) {
