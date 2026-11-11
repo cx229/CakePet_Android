@@ -1037,6 +1037,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
             return
         }
         resourcePageUpdater = null
+        resourceCachedPage = null
+        resourceCachedViews.clear()
+        resourceCachedSignatures.clear()
         removeBulkBar()
         // Only the active page owns a vertical scroller. Restore normal page
         // ScrollView before creating ordinary editor pages.
@@ -1584,7 +1587,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
      * a single movable item; fixed groups never enter the drag targets.
      */
     private var resourcePageUpdater: ((List<Pair<String, LinearLayout>>) -> Unit)? = null
+    private var resourceCachedPage: String? = null
+    private val resourceCachedViews = mutableMapOf<String, LinearLayout>()
+    private val resourceCachedSignatures = mutableMapOf<String, String>()
     private val resourceImageRevisions = mutableMapOf<String, Int>()
+
+    /** Reuse unchanged folder trees without even recreating thumbnails or children. */
+    private fun cachedResourceGroup(page: String, key: String): LinearLayout? {
+        if (resourceCachedPage != page || resourcePageUpdater == null) return null
+        val saved = resourceCachedSignatures[key] ?: return null
+        return resourceCachedViews[key]?.takeIf { saved == resourceGroupSignature(page, key) }
+    }
 
     /** Stable group fingerprints let edits update only changed group cards. */
     private fun resourceGroupSignature(page: String, key: String): String {
@@ -1686,6 +1699,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         recycler.adapter = adapter
         if (incrementalPage != null) {
+            resourceCachedPage = incrementalPage
+            resourceCachedViews.clear()
+            resourceCachedViews.putAll(items.toMap())
+            resourceCachedSignatures.clear()
+            resourceCachedSignatures.putAll(signatures)
             recycler.itemAnimator = null
             resourcePageUpdater = { fresh ->
                 val old = items.toList()
@@ -1712,6 +1730,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     items.add(key to (reused ?: view))
                 }
                 signatures = nextSignatures
+                resourceCachedViews.clear()
+                resourceCachedViews.putAll(items.toMap())
+                resourceCachedSignatures.clear()
+                resourceCachedSignatures.putAll(nextSignatures)
                 diff.dispatchUpdatesTo(adapter)
             }
         }
@@ -1812,6 +1834,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val thumbnails = mutableMapOf<String, android.graphics.Bitmap?>()
         val folderRows = mutableListOf<Pair<String, LinearLayout>>()
         for ((group, names) in grouped) {
+            cachedResourceGroup("modes", group)?.let { reused ->
+                folderRows.add(group to reused)
+                continue
+            }
             val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val header = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -4963,6 +4989,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val order = jsonStrings(root.optJSONObject("resourceOrder")?.optJSONArray(parentPath))
         val ranks = order.withIndex().associate { it.value to it.index }
         val rows = mutableListOf<Pair<String, LinearLayout>>()
+        val cachedUngrouped = if (level == 0) cachedResourceGroup("images", "u:未分组") else null
         directory.listFiles().orEmpty()
             .filter { isImage(it) || it.isDirectory && !it.name.startsWith(".") }
             .sortedWith(compareBy<File>({ !it.isDirectory },
@@ -4970,6 +4997,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 { it.name.lowercase() }))
             .forEach { file ->
                 val path = file.relativeTo(draft).invariantSeparatorsPath
+                if (level == 0 && file.isDirectory) {
+                    val key = "d:" + file.name
+                    cachedResourceGroup("images", key)?.let { reused ->
+                        rows.add(key to reused)
+                        return@forEach
+                    }
+                }
+                if (level == 0 && file.isFile && cachedUngrouped != null) return@forEach
                 val row = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
@@ -5067,7 +5102,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
                 rows.add((if (file.isDirectory) "d:" else "f:") + file.name to item)
             }
-        if (level == 0) {
+        if (level == 0 && cachedUngrouped != null) {
+            rows.add("u:未分组" to cachedUngrouped)
+        } else if (level == 0) {
             // Root files have no real parent folder. Show them in a virtual,
             // non-renamable "未分组" folder; their actual paths remain unchanged.
             val loose = rows.filter { it.first.startsWith("f:") }
@@ -5224,6 +5261,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
         val folderRows = mutableListOf<Pair<String, LinearLayout>>()
         for ((group, ids) in grouped) {
+            if (!linkedPreview && target === panel) {
+                cachedResourceGroup("thinkings", group)?.let { reused ->
+                    folderRows.add(group to reused)
+                    continue
+                }
+            }
             val groupRow = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val opened = expandedThinkingGroups.contains(group)
             // Match the action layout already used by animation group headers.
