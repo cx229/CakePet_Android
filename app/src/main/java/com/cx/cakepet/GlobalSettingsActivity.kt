@@ -69,15 +69,21 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 else "这份备份不含全局个性化和去水印设置，导入后保留当前值"
                 showConfirmDialog(
                     title = "导入软件备份",
-                    bodyHtml = "来源版本：$version<br/>包含：$roleText。<br/>$globalText。<br/>将<b>覆盖当前素材包、实例及持久化设置</b>，建议先备份当前数据。",
-                    positiveText = "覆盖恢复",
+                    bodyHtml = "来源版本：$version<br/>包含：$roleText。<br/>$globalText。<br/>只覆盖当前版本能识别的内容，无法兼容的项目会跳过，其他数据保留。",
+                    positiveText = "选择性导入",
                     titleColorRes = R.color.cp_danger
                 ) {
                     lifecycleScope.launch {
+                        val background = getSharedPreferences("cakepet_background", MODE_PRIVATE)
+                        val summoned = background.getStringSet("summoned_roles", emptySet())
+                            .orEmpty().toSet()
                         PetService.instance?.let { svc ->
                             RoleStore.getHomeRoles(this@GlobalSettingsActivity)
                                 .forEach { svc.recall(it.instanceId) }
                         }
+                        // Keep summon intent independent of stopping the old
+                        // service; imported settings can then override it safely.
+                        background.edit().putStringSet("summoned_roles", summoned).commit()
                         stopService(Intent(this@GlobalSettingsActivity, PetService::class.java))
                         val result = withContext(Dispatchers.IO) {
                             runCatching { SoftwareBackup.restore(this@GlobalSettingsActivity, uri) }
@@ -85,6 +91,14 @@ class GlobalSettingsActivity : AppCompatActivity() {
                         Toast.makeText(this@GlobalSettingsActivity,
                             result.fold({ it }, { "恢复失败：${it.message}" }),
                             Toast.LENGTH_LONG).show()
+                        if (result.isFailure) {
+                            background.edit().putStringSet("summoned_roles", summoned).commit()
+                        }
+                        // Neither success nor failure should leave a previously
+                        // running pet service permanently stopped.
+                        if (summoned.isNotEmpty() || result.isSuccess) {
+                            startForegroundService(Intent(this@GlobalSettingsActivity, PetService::class.java))
+                        }
                         if (result.isSuccess) finish()
                     }
                 }
