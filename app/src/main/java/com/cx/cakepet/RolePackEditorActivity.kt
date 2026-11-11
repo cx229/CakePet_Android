@@ -4935,6 +4935,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             return canonical
         }
         fun mkdir(directory: File) {
+            if (directory.canonicalFile == pack.canonicalFile) return
             val target = inside(directory)
             if (target.isDirectory) return
             val missing = generateSequence(target) { it.parentFile }
