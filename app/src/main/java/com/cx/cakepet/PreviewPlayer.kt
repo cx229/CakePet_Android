@@ -81,9 +81,9 @@ class PreviewPlayer(
         }
         stop()
         previewScene = "summoned"
+        mgr.cancelForced()
         mgr.useStaticPool = true
         mgr.setActiveStateFunction(path)
-        mgr.cancelForced()
         mgr.setMode(startMode)
         running = true
         lastTick = System.currentTimeMillis()
