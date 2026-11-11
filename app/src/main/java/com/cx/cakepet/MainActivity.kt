@@ -454,6 +454,13 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
             }
+        // Temporary editing drafts and decoded import caches must not survive
+        // a factory reset; the original files selected by the player are external.
+        cacheDir.listFiles().orEmpty().forEach { file ->
+            if (!file.deleteRecursively()) {
+                android.util.Log.w("CakePetReset", "Failed to clear cache: ${file.name}")
+            }
+        }
         // The recreated home initializes the first-install pack after the file cleanup.
         // Remove remembered active pets: reset must not restore removed instances.
         getSharedPreferences("cakepet_background", MODE_PRIVATE).edit()
