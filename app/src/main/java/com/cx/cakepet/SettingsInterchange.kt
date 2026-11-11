@@ -31,7 +31,8 @@ object SettingsInterchange {
         config.update { it }
         for (page in SettingsPage.entries) bounds.updateBounds(page, bounds.getBlocking(page))
         val selectedConfig = data.optJSONObject("config")?.let {
-            PreferenceCodec.compatible(it, config.exportSettings(), config.supportedPreferenceKeys())
+            PreferenceCodec.compatible(it, config.exportSettings(), config.supportedPreferenceKeys(),
+                config::acceptsImportedValue)
         } ?: JSONObject()
         val selectedBounds = data.optJSONObject("bounds")?.let {
             PreferenceCodec.compatible(it, bounds.exportSettings(), bounds.supportedPreferenceKeys(),
