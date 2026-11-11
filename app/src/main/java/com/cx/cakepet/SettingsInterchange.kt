@@ -6,6 +6,7 @@ import org.json.JSONObject
 
 /** Standalone human-readable settings format shared by role settings and habits. */
 object SettingsInterchange {
+    data class ImportSummary(val applied: Int, val skipped: Int)
     fun exportRole(ctx: Context, roleId: String): JSONObject = runBlocking {
         val config = PetConfig.forRole(ctx, roleId)
         val bounds = PetBounds.forRole(ctx, roleId)
@@ -39,10 +40,12 @@ object SettingsInterchange {
                 bounds::acceptsImportedValue)
         } ?: JSONObject()
         val count = selectedConfig.length() + selectedBounds.length()
+        val ignored = (data.optJSONObject("config")?.length() ?: 0) +
+            (data.optJSONObject("bounds")?.length() ?: 0) - count
         require(count > 0) { "没有当前版本可识别的设置项" }
         if (selectedConfig.length() > 0) config.importSettings(selectedConfig)
         if (selectedBounds.length() > 0) bounds.importSettings(selectedBounds)
-        count
+        ImportSummary(count, ignored.coerceAtLeast(0))
     }
 
     fun exportHabits(ctx: Context): JSONObject =
