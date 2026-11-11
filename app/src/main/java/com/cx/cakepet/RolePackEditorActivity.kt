@@ -3274,10 +3274,55 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val scrollList = ScrollView(this).apply { addView(list) }
         body.addView(scrollList, LinearLayout.LayoutParams(-1,
             (resources.displayMetrics.heightPixels * 0.54f).toInt()))
+        // Only structural changes (expanding a folder) rebuild the rows.
+        // Selection changes refresh the existing checkboxes and folder counts in place.
+        val selectionRefreshers = mutableListOf<() -> Unit>()
+        var syncingSelection = false
+        fun refreshSelection() {
+            syncingSelection = true
+            try {
+                info.text = "已选择 ${selected.size} 张图片"
+                selectionRefreshers.forEach { it() }
+            } finally {
+                syncingSelection = false
+            }
+        }
+        // Android CheckBox has only two built-in states. Draw a visible minus for
+        // the third state instead of making a partly selected folder look empty.
+        fun partialButton(): android.graphics.drawable.Drawable =
+            object : android.graphics.drawable.Drawable() {
+                private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = getColor(R.color.cp_title)
+                    strokeWidth = px(2).toFloat()
+                    strokeCap = android.graphics.Paint.Cap.ROUND
+                }
+                override fun draw(canvas: android.graphics.Canvas) {
+                    val b = bounds
+                    val inset = px(2).toFloat()
+                    paint.style = android.graphics.Paint.Style.STROKE
+                    canvas.drawRoundRect(
+                        android.graphics.RectF(b.left + inset, b.top + inset,
+                            b.right - inset, b.bottom - inset),
+                        px(3).toFloat(), px(3).toFloat(), paint)
+                    paint.style = android.graphics.Paint.Style.FILL
+                    val mid = b.exactCenterY()
+                    canvas.drawLine(b.left + px(6).toFloat(), mid,
+                        b.right - px(6).toFloat(), mid, paint)
+                }
+                override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
+                override fun setColorFilter(filter: android.graphics.ColorFilter?) {
+                    paint.colorFilter = filter
+                    invalidateSelf()
+                }
+                @Suppress("DEPRECATION")
+                override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+                override fun getIntrinsicWidth(): Int = px(22)
+                override fun getIntrinsicHeight(): Int = px(22)
+            }
         lateinit var redraw: () -> Unit
         redraw = {
             list.removeAllViews()
-            info.text = "已选择 ${selected.size} 张图片"
+            selectionRefreshers.clear()
             fun visit(dir: File, depth: Int) {
                 dir.listFiles().orEmpty()
                     .filter { isImage(it) || it.isDirectory && !it.name.startsWith(".") }
@@ -3293,26 +3338,49 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         if (file.isDirectory) {
                             val descendants = file.walkTopDown().filter(::isImage)
                                 .map { it.relativeTo(draft).invariantSeparatorsPath }.toList()
-                            val count = descendants.count { it in selected }
-                            if (!single) {
-                                row.addView(CheckBox(this).apply {
-                                    isChecked = descendants.isNotEmpty() && count == descendants.size
-                                    // Counts beside the folder name distinguish none/partial/all.
-                                    setOnCheckedChangeListener { _, checked ->
-                                        if (checked) selected.addAll(descendants)
-                                        else selected.removeAll(descendants.toSet())
-                                        redraw()
-                                    }
-                                }, LinearLayout.LayoutParams(px(40), px(46)))
-                            }
-                            row.addView(text((if (path in expanded) "▾ 📂  " else "▸ 📁  ") + file.name +
-                                " ($count/${descendants.size})", 14f).apply {
+                            val folderLabel = text("", 14f).apply {
                                 isClickable = true
                                 setOnClickListener {
                                     if (!expanded.add(path)) expanded.remove(path)
+                                    val previousScroll = scrollList.scrollY
                                     redraw()
+                                    scrollList.post { scrollList.scrollTo(0, previousScroll) }
                                 }
-                            }, LinearLayout.LayoutParams(0, px(46), 1f))
+                            }
+                            val folderPrefix = (if (path in expanded) "▾ 📂  " else "▸ 📁  ") + file.name
+                            if (!single) {
+                                val checkbox = CheckBox(this)
+                                val normalButton = checkbox.buttonDrawable
+                                val mixedButton = partialButton()
+                                checkbox.setOnCheckedChangeListener { _, checked ->
+                                    if (!syncingSelection) {
+                                        // A mixed folder behaves like unchecked when tapped:
+                                        // first tap selects all, next tap deselects all.
+                                        if (checked) selected.addAll(descendants)
+                                        else selected.removeAll(descendants.toSet())
+                                        refreshSelection()
+                                    }
+                                }
+                                row.addView(checkbox, LinearLayout.LayoutParams(px(40), px(46)))
+                                selectionRefreshers.add {
+                                    val count = descendants.count { it in selected }
+                                    val mixed = count > 0 && count < descendants.size
+                                    checkbox.buttonDrawable = if (mixed) mixedButton else normalButton
+                                    checkbox.isChecked = descendants.isNotEmpty() && count == descendants.size
+                                    folderLabel.text = "$folderPrefix ($count/${descendants.size})"
+                                    checkbox.contentDescription = when {
+                                        count == 0 -> "${file.name}，未选，0/${descendants.size}"
+                                        count == descendants.size -> "${file.name}，全选，$count/${descendants.size}"
+                                        else -> "${file.name}，半选，$count/${descendants.size}"
+                                    }
+                                }
+                            } else {
+                                selectionRefreshers.add {
+                                    val count = descendants.count { it in selected }
+                                    folderLabel.text = "$folderPrefix ($count/${descendants.size})"
+                                }
+                            }
+                            row.addView(folderLabel, LinearLayout.LayoutParams(0, px(46), 1f))
                             row.addView(text("+", 22f).apply {
                                 gravity = Gravity.CENTER
                                 isClickable = true
@@ -3326,13 +3394,16 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             })
                             if (path in expanded) visit(file, depth + 1)
                         } else {
-                            val cb = CheckBox(this).apply { isChecked = path in selected }
+                            val cb = CheckBox(this)
                             fun toggle(yes: Boolean) {
                                 if (single) selected.clear()
                                 if (yes) selected.add(path) else selected.remove(path)
-                                redraw()
+                                refreshSelection()
                             }
-                            cb.setOnCheckedChangeListener { _, yes -> toggle(yes) }
+                            cb.setOnCheckedChangeListener { _, yes ->
+                                if (!syncingSelection) toggle(yes)
+                            }
+                            selectionRefreshers.add { cb.isChecked = path in selected }
                             row.addView(cb, LinearLayout.LayoutParams(px(40), px(48)))
                             row.addView(ImageView(this).apply {
                                 scaleType = ImageView.ScaleType.FIT_CENTER
@@ -3351,6 +3422,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     }
             }
             visit(draft, 0)
+            refreshSelection()
         }
         redraw()
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, px(12), 0, 0) }
