@@ -34,20 +34,38 @@ class PreviewPlayer(
     private var lastTick = 0L
     private val FRAME_MS = 33L   // 约 30fps 推进状态机，足够平滑且省电
 
-    fun start() {
-        if (running && previewScene == "normal") return
+    /** Each source is a normal Functions pool with full frame/chain playback. */
+    fun start(source: String = PersonalizationPrefs.PREVIEW) {
+        if (source == PersonalizationPrefs.BLANK) {
+            showBlank()
+            return
+        }
+        if (running && previewScene == source) return
+        val path = PersonalizationPrefs.previewFunctionPath(source)
+        val startMode = path?.let { mgr.modeOf(*it.toTypedArray()) }
+        if (startMode == null) {
+            showBlank()
+            return
+        }
         stop()
-        previewScene = "normal"
-        running = true
-        // Ordinary home previews retain their existing independent static-pool behavior.
-        mgr.setActiveStateFunction(null)
+        previewScene = source
         mgr.cancelForced()
-        mgr.useStaticPool = true
-        (mgr.modeOf("standby", "static_pool") ?: mgr.modeOf("standby", "pool"))
-            ?.let { mgr.setMode(it) }
+        mgr.useStaticPool = source == PersonalizationPrefs.STATIC_POOL
+        mgr.setActiveStateFunction(path)
+        mgr.setMode(startMode)
+        running = true
         lastTick = System.currentTimeMillis()
         renderCurrent()
+        imageView.contentDescription = "角色预览 · 动画"
         postTick()
+    }
+
+    fun showBlank() {
+        stop()
+        mgr.setActiveStateFunction(null)
+        mgr.cancelForced()
+        imageView.setImageDrawable(null)
+        imageView.contentDescription = "角色预览 · 空白"
     }
 
     /** Summoned cards use their own optional function pool, not a frozen placeholder.
@@ -78,17 +96,6 @@ class PreviewPlayer(
         running = false
         previewScene = ""
         handler.removeCallbacksAndMessages(null)
-    }
-
-    /** Keep a stable frame without scheduling periodic animation ticks. */
-    fun showStatic() {
-        stop()
-        mgr.setActiveStateFunction(null)
-        mgr.cancelForced()
-        mgr.useStaticPool = true
-        (mgr.modeOf("standby", "static_pool") ?: mgr.modeOf("standby", "pool"))
-            ?.let { mgr.setMode(it) }
-        renderCurrent()
     }
 
     /** Missing optional summoned preview: do not display a fake sprite. */
