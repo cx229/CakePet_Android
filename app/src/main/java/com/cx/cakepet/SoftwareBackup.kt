@@ -178,9 +178,17 @@ object SoftwareBackup {
                 val manifest = File(sourceDir, "modes.jsonc")
                 val parsed = runCatching { parseJsonc(manifest.readText()) }.getOrNull() ?: continue
                 if (!parsed.has("modes") || !parsed.has("functions")) continue
-                // Do not replace a working live pack with an incompatible payload.
+                // An incomplete new pack may be imported for repair in the editor.
+                // However, never replace a working pack used by existing roles
+                // with a payload that cannot actually play its standby animation.
+                val ready = RolePackageContract.validate(parsed).ok &&
+                    MaterialFunctionSupport.available(parsed, MaterialFunctionSupport.NORMAL) { path ->
+                        val root = sourceDir.canonicalFile
+                        val file = File(root, path).canonicalFile
+                        file.toPath().startsWith(root.toPath()) && file.isFile
+                    }
                 val existing = installed[id]
-                if (existing != null && !RolePackageContract.validate(parsed).ok) continue
+                if (existing != null && !ready) continue
                 copyTree(sourceDir, File(liveRoles, id))
                 val authors = value.optJSONArray("authors")?.let { arr ->
                     (0 until arr.length()).mapNotNull { arr.opt(it) as? String }
