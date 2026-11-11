@@ -1839,8 +1839,28 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
+    /** New membership groups remain drafts until the picker is confirmed. */
+    private fun addMembershipGroupCreator(box: LinearLayout, groups: MutableList<String>,
+                                          selected: MutableSet<String>, label: String,
+                                          redraw: () -> Unit) {
+        val nameField = entry(box, "新建${label}组", "", compact = true)
+        box.addView(button("＋ 新建组") {
+            val name = nameField.text.toString().trim()
+            if (!validModeGroupName(name)) {
+                Toast.makeText(this, "${label}组名称不合法", Toast.LENGTH_SHORT).show()
+            } else if (name in groups) {
+                Toast.makeText(this, "${label}组已存在", Toast.LENGTH_SHORT).show()
+            } else {
+                groups.add(name)
+                selected.add(name)
+                nameField.text.clear()
+                redraw()
+            }
+        })
+    }
+
     private fun editModeGroups(key: String, onSaved: () -> Unit = { modes() }) {
-        editor("$key · 动画组") { box ->
+        editor("${key} · 动画组", compact = true, confirmLabel = "确认") { box ->
             val groups = knownGroups().toMutableList()
             val selected = modeGroups(key).toMutableSet()
             val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1857,12 +1877,21 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             box.addView(choices)
+            addMembershipGroupCreator(box, groups, selected, "动画", ::redraw)
             redraw()
             val save: () -> Unit = {
                 change { json ->
-                    val arr = JSONArray()
-                    groups.filter { it in selected }.forEach { arr.put(it) }
-                    json.getJSONObject("modes").getJSONObject(key).put("groups", arr)
+                    val catalog = json.optJSONArray("modeGroups") ?: JSONArray().also {
+                        json.put("modeGroups", it)
+                    }
+                    val known = jsonStrings(catalog).toMutableSet()
+                    groups.filter { it !in known }.forEach { group ->
+                        catalog.put(group)
+                        known.add(group)
+                    }
+                    json.getJSONObject("modes").getJSONObject(key).put("groups", JSONArray().apply {
+                        groups.filter { it in selected }.forEach { put(it) }
+                    })
                 }
                 onSaved()
             }
@@ -5156,9 +5185,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             setOf("删除")) { action ->
                             when (action) {
                                 "详情 / 编辑" -> thinkingDetails(id)
-                                "选择碎碎念组" -> chooseThinkingGroups(thinkingGroups(id)) { selected ->
-                                    if (selected != thinkingGroups(id)) {
+                                "选择碎碎念组" -> chooseThinkingGroups(thinkingGroups(id)) { selected, created ->
+                                    if (selected != thinkingGroups(id) || created.isNotEmpty()) {
                                         change { json ->
+                                            val catalog = json.optJSONArray("thinkingGroups") ?: JSONArray().also {
+                                                json.put("thinkingGroups", it)
+                                            }
+                                            val known = jsonStrings(catalog).toMutableSet()
+                                            created.filter { it !in known }.forEach { group ->
+                                                catalog.put(group)
+                                                known.add(group)
+                                            }
                                             val texts = json.getJSONObject("thinkings")
                                             val item = texts.optJSONObject(id) ?: JSONObject().apply {
                                                 put("text", thinkingBody(id))
@@ -5321,6 +5358,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             textCard.addView(textField, LinearLayout.LayoutParams(-1, -2))
             addDetailSection(box, textCard)
 
+            val draftNewGroups = mutableSetOf<String>()
             val groupCard = dialogSection()
             val groupInfo = text("", 12f).apply {
                 setTextColor(getColor(R.color.cp_note))
@@ -5332,7 +5370,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             refreshGroups()
             val groupHeader = detailSectionHeader("所属分组", "",
                 if (readOnly) null else ({
-                    chooseThinkingGroups(draftGroups) { selected ->
+                    chooseThinkingGroups(draftGroups, draftNewGroups.toList()) { selected, created ->
+                        draftNewGroups.addAll(created)
                         draftGroups.clear()
                         draftGroups.addAll(selected)
                         refreshGroups()
@@ -5397,6 +5436,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 // Merge this entry only; preserve independent changes made to
                 // Function/Mode data while this detail dialog was open.
                 change { json ->
+                    val catalog = json.optJSONArray("thinkingGroups") ?: JSONArray().also {
+                        json.put("thinkingGroups", it)
+                    }
+                    val known = jsonStrings(catalog).toMutableSet()
+                    draftNewGroups.filter { it !in known }.forEach { group ->
+                        catalog.put(group)
+                        known.add(group)
+                    }
                     val texts = json.optJSONObject("thinkings") ?: JSONObject().also {
                         json.put("thinkings", it)
                     }
@@ -5437,10 +5484,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
-    /** Mirror animation group selection: add candidates locally, then confirm once. */
-    private fun chooseThinkingGroups(initialGroups: List<String>, onConfirm: (List<String>) -> Unit) {
+    /** Existing checkboxes and locally created groups share one Confirm action. */
+    private fun chooseThinkingGroups(initialGroups: List<String>,
+                                    pendingGroups: List<String> = emptyList(),
+                                    onConfirm: (List<String>, List<String>) -> Unit) {
         editor("选择碎碎念组", compact = true, confirmLabel = "确认") { box ->
-            val groups = allThinkingGroups()
+            val existing = allThinkingGroups()
+            val groups = (existing + pendingGroups).distinct().toMutableList()
             val checked = initialGroups.toMutableSet()
             val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             fun redraw() {
@@ -5456,9 +5506,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             box.addView(choices)
+            addMembershipGroupCreator(box, groups, checked, "碎碎念", ::redraw)
             redraw()
             ({
-                onConfirm(groups.filter { it in checked })
+                onConfirm(groups.filter { it in checked }, groups.filter { it !in existing })
             })
         }
     }
