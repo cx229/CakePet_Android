@@ -23,24 +23,25 @@ object SettingsInterchange {
             .put("bounds", bounds.exportSettings())
     }
 
+    /** Overlay only current, valid options; never clear unrelated settings. */
     fun importRole(ctx: Context, roleId: String, data: JSONObject): Int = runBlocking {
         require(data.optString("type") == "cakepet-settings") { "不是 CakePet 设置文件" }
-        var applied = 0
-        for (section in listOf("config", "bounds")) {
-            val obj = data.optJSONObject(section) ?: continue
-            // User habits are now complete defaults; no opt-in selection.
-            val selected = JSONObject(obj.toString())
-            // These are internal material identity and retired visibility keys,
-            // not portable user settings for a different character.
-            if (section == "config") {
-                listOf("sprite_pack", "use_new_sprite", "visible").forEach { selected.remove(it) }
-            }
-            applied += if (section == "config")
-                PetConfig.forRole(ctx, roleId).importSettings(selected)
-            else PetBounds.forRole(ctx, roleId).importSettings(selected)
-        }
-        require(applied > 0) { "没有可恢复的设置项" }
-        applied
+        val config = PetConfig.forRole(ctx, roleId)
+        val bounds = PetBounds.forRole(ctx, roleId)
+        config.update { it }
+        for (page in SettingsPage.entries) bounds.updateBounds(page, bounds.getBlocking(page))
+        val selectedConfig = data.optJSONObject("config")?.let {
+            PreferenceCodec.compatible(it, config.exportSettings(), config.supportedPreferenceKeys())
+        } ?: JSONObject()
+        val selectedBounds = data.optJSONObject("bounds")?.let {
+            PreferenceCodec.compatible(it, bounds.exportSettings(), bounds.supportedPreferenceKeys(),
+                bounds::acceptsImportedValue)
+        } ?: JSONObject()
+        val count = selectedConfig.length() + selectedBounds.length()
+        require(count > 0) { "没有当前版本可识别的设置项" }
+        if (selectedConfig.length() > 0) config.importSettings(selectedConfig)
+        if (selectedBounds.length() > 0) bounds.importSettings(selectedBounds)
+        count
     }
 
     fun exportHabits(ctx: Context): JSONObject =
@@ -51,12 +52,13 @@ object SettingsInterchange {
 
     fun importHabits(ctx: Context, data: JSONObject) {
         require(data.optString("type") == "cakepet-settings") { "不是 CakePet 设置文件" }
-        val bounds = data.optJSONObject("bounds") ?: JSONObject()
-        if (data.optString("source") == "habits") {
-            UserHabits.save(ctx, JSONObject().put("bounds", bounds))
-        } else {
-            // Role bounds are a complete set of defaults in the shared format.
-            UserHabits.save(ctx, JSONObject().put("bounds", bounds))
+        val incoming = data.optJSONObject("bounds") ?: return
+        val target = PetBounds.forRole(ctx, UserHabits.ROLE_ID)
+        runBlocking {
+            for (page in SettingsPage.entries) target.updateBounds(page, target.getBlocking(page))
+            val usable = PreferenceCodec.compatible(incoming, target.exportSettings(),
+                target.supportedPreferenceKeys(), target::acceptsImportedValue)
+            if (usable.length() > 0) target.importSettings(usable)
         }
     }
 }
