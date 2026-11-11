@@ -678,12 +678,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
         try {
             require(bmp.width > 0 && bmp.height > 0 &&
                 bmp.width.toLong() * bmp.height <= 8_000_000) { "图片尺寸过大" }
-            resourceChange { work, _ ->
+            resourceChange { work, _, tx ->
                 val parent = File(work, folder).canonicalFile
                 require(parent.toPath().startsWith(work.canonicalFile.toPath())) { "非法文件夹" }
-                parent.mkdirs()
+                tx.mkdir(parent)
                 val file = File(parent, RolePackEditing.uniqueName(parent,
                     pickedFileName(uri).substringBeforeLast('.'), ".png"))
+                tx.created(file)
                 file.outputStream().use { check(cleaned.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
                 path = file.canonicalFile.relativeTo(work.canonicalFile).invariantSeparatorsPath
             }
@@ -725,21 +726,23 @@ open class RolePackEditorActivity : AppCompatActivity() {
             try {
                 require(bitmap.width > 0 && bitmap.height > 0 &&
                     bitmap.width.toLong() * bitmap.height <= 8_000_000) { "图片尺寸过大" }
-                resourceChange { work, _ ->
+                resourceChange { work, _, tx ->
                     val dest = if (replacing == null) {
-                        val parent = File(work, "images").apply { mkdirs() }
+                        val parent = File(work, "images").also { tx.mkdir(it) }
                         File(parent, RolePackEditing.uniqueName(parent,
                             pickedFileName(uri).substringBeforeLast('.'), ".png"))
                     } else File(work, replacing)
                     if (replacing != null) require(isImage(dest)) { "原图片不存在" }
-                    dest.parentFile?.mkdirs()
+                    dest.parentFile?.let(tx::mkdir)
                     val format = when (dest.extension.lowercase()) {
                         "jpg", "jpeg" -> android.graphics.Bitmap.CompressFormat.JPEG
                         "webp" -> android.graphics.Bitmap.CompressFormat.WEBP_LOSSLESS
                         else -> android.graphics.Bitmap.CompressFormat.PNG
                     }
-                    dest.outputStream().use {
-                        check(cleaned.compress(format, 100, it)) { "图片写入失败" }
+                    tx.replace(dest) { output ->
+                        output.outputStream().use {
+                            check(cleaned.compress(format, 100, it)) { "图片写入失败" }
+                        }
                     }
                 }
             } finally {
@@ -756,9 +759,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val mode = uploadMode
             var paths = emptyList<String>()
             var removed: ImportWatermark.Corner? = null
-            resourceChange { work, json ->
-                val imported = RolePackEditing.gif(this, uri, work, uploadFolder, pickedFileName(uri)) { corner ->
-                    removed = corner
+            resourceChange { work, json, tx ->
+                val folder = File(work, uploadFolder).canonicalFile
+                require(folder.toPath().startsWith(work.canonicalFile.toPath())) { "非法文件夹" }
+                tx.mkdir(folder)
+                lateinit var imported: JSONArray
+                tx.recordNewChildren(folder) {
+                    imported = RolePackEditing.gif(this, uri, work, uploadFolder, pickedFileName(uri)) { corner ->
+                        removed = corner
+                    }
                 }
                 require(imported.length() > 0) { "GIF 没有可用帧" }
                 paths = (0 until imported.length()).map { imported.getJSONObject(it).getString("res") }
@@ -1449,7 +1458,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun playableMode(modeId: String): Boolean = modeAvailability.getOrPut(modeId) {
         val probe = JSONObject().put("modes", root.optJSONObject("modes"))
             .put("functions", JSONObject().put("probe", JSONArray().put(modeId)))
-        return MaterialFunctionSupport.available(probe, listOf("probe")) { relative ->
+        MaterialFunctionSupport.available(probe, listOf("probe")) { relative ->
             runCatching {
                 val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 if (linkedReadOnly) {
@@ -3288,9 +3297,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     name.length <= 80 && name.none {
                         it == '/' || it == '\\' || it.code < 32 || it == ':'
                     }) { "请输入有效的文件夹名称" }
-                resourceChange { working, _ ->
+                resourceChange { working, _, tx ->
                     val directory = File(working, RolePackEditing.uniqueName(working, name))
-                    check(directory.mkdirs()) { "无法创建文件夹" }
+                    tx.mkdir(directory)
                 }
                 handler.post { afterCreated() }
             }
@@ -5011,13 +5020,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
             newBase.none { it == '/' || it == '\\' || it.code < 32 }) {
             "名称不能为空，不能包含斜杠或控制字符"
         }
-        resourceChange { working, candidate ->
+        resourceChange { working, candidate, tx ->
             val from = File(working, relative)
             require(from.exists() && from.isDirectory == directory) { "原文件不存在" }
             val newName = if (directory) newBase else newBase + "." + from.extension
             val to = File(from.parentFile, newName)
             require(!to.exists()) { "名称已经存在" }
-            check(from.renameTo(to)) { "重命名失败" }
+            tx.rename(from, to)
             // GIF frame timing metadata is keyed by filename; keep it in sync on image rename.
             if (!directory) {
                 val manifest = File(to.parentFile, "frames.json")
@@ -5029,7 +5038,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             val frame = items.getJSONObject(i)
                             if (frame.optString("file") == from.name) frame.put("file", to.name)
                         }
-                        manifest.writeText(json.toString(2))
+                        tx.replace(manifest) { it.writeText(json.toString(2)) }
                     }
                 }
             }
@@ -5072,7 +5081,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     /** Dissolve a real folder into its parent, updating all animation paths atomically. */
     private fun dissolveResourceFolder(relative: String) {
-        resourceChange { working, json ->
+        resourceChange { working, json, tx ->
             val base = working.canonicalFile
             val folder = File(base, relative).canonicalFile
             require(folder.isDirectory && folder != base &&
@@ -5087,10 +5096,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         if (child.extension.isBlank()) "" else "." + child.extension)
                 } else child.name
                 val target = File(parent, name)
-                check(child.renameTo(target)) { "无法移动文件：" + child.name }
+                tx.rename(child, target)
                 moved[original] = target.relativeTo(base).invariantSeparatorsPath
             }
-            check(folder.delete()) { "无法解散文件夹" }
+            tx.deleteEmpty(folder)
             fun remap(path: String): String {
                 for ((before, after) in moved) {
                     if (path == before) return after
@@ -5133,10 +5142,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun deleteImage(relative: String) {
         require(imageUses()[relative].orEmpty().isEmpty()) { "仍有动画引用，不能删除" }
-        resourceChange { working, _ ->
+        resourceChange { working, _, tx ->
             val file = File(working, relative)
             require(isImage(file))
-            check(file.delete()) { "删除失败" }
+            tx.delete(file)
         }
         images()
     }
