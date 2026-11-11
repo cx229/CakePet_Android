@@ -39,6 +39,33 @@ object PreferenceCodec {
         return out
     }
 
+    /** Select only current, type-compatible fields. The source JSON is left unchanged.
+     * The expected snapshot is materialized from real default-backed stores.
+     */
+    fun compatible(source: JSONObject, expected: JSONObject, supported: Set<String>,
+                   accepts: (String, JSONObject) -> Boolean = { _, _ -> true }): JSONObject {
+        val out = JSONObject()
+        for (name in entries(source)) {
+            if (name !in supported) continue
+            val field = source.optJSONObject(name) ?: continue
+            val type = field.optString("type")
+            if (type.isBlank() || type != expected.optJSONObject(name)?.optString("type")) continue
+            val valid = when (type) {
+                "boolean" -> field.opt("value") is Boolean
+                "int", "long" -> field.opt("value") is Number
+                "float", "double" -> (field.opt("value") as? Number)?.toDouble()
+                    ?.let { it.isFinite() && kotlin.math.abs(it) <= 1e9 } == true
+                "string" -> (field.opt("value") as? String)?.length?.let { it <= 2048 } == true
+                "strings" -> field.optJSONArray("value")?.let { arr ->
+                    (0 until arr.length()).all { arr.opt(it) is String }
+                } == true
+                else -> false
+            }
+            if (valid && accepts(name, field)) out.put(name, field)
+        }
+        return out
+    }
+
     /** Invalid and newer/retired fields are ignored, not allowed to crash import. */
     suspend fun apply(store: DataStore<Preferences>, source: JSONObject, replace: Boolean = false): Int {
         val entries = mutableListOf<Pair<String, Any>>()
