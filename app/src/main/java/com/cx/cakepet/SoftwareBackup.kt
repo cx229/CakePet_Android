@@ -98,6 +98,37 @@ object SoftwareBackup {
                 background.getStringSet("summoned_roles", emptySet()).orEmpty().sorted()))
     }
 
+    /**
+     * Full export is deliberately broader than import. Preserve currently
+     * unrecognized preference keys as readable JSON for a future version or
+     * manual inspection; never blindly apply them to the current runtime.
+     */
+    private fun rawPreferences(ctx: Context): JSONObject {
+        val result = JSONObject()
+        val dir = File(ctx.applicationInfo.dataDir, "shared_prefs")
+        dir.listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".xml") }
+            .forEach { file ->
+                val name = file.name.removeSuffix(".xml")
+                if (name == "cakepet_exit") return@forEach // transient quit state
+                val values = JSONObject()
+                ctx.getSharedPreferences(name, Context.MODE_PRIVATE).all.forEach { (key, value) ->
+                    val item: JSONObject? = when (value) {
+                        is Boolean -> JSONObject().put("type", "boolean").put("value", value)
+                        is Int -> JSONObject().put("type", "int").put("value", value)
+                        is Long -> JSONObject().put("type", "long").put("value", value)
+                        is Float -> JSONObject().put("type", "float").put("value", value.toDouble())
+                        is String -> JSONObject().put("type", "string").put("value", value)
+                        is Set<*> -> if (value.all { it is String }) JSONObject()
+                            .put("type", "strings").put("value", JSONArray(value.toList())) else null
+                        else -> null
+                    }
+                    if (item != null) values.put(key, item)
+                }
+                result.put(name, values)
+            }
+        return result
+    }
+
     /** Optional settings are independent: a bad value never rejects its siblings. */
     private fun restoreAppSettings(ctx: Context, settings: JSONObject): Int {
         var applied = 0
@@ -295,6 +326,7 @@ object SoftwareBackup {
                 json("role-bounds.json", bounds)
                 json("user-habits.json", UserHabits.load(ctx))
                 json("app-settings.json", appSettings(ctx))
+                json("raw-shared-preferences.json", rawPreferences(ctx))
                 val root = File(ctx.filesDir, "roles")
                 if (root.isDirectory) writeTree(zip, root, "roles/")
                 // Extra persistent files are kept readable too; active DataStore
@@ -371,7 +403,10 @@ object SoftwareBackup {
         val staged = extract(ctx, uri)
         return try {
             JSONObject(File(staged, "manifest.json").readText())
-                .put("appSettingsIncluded", File(staged, "app-settings.json").isFile)
+                .put("appSettingsIncluded", File(staged, "app-settings.json")
+                    .takeIf { it.isFile }?.let {
+                        runCatching { JSONObject(it.readText()) }.isSuccess
+                    } == true)
         } finally {
             staged.deleteRecursively()
         }
