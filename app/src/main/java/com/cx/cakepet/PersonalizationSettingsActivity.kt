@@ -14,6 +14,14 @@ import androidx.appcompat.widget.SwitchCompat
 class PersonalizationSettingsActivity : AppCompatActivity() {
     private fun dp(value: Int) = (resources.displayMetrics.density * value + .5f).toInt()
 
+    private fun openPreviewFunction(path: List<String>, title: String) {
+        startActivity(android.content.Intent(this, RolePackLinkedActivity::class.java).apply {
+            putExtra("linked_global_preview", true)
+            putExtra("linked_title", title)
+            putStringArrayListExtra("linked_paths", ArrayList(listOf(path.joinToString("/"))))
+        })
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_threshold_settings)
@@ -87,28 +95,40 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
         }
 
         val previews = module("角色预览")
-        val mainRow = SettingsRippleRow(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(20), dp(8), dp(20), dp(8))
-            minimumHeight = dp(60)
+        val previewSources = listOf(
+            PersonalizationPrefs.PREVIEW, PersonalizationPrefs.STANDBY,
+            PersonalizationPrefs.STATIC_POOL, PersonalizationPrefs.BLANK
+        )
+        lateinit var refreshChildren: () -> Unit
+        val previewRow = selector(previews, "动态预览",
+            listOf("动画：预览", "待机池", "静止待机池", "空白"),
+            previewSources.indexOf(PersonalizationPrefs.previewSource(this)).coerceAtLeast(0),
+            note = "选择首页角色卡片的动画来源") { index ->
+            PersonalizationPrefs.setPreviewSource(this, previewSources[index])
+            refreshChildren()
         }
-        mainRow.addView(caption("动态预览", "在角色卡片中播放动画"),
-            LinearLayout.LayoutParams(0, -2, 1f))
-        val toggle = SwitchCompat(this).apply {
-            isChecked = PersonalizationPrefs.animatedPreview(this@PersonalizationSettingsActivity)
-            thumbTintList = androidx.core.content.ContextCompat.getColorStateList(
-                this@PersonalizationSettingsActivity, R.color.switch_black_selector)
-            trackTintList = androidx.core.content.ContextCompat.getColorStateList(
-                this@PersonalizationSettingsActivity, R.color.switch_black_selector)
+        // The editor link follows the selected Functions path; blank has none.
+        SettingsMaterialLink.attachInline(this, previewRow, "动态预览",
+            previewRow.getChildAt(1), "编辑功能/动画 ›") {
+            val source = PersonalizationPrefs.previewSource(this)
+            val path = PersonalizationPrefs.previewFunctionPath(source) ?: return@attachInline
+            openPreviewFunction(path, when (source) {
+                PersonalizationPrefs.PREVIEW -> "预览"
+                PersonalizationPrefs.STANDBY -> "待机池"
+                else -> "静止待机池"
+            })
         }
-        mainRow.addView(toggle, LinearLayout.LayoutParams(-2, -2))
-        previews.addView(mainRow, LinearLayout.LayoutParams(-1, -2))
+        val previewLink = ((previewRow.getChildAt(0) as? LinearLayout)
+            ?.getChildAt(0) as? LinearLayout)?.getChildAt(1)
 
         val patRow = selector(previews, "摸摸头", listOf("开启", "关闭"),
             if (PersonalizationPrefs.previewPat(this)) 0 else 1, true,
             note = "点击预览角色触发摸摸头") {
             PersonalizationPrefs.setPreviewPat(this, it == 0)
+        }
+        SettingsMaterialLink.attachInline(this, patRow, "摸摸头",
+            patRow.getChildAt(1), "编辑功能/动画 ›") {
+            openPreviewFunction(listOf("pat_head", "pat_head"), "摸摸头")
         }
         val modeRow = selector(previews, "召唤后", listOf("预览·常驻", "动画·已召唤"),
             if (PersonalizationPrefs.homePreviewMode(this) == PersonalizationPrefs.DYNAMIC) 1 else 0, true,
@@ -126,16 +146,12 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
             })
         }
 
-        fun refreshChildren() {
-            val visible = if (toggle.isChecked) View.VISIBLE else View.GONE
-            patRow.visibility = visible
-            modeRow.visibility = visible
+        refreshChildren = {
+            val visible = PersonalizationPrefs.previewSource(this) != PersonalizationPrefs.BLANK
+            patRow.visibility = if (visible) View.VISIBLE else View.GONE
+            modeRow.visibility = if (visible) View.VISIBLE else View.GONE
+            previewLink?.visibility = if (visible) View.VISIBLE else View.GONE
         }
-        toggle.setOnCheckedChangeListener { _, value ->
-            PersonalizationPrefs.setAnimatedPreview(this, value)
-            refreshChildren()
-        }
-        mainRow.setOnClickListener { toggle.isChecked = !toggle.isChecked }
         refreshChildren()
     }
 }
