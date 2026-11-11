@@ -420,7 +420,18 @@ class MainActivity : AppCompatActivity() {
             PersonalizationPrefs.reset(this)
             ImportWatermark.reset(this)
             // Exit intent is runtime state, not a user setting.
-            getSharedPreferences("cakepet_exit", MODE_PRIVATE).edit().clear().commit()
+            // Clear every app-owned SharedPreferences file via the live API.
+            // This includes future global settings without hardcoding their names.
+            val prefsDir = java.io.File(applicationInfo.dataDir, "shared_prefs")
+            prefsDir.listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".xml") }
+                .forEach { file ->
+                    val name = file.name.removeSuffix(".xml")
+                    check(getSharedPreferences(name, MODE_PRIVATE).edit().clear().commit()) {
+                        "无法重置设置：$name"
+                    }
+                }
+            check(getSharedPreferences("cakepet_exit", MODE_PRIVATE).edit().clear().commit())
+            check(getSharedPreferences("cakepet_background", MODE_PRIVATE).edit().clear().commit())
         } catch (e: Exception) {
             android.widget.Toast.makeText(this, "重置失败：${e.message}", android.widget.Toast.LENGTH_LONG).show()
             return
@@ -430,6 +441,16 @@ class MainActivity : AppCompatActivity() {
             android.widget.Toast.makeText(this, "素材包目录删除失败，请重试", android.widget.Toast.LENGTH_LONG).show()
             return
         }
+        // Retired/unknown files are user data too. Keep only live DataStores,
+        // whose values were already reset in place.
+        filesDir.listFiles().orEmpty().filter { it.name !in setOf("datastore", "roles") }
+            .forEach { file ->
+                if (!file.deleteRecursively()) {
+                    android.widget.Toast.makeText(this, "残留数据清理失败：${file.name}",
+                        android.widget.Toast.LENGTH_LONG).show()
+                    return
+                }
+            }
         // The recreated home initializes the first-install pack after the file cleanup.
         // Remove remembered active pets: reset must not restore removed instances.
         getSharedPreferences("cakepet_background", MODE_PRIVATE).edit()
