@@ -16,7 +16,7 @@ internal object ResourceFolderOrder {
 
     private fun parse(text: String): Node {
         val start = Regex("\\\"resourceOrder\\\"\\s*:\\s*\\{").find(text)?.range?.last ?: return Node()
-        var pos = start
+        var pos = start + 1
         fun skip() {
             while (pos < text.length && (text[pos].isWhitespace() || text[pos] == ',')) pos++
         }
@@ -27,7 +27,7 @@ internal object ResourceFolderOrder {
             while (pos < text.length) {
                 val ch = text[pos++]
                 if (escaped) escaped = false
-                else if (ch == '\\\\') escaped = true
+                else if (ch == '\\') escaped = true
                 else if (ch == '"') break
             }
             return JSONTokener(text.substring(begin, pos)).nextValue() as String
@@ -136,7 +136,7 @@ internal object ResourceFolderOrder {
         if (tree.children.isEmpty()) return "{}"
         val pad = "  ".repeat(depth)
         val inner = "  ".repeat(depth + 1)
-        return tree.children.entries.joinToString(",\\n", "{\\n", "\\n$pad}") { (key, node) ->
+        return tree.children.entries.joinToString(",\n", "{\n", "\n$pad}") { (key, node) ->
             inner + JSONObject.quote(key) + ": " + render(node, depth + 1)
         }
     }
@@ -154,7 +154,7 @@ internal object ResourceFolderOrder {
             val ch = written[at++]
             if (quoted) {
                 if (escaped) escaped = false
-                else if (ch == '\\\\') escaped = true
+                else if (ch == '\\') escaped = true
                 else if (ch == '"') quoted = false
             } else when (ch) {
                 '"' -> quoted = true
