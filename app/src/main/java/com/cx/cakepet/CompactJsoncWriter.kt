@@ -15,7 +15,7 @@ internal object CompactJsoncWriter {
         val comments = commentsByUniqueKey(previousText)
         val out = StringBuilder()
         appendValue(out, json, 0, false, comments)
-        return out.append('\n').toString()
+        return ResourceFolderOrder.serialize(json, out.append('\n').toString())
     }
 
 
@@ -90,7 +90,7 @@ internal object CompactJsoncWriter {
             }
         }
         write.put(json, 0, emptyList())
-        return out.append('\n').toString()
+        return ResourceFolderOrder.serialize(json, out.append('\n').toString())
     }
 
     private fun appendValue(
