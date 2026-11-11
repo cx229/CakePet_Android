@@ -4998,7 +4998,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 { it.name.lowercase() }))
             .forEach { file ->
                 val path = file.relativeTo(draft).invariantSeparatorsPath
-                if (level == 0 && file.isDirectory) {
+                val isFolder = file.isDirectory
+                if (level == 0 && isFolder) {
                     val key = "d:" + file.name
                     cachedResourceGroup("images", key)?.let { reused ->
                         rows.add(key to reused)
@@ -5013,17 +5014,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     // same white rounded surface as other editor cards.
                     setBackgroundResource(R.drawable.card_bg)
                     rippleCard(this)
-                    setPadding(if (file.isDirectory) px(12) else px(8),
-                        if (file.isDirectory) px(6) else px(4), px(4),
-                        if (file.isDirectory) px(6) else px(4))
-                    if (file.isDirectory) minimumHeight = px(folderMinHeightDp)
+                    setPadding(if (isFolder) px(12) else px(8),
+                        if (isFolder) px(6) else px(4), px(4),
+                        if (isFolder) px(6) else px(4))
+                    if (isFolder) minimumHeight = px(folderMinHeightDp)
                 }
                 val main = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     isClickable = false
                 }
-                if (file.isDirectory) {
+                if (isFolder) {
                     main.addView(text(if (path in expandedResourceFolders) "▾ 📂" else "▸ 📁",
                         folderHeadingSp), LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
                 } else {
@@ -5034,23 +5035,23 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
                 val words = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
-                    setPadding(if (file.isDirectory) 0 else px(8), 0, 0, 0)
+                    setPadding(if (isFolder) 0 else px(8), 0, 0, 0)
                 }
-                words.addView(text(file.name, if (file.isDirectory) folderHeadingSp else 14f).apply {
+                words.addView(text(file.name, if (isFolder) folderHeadingSp else 14f).apply {
                     maxLines = 2
                     ellipsize = TextUtils.TruncateAt.END
                     setPadding(0, 0, 0, 0)
                 })
-                val subtitle = if (file.isDirectory) {
+                val subtitle = if (isFolder) {
                     "${file.walkTopDown().count { isImage(it) }} 张图片"
                 } else {
                     val refs = uses[path].orEmpty()
                     if (refs.isEmpty()) "未使用"
                     else "${refs.map { it.first }.distinct().take(2).joinToString("、")} · ${refs.size} 帧引用"
                 }
-                words.addView(text(subtitle, if (file.isDirectory) folderSubtitleSp else 11f).apply {
+                words.addView(text(subtitle, if (isFolder) folderSubtitleSp else 11f).apply {
                     setTextColor(getColor(R.color.cp_note))
-                    setPadding(0, if (file.isDirectory) px(2) else 0, 0, 0)
+                    setPadding(0, if (isFolder) px(2) else 0, 0, 0)
                     maxLines = 2
                 })
                 main.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
@@ -5058,24 +5059,24 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
                 var populated = false
                 fun refreshResourceFolder() {
-                    if (file.isDirectory) {
+                    if (isFolder) {
                         val opened = path in expandedResourceFolders
                         (main.getChildAt(0) as TextView).text =
                             if (opened) "▾ 📂" else "▸ 📁"
                         if (opened && !populated) {
                             populated = true
-                            resourceBranch(file, level + 1, uses, children)
+                            resourceBranch(File(draft, path), level + 1, uses, children)
                         }
                         children.visibility = if (opened) View.VISIBLE else View.GONE
                     }
                 }
                 row.setOnClickListener {
-                    if (file.isDirectory) {
+                    if (isFolder) {
                         if (!expandedResourceFolders.add(path)) expandedResourceFolders.remove(path)
                         refreshResourceFolder()
                     } else imageDetails(path)
                 }
-                if (file.isDirectory) {
+                if (isFolder) {
                     row.addView(text("+", 22f).apply {
                         gravity = Gravity.CENTER
                         isClickable = true
@@ -5088,7 +5089,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     gravity = Gravity.CENTER
                     isClickable = true
                     setOnClickListener { anchor ->
-                        if (file.isDirectory) showResourceFolderOptions(anchor, path)
+                        if (isFolder) showResourceFolderOptions(anchor, path)
                         else imageOptions(anchor, path)
                     }
                 }, LinearLayout.LayoutParams(px(40), px(48)))
@@ -5097,11 +5098,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     leftMargin = px((level * 12).coerceAtMost(48))
                     topMargin = px(4)
                 })
-                if (file.isDirectory) {
+                if (isFolder) {
                     item.addView(children, LinearLayout.LayoutParams(-1, -2))
                     refreshResourceFolder()
                 }
-                rows.add((if (file.isDirectory) "d:" else "f:") + file.name to item)
+                rows.add((if (isFolder) "d:" else "f:") + file.name to item)
             }
         if (level == 0 && cachedUngrouped != null) {
             rows.add("u:未分组" to cachedUngrouped)
