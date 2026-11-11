@@ -186,7 +186,8 @@ object RolePackEditing {
         markChanged(id)
         // Validating every image on a text-only edit used to stall the UI.
         // Resource changes still perform the asset-readiness check.
-        if (!resourcesChanged || validationErrors(directory).isEmpty())
+        if (RolePackageContract.validate(json).errors.isEmpty() &&
+            (!resourcesChanged || RolePackageContract.verifyAssets(directory, json).isEmpty()))
             PetService.instance?.refreshMaterialPack(id)
     }
     fun export(ctx: Context, role: RoleDescriptor, uri: Uri) {
