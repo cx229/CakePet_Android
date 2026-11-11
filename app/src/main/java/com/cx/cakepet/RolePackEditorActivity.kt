@@ -747,7 +747,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 if (cleaned !== bitmap) cleaned.recycle()
                 bitmap.recycle()
             }
-            replacing?.let { touchedResourcePaths.add(it) }
+            replacing?.let { resourceImageRevisions[it] = (resourceImageRevisions[it] ?: 0) + 1 }
             images()
             showWatermarkNotice(removed)
         }
@@ -1584,7 +1584,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
      * a single movable item; fixed groups never enter the drag targets.
      */
     private var resourcePageUpdater: ((List<Pair<String, LinearLayout>>) -> Unit)? = null
-    private val touchedResourcePaths = mutableSetOf<String>()
+    private val resourceImageRevisions = mutableMapOf<String, Int>()
 
     /** Stable group fingerprints let edits update only changed group cards. */
     private fun resourceGroupSignature(page: String, key: String): String {
@@ -1628,7 +1628,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         val path = file.relativeTo(draft).invariantSeparatorsPath
                         append('|').append(path).append(':').append(file.length())
                         append(':').append(uses[path].orEmpty())
-                        append(':').append(path in touchedResourcePaths)
+                        append(':').append(resourceImageRevisions[path] ?: 0)
                     }
                     if (key.startsWith("d:")) {
                         expandedResourceFolders.filter { it == key.removePrefix("d:") ||
@@ -1713,7 +1713,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
                 signatures = nextSignatures
                 diff.dispatchUpdatesTo(adapter)
-                touchedResourcePaths.clear()
             }
         }
         var dirty = false
