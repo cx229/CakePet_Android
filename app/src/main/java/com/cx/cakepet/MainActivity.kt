@@ -409,9 +409,12 @@ class MainActivity : AppCompatActivity() {
 
     /** 执行重置：清素材库与顺序、删所有角色与设置、首页清单归位预装角色，并重启服务/刷新首页。 */
     private fun doResetSoftware() {
-        val oldIds = RoleStore.getHomeRoles(this).map { it.instanceId }
+        val oldIds = runCatching { RoleStore.getHomeRoles(this).map { it.instanceId } }
+            .getOrDefault(emptyList())
         // 1. 撤回在屏宠物，避免重置后残留窗口。
-        PetService.instance?.let { svc -> oldIds.forEach { svc.recall(it) } }
+        PetService.instance?.let { svc ->
+            oldIds.forEach { runCatching { svc.recall(it) } }
+        }
         // 2. 所有角色设置【就地】回到系统默认（经活跃 DataStore 实例写回，内存与磁盘同时生效，
         //    不删活动角色的文件——删文件会让进程内单例缓存残留旧值，导致重置不生效/被旧值写回污染）；
         //    清素材库、顺序、首页清单（下次读取自动播种预装角色）。
