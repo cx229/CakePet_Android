@@ -418,9 +418,11 @@ class PetService : Service() {
     fun clearAllFreeze(roleId: String? = null) {
         val list = if (roleId == null) freezeLayers.toList() else freezeLayers.filter { it.roleId == roleId }
         for (layer in list) {
-            try { windowManager.removeView(layer.iv) } catch (_: Exception) {}
+            try { windowManager.removeViewImmediate(layer.iv) } catch (e: Exception) {
+                android.util.Log.w("PetService", "移除定格浮窗失败：${layer.roleId}", e)
+            }
             (layer.iv.drawable as? BitmapDrawable)?.bitmap?.recycle()
-            layer.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
+            layer.borderView?.let { try { windowManager.removeViewImmediate(it) } catch (_: Exception) {} }
         }
         freezeLayers.removeAll(list)
         list.forEach { imeFreezeOffsets.remove(it.iv) }
@@ -1649,8 +1651,10 @@ class PetService : Service() {
         if (idx < 0) return
         val cur = fishLayers[idx]
         cur.expireRunnable?.let { mainHandler.removeCallbacks(it) }
-        try { windowManager.removeView(cur.iv) } catch (_: Exception) {}
-        cur.borderView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
+        try { windowManager.removeViewImmediate(cur.iv) } catch (e: Exception) {
+            android.util.Log.w("PetService", "移除食物浮窗失败：${cur.roleId}", e)
+        }
+        cur.borderView?.let { try { windowManager.removeViewImmediate(it) } catch (_: Exception) {} }
         fishLayers.removeAt(idx)
         imeFishOffsets.remove(cur.iv)
         if (draggingFish?.iv === cur.iv) draggingFish = null
@@ -4030,9 +4034,11 @@ class PetService : Service() {
         val rt = engines[roleId]
         // Cleanup is idempotent: even an already-detached runtime may leave auxiliary
         // windows behind. Never remove another role's fish, freezes or message window.
-        rt?.configJob?.cancel(); rt?.configJob = null
-        rt?.randomJob?.cancel(); rt?.randomJob = null
-        if (rt != null) stopFishSpawning(rt)
+        if (rt != null) {
+            rt.configJob?.cancel(); rt.configJob = null
+            rt.randomJob?.cancel(); rt.randomJob = null
+            stopFishSpawning(rt)
+        }
         else clearAllFish(roleId)
         clearAllFreeze(roleId)
         modeAssetManagers.remove(roleId)
