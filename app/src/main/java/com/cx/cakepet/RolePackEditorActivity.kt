@@ -2893,6 +2893,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     if (count > 0) adapter.notifyItemRangeChanged(start, count)
                 }
             }
+            // Bulk selection is cleared by some edits; update surviving visible
+            // checkboxes without rebuilding their cards.
+            refreshVisibleFrameSelection(recycler)
         }
         var changed = false
         val touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
@@ -3296,12 +3299,13 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun appendFrames(key: String, paths: List<String>) {
         require(paths.isNotEmpty())
+        val insertion = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames").length()
         change { json ->
             val frames = json.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
             paths.forEach { frames.put(newFrameFor(it)) }
         }
         bulkSelected.clear()
-        refreshFrames(key, FrameMutation(replaceAll = true))
+        refreshFrames(key, FrameMutation(insertedAt = insertion, insertedCount = paths.size))
     }
 
     private fun applyImageSelection(request: ImagePickRequest, paths: List<String>) {
