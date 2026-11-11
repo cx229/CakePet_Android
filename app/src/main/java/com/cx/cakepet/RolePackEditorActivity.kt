@@ -1734,7 +1734,22 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 resourceCachedViews.putAll(items.toMap())
                 resourceCachedSignatures.clear()
                 resourceCachedSignatures.putAll(nextSignatures)
-                diff.dispatchUpdatesTo(adapter)
+                // The first adapter row is the fixed page header, excluded from DiffUtil.
+                // Shift all diff positions or notifications would accidentally target the header.
+                diff.dispatchUpdatesTo(object : androidx.recyclerview.widget.ListUpdateCallback {
+                    override fun onInserted(position: Int, count: Int) {
+                        adapter.notifyItemRangeInserted(position + offset, count)
+                    }
+                    override fun onRemoved(position: Int, count: Int) {
+                        adapter.notifyItemRangeRemoved(position + offset, count)
+                    }
+                    override fun onMoved(fromPosition: Int, toPosition: Int) {
+                        adapter.notifyItemMoved(fromPosition + offset, toPosition + offset)
+                    }
+                    override fun onChanged(position: Int, count: Int, payload: Any?) {
+                        adapter.notifyItemRangeChanged(position + offset, count, payload)
+                    }
+                })
             }
         }
         var dirty = false
