@@ -65,10 +65,63 @@ object SoftwareBackup {
         val config = JSONObject()
         val bounds = JSONObject()
         for (id in roleIds(ctx)) {
-            config.put(id, PetConfig.forRole(ctx, id).exportSettings())
-            bounds.put(id, PetBounds.forRole(ctx, id).exportSettings())
+            val roleConfig = PetConfig.forRole(ctx, id)
+            val roleBounds = PetBounds.forRole(ctx, id)
+            // A full backup must include effective defaults, not only options
+            // that have been explicitly changed since installation.
+            roleConfig.update { it }
+            for (page in SettingsPage.entries) {
+                roleBounds.updateBounds(page, roleBounds.getBlocking(page))
+            }
+            config.put(id, roleConfig.exportSettings())
+            bounds.put(id, roleBounds.exportSettings())
         }
         return config to bounds
+    }
+
+    /** These global options live in SharedPreferences OUTSIDE filesDir.
+     * The misc/ file tree cannot capture or restore them.
+     * Runtime exit flags and Android permissions are intentionally excluded.
+     */
+    private fun appSettings(ctx: Context): JSONObject {
+        val background = ctx.getSharedPreferences("cakepet_background", Context.MODE_PRIVATE)
+        return JSONObject()
+            .put("personalization", JSONObject()
+                .put("summonPosition", PersonalizationPrefs.summonPosition(ctx))
+                .put("previewSource", PersonalizationPrefs.previewSource(ctx))
+                .put("previewPat", PersonalizationPrefs.previewPat(ctx))
+                .put("homePreviewMode", PersonalizationPrefs.homePreviewMode(ctx)))
+            .put("watermark", JSONObject()
+                .put("enabled", ImportWatermark.enabled(ctx))
+                .put("level", ImportWatermark.level(ctx).name))
+            .put("summonedRoles", JSONArray(
+                background.getStringSet("summoned_roles", emptySet()).orEmpty().sorted()))
+    }
+
+    /** Restore through the preference APIs so their in-process caches update too. */
+    private fun restoreAppSettings(ctx: Context, settings: JSONObject) {
+        settings.optJSONObject("personalization")?.let { p ->
+            if (p.has("summonPosition"))
+                PersonalizationPrefs.setSummonPosition(ctx, p.getString("summonPosition"))
+            if (p.has("previewSource"))
+                PersonalizationPrefs.setPreviewSource(ctx, p.getString("previewSource"))
+            if (p.has("previewPat"))
+                PersonalizationPrefs.setPreviewPat(ctx, p.getBoolean("previewPat"))
+            if (p.has("homePreviewMode"))
+                PersonalizationPrefs.setHomePreviewMode(ctx, p.getString("homePreviewMode"))
+        }
+        settings.optJSONObject("watermark")?.let { w ->
+            if (w.has("enabled")) ImportWatermark.setEnabled(ctx, w.getBoolean("enabled"))
+            if (w.has("level"))
+                ImportWatermark.setLevel(ctx, ImportWatermark.Level.valueOf(w.getString("level")))
+        }
+        settings.optJSONArray("summonedRoles")?.let { roles ->
+            val selected = (0 until roles.length()).map { roles.getString(it) }.toSet()
+            check(ctx.getSharedPreferences("cakepet_background", Context.MODE_PRIVATE)
+                .edit().putStringSet("summoned_roles", selected).commit()) {
+                "无法恢复已召唤角色状态"
+            }
+        }
     }
 
     fun export(ctx: Context, uri: Uri) {
@@ -95,6 +148,7 @@ object SoftwareBackup {
                 json("role-config.json", config)
                 json("role-bounds.json", bounds)
                 json("user-habits.json", UserHabits.load(ctx))
+                json("app-settings.json", appSettings(ctx))
                 val root = File(ctx.filesDir, "roles")
                 if (root.isDirectory) writeTree(zip, root, "roles/")
                 // Extra persistent files are kept readable too; active DataStore
@@ -159,6 +213,10 @@ object SoftwareBackup {
             for (name in listOf("registries.json", "role-config.json", "role-bounds.json", "user-habits.json")) {
                 JSONObject(File(root, name).readText())
             }
+            // Backups from before the explicit app-wide settings record remain readable.
+            File(root, "app-settings.json").takeIf { it.isFile }?.let {
+                JSONObject(it.readText())
+            }
             return root
         } catch (e: Exception) {
             root.deleteRecursively()
@@ -190,6 +248,9 @@ object SoftwareBackup {
             val restoredConfigs = JSONObject(File(staged, "role-config.json").readText())
             val bounds = JSONObject(File(staged, "role-bounds.json").readText())
             val habits = JSONObject(File(staged, "user-habits.json").readText())
+            val restoredAppSettings = File(staged, "app-settings.json").takeIf { it.isFile }
+                ?.let { JSONObject(it.readText()) }
+            val oldAppSettings = appSettings(ctx)
             val originals = runBlocking { RoleStore.exportRegistries(ctx) }
             val oldConfigs: Pair<JSONObject, JSONObject> = runBlocking { configs(ctx) }
             val oldHabits = UserHabits.load(ctx)
@@ -220,8 +281,8 @@ object SoftwareBackup {
                             PetConfig.forRole(ctx, id).importSettings(JSONObject(), replace = true)
                             PetBounds.forRole(ctx, id).importSettings(JSONObject(), replace = true)
                         } else {
-                            if (config != null) PetConfig.forRole(ctx, id).importSettings(config)
-                            if (bound != null) PetBounds.forRole(ctx, id).importSettings(bound)
+                            if (config != null) PetConfig.forRole(ctx, id).importSettings(config, replace = true)
+                            if (bound != null) PetBounds.forRole(ctx, id).importSettings(bound, replace = true)
                         }
                     }
                 }
@@ -241,9 +302,12 @@ object SoftwareBackup {
                 }
                 File(staged, "misc").takeIf { it.isDirectory }?.listFiles().orEmpty()
                     .forEach { copyTree(it, File(ctx.filesDir, it.name)) }
+                // Restore app-wide preferences after all file operations have
+                // succeeded, so a failed restore can reinstate the old values.
+                if (restoredAppSettings != null) restoreAppSettings(ctx, restoredAppSettings)
                 previousMisc.deleteRecursively()
                 previousDir.deleteRecursively()
-                return "软件备份已恢复。素材包和角色设置已替换；系统权限保持不变。"
+                return "软件备份已恢复。素材包、角色设置及全局偏好已恢复；系统权限保持不变。"
             } catch (problem: Exception) {
                 val rollback = runCatching {
                     if (assetsTouched) liveRoles.deleteRecursively()
@@ -271,6 +335,7 @@ object SoftwareBackup {
                         }
                     }
                     UserHabits.save(ctx, oldHabits)
+                    restoreAppSettings(ctx, oldAppSettings)
                 }
                 if (rollback.isFailure) {
                     throw IllegalStateException(
