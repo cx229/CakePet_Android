@@ -229,6 +229,7 @@ object SoftwareBackup {
         }.toSet()
         val currentHome = RoleStore.getHomeRoles(ctx).associateBy { it.instanceId }.toMutableMap()
         val incomingHome = registryArray(source, "homeRoles", "home_roles")
+        val importedHomeOrder = mutableListOf<String>()
         if (incomingHome != null) for (i in 0 until incomingHome.length()) {
             val obj = incomingHome.optJSONObject(i) ?: continue
             val id = obj.optString("instanceId")
@@ -236,10 +237,13 @@ object SoftwareBackup {
             if (!id.matches(Regex("[a-zA-Z0-9_-]{1,100}")) || template !in eligible) continue
             currentHome[id] = HomeRoleInstance(id, template,
                 obj.optString("displayName"), obj.optString("shortName"))
+            if (id !in importedHomeOrder) importedHomeOrder.add(id)
             applied++
         }
         val home = JSONArray()
-        currentHome.values.forEach { item ->
+        val sortedHome = importedHomeOrder.mapNotNull { currentHome[it] } +
+            currentHome.values.filter { it.instanceId !in importedHomeOrder }
+        sortedHome.forEach { item ->
             home.put(JSONObject().put("instanceId", item.instanceId)
                 .put("templateId", item.templateId)
                 .put("displayName", item.displayName).put("shortName", item.shortName))
@@ -247,12 +251,14 @@ object SoftwareBackup {
         setRegistryArray(merged, "homeRoles", "home_roles", home)
 
         // The catalog order is cosmetic; preserve current order, append valid new IDs.
-        val order = RoleStore.getCatalogOrder(ctx).toMutableList()
+        val oldOrder = RoleStore.getCatalogOrder(ctx)
+        val order = mutableListOf<String>()
         val incomingOrder = registryArray(source, "catalogOrder", "catalog_order")
         if (incomingOrder != null) for (i in 0 until incomingOrder.length()) {
             val id = incomingOrder.optString(i)
             if (id in installed && id !in order) order.add(id)
         }
+        oldOrder.forEach { if (it in installed && it !in order) order.add(it) }
         setRegistryArray(merged, "catalogOrder", "catalog_order", JSONArray(order))
         return merged to applied
     }
@@ -469,6 +475,8 @@ object SoftwareBackup {
                     if (id !in activeIds)
                         skippedCount += restoredBounds.optJSONObject(id)?.length() ?: 0
                 }
+                // Revision-based preview caches must notice imported pack files.
+                RolePackEditing.invalidateImported(RoleStore.getUserRoles(ctx).map { it.id })
                 previousDir.deleteRecursively()
                 return "导入完成：处理 ${catalogChanges} 条素材/角色记录、" +
                     "恢复 ${settingsCount} 项设置，跳过 ${skippedCount} 项不兼容设置。" +
