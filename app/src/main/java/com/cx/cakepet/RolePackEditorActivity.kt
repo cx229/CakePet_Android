@@ -5259,7 +5259,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                             else value?.toString()
                                         if (refId != id) remaining.put(value)
                                     }
-                                    thinking.put("pool", remaining)
+                                    thinking?.put("pool", remaining)
                                 }
                             }
                         }
