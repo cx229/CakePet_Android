@@ -1834,7 +1834,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val thumbnails = mutableMapOf<String, android.graphics.Bitmap?>()
         val folderRows = mutableListOf<Pair<String, LinearLayout>>()
         for ((group, names) in grouped) {
-            cachedResourceGroup("modes", group)?.let { reused ->
+            val reused = cachedResourceGroup("modes", group)
+            if (reused != null) {
                 folderRows.add(group to reused)
                 continue
             }
@@ -5262,7 +5263,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val folderRows = mutableListOf<Pair<String, LinearLayout>>()
         for ((group, ids) in grouped) {
             if (!linkedPreview && target === panel) {
-                cachedResourceGroup("thinkings", group)?.let { reused ->
+                val reused = cachedResourceGroup("thinkings", group)
+                if (reused != null) {
                     folderRows.add(group to reused)
                     continue
                 }
