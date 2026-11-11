@@ -8,7 +8,6 @@ import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.SwitchCompat
 
 /** App-level display preferences. Uses the same titlebar, module cards and spinner as other settings. */
 class PersonalizationSettingsActivity : AppCompatActivity() {
@@ -99,7 +98,7 @@ class PersonalizationSettingsActivity : AppCompatActivity() {
             PersonalizationPrefs.PREVIEW, PersonalizationPrefs.STANDBY,
             PersonalizationPrefs.STATIC_POOL, PersonalizationPrefs.BLANK
         )
-        lateinit var refreshChildren: () -> Unit
+        var refreshChildren: () -> Unit = {}
         val previewRow = selector(previews, "动态预览",
             listOf("动画：预览", "待机池", "静止待机池", "空白"),
             previewSources.indexOf(PersonalizationPrefs.previewSource(this)).coerceAtLeast(0),
