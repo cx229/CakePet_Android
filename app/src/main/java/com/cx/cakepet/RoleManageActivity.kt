@@ -170,6 +170,20 @@ class RoleManageActivity : AppCompatActivity() {
         adapter = CatalogAdapter()
         recycler.adapter = adapter
 
+        // External ZIP opening uses the same importer as the page's own button,
+        // but asks for consent before any files are created or registered.
+        if (savedInstanceState == null &&
+            intent.getBooleanExtra(ExternalZipImportActivity.EXTRA_EXTERNAL_IMPORT, false)) {
+            intent.data?.let { source ->
+                showConfirmDialog(
+                    title = "导入素材包",
+                    bodyHtml = "检测到 CakePet 素材包。导入后会加入素材包管理，" +
+                        "可以继续编辑或加入首页。不会修改原 ZIP 文件。",
+                    positiveText = "导入素材包"
+                ) { importZip(source) }
+            }
+        }
+
         val touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
         ) {
