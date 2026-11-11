@@ -50,7 +50,11 @@ class GlobalSettingsActivity : AppCompatActivity() {
     private val importBackup = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri ?: return@registerForActivityResult
+        uri?.let(::handleBackupImport)
+    }
+
+    /** Same backup preview and confirmation for file picker and external ZIP. */
+    private fun handleBackupImport(uri: Uri) {
         lifecycleScope.launch {
             // Do not tear down a running pet when a ZIP is invalid.
             val preview = withContext(Dispatchers.IO) {
@@ -113,6 +117,10 @@ class GlobalSettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_global_settings)
+        if (savedInstanceState == null &&
+            intent.getBooleanExtra(ExternalZipImportActivity.EXTRA_EXTERNAL_IMPORT, false)) {
+            intent.data?.let(::handleBackupImport)
+        }
         page = when (intent.getStringExtra(EXTRA_PAGE)) {
             PAGE_DEBUG -> PAGE_DEBUG
             PAGE_ACCESSIBILITY_TEST -> PAGE_ACCESSIBILITY_TEST
