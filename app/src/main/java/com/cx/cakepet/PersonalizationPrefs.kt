@@ -39,6 +39,11 @@ object PersonalizationPrefs {
         else -> null
     }
 
+    /** Factory defaults: no legacy option survives a software reset. */
+    fun reset(context: Context) {
+        check(prefs(context).edit().clear().commit()) { "无法重置个性化设置" }
+    }
+
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
