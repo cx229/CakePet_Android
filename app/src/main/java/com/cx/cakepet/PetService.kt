@@ -962,6 +962,9 @@ class PetService : Service() {
         // 角色召唤交由 onStartCommand 处理（指定角色或按玩家上次实际召唤状态恢复）。
     }
 
+    // 新召唤在最终定位前，禁止挂载宠物窗口。
+    private val pendingInitialPlacement = mutableSetOf<String>()
+
     private fun initPetView(roleId: String) {
         // 先创建主实例（index 0），它承载调试浮层（吸附线 / 调试文本 / 辅助线）与菜单动作基准。
         // 启动瞬间：数量上限限 3（调试页允许设到 10，但启动只生成最多 3，避免一次性过多；
@@ -1140,14 +1143,14 @@ class PetService : Service() {
         view.petAlpha = petAlpha
         // 诊断开关 hideStage：开启时不挂显示窗（仅透明控制窗，即 9.27 几何），用于二分点击拦截来源。
         var dispAdded = false
-        if (!roleHideStage(roleId) && rolePetVisible(roleId)) {
+        if (roleId !in pendingInitialPlacement && !roleHideStage(roleId) && rolePetVisible(roleId)) {
             dispAdded = addDisplay(disp, dispLp)
         }
 
         // 控制窗是否挂载：调试“隐藏控制层”或用户“点击穿透”任一为真即不挂（二者语义等价，
         // 显示窗本就 NOT_TOUCHABLE，屏蔽控制窗后点击穿透到下层 app 且宠物仍可见）。
         var controlAdded = false
-        if (!roleControlHidden(roleId) && rolePetVisible(roleId)) {
+        if (roleId !in pendingInitialPlacement && !roleControlHidden(roleId) && rolePetVisible(roleId)) {
             windowManager.addView(view, lp)
             controlAdded = true
         }
@@ -2330,6 +2333,7 @@ class PetService : Service() {
 
     /** 按 hideStage 开关增删各宠物的显示窗（诊断用，实时生效）。 */
     private fun syncDisplayWindows(roleId: String) {
+        if (roleId in pendingInitialPlacement) return
         val wantedType = roleDisplayType(roleId)
         for (inst in pets.filter { it.roleId == roleId }) {
             val disp = inst.displayView ?: continue
@@ -2356,6 +2360,7 @@ class PetService : Service() {
 
     /** 按【该角色】controlHidden（hideControlLayer || clickThrough）增删各宠物控制窗，按 roleId 独立，无需整组重建。 */
     private fun syncControlWindows(roleId: String) {
+        if (roleId in pendingInitialPlacement) return
         for (inst in pets.filter { it.roleId == roleId }) {
             if ((roleControlHidden(roleId) || !rolePetVisible(roleId)) && inst.controlAdded) {
                 try { windowManager.removeView(inst.view) } catch (_: Exception) {}
@@ -3922,38 +3927,52 @@ class PetService : Service() {
      * 多角色引擎入口（对应之前在 onCreate 直接初始化的逻辑）：
      * 为指定角色按 pet_config_<id>/pet_bounds_<id> 构造配置，建宠物窗与物理循环并启动。
      */
-    /**
-     * 首次召唤的最终落点。createPetInstance 先挂浮窗，loadConfig 随后才加载实际
-     * 素材尺寸并确定物理活动范围；素材切换时的首帧回调也可能在边界初始化前
-     * 将位置钳到 (0,0)。因此必须在配置、素材和边界均就绪后决定真正的出生点。
-     * 仅用于新召唤，不修改“归位”或角色之后的正常物理运动。
-     */
+    /** 首次召唤和归位共用最终物理边界的底部中心。 */
+    private fun placeAtHome(inst: PetInstance) {
+        val p = inst.view.physics
+        p.resetTo((p.minX + p.maxX) / 2f, p.maxY)
+    }
+
+    /** 同步控制窗和显示窗；尚未挂载时仅准备坐标与尺寸。 */
+    private fun alignPetWindows(inst: PetInstance) {
+        val view = inst.view
+        placeControlWindow(view, inst.layoutParams, inst.lastW, inst.lastH)
+        if (inst.controlAdded) {
+            try { windowManager.updateViewLayout(view, inst.layoutParams) } catch (_: Exception) {}
+        }
+        val disp = inst.displayView
+        val dlp = inst.displayLp
+        if (disp != null && dlp != null) {
+            val (w, h) = view.getBaseBitmapSize()
+            dlp.x = view.physics.x.toInt()
+            dlp.y = view.physics.y.toInt()
+            dlp.width = w
+            dlp.height = h
+            disp.displayLeft = view.physics.x
+            disp.displayTop = view.physics.y
+            if (inst.displayAdded) {
+                try { windowManager.updateViewLayout(disp, dlp) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    /** 配置、素材、缩放及边界就绪后定位，取消极大 Y 的钳制绕行。 */
     private fun positionNewlySummonedRole(roleId: String) {
         val random = PersonalizationPrefs.summonPosition(this) == PersonalizationPrefs.RANDOM
         pets.filter { it.roleId == roleId }.forEach { inst ->
-            val view = inst.view
-            val physics = view.physics
-            val minX = physics.minX
-            val maxX = physics.maxX.coerceAtLeast(minX)
-            val minY = physics.minY
-            val maxY = physics.maxY.coerceAtLeast(minY)
+            val p = inst.view.physics
             if (random) {
-                physics.x = if (maxX > minX) minX + Random.nextFloat() * (maxX - minX) else minX
-                physics.y = if (maxY > minY) minY + Random.nextFloat() * (maxY - minY) else minY
+                val minX = p.minX
+                val maxX = p.maxX.coerceAtLeast(minX)
+                val minY = p.minY
+                val maxY = p.maxY.coerceAtLeast(minY)
+                val x = if (maxX > minX) minX + Random.nextFloat() * (maxX - minX) else minX
+                val y = if (maxY > minY) minY + Random.nextFloat() * (maxY - minY) else minY
+                p.resetTo(x, y)
             } else {
-                // Only a NEW bottom-center summon: spawn well beyond the bottom
-                // boundary and let the already-initialized physics bounds decide
-                // the exact landing point. Return Home keeps its existing path.
-                val outsideY = maxOf(5000f, physics.maxY * 2f, physics.maxY + 1f)
-                physics.resetTo((minX + maxX) / 2f, outsideY)
-                physics.clampToBounds()
+                placeAtHome(inst)
             }
-            // 显示层与控制层在第一帧之前同步到同一出生位置，避免先闪到左上角。
-            placeControlWindow(view, inst.layoutParams, inst.lastW, inst.lastH)
-            if (inst.controlAdded) {
-                try { windowManager.updateViewLayout(view, inst.layoutParams) } catch (_: Exception) {}
-            }
-            syncDisplayWindow(inst)
+            alignPetWindows(inst)
         }
     }
 
@@ -3977,6 +3996,7 @@ class PetService : Service() {
         config = rt.config
         currentRoleId = roleId
         currentShortName = RoleStore.resolveShortName(this, roleId)
+        pendingInitialPlacement.add(roleId)
         initPetView(roleId)
         loadConfig(roleId)
         applyNightMode(config.getBlocking())
@@ -3990,6 +4010,10 @@ class PetService : Service() {
         }
         recalcBounds()
         positionNewlySummonedRole(roleId)
+        pendingInitialPlacement.remove(roleId)
+        syncDisplayWindows(roleId)
+        syncControlWindows(roleId)
+        applyDisplayTouchFlags(roleId)
         startLoop()
         startRandomLoop(rt)
         saveSummonedRoles()
@@ -4115,14 +4139,8 @@ class PetService : Service() {
         for (inst in roleInstances) inst.view.forceReset()
         recalcBounds()
         for (inst in roleInstances) {
-            val p = inst.view.physics
-            p.resetTo((p.minX + p.maxX) / 2f, p.maxY)
-            // Position both split windows immediately, without a first-frame jump.
-            placeControlWindow(inst.view, inst.layoutParams, inst.lastW, inst.lastH)
-            if (inst.controlAdded) {
-                try { windowManager.updateViewLayout(inst.view, inst.layoutParams) } catch (_: Exception) {}
-            }
-            syncDisplayWindow(inst)
+            placeAtHome(inst)
+            alignPetWindows(inst)
         }
     }
 
