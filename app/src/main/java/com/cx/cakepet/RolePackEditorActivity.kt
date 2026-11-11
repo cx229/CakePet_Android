@@ -59,9 +59,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         linkedEditorOpen = false
         if (!linkedReadOnly && RolePackEditing.revision(id) != linkedReturnRevision) {
             runCatching {
-                if (::draft.isInitialized) draft.deleteRecursively()
                 draft = RolePackEditing.draft(this, id)
-                root = RolePackEditing.prepareEditable(draft, id, linkedPackName)
+                root = RolePackEditing.prepareEditable(draft, id, linkedPackName, persist = false)
                 linkedTreeContainer?.let { tree ->
                     tree.removeAllViews()
                     if (intent.getBooleanExtra("missing_only", false)) renderMissingLinkedCards(tree)
@@ -106,7 +105,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 .bufferedReader().use { parseJsonc(it.readText()) }
             else {
                 draft = RolePackEditing.draft(this, id)
-                RolePackEditing.prepareEditable(draft, id, pack.displayName)
+                RolePackEditing.prepareEditable(draft, id, pack.displayName, persist = false)
             }
         } catch (e: Exception) {
             Toast.makeText(this, e.message ?: "读取素材包失败", Toast.LENGTH_LONG).show()
@@ -807,7 +806,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         try {
             draft = RolePackEditing.draft(this, id)
             val name = RoleRegistry.byId(id)?.displayName ?: id
-            root = RolePackEditing.prepareEditable(draft, id, name)
+            root = RolePackEditing.prepareEditable(draft, id, name, persist = false)
         } catch (e: Exception) {
             Toast.makeText(this, e.message ?: "打开失败", Toast.LENGTH_LONG).show()
             finish()
@@ -871,7 +870,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
         previewRefreshers.clear()
         homePreviewPlayer?.stop()
         homePreviewPlayer = null
-        if (::draft.isInitialized) draft.deleteRecursively()
         super.onDestroy()
     }
     private fun currentPageScrollY(): Int = modePageRecycler?.scrollY ?: scroll.scrollY
@@ -1083,7 +1081,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         edit(candidate)
         RolePackEditing.commit(this, id, draft, candidate)
         root = candidate
-        draft = RolePackEditing.draft(this, id)
+        modeAvailability.clear()
         refreshLivePreviews()
         // JSON has changed, but existing View text and lists are not live bindings.
         // Refresh underlying cards without navigating or collapsing folders, then
@@ -1444,10 +1442,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
         return node as? FormInputField ?: error("Input has no form field container")
     }
 
+    private val modeAvailability = mutableMapOf<String, Boolean>()
     private fun ids(): List<String> = root.getJSONObject("modes").keys().asSequence().toList()
         .sortedWith(compareBy<String> { !playableMode(it) }.thenBy { it })
 
-    private fun playableMode(modeId: String): Boolean {
+    private fun playableMode(modeId: String): Boolean = modeAvailability.getOrPut(modeId) {
         val probe = JSONObject().put("modes", root.optJSONObject("modes"))
             .put("functions", JSONObject().put("probe", JSONArray().put(modeId)))
         return MaterialFunctionSupport.available(probe, listOf("probe")) { relative ->
@@ -4914,18 +4913,95 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun isImage(file: File): Boolean =
         file.isFile && file.extension.lowercase() in setOf("png", "webp", "jpg", "jpeg")
 
-    /** File operations and JSON path references are committed atomically together. */
-    private fun resourceChange(operation: (File, JSONObject) -> Unit) {
-        val working = RolePackEditing.draft(this, id)
+    /** A small undo log for the specific files touched by an image edit.
+     * No image or unrelated folder is cloned. All paths stay inside this pack.
+     */
+    private class ResourceEdits(private val pack: File) {
+        private val undo = mutableListOf<() -> Unit>()
+        private val garbage = mutableListOf<File>()
+        private fun inside(file: File): File {
+            val canonical = file.canonicalFile
+            require(canonical.toPath().startsWith(pack.canonicalFile.toPath()) &&
+                canonical != pack.canonicalFile) { "非法资源路径" }
+            return canonical
+        }
+        fun mkdir(directory: File) {
+            val target = inside(directory)
+            if (target.isDirectory) return
+            val missing = generateSequence(target) { it.parentFile }
+                .takeWhile { it != pack.canonicalFile && !it.exists() }.toList()
+            check(target.mkdirs()) { "创建文件夹失败" }
+            missing.forEach { created ->
+                undo.add { if (created.exists()) check(created.delete()) { "回滚文件夹失败" } }
+            }
+        }
+        fun created(file: File) {
+            val target = inside(file)
+            require(!target.exists()) { "资源已存在：${target.name}" }
+            undo.add { if (target.exists()) check(target.deleteRecursively()) { "回滚新增资源失败" } }
+        }
+        fun rename(from: File, to: File) {
+            val source = inside(from)
+            val target = inside(to)
+            require(source.exists() && !target.exists()) { "移动目标冲突" }
+            check(source.renameTo(target)) { "无法移动文件：${source.name}" }
+            undo.add { check(target.renameTo(source)) { "恢复文件位置失败" } }
+        }
+        fun delete(file: File) {
+            val source = inside(file)
+            require(source.exists()) { "资源不存在" }
+            val backup = File(pack.parentFile, ".cakepet-edit-${System.nanoTime()}-${source.name}")
+            check(source.renameTo(backup)) { "暂存资源失败" }
+            undo.add { check(backup.renameTo(source)) { "恢复资源失败" } }
+            garbage.add(backup)
+        }
+        fun deleteEmpty(directory: File) {
+            val target = inside(directory)
+            check(target.isDirectory && target.delete()) { "无法解散文件夹" }
+            undo.add { check(target.mkdir()) { "恢复文件夹失败" } }
+        }
+        fun replace(file: File, write: (File) -> Unit) {
+            val target = inside(file)
+            if (target.exists()) delete(target)
+            created(target)
+            write(target)
+        }
+        fun recordNewChildren(parent: File, block: () -> Unit) {
+            val before = parent.listFiles().orEmpty().map { it.name }.toSet()
+            try { block() }
+            finally {
+                parent.listFiles().orEmpty().filter { it.name !in before }.forEach {
+                    val target = inside(it)
+                    undo.add { if (target.exists()) check(target.deleteRecursively()) }
+                }
+            }
+        }
+        fun rollback() {
+            undo.asReversed().forEach { it() }
+            undo.clear()
+            garbage.clear()
+        }
+        fun finish() {
+            garbage.forEach { if (it.exists()) check(it.deleteRecursively()) }
+            garbage.clear()
+            undo.clear()
+        }
+    }
+
+    /** Save JSONC atomically; only the changed image paths participate in rollback. */
+    private fun resourceChange(operation: (File, JSONObject, ResourceEdits) -> Unit) {
+        val tx = ResourceEdits(draft)
+        val candidate = JSONObject(root.toString())
         try {
-            val candidate = JSONObject(root.toString())
-            operation(working, candidate)
-            RolePackEditing.commit(this, id, working, candidate)
-            draft.deleteRecursively()
+            operation(draft, candidate, tx)
+            RolePackEditing.commit(this, id, draft, candidate, resourcesChanged = true)
             root = candidate
-            draft = RolePackEditing.draft(this, id)
-        } finally {
-            if (working.exists()) working.deleteRecursively()
+            modeAvailability.clear()
+            tx.finish()
+        } catch (failure: Exception) {
+            try { tx.rollback() }
+            catch (rollbackFailure: Exception) { failure.addSuppressed(rollbackFailure) }
+            throw failure
         }
     }
 
