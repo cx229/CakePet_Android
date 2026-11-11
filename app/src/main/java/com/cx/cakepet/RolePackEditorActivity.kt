@@ -5188,10 +5188,22 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
             val referencesCard = dialogSection()
             val refs = id?.let(::thinkingUses).orEmpty()
+            val uncheckedReferences = mutableSetOf<ThinkingReference>()
             referencesCard.addView(detailSectionHeader("被引用位置",
                 if (refs.isEmpty()) "未被引用" else "${refs.size} 次引用"))
+            if (refs.isNotEmpty()) referencesCard.addView(text("取消勾选将取消引用", 11f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(px(4), 0, px(4), px(2))
+            })
             refs.forEachIndexed { index, reference ->
                 val row = detailListRow()
+                if (!readOnly) row.addView(CheckBox(this).apply {
+                    isChecked = true
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) uncheckedReferences.remove(reference)
+                        else uncheckedReferences.add(reference)
+                    }
+                }, LinearLayout.LayoutParams(px(42), px(42)))
                 row.addView(detailNumber(index))
                 row.addView(text(reference.label(::functionPathName), 12f).apply {
                     setPadding(0, px(3), 0, px(3))
@@ -5227,6 +5239,31 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     item.put("text", content)
                     item.put("groups", JSONArray().apply { currentGroups.forEach { put(it) } })
                     texts.put(key, item)
+                    if (id != null && uncheckedReferences.isNotEmpty()) {
+                        // Unbind only this text from unchecked Function/Mode pools.
+                        // Do not change the text resource, playback policy or other entries.
+                        uncheckedReferences.forEach { reference ->
+                            val owner = if (reference.functionPath != null) {
+                                var node: JSONObject? = json.optJSONObject("functions")
+                                reference.functionPath.forEach { part -> node = node?.optJSONObject(part) }
+                                node
+                            } else reference.modeId?.let { json.optJSONObject("modes")?.optJSONObject(it) }
+                            val thinking = owner?.optJSONObject("thinking")
+                            when (val pool = thinking?.opt("pool")) {
+                                is JSONObject -> pool.remove(id)
+                                is JSONArray -> {
+                                    val remaining = JSONArray()
+                                    for (index in 0 until pool.length()) {
+                                        val value = pool.opt(index)
+                                        val refId = if (value is JSONObject) value.optString("id")
+                                            else value?.toString()
+                                        if (refId != id) remaining.put(value)
+                                    }
+                                    thinking.put("pool", remaining)
+                                }
+                            }
+                        }
+                    }
                 }
                 if (screen == "thinkings") thinkingResources()
                 onSaved?.invoke()
