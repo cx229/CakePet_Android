@@ -4473,7 +4473,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
             fun drawLeaf(path: List<String>, depth: Int) {
                 val key = path.joinToString("/")
-                val wasSelected = key in selected
                 val row = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
                     selectionSurface(this)
@@ -4481,7 +4480,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
                 val check = CheckBox(this).apply {
                     text = ""
-                    isChecked = wasSelected
+                    isChecked = key in selected
                     minWidth = 0
                     minimumWidth = 0
                     setPadding(0, 0, 0, 0)
@@ -6154,7 +6153,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     group, ids, { it in chosen }) { all ->
                     if (all) ids.forEach {
                         chosen.putIfAbsent(it, DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS)
-                    } else ids.forEach(chosen::remove)
+                    } else ids.forEach { chosen.remove(it) }
                     refreshChoices()
                 }
                 folderRefreshers.add {
