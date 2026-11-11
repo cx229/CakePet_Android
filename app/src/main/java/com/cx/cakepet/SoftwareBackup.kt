@@ -408,6 +408,7 @@ object SoftwareBackup {
                 runBlocking { RoleStore.importRegistries(ctx, merged, replace = false) }
 
                 var settingsCount = 0
+                var skippedCount = 0
                 val activeIds = RoleStore.getHomeRoles(ctx).map { it.instanceId }.toSet()
                 val selectedIds = activeIds.filter { restoredConfigs.has(it) || restoredBounds.has(it) }
                 runBlocking {
@@ -428,6 +429,10 @@ object SoftwareBackup {
                         if (selectedConfig.length() > 0 || selectedBounds.length() > 0)
                             updatedRoles.add(id)
                         settingsCount += selectedConfig.length() + selectedBounds.length()
+                        skippedCount += (restoredConfigs.optJSONObject(id)?.length() ?: 0) -
+                            selectedConfig.length()
+                        skippedCount += (restoredBounds.optJSONObject(id)?.length() ?: 0) -
+                            selectedBounds.length()
                         if (selectedConfig.length() > 0) config.importSettings(selectedConfig)
                         if (selectedBounds.length() > 0) bounds.importSettings(selectedBounds)
                     }
@@ -441,17 +446,33 @@ object SoftwareBackup {
                             target::acceptsImportedValue)
                         if (usable.length() > 0) target.importSettings(usable)
                         settingsCount += usable.length()
+                        skippedCount += habitValues.length() - usable.length()
                     }
                 }
 
                 // Misc files are exported losslessly, but cannot be safely
                 // interpreted as current settings. Do not overwrite active or
                 // unknown files with unrecognized backup content.
-                if (restoredApp != null) settingsCount += restoreAppSettings(ctx, restoredApp)
-
+                if (restoredApp != null) {
+                    val imported = restoreAppSettings(ctx, restoredApp)
+                    settingsCount += imported
+                    val supplied = (restoredApp.optJSONObject("personalization")?.length() ?: 0) +
+                        (restoredApp.optJSONObject("watermark")?.length() ?: 0) +
+                        if (restoredApp.has("summonedRoles")) 1 else 0
+                    skippedCount += (supplied - imported).coerceAtLeast(0)
+                }
+                for (id in PreferenceCodec.entries(restoredConfigs)) {
+                    if (id !in activeIds)
+                        skippedCount += restoredConfigs.optJSONObject(id)?.length() ?: 0
+                }
+                for (id in PreferenceCodec.entries(restoredBounds)) {
+                    if (id !in activeIds)
+                        skippedCount += restoredBounds.optJSONObject(id)?.length() ?: 0
+                }
                 previousDir.deleteRecursively()
-                return "导入完成：处理 ${catalogChanges} 条素材/角色记录、${settingsCount} 项兼容设置；" +
-                    "不兼容或缺失的内容已跳过，原有其他数据保留。系统权限未改变。"
+                return "导入完成：处理 ${catalogChanges} 条素材/角色记录、" +
+                    "恢复 ${settingsCount} 项设置，跳过 ${skippedCount} 项不兼容设置。" +
+                    "其他数据保留，系统权限未改变。"
             } catch (problem: Exception) {
                 val rollback = runCatching {
                     if (assetsTouched) liveRoles.deleteRecursively()
