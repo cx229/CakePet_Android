@@ -4645,6 +4645,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val choiceButtons = mutableMapOf<String, MutableList<android.widget.CompoundButton>>()
         val chainLabels = mutableListOf<Pair<String, TextView>>()
         val groupCounts = mutableMapOf<String, TextView>()
+        val folderCheckRefreshers = mutableListOf<() -> Unit>()
         var automaticRadio: android.widget.RadioButton? = null
         var syncingChoices = false
         fun refreshSelection() {
@@ -4658,6 +4659,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             groupedModes.forEach { (group, candidates) ->
                 groupCounts[group]?.text = "${candidates.count { it in selected }}/${candidates.size}"
             }
+            folderCheckRefreshers.forEach { it() }
             syncingChoices = false
         }
         fun selectMode(name: String) {
@@ -4762,7 +4764,22 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     if (open) "▾ 📂" else "▸ 📁"
             }
             groupCounts[group] = header.getChildAt(2) as TextView
-            listing.addView(header, selectionRowParams())
+            if (!single) {
+                val (folderCheck, refreshCheck) = pickerFolderCheckbox(
+                    group, candidates, { it in selected }) { all ->
+                    if (all) selected.addAll(candidates)
+                    else selected.removeAll(candidates.toSet())
+                    refreshSelection()
+                }
+                folderCheckRefreshers.add(refreshCheck)
+                val folderRow = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                folderRow.addView(folderCheck, LinearLayout.LayoutParams(px(42), px(48)))
+                folderRow.addView(header, LinearLayout.LayoutParams(0, -2, 1f))
+                listing.addView(folderRow, selectionRowParams())
+            } else listing.addView(header, selectionRowParams())
             listing.addView(children)
             if (group in expanded) fillChildren()
         }
