@@ -91,7 +91,8 @@ class SettingsActivity : AppCompatActivity() {
                             runCatching { SettingsInterchange.importRole(this@SettingsActivity, roleId, data) }
                         }
                         Toast.makeText(this@SettingsActivity,
-                            result.fold({ "已导入 $it 项设置" }, { "导入失败：${it.message}" }),
+                            result.fold({ "已导入 ${it.applied} 项设置，跳过 ${it.skipped} 项不兼容内容" },
+                                { "导入失败：${it.message}" }),
                             Toast.LENGTH_LONG).show()
                         if (result.isSuccess) recreate()
                     }
