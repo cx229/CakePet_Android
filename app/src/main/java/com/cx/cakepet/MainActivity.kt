@@ -415,9 +415,21 @@ class MainActivity : AppCompatActivity() {
         // 2. 所有角色设置【就地】回到系统默认（经活跃 DataStore 实例写回，内存与磁盘同时生效，
         //    不删活动角色的文件——删文件会让进程内单例缓存残留旧值，导致重置不生效/被旧值写回污染）；
         //    清素材库、顺序、首页清单（下次读取自动播种预装角色）。
-        RoleStore.resetAllSoftwareData(this)
+        try {
+            RoleStore.resetAllSoftwareData(this)
+            PersonalizationPrefs.reset(this)
+            ImportWatermark.reset(this)
+            // Exit intent is runtime state, not a user setting.
+            getSharedPreferences("cakepet_exit", MODE_PRIVATE).edit().clear().commit()
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "重置失败：${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         // 3. Remove the now-unified player material library.
-        filesDir.resolve("roles").deleteRecursively()
+        if (!filesDir.resolve("roles").deleteRecursively()) {
+            android.widget.Toast.makeText(this, "素材包目录删除失败，请重试", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         // The recreated home initializes the first-install pack after the file cleanup.
         // Remove remembered active pets: reset must not restore removed instances.
         getSharedPreferences("cakepet_background", MODE_PRIVATE).edit()
