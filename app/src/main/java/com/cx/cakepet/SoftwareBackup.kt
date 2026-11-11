@@ -267,6 +267,7 @@ object SoftwareBackup {
         val staged = extract(ctx, uri)
         return try {
             JSONObject(File(staged, "manifest.json").readText())
+                .put("appSettingsIncluded", File(staged, "app-settings.json").isFile)
         } finally {
             staged.deleteRecursively()
         }
@@ -311,17 +312,13 @@ object SoftwareBackup {
                     val allIds = roleIds(ctx) + PreferenceCodec.entries(oldConfigs.first) +
                         PreferenceCodec.entries(restoredConfigs) + PreferenceCodec.entries(bounds)
                     for (id in allIds) {
-                        // A retired role is removed. A setting absent from an
-                        // older backup retains its current value (or app default).
-                        val config = restoredConfigs.optJSONObject(id)
-                        val bound = bounds.optJSONObject(id)
-                        if (id !in desired) {
-                            PetConfig.forRole(ctx, id).importSettings(JSONObject(), replace = true)
-                            PetBounds.forRole(ctx, id).importSettings(JSONObject(), replace = true)
-                        } else {
-                            if (config != null) PetConfig.forRole(ctx, id).importSettings(config, replace = true)
-                            if (bound != null) PetBounds.forRole(ctx, id).importSettings(bound, replace = true)
-                        }
+                        // Full restore must never retain a role's old settings
+                        // when that role exists in the incoming registry but has
+                        // no matching config/bounds section in the backup.
+                        val config = if (id in desired) restoredConfigs.optJSONObject(id) else null
+                        val bound = if (id in desired) bounds.optJSONObject(id) else null
+                        PetConfig.forRole(ctx, id).importSettings(config ?: JSONObject(), replace = true)
+                        PetBounds.forRole(ctx, id).importSettings(bound ?: JSONObject(), replace = true)
                     }
                 }
                 UserHabits.save(ctx, habits)
