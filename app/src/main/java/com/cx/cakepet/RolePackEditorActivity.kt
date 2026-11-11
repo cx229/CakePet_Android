@@ -4940,7 +4940,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             val missing = generateSequence(target) { it.parentFile }
                 .takeWhile { it != pack.canonicalFile && !it.exists() }.toList()
             check(target.mkdirs()) { "创建文件夹失败" }
-            missing.forEach { created ->
+            missing.asReversed().forEach { created ->
                 undo.add { if (created.exists()) check(created.delete()) { "回滚文件夹失败" } }
             }
         }
