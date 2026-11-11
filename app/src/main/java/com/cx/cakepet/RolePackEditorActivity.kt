@@ -636,6 +636,22 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private var bulkBar: View? = null
     private var bulkCountView: TextView? = null
     private var activeFrameRecycler: RecyclerView? = null
+    /** A frame edit changes data, not the enclosing Mode page or its scroll position. */
+    private data class FrameMutation(
+        val changed: List<Int> = emptyList(),
+        val deleted: List<Int> = emptyList(),
+        val insertedAt: Int = -1,
+        val insertedCount: Int = 0,
+        val replaceAll: Boolean = false
+    )
+    private var activeFrameUpdater: ((FrameMutation) -> Unit)? = null
+    private fun refreshFrames(key: String, mutation: FrameMutation) {
+        if (screen == "mode" && modeId == key && activeFrameUpdater != null) {
+            activeFrameUpdater?.invoke(mutation)
+        } else {
+            showMode(key)
+        }
+    }
     private var modePageRecycler: RecyclerView? = null
     /** Guard programmatic checkbox updates from re-entering selection callbacks. */
     private var syncingBulkSelection = false
@@ -787,7 +803,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             when (uploadAction) {
-                "append", "overwrite" -> showMode(mode)
+                "append", "overwrite" -> refreshFrames(mode, FrameMutation(replaceAll = true))
                 else -> {
                     paths.forEach(::expandResourceParents)
                     images()
@@ -1055,6 +1071,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             modePageRecycler = null
         }
         activeFrameRecycler = null
+        activeFrameUpdater = null
         scroll.visibility = View.VISIBLE
         scroll.setPadding(scroll.paddingLeft, scroll.paddingTop, scroll.paddingRight, 0)
         stopAnimation()
@@ -2583,7 +2600,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             topMargin = px(9)
             bottomMargin = px(8)
         })
-        val frames = m.getJSONArray("frames")
+        var frames = m.getJSONArray("frames")
         val frameHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -2591,8 +2608,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             // changing the RecyclerView surface or frame-card geometry.
             setPadding(px(4), px(4), px(4), px(4))
         }
-        frameHeader.addView(text("逐帧编辑 · ${frames.length()} 帧", 18f),
-            LinearLayout.LayoutParams(0, -2, 1f))
+        val frameCountLabel = text("逐帧编辑 · ${frames.length()} 帧", 18f)
+        frameHeader.addView(frameCountLabel, LinearLayout.LayoutParams(0, -2, 1f))
         frameHeader.addView(text("支持长按拖动排序", 11f).apply {
             setTextColor(getColor(R.color.cp_note))
         })
@@ -2844,6 +2861,39 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         recycler.adapter = adapter
+        activeFrameUpdater = { mutation ->
+            // Commit has already replaced root. Keep the existing RecyclerView,
+            // preview, header, scroll anchor and drag helper attached.
+            frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+            order.clear()
+            order.addAll(0 until frames.length())
+            frameCountLabel.text = "逐帧编辑 · ${frames.length()} 帧"
+            if (mutation.replaceAll) {
+                thumbs.clear()
+                bulkSelected.clear()
+                removeBulkBar()
+                adapter.notifyDataSetChanged()
+            } else {
+                if (mutation.deleted.isNotEmpty() || mutation.insertedCount > 0) {
+                    bulkSelected.clear()
+                    removeBulkBar()
+                }
+                mutation.deleted.sortedDescending().forEach { adapter.notifyItemRemoved(it + 1) }
+                if (mutation.insertedCount > 0)
+                    adapter.notifyItemRangeInserted(mutation.insertedAt + 1, mutation.insertedCount)
+                mutation.changed.distinct().filter { it in order.indices }.forEach {
+                    adapter.notifyItemChanged(it + 1)
+                }
+                val firstShift = listOfNotNull(
+                    mutation.deleted.minOrNull(), mutation.insertedAt.takeIf { mutation.insertedCount > 0 }
+                ).minOrNull()
+                if (firstShift != null) {
+                    val start = (firstShift + 1).coerceAtMost(adapter.itemCount)
+                    val count = adapter.itemCount - start
+                    if (count > 0) adapter.notifyItemRangeChanged(start, count)
+                }
+            }
+        }
         var changed = false
         val touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
@@ -2872,7 +2922,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             it.getJSONObject("modes").getJSONObject(key)
                                 .put("frames", remapFrames(frames, order))
                         }
-                        adapter.notifyDataSetChanged()
+                        frames = root.getJSONObject("modes").getJSONObject(key).getJSONArray("frames")
+                        order.clear()
+                        order.addAll(0 until frames.length())
+                        adapter.notifyItemRangeChanged(1, order.size)
                     }
                 }
             }
@@ -3248,7 +3301,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             paths.forEach { frames.put(newFrameFor(it)) }
         }
         bulkSelected.clear()
-        showMode(key)
+        refreshFrames(key, FrameMutation(replaceAll = true))
     }
 
     private fun applyImageSelection(request: ImagePickRequest, paths: List<String>) {
@@ -3284,7 +3337,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
             })
         }
         bulkSelected.clear()
-        showMode(key)
+        val mutation = when (request.action) {
+            "replace" -> FrameMutation(
+                changed = listOf(request.index),
+                insertedAt = request.index + 1,
+                insertedCount = (paths.size - 1).coerceAtLeast(0))
+            "before" -> FrameMutation(insertedAt = request.index, insertedCount = paths.size)
+            "after" -> FrameMutation(insertedAt = request.index + 1, insertedCount = paths.size)
+            "batch" -> FrameMutation(changed = request.batch)
+            else -> FrameMutation(replaceAll = true)
+        }
+        refreshFrames(key, mutation)
     }
 
     /** Make a visible, uniquely numbered directory before returning to the image picker. */
@@ -3577,7 +3640,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         remapFrames(current, (0 until current.length()).filter { it !in indices }))
                 }
                 bulkSelected.clear()
-                showMode(key)
+                refreshFrames(key, FrameMutation(deleted = indices.toList()))
             }
         }
     }
@@ -3741,7 +3804,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     }
                 }
                 bulkSelected.clear()
-                showMode(key)
+                refreshFrames(key, FrameMutation(changed = indices))
             })
         }
     }
@@ -3766,7 +3829,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             it.getJSONObject("modes").getJSONObject(key).put("frames",
                                 remapFrames(old, (0 until old.length()).filter { n -> n != index }))
                         }
-                        showMode(key)
+                        refreshFrames(key, FrameMutation(deleted = listOf(index)))
                     }
                 }
             }
@@ -3805,7 +3868,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     else current.put("verticalAlign", alignment)
                     current.remove("flipX")
                 }
-                showMode(key)
+                refreshFrames(key, FrameMutation(changed = listOf(index)))
             })
         }
     }
