@@ -204,15 +204,16 @@ class MainActivity : AppCompatActivity() {
     /** Render this instance's preview according to global preferences and active status. */
     private fun applyHomePreview(active: Boolean,
                                  thumb: ImageView, player: PreviewPlayer) {
-        val away = active && PersonalizationPrefs.animatedPreview(this) &&
+        val source = PersonalizationPrefs.previewSource(this)
+        val visible = source != PersonalizationPrefs.BLANK
+        val away = visible && active &&
             PersonalizationPrefs.homePreviewMode(this) == PersonalizationPrefs.DYNAMIC
         when {
+            !visible -> player.showBlank()
             away -> player.startSummonedPreview()
-            PersonalizationPrefs.animatedPreview(this) -> player.start()
-            else -> player.showStatic()
+            else -> player.start(source)
         }
-        val canPat = !away && PersonalizationPrefs.animatedPreview(this) &&
-            PersonalizationPrefs.previewPat(this)
+        val canPat = visible && !away && PersonalizationPrefs.previewPat(this)
         thumb.setOnClickListener(if (canPat) View.OnClickListener { player.triggerPat() } else null)
         thumb.isClickable = canPat
         if (!away) thumb.contentDescription = "角色预览"
