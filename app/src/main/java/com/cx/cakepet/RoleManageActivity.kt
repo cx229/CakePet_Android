@@ -539,9 +539,9 @@ class RoleManageActivity : AppCompatActivity() {
             }
             val player = PreviewPlayer(mgr, thumb, ctx.resources.displayMetrics.density)
             players[role.id] = player
-            if (PersonalizationPrefs.animatedPreview(ctx)) player.start()
-            else player.showStatic()
-            val allowPat = PersonalizationPrefs.animatedPreview(ctx) &&
+            val source = PersonalizationPrefs.previewSource(ctx)
+            player.start(source)
+            val allowPat = source != PersonalizationPrefs.BLANK &&
                 PersonalizationPrefs.previewPat(ctx)
             thumb.setOnClickListener(if (allowPat) View.OnClickListener {
                 player.triggerPat()
