@@ -307,8 +307,8 @@ object SoftwareBackup {
         val (config, bounds) = runBlocking { configs(ctx) }
         val registry = runBlocking { RoleStore.exportRegistries(ctx) }
         val manifest = metadata(ctx).put("summary", JSONObject()
-            .put("materialPacks", RoleStore.getUserRoles(ctx).size)
-            .put("roleInstances", RoleStore.getHomeRoles(ctx).size))
+            .put("materialPacks", runCatching { RoleStore.getUserRoles(ctx).size }.getOrDefault(-1))
+            .put("roleInstances", runCatching { RoleStore.getHomeRoles(ctx).size }.getOrDefault(-1)))
         ctx.contentResolver.openOutputStream(uri)?.use { output ->
             ZipOutputStream(output).use { zip ->
                 fun entry(name: String, bytes: ByteArray) {
