@@ -1259,6 +1259,68 @@ open class RolePackEditorActivity : AppCompatActivity() {
             setOnClickListener { toggle() }
         }
 
+    /** Unified folder selection: unchecked / partially checked / fully checked.
+     *  Call refresh after any leaf change; checked states never rebuild the picker.
+     *  Multiple appearances of a resource are keyed by its stable ID.
+     */
+    private fun pickerFolderCheckbox(
+        label: String,
+        descendants: List<String>,
+        contains: (String) -> Boolean,
+        setAll: (Boolean) -> Unit
+    ): Pair<CheckBox, () -> Unit> {
+        val check = CheckBox(this)
+        val normal = check.buttonDrawable
+        val partial = object : android.graphics.drawable.Drawable() {
+            private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                color = getColor(R.color.cp_title)
+                strokeWidth = px(2).toFloat()
+                strokeCap = android.graphics.Paint.Cap.ROUND
+            }
+            override fun draw(canvas: android.graphics.Canvas) {
+                val b = bounds
+                val inset = px(2).toFloat()
+                paint.style = android.graphics.Paint.Style.STROKE
+                canvas.drawRoundRect(android.graphics.RectF(b.left + inset, b.top + inset,
+                    b.right - inset, b.bottom - inset), px(3).toFloat(), px(3).toFloat(), paint)
+                paint.style = android.graphics.Paint.Style.FILL
+                canvas.drawLine(b.left + px(6).toFloat(), b.exactCenterY(),
+                    b.right - px(6).toFloat(), b.exactCenterY(), paint)
+            }
+            override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
+            override fun setColorFilter(filter: android.graphics.ColorFilter?) {
+                paint.colorFilter = filter
+                invalidateSelf()
+            }
+            @Suppress("DEPRECATION")
+            override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+            override fun getIntrinsicWidth(): Int = px(22)
+            override fun getIntrinsicHeight(): Int = px(22)
+        }
+        var syncing = false
+        val refresh: () -> Unit = {
+            syncing = true
+            try {
+                val count = descendants.count(contains)
+                val mixed = count > 0 && count < descendants.size
+                check.buttonDrawable = if (mixed) partial else normal
+                check.isChecked = descendants.isNotEmpty() && count == descendants.size
+                check.contentDescription = "$label，" + when {
+                    count == 0 -> "未选"
+                    count == descendants.size -> "全选"
+                    else -> "半选"
+                } + "，$count/${descendants.size}"
+            } finally {
+                syncing = false
+            }
+        }
+        check.setOnCheckedChangeListener { _, checked ->
+            if (!syncing) setAll(checked)
+        }
+        refresh()
+        return check to refresh
+    }
+
     /** Existing editor-page card styling. Do not change when adjusting dialogs. */
     private fun detailSection(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -3287,38 +3349,6 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 syncingSelection = false
             }
         }
-        // Android CheckBox has only two built-in states. Draw a visible minus for
-        // the third state instead of making a partly selected folder look empty.
-        fun partialButton(): android.graphics.drawable.Drawable =
-            object : android.graphics.drawable.Drawable() {
-                private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                    color = getColor(R.color.cp_title)
-                    strokeWidth = px(2).toFloat()
-                    strokeCap = android.graphics.Paint.Cap.ROUND
-                }
-                override fun draw(canvas: android.graphics.Canvas) {
-                    val b = bounds
-                    val inset = px(2).toFloat()
-                    paint.style = android.graphics.Paint.Style.STROKE
-                    canvas.drawRoundRect(
-                        android.graphics.RectF(b.left + inset, b.top + inset,
-                            b.right - inset, b.bottom - inset),
-                        px(3).toFloat(), px(3).toFloat(), paint)
-                    paint.style = android.graphics.Paint.Style.FILL
-                    val mid = b.exactCenterY()
-                    canvas.drawLine(b.left + px(6).toFloat(), mid,
-                        b.right - px(6).toFloat(), mid, paint)
-                }
-                override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
-                override fun setColorFilter(filter: android.graphics.ColorFilter?) {
-                    paint.colorFilter = filter
-                    invalidateSelf()
-                }
-                @Suppress("DEPRECATION")
-                override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
-                override fun getIntrinsicWidth(): Int = px(22)
-                override fun getIntrinsicHeight(): Int = px(22)
-            }
         lateinit var redraw: () -> Unit
         redraw = {
             list.removeAllViews()
@@ -3349,30 +3379,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             }
                             val folderPrefix = (if (path in expanded) "▾ 📂  " else "▸ 📁  ") + file.name
                             if (!single) {
-                                val checkbox = CheckBox(this)
-                                val normalButton = checkbox.buttonDrawable
-                                val mixedButton = partialButton()
-                                checkbox.setOnCheckedChangeListener { _, checked ->
-                                    if (!syncingSelection) {
-                                        // A mixed folder behaves like unchecked when tapped:
-                                        // first tap selects all, next tap deselects all.
-                                        if (checked) selected.addAll(descendants)
-                                        else selected.removeAll(descendants.toSet())
-                                        refreshSelection()
-                                    }
+                                val (checkbox, refreshFolder) = pickerFolderCheckbox(
+                                    file.name, descendants, { it in selected }) { all ->
+                                    if (all) selected.addAll(descendants)
+                                    else selected.removeAll(descendants.toSet())
+                                    refreshSelection()
                                 }
                                 row.addView(checkbox, LinearLayout.LayoutParams(px(40), px(46)))
                                 selectionRefreshers.add {
+                                    refreshFolder()
                                     val count = descendants.count { it in selected }
-                                    val mixed = count > 0 && count < descendants.size
-                                    checkbox.buttonDrawable = if (mixed) mixedButton else normalButton
-                                    checkbox.isChecked = descendants.isNotEmpty() && count == descendants.size
                                     folderLabel.text = "$folderPrefix ($count/${descendants.size})"
-                                    checkbox.contentDescription = when {
-                                        count == 0 -> "${file.name}，未选，0/${descendants.size}"
-                                        count == descendants.size -> "${file.name}，全选，$count/${descendants.size}"
-                                        else -> "${file.name}，半选，$count/${descendants.size}"
-                                    }
                                 }
                             } else {
                                 selectionRefreshers.add {
