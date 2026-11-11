@@ -79,8 +79,9 @@ class GlobalSettingsActivity : AppCompatActivity() {
                             .orEmpty().toSet()
                         val serviceWasRunning = PetService.instance != null
                         PetService.instance?.let { svc ->
-                            RoleStore.getHomeRoles(this@GlobalSettingsActivity)
-                                .forEach { svc.recall(it.instanceId) }
+                            runCatching { RoleStore.getHomeRoles(this@GlobalSettingsActivity) }
+                                .getOrDefault(emptyList())
+                                .forEach { runCatching { svc.recall(it.instanceId) } }
                         }
                         // Keep summon intent independent of stopping the old
                         // service; imported settings can then override it safely.
