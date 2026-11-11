@@ -77,6 +77,7 @@ class GlobalSettingsActivity : AppCompatActivity() {
                         val background = getSharedPreferences("cakepet_background", MODE_PRIVATE)
                         val summoned = background.getStringSet("summoned_roles", emptySet())
                             .orEmpty().toSet()
+                        val serviceWasRunning = PetService.instance != null
                         PetService.instance?.let { svc ->
                             RoleStore.getHomeRoles(this@GlobalSettingsActivity)
                                 .forEach { svc.recall(it.instanceId) }
@@ -96,7 +97,7 @@ class GlobalSettingsActivity : AppCompatActivity() {
                         }
                         // Neither success nor failure should leave a previously
                         // running pet service permanently stopped.
-                        if (summoned.isNotEmpty() || result.isSuccess) {
+                        if (serviceWasRunning || result.isSuccess) {
                             startForegroundService(Intent(this@GlobalSettingsActivity, PetService::class.java))
                         }
                         if (result.isSuccess) finish()
