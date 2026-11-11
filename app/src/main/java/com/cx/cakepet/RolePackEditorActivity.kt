@@ -4959,29 +4959,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
             val updated = to.relativeTo(working).invariantSeparatorsPath
             if (directory) {
-                // Rename order entries in place, including the entire descendant tree.
-                // The normalizer then reconciles them against the renamed disk tree.
-                val oldOrder = candidate.optJSONObject("resourceOrder")
-                if (oldOrder != null) {
-                    val renamed = JSONObject()
-                    val parent = relative.substringBeforeLast('/', "")
-                    val oldName = from.name
-                    oldOrder.keys().asSequence().toList().forEach { path ->
-                        val newPath = when {
-                            path == relative -> updated
-                            path.startsWith("$relative/") -> updated + path.removePrefix(relative)
-                            else -> path
-                        }
-                        val previous = oldOrder.optJSONArray(path) ?: JSONArray()
-                        renamed.put(newPath, JSONArray().apply {
-                            for (index in 0 until previous.length()) {
-                                val name = previous.optString(index)
-                                put(if (path == parent && name == oldName) newBase else name)
-                            }
-                        })
-                    }
-                    candidate.put("resourceOrder", renamed)
-                }
+                // Rename the nested folder key in place, retaining its complete subtree.
+                ResourceFolderOrder.rename(candidate, working, relative, newBase)
             }
             val prefix = "$relative/"
             val modes = candidate.getJSONObject("modes")
@@ -5053,14 +5032,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     if (updated != old) frame.put("res", updated)
                 }
             }
-            // Preserve order definitions for subfolders that were moved.
-            json.optJSONObject("resourceOrder")?.let { order ->
-                val updated = JSONObject()
-                order.keys().asSequence().toList().forEach { old ->
-                    if (old != relative) updated.put(remap(old), order.optJSONArray(old))
-                }
-                json.put("resourceOrder", updated)
-            }
+            // Promote child folder subtrees without losing their display order.
+            ResourceFolderOrder.dissolve(json, working, relative, moved)
         }
         expandedResourceFolders.remove(relative)
         expandedResourceFolders.removeAll { it.startsWith(relative + "/") }
@@ -5189,7 +5162,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                uses: Map<String, List<Pair<String, Int>>>,
                                target: LinearLayout = panel) {
         val parentPath = if (level == 0) "" else directory.relativeTo(draft).invariantSeparatorsPath
-        val order = jsonStrings(root.optJSONObject("resourceOrder")?.optJSONArray(parentPath))
+        val order = ResourceFolderOrder.names(draft, parentPath)
         val ranks = order.withIndex().associate { it.value to it.index }
         val rows = mutableListOf<Pair<String, LinearLayout>>()
         val cachedUngrouped = if (level == 0) cachedResourceGroup("images", "u:未分组") else null
@@ -5355,12 +5328,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val canReorder: (String) -> Boolean = { it.startsWith("d:") }
         val persist: (List<String>) -> Unit = { names ->
             change { json ->
-                val catalog = json.optJSONObject("resourceOrder") ?: JSONObject().also {
-                    json.put("resourceOrder", it)
-                }
-                catalog.put(parentPath, JSONArray().apply {
-                    names.forEach { put(it.removePrefix("d:")) }
-                })
+                ResourceFolderOrder.reorder(json, draft, parentPath,
+                    names.map { it.removePrefix("d:") })
             }
         }
         if (target === panel && level == 0) {
