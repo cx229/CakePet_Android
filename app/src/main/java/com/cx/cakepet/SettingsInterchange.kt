@@ -25,7 +25,7 @@ object SettingsInterchange {
     }
 
     /** Overlay only current, valid options; never clear unrelated settings. */
-    fun importRole(ctx: Context, roleId: String, data: JSONObject): Int = runBlocking {
+    fun importRole(ctx: Context, roleId: String, data: JSONObject): ImportSummary = runBlocking {
         require(data.optString("type") == "cakepet-settings") { "不是 CakePet 设置文件" }
         val config = PetConfig.forRole(ctx, roleId)
         val bounds = PetBounds.forRole(ctx, roleId)
