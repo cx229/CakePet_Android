@@ -4648,34 +4648,69 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
-    private fun deleteResourceFolder(relative: String) {
-        val folder = File(draft, relative).canonicalFile
-        require(folder.isDirectory && folder.toPath().startsWith(draft.canonicalFile.toPath()) &&
-            folder != draft.canonicalFile) { "无效文件夹" }
-        val used = imageUses().keys
-        require(folder.walkTopDown().filter(::isImage).none {
-            it.relativeTo(draft).invariantSeparatorsPath in used
-        }) { "文件夹中有正在使用的图片，无法删除" }
-        resourceChange { working, _ ->
-            val target = File(working, relative).canonicalFile
-            require(target.isDirectory && target.toPath().startsWith(working.canonicalFile.toPath())) {
-                "无效文件夹"
+    /** Dissolve a real folder into its parent, updating all animation paths atomically. */
+    private fun dissolveResourceFolder(relative: String) {
+        resourceChange { working, json ->
+            val base = working.canonicalFile
+            val folder = File(base, relative).canonicalFile
+            require(folder.isDirectory && folder != base &&
+                folder.toPath().startsWith(base.toPath())) { "无效文件夹" }
+            val parent = requireNotNull(folder.parentFile)
+            val moved = linkedMapOf<String, String>()
+            folder.listFiles().orEmpty().forEach { child ->
+                val original = child.relativeTo(base).invariantSeparatorsPath
+                val name = if (File(parent, child.name).exists()) {
+                    if (child.isDirectory) RolePackEditing.uniqueName(parent, child.name)
+                    else RolePackEditing.uniqueName(parent, child.nameWithoutExtension,
+                        if (child.extension.isBlank()) "" else "." + child.extension)
+                } else child.name
+                val target = File(parent, name)
+                check(child.renameTo(target)) { "无法移动文件：" + child.name }
+                moved[original] = target.relativeTo(base).invariantSeparatorsPath
             }
-            check(target.deleteRecursively()) { "删除文件夹失败" }
+            check(folder.delete()) { "无法解散文件夹" }
+            fun remap(path: String): String {
+                for ((before, after) in moved) {
+                    if (path == before) return after
+                    if (path.startsWith(before + "/")) return after + path.removePrefix(before)
+                }
+                return path
+            }
+            val modes = json.getJSONObject("modes")
+            modes.keys().forEach { key ->
+                val frames = modes.optJSONObject(key)?.optJSONArray("frames") ?: return@forEach
+                for (i in 0 until frames.length()) {
+                    val frame = frames.optJSONObject(i) ?: continue
+                    val old = frame.optString("res")
+                    val updated = remap(old)
+                    if (updated != old) frame.put("res", updated)
+                }
+            }
+            // Preserve order definitions for subfolders that were moved.
+            json.optJSONObject("resourceOrder")?.let { order ->
+                val updated = JSONObject()
+                order.keys().asSequence().toList().forEach { old ->
+                    if (old != relative) updated.put(remap(old), order.optJSONArray(old))
+                }
+                json.put("resourceOrder", updated)
+            }
         }
         expandedResourceFolders.remove(relative)
+        expandedResourceFolders.removeAll { it.startsWith(relative + "/") }
         images()
     }
 
     private fun showResourceFolderOptions(anchor: View, relative: String) {
-        UnifiedOptionMenu.show(anchor, listOf("重命名", "删除"), setOf("删除")) { choice ->
+        UnifiedOptionMenu.show(anchor, listOf("重命名", "解散"), setOf("解散")) { choice ->
             when (choice) {
                 "重命名" -> renameDialog(relative, true)
-                "删除" -> showConfirmDialog(
-                    title = "删除文件夹",
-                    bodyHtml = "确认删除「${File(relative).name}」及其中未使用的资源？",
-                    positiveText = "删除"
-                ) { attempt { deleteResourceFolder(relative) } }
+                "解散" -> showConfirmDialog(
+                    title = "解散文件夹",
+                    bodyHtml = "确认解散「" +
+                        android.text.TextUtils.htmlEncode(File(relative).name) +
+                        "」？其中图片和子文件夹将移至上一级，图片引用保持有效。",
+                    positiveText = "解散"
+                ) { attempt { dissolveResourceFolder(relative) } }
             }
         }
     }
@@ -4780,6 +4815,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
     }
+
+    private var rootUngroupedInitialized = false
 
     private fun resourceBranch(directory: File, level: Int,
                                uses: Map<String, List<Pair<String, Int>>>,
@@ -4892,6 +4929,50 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
                 rows.add((if (file.isDirectory) "d:" else "f:") + file.name to item)
             }
+        if (level == 0) {
+            // Root files have no real parent folder. Show them in a virtual,
+            // non-renamable "未分组" folder; their actual paths remain unchanged.
+            val loose = rows.filter { it.first.startsWith("f:") }
+            rows.removeAll(loose)
+            val virtualKey = "__root_ungrouped__"
+            if (!rootUngroupedInitialized) {
+                expandedResourceFolders.add(virtualKey)
+                rootUngroupedInitialized = true
+            }
+            val opened = virtualKey in expandedResourceFolders
+            val group = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val header = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundResource(R.drawable.card_bg)
+                rippleCard(this)
+                setPadding(px(12), px(6), px(12), px(6))
+                minimumHeight = px(folderMinHeightDp)
+            }
+            val glyph = text(if (opened) "▾ 📂" else "▸ 📁", folderHeadingSp)
+            header.addView(glyph, LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
+            val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            labels.addView(text("未分组", folderHeadingSp))
+            labels.addView(text(loose.size.toString() + " 张图片", folderSubtitleSp).apply {
+                setTextColor(getColor(R.color.cp_note))
+                setPadding(0, px(2), 0, 0)
+            })
+            header.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+            val children = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                visibility = if (opened) View.VISIBLE else View.GONE
+            }
+            loose.forEach { children.addView(it.second) }
+            header.setOnClickListener {
+                if (!expandedResourceFolders.add(virtualKey)) expandedResourceFolders.remove(virtualKey)
+                val isOpen = virtualKey in expandedResourceFolders
+                glyph.text = if (isOpen) "▾ 📂" else "▸ 📁"
+                children.visibility = if (isOpen) View.VISIBLE else View.GONE
+            }
+            group.addView(header, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) })
+            group.addView(children)
+            rows.add("u:未分组" to group)
+        }
         val canReorder: (String) -> Boolean = { it.startsWith("d:") }
         val persist: (List<String>) -> Unit = { names ->
             change { json ->
