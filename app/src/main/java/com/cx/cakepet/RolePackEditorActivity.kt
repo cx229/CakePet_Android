@@ -4451,11 +4451,25 @@ open class RolePackEditorActivity : AppCompatActivity() {
             ) { proceed() }
         }
 
+        val leafButtons = mutableMapOf<String, CheckBox>()
+        val folderRefreshers = mutableListOf<() -> Unit>()
+        var syncingChoices = false
+        fun refreshChoices() {
+            syncingChoices = true
+            try {
+                selectionInfo.text = "已绑定 ${selected.size} 个功能"
+                leafButtons.forEach { (key, check) -> check.isChecked = key in selected }
+                folderRefreshers.forEach { it() }
+            } finally {
+                syncingChoices = false
+            }
+        }
         lateinit var redraw: () -> Unit
         redraw = {
             val scrollPosition = viewport.scrollY
             listing.removeAllViews()
-            selectionInfo.text = "已绑定 ${selected.size} 个功能"
+            leafButtons.clear()
+            folderRefreshers.clear()
 
             fun drawLeaf(path: List<String>, depth: Int) {
                 val key = path.joinToString("/")
@@ -4488,21 +4502,20 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 inline.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
                 row.addView(inline, LinearLayout.LayoutParams(-1, -2))
                 listing.addView(row, selectionRowParams(depth + 1))
-                var restoringCheck = false
+                leafButtons[key] = check
                 check.setOnCheckedChangeListener { _, nowChecked ->
-                    if (restoringCheck) return@setOnCheckedChangeListener
+                    if (syncingChoices) return@setOnCheckedChangeListener
                     val others = leaves.getValue(key).second.filter { it != modeId }
-                    if (!nowChecked && wasSelected && others.isEmpty()) {
-                        restoringCheck = true
-                        try { check.isChecked = true }
-                        finally { restoringCheck = false }
+                    if (!nowChecked && modeId in leaves.getValue(key).second && others.isEmpty()) {
+                        // Restore the checkbox until the player confirms the unbind.
+                        refreshChoices()
                         warnLastBinding(path) {
                             selected.remove(key)
-                            redraw()
+                            refreshChoices()
                         }
                     } else {
                         if (nowChecked) selected.add(key) else selected.remove(key)
-                        redraw()
+                        refreshChoices()
                     }
                 }
                 rippleClick(row) { check.isChecked = !check.isChecked }
@@ -4534,20 +4547,61 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             }
                             headingRow.addView(text(functionSegment(path), folderHeadingSp),
                                 LinearLayout.LayoutParams(0, -2, 1f))
-                            headingRow.addView(text(
+                            val counter = text(
                                 "${descendantPaths.count { it in selected }}/${descendantPaths.size}",
                                 folderSubtitleSp
                             ).apply {
                                 setTextColor(getColor(R.color.cp_note))
                                 setPadding(px(6), 0, 0, 0)
-                            })
+                            }
+                            headingRow.addView(counter)
                             folderText.addView(headingRow)
                             folderText.addView(text(functionFolderDescription(path), folderSubtitleSp).apply {
                                 setTextColor(getColor(R.color.cp_note))
                                 setPadding(0, px(2), 0, 0)
                             })
                             folder.addView(folderText, LinearLayout.LayoutParams(0, -2, 1f))
-                            listing.addView(folder, selectionRowParams(depth).apply { height = -2 })
+                            val (folderCheck, refreshFolder) = pickerFolderCheckbox(
+                                functionSegment(path), descendantPaths, { it in selected }) { all ->
+                                if (all) {
+                                    selected.addAll(descendantPaths)
+                                    refreshChoices()
+                                } else {
+                                    val risky = descendantPaths.filter { leaf ->
+                                        leaf in selected && modeId in leaves.getValue(leaf).second &&
+                                            leaves.getValue(leaf).second.size == 1
+                                    }
+                                    val unbind: () -> Unit = {
+                                        selected.removeAll(descendantPaths.toSet())
+                                        refreshChoices()
+                                    }
+                                    if (risky.isEmpty()) unbind() else {
+                                        val affected = risky.take(3).joinToString("、") { leaf ->
+                                            android.text.TextUtils.htmlEncode(
+                                                functionPathName(leaves.getValue(leaf).first))
+                                        }
+                                        val remaining = if (risky.size > 3) "等" else ""
+                                        showConfirmDialog(
+                                            title = "解除最后一个动画绑定？",
+                                            bodyHtml = "此次操作将解除 ${risky.size} 个功能的最后一个动画：" +
+                                                "<br>$affected$remaining",
+                                            positiveText = "仍然解绑"
+                                        ) { unbind() }
+                                        refreshChoices()
+                                    }
+                                }
+                            }
+                            folderRefreshers.add {
+                                refreshFolder()
+                                counter.text = "${descendantPaths.count { it in selected }}/${descendantPaths.size}"
+                            }
+                            val folderRow = LinearLayout(this).apply {
+                                orientation = LinearLayout.HORIZONTAL
+                                gravity = Gravity.CENTER_VERTICAL
+                            }
+                            folderRow.addView(folderCheck, LinearLayout.LayoutParams(px(42), px(48)))
+                            folderRow.addView(folder, LinearLayout.LayoutParams(0, -2, 1f))
+                            listing.addView(folderRow, selectionRowParams(depth).apply { height = -2 })
                             rippleClick(folder) {
                                 if (!expanded.add(key)) expanded.remove(key)
                                 redraw()
@@ -4559,6 +4613,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
             }
             drawNode(functionsRoot, emptyList(), 0)
+            refreshChoices()
             viewport.post { viewport.scrollTo(0, scrollPosition) }
         }
         redraw()
