@@ -128,7 +128,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             return
         }
         val dialog = editor("选择素材包", compact = true, readOnly = true,
-            subtitle = "已召唤 · 功能/动画") { form ->
+            subtitle = "${intent.getStringExtra("linked_title").orEmpty()} · 功能/动画") { form ->
             if (packs.isEmpty()) {
                 form.addView(text("暂无素材包", 13f))
             } else packs.forEach { pack ->
@@ -1408,9 +1408,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 PreviewPlayer(mgr, preview, resources.displayMetrics.density)
             }.onSuccess { player ->
                 homePreviewPlayer = player
-                if (PersonalizationPrefs.animatedPreview(this)) player.start()
-                else player.showStatic()
-                val allowPat = PersonalizationPrefs.animatedPreview(this) &&
+                val previewSource = PersonalizationPrefs.previewSource(this)
+                player.start(previewSource)
+                val allowPat = previewSource != PersonalizationPrefs.BLANK &&
                     PersonalizationPrefs.previewPat(this)
                 preview.setOnClickListener(if (allowPat) View.OnClickListener {
                     player.triggerPat()
@@ -3542,6 +3542,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             "standby/static_pool" -> "静止待机池"
             "menu/pool" -> "手动选择"
             "menu/summoned" -> "已召唤"
+            "menu/preview" -> "预览"
             else -> when (path.last()) {
                 "standby" -> "待机"
                 "touch" -> "抛掷"
@@ -3596,6 +3597,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         "feed/food" -> "投喂时显示的食物动画"
         "menu/pool" -> "在长按菜单中手动选择播放的动画"
         "menu/summoned" -> "召唤到桌面后，首页角色预览播放的动画"
+        "menu/preview" -> "首页角色卡片选择「动画：预览」时播放的动画"
         else -> "执行该功能时，从关联动画中选择播放"
     }.replace("角色", "「${root.optString("name").ifBlank { "素材包" }}」")
 
