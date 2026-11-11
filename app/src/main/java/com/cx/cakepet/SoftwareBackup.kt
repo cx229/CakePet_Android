@@ -117,7 +117,8 @@ object SoftwareBackup {
                         is Boolean -> JSONObject().put("type", "boolean").put("value", value)
                         is Int -> JSONObject().put("type", "int").put("value", value)
                         is Long -> JSONObject().put("type", "long").put("value", value)
-                        is Float -> JSONObject().put("type", "float").put("value", value.toDouble())
+                        is Float -> if (value.isFinite()) JSONObject()
+                            .put("type", "float").put("value", value.toDouble()) else null
                         is String -> JSONObject().put("type", "string").put("value", value)
                         is Set<*> -> if (value.all { it is String }) JSONObject()
                             .put("type", "strings").put("value", JSONArray(value.toList())) else null
@@ -171,8 +172,12 @@ object SoftwareBackup {
             val known = RoleStore.getHomeRoles(ctx).map { it.instanceId }.toSet()
             val selected = (0 until roles.length()).mapNotNull { roles.opt(it) as? String }
                 .filter { it in known }.toSet()
-            if (ctx.getSharedPreferences("cakepet_background", Context.MODE_PRIVATE)
-                .edit().putStringSet("summoned_roles", selected).commit()) applied++
+            // An explicitly empty source means 'no summoned pets'. A nonempty
+            // but wholly incompatible list must not clear existing summon state.
+            if (roles.length() == 0 || selected.isNotEmpty()) {
+                if (ctx.getSharedPreferences("cakepet_background", Context.MODE_PRIVATE)
+                    .edit().putStringSet("summoned_roles", selected).commit()) applied++
+            }
         }
         return applied
     }
