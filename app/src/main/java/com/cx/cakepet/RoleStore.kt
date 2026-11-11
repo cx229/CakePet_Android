@@ -286,7 +286,8 @@ object RoleStore {
 
     /** Only actual home instances own per-character settings. */
     private fun knownRoleIds(ctx: Context): List<String> =
-        getHomeRoles(ctx).map { it.instanceId }.distinct()
+        runCatching { getHomeRoles(ctx).map { it.instanceId }.distinct() }
+            .getOrDefault(emptyList())
 
     /**
      * A reset is the recovery boundary, not an import. Clear *all* saved
