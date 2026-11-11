@@ -1994,20 +1994,42 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun addMembershipGroupCreator(box: LinearLayout, groups: MutableList<String>,
                                           selected: MutableSet<String>, label: String,
                                           redraw: () -> Unit) {
-        val nameField = entry(box, "新建${label}组", "", compact = true)
-        box.addView(button("＋ 新建组") {
-            val name = nameField.text.toString().trim()
-            if (!validModeGroupName(name)) {
-                Toast.makeText(this, "${label}组名称不合法", Toast.LENGTH_SHORT).show()
-            } else if (name in groups) {
-                Toast.makeText(this, "${label}组已存在", Toast.LENGTH_SHORT).show()
-            } else {
-                groups.add(name)
-                selected.add(name)
-                nameField.text.clear()
-                redraw()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val nameField = entry(row, "新建${label}组", "", compact = true)
+        // The input and its add-to-list checkmark belong to one row.
+        formFieldOf(nameField).layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply {
+            rightMargin = px(8)
+        }
+        val confirmNewGroup = text("√", 23f).apply {
+            gravity = Gravity.CENTER
+            contentDescription = "确认新建${label}组"
+            isClickable = true
+            isFocusable = true
+            setBackgroundResource(R.drawable.card_bg)
+            rippleCard(this)
+            setOnClickListener {
+                val name = nameField.text.toString().trim()
+                when {
+                    !validModeGroupName(name) ->
+                        Toast.makeText(this@RolePackEditorActivity,
+                            "${label}组名称不合法", Toast.LENGTH_SHORT).show()
+                    name in groups ->
+                        Toast.makeText(this@RolePackEditorActivity,
+                            "${label}组已存在", Toast.LENGTH_SHORT).show()
+                    else -> {
+                        groups.add(name)
+                        selected.add(name)
+                        nameField.text.clear()
+                        redraw()
+                    }
+                }
             }
-        })
+        }
+        row.addView(confirmNewGroup, LinearLayout.LayoutParams(px(44), px(44)))
+        box.addView(row, LinearLayout.LayoutParams(-1, -2))
     }
 
     private fun editModeGroups(key: String, onSaved: () -> Unit = { modes() }) {
