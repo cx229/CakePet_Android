@@ -138,7 +138,7 @@ class RoleManageActivity : AppCompatActivity() {
                 "删除" -> confirmDelete(role)
                 "导出 ZIP" -> {
                     exportRole = role
-                    exportZip.launch(role.displayName + ".zip")
+                    exportZip.launch("${role.displayName}-v${RolePackageContract.VERSION}.zip")
                 }
             }
         }
