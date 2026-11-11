@@ -288,28 +288,34 @@ object RoleStore {
     private fun knownRoleIds(ctx: Context): List<String> =
         getHomeRoles(ctx).map { it.instanceId }.distinct()
 
-    /** 删除【无活跃实例】的孤儿 pet_config/pet_bounds 文件（keepIds 内的角色保留，其数据已就地重置）。 */
-    private fun clearOrphanRoleConfigAndBounds(ctx: Context, keepIds: Set<String>) {
-        val dir = ctx.filesDir.resolve("datastore")
-        if (dir.isDirectory) {
-            dir.listFiles { f ->
-                (f.name.startsWith("pet_config_") || f.name.startsWith("pet_bounds_")) &&
-                    keepIds.none { id -> f.name == "pet_config_$id" || f.name == "pet_bounds_$id" }
-            }?.forEach { it.delete() }
-        }
-    }
-
-    /** Reset stored role data; caller removes material files and then reinstalls the initial pack. */
+    /**
+     * A reset is the recovery boundary, not an import. Clear *all* saved
+     * role stores using their live DataStore instances, including orphaned
+     * IDs and user-habit defaults. Deleting open .preferences_pb files would
+     * leave stale in-process caches behind.
+     */
     fun resetAllSoftwareData(ctx: Context) {
-        val keepIds = knownRoleIds(ctx).toSet()
-        // 1. 有活跃实例的角色：就地写回默认值（内存+磁盘同时生效，见方法注释）。
-        resetAllRoleConfigAndBoundsInPlace(ctx)
-        // 2. 无实例的孤儿配置文件：无活跃 DataStore，直接删除安全。
-        clearOrphanRoleConfigAndBounds(ctx, keepIds)
-        // 3. Clear registries and initialization marker; reinstall happens explicitly after file cleanup.
-        clearUserRoles(ctx)
-        clearCatalogOrder(ctx)
-        clearHomeRoles(ctx)
+        val names = mutableSetOf<String>()
+        names += knownRoleIds(ctx)
+        val dataDir = ctx.filesDir.resolve("datastore")
+        dataDir.listFiles().orEmpty().forEach { file ->
+            val name = file.name
+            if (name.startsWith("pet_config_") && name.endsWith(".preferences_pb"))
+                names += name.removePrefix("pet_config_").removeSuffix(".preferences_pb")
+            if (name.startsWith("pet_bounds_") && name.endsWith(".preferences_pb"))
+                names += name.removePrefix("pet_bounds_").removeSuffix(".preferences_pb")
+        }
+        names += UserHabits.ROLE_ID
+        runBlocking {
+            for (id in names) {
+                PetConfig.forRole(ctx, id).importSettings(JSONObject(), replace = true)
+                PetBounds.forRole(ctx, id).importSettings(JSONObject(), replace = true)
+            }
+            ctx.userRolesStore.edit { it.clear() }
+            ctx.catalogOrderStore.edit { it.clear() }
+            ctx.homeRolesStore.edit { it.clear() }
+        }
+        RoleRegistry.refreshUserRoles(ctx)
     }
 
     /** 素材页拖拽排序后的模板 id 顺序（仅素材页展示用，不影响首页实例排序）。 */
