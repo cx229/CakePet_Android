@@ -64,9 +64,12 @@ class GlobalSettingsActivity : AppCompatActivity() {
                 val summary = manifest.optJSONObject("summary")
                 val roles = summary?.optInt("roleInstances", -1) ?: -1
                 val roleText = if (roles >= 0) "$roles 个角色实例" else "角色实例"
+                val globalText = if (manifest.optBoolean("appSettingsIncluded", false))
+                    "包含个性化设置、去水印设置及召唤状态"
+                else "这份备份不含全局个性化和去水印设置，导入后保留当前值"
                 showConfirmDialog(
                     title = "导入软件备份",
-                    bodyHtml = "来源版本：$version<br/>包含：$roleText。<br/>将<b>覆盖当前素材包、实例及持久化设置</b>，建议先备份当前数据。",
+                    bodyHtml = "来源版本：$version<br/>包含：$roleText。<br/>$globalText。<br/>将<b>覆盖当前素材包、实例及持久化设置</b>，建议先备份当前数据。",
                     positiveText = "覆盖恢复",
                     titleColorRes = R.color.cp_danger
                 ) {
