@@ -366,7 +366,7 @@ object SoftwareBackup {
         }
     }
 
-    /** All input is parsed and extracted before editing live state. */
+    /** Overlay backed-up settings without clearing current user data. */
     fun restore(ctx: Context, uri: Uri): String {
         val staged = extract(ctx, uri)
         val previousDir = File(ctx.cacheDir, "cakepet_previous_roles_" + System.nanoTime())
@@ -374,91 +374,106 @@ object SoftwareBackup {
         val liveRoles = File(ctx.filesDir, "roles")
         var moved = false
         var assetsTouched = false
-        var miscMoved = false
+        var miscTouched = false
         try {
             val registry = JSONObject(File(staged, "registries.json").readText())
             val restoredConfigs = JSONObject(File(staged, "role-config.json").readText())
-            val bounds = JSONObject(File(staged, "role-bounds.json").readText())
-            val habits = JSONObject(File(staged, "user-habits.json").readText())
-            val restoredAppSettings = File(staged, "app-settings.json").takeIf { it.isFile }
+            val restoredBounds = JSONObject(File(staged, "role-bounds.json").readText())
+            val restoredHabits = JSONObject(File(staged, "user-habits.json").readText())
+            val restoredApp = File(staged, "app-settings.json").takeIf { it.isFile }
                 ?.let { JSONObject(it.readText()) }
-            val oldAppSettings = appSettings(ctx)
             val originals = runBlocking { RoleStore.exportRegistries(ctx) }
-            val oldConfigs: Pair<JSONObject, JSONObject> = runBlocking { configs(ctx) }
+            val oldConfigs = runBlocking { configs(ctx) }
             val oldHabits = UserHabits.load(ctx)
+            val oldApp = appSettings(ctx)
+            val updatedRoles = mutableSetOf<String>()
             try {
-                // Prepared assets replace the old directory as one unit.
+                // Keep existing material packs intact, overlay only importable
+                // packages and registry references, and retain an atomic
+                // rollback copy of the previous directory.
                 if (liveRoles.exists()) {
-                    check(liveRoles.renameTo(previousDir)) { "无法暂存旧素材包" }
+                    check(liveRoles.renameTo(previousDir)) { "无法暂存素材包" }
                     moved = true
                 }
                 assetsTouched = true
-                val incoming = File(staged, "roles")
-                if (incoming.exists()) {
-                    check(incoming.renameTo(liveRoles)) { "无法安装素材包" }
-                } else liveRoles.mkdirs()
+                check(liveRoles.mkdirs()) { "无法创建素材包目录" }
+                if (moved) copyTree(previousDir, liveRoles)
+                val (merged, catalogChanges) = mergeRegistries(ctx, originals, registry,
+                    File(staged, "roles"), liveRoles)
+                runBlocking { RoleStore.importRegistries(ctx, merged, replace = false) }
+
+                var settingsCount = 0
+                val activeIds = RoleStore.getHomeRoles(ctx).map { it.instanceId }.toSet()
+                val selectedIds = activeIds.filter { restoredConfigs.has(it) || restoredBounds.has(it) }
                 runBlocking {
-                    RoleStore.importRegistries(ctx, registry, replace = true)
-                    // Explicitly clear previously known role prefs not in backup.
-                    val desired = RoleStore.getHomeRoles(ctx).map { it.instanceId }.toSet() +
-                        PreferenceCodec.entries(restoredConfigs) + PreferenceCodec.entries(bounds)
-                    val allIds = roleIds(ctx) + PreferenceCodec.entries(oldConfigs.first) +
-                        PreferenceCodec.entries(restoredConfigs) + PreferenceCodec.entries(bounds)
-                    for (id in allIds) {
-                        // Full restore must never retain a role's old settings
-                        // when that role exists in the incoming registry but has
-                        // no matching config/bounds section in the backup.
-                        val config = if (id in desired) restoredConfigs.optJSONObject(id) else null
-                        val bound = if (id in desired) bounds.optJSONObject(id) else null
-                        PetConfig.forRole(ctx, id).importSettings(config ?: JSONObject(), replace = true)
-                        PetBounds.forRole(ctx, id).importSettings(bound ?: JSONObject(), replace = true)
+                    for (id in selectedIds) {
+                        val config = PetConfig.forRole(ctx, id)
+                        val bounds = PetBounds.forRole(ctx, id)
+                        config.update { it }
+                        for (page in SettingsPage.entries)
+                            bounds.updateBounds(page, bounds.getBlocking(page))
+                        val selectedConfig = restoredConfigs.optJSONObject(id)?.let {
+                            PreferenceCodec.compatible(it, config.exportSettings(),
+                                config.supportedPreferenceKeys())
+                        } ?: JSONObject()
+                        val selectedBounds = restoredBounds.optJSONObject(id)?.let {
+                            PreferenceCodec.compatible(it, bounds.exportSettings(),
+                                bounds.supportedPreferenceKeys(), bounds::acceptsImportedValue)
+                        } ?: JSONObject()
+                        if (selectedConfig.length() > 0 || selectedBounds.length() > 0)
+                            updatedRoles.add(id)
+                        settingsCount += selectedConfig.length() + selectedBounds.length()
+                        if (selectedConfig.length() > 0) config.importSettings(selectedConfig)
+                        if (selectedBounds.length() > 0) bounds.importSettings(selectedBounds)
+                    }
+                    val habitValues = restoredHabits.optJSONObject("bounds")
+                    if (habitValues != null) {
+                        val target = PetBounds.forRole(ctx, UserHabits.ROLE_ID)
+                        for (page in SettingsPage.entries)
+                            target.updateBounds(page, target.getBlocking(page))
+                        val usable = PreferenceCodec.compatible(habitValues,
+                            target.exportSettings(), target.supportedPreferenceKeys(),
+                            target::acceptsImportedValue)
+                        if (usable.length() > 0) target.importSettings(usable)
+                        settingsCount += usable.length()
                     }
                 }
-                UserHabits.save(ctx, habits)
-                // Replace other persistent files as a group (excluding live
-                // DataStore files and the separately restored roles/habits).
-                check(previousMisc.mkdirs()) { "无法创建临时备份目录" }
-                val miscFiles = ctx.filesDir.listFiles().orEmpty().filter {
+
+                // Preserve every current misc file not present in the backup.
+                check(previousMisc.mkdirs()) { "无法创建恢复安全副本" }
+                val currentMisc = ctx.filesDir.listFiles().orEmpty().filter {
                     it.name !in setOf("datastore", "roles", "user_habits.json")
                 }
-                // Copy ALL originals first, before removing even one file.
-                // A partial safety-copy failure must leave every original intact.
-                miscFiles.forEach { old -> copyTree(old, File(previousMisc, old.name)) }
-                miscMoved = true
-                miscFiles.forEach { old ->
-                    check(old.deleteRecursively()) { "无法替换持久化文件：${old.name}" }
-                }
+                currentMisc.forEach { copyTree(it, File(previousMisc, it.name)) }
+                miscTouched = true
                 File(staged, "misc").takeIf { it.isDirectory }?.listFiles().orEmpty()
+                    .filter { it.name !in setOf("datastore", "roles", "user_habits.json") }
                     .forEach { copyTree(it, File(ctx.filesDir, it.name)) }
-                // Restore app-wide preferences after all file operations have
-                // succeeded, so a failed restore can reinstate the old values.
-                if (restoredAppSettings != null) restoreAppSettings(ctx, restoredAppSettings)
+                if (restoredApp != null) settingsCount += restoreAppSettings(ctx, restoredApp)
+
                 previousMisc.deleteRecursively()
                 previousDir.deleteRecursively()
-                return if (restoredAppSettings == null)
-                    "软件备份已恢复。素材包和角色设置已替换；此备份不含全局个性化及去水印设置；系统权限保持不变。"
-                else
-                    "软件备份已恢复。素材包、角色设置及全局偏好已恢复；系统权限保持不变。"
+                return "导入完成：处理 ${catalogChanges} 条素材/角色记录、${settingsCount} 项兼容设置；" +
+                    "不兼容或缺失的内容已跳过，原有其他数据保留。系统权限未改变。"
             } catch (problem: Exception) {
                 val rollback = runCatching {
                     if (assetsTouched) liveRoles.deleteRecursively()
                     if (moved) check(previousDir.renameTo(liveRoles)) {
-                        "无法还原原素材目录"
+                        "无法还原原素材包"
                     }
-                    if (miscMoved) {
+                    if (miscTouched) {
                         ctx.filesDir.listFiles().orEmpty().filter {
                             it.name !in setOf("datastore", "roles", "user_habits.json")
                         }.forEach { it.deleteRecursively() }
                         previousMisc.listFiles().orEmpty().forEach { old ->
                             check(old.renameTo(File(ctx.filesDir, old.name))) {
-                                "无法还原原有文件：${old.name}"
+                                "无法还原持久化文件：${old.name}"
                             }
                         }
                     }
                     runBlocking {
                         RoleStore.importRegistries(ctx, originals, replace = true)
-                        for (id in PreferenceCodec.entries(oldConfigs.first) +
-                            PreferenceCodec.entries(oldConfigs.second)) {
+                        for (id in updatedRoles) {
                             PetConfig.forRole(ctx, id).importSettings(
                                 oldConfigs.first.optJSONObject(id) ?: JSONObject(), replace = true)
                             PetBounds.forRole(ctx, id).importSettings(
@@ -466,19 +481,15 @@ object SoftwareBackup {
                         }
                     }
                     UserHabits.save(ctx, oldHabits)
-                    restoreAppSettings(ctx, oldAppSettings)
+                    restoreAppSettings(ctx, oldApp)
                 }
-                if (rollback.isFailure) {
-                    throw IllegalStateException(
-                        "恢复失败，且自动回滚未完全成功；旧数据安全副本仍保留在应用缓存目录。原错误：${problem.message}",
-                        rollback.exceptionOrNull()
-                    )
-                }
+                if (rollback.isFailure) throw IllegalStateException(
+                    "导入失败，且回滚未完全成功；旧数据副本仍保留在缓存。原错误：${problem.message}",
+                    rollback.exceptionOrNull())
                 throw problem
             }
         } finally {
             staged.deleteRecursively()
-            // Keep any failed rollback's safety copy rather than deleting it.
         }
     }
 
