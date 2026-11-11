@@ -1,5 +1,5 @@
 name: Build CakePet debug APK
-# Manual rebuild request for the current material-function branch (2026-11-08).
+# Manual rebuild request: verify selective import and factory reset branch (2026-11-11).
 
 on:
   push:
