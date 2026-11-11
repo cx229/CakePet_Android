@@ -6061,9 +6061,26 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val viewport = ScrollView(this).apply { addView(list) }
         body.addView(viewport, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * .55f).toInt()))
         val opened = mutableSetOf<String>()
+        val choiceButtons = mutableMapOf<String, MutableList<CheckBox>>()
+        val folderRefreshers = mutableListOf<() -> Unit>()
+        var syncingChoices = false
+        fun refreshChoices() {
+            syncingChoices = true
+            try {
+                info.text = "已选择 ${chosen.size} 条"
+                choiceButtons.forEach { (id, buttons) ->
+                    buttons.forEach { it.isChecked = id in chosen }
+                }
+                folderRefreshers.forEach { it() }
+            } finally {
+                syncingChoices = false
+            }
+        }
         fun redraw() {
+            val previousScroll = viewport.scrollY
             list.removeAllViews()
-            info.text = "已选择 ${chosen.size} 条"
+            choiceButtons.clear()
+            folderRefreshers.clear()
             val grouped = linkedMapOf<String, MutableList<String>>()
             allThinkingGroups().forEach { grouped[it] = mutableListOf() }
             allThinkingIds().forEach { id ->
@@ -6072,11 +6089,30 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 else groups.forEach { grouped.getOrPut(it) { mutableListOf() }.add(id) }
             }
             for ((group, ids) in grouped) {
-                list.addView(pickerGroupHeader(group, group in opened,
+                val header = pickerGroupHeader(group, group in opened,
                     ids.count { it in chosen }, ids.size) {
                     if (!opened.add(group)) opened.remove(group)
                     redraw()
-                }, selectionRowParams())
+                }
+                val counter = header.getChildAt(2) as TextView
+                val (folderCheck, refreshFolder) = pickerFolderCheckbox(
+                    group, ids, { it in chosen }) { all ->
+                    if (all) ids.forEach {
+                        chosen.putIfAbsent(it, DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS)
+                    } else ids.forEach(chosen::remove)
+                    refreshChoices()
+                }
+                folderRefreshers.add {
+                    refreshFolder()
+                    counter.text = "${ids.count { it in chosen }}/${ids.size}"
+                }
+                val folderRow = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                folderRow.addView(folderCheck, LinearLayout.LayoutParams(px(42), px(48)))
+                folderRow.addView(header, LinearLayout.LayoutParams(0, -2, 1f))
+                list.addView(folderRow, selectionRowParams())
                 if (group in opened) for (id in ids) {
                     val row = LinearLayout(this).apply {
                         orientation = LinearLayout.HORIZONTAL
@@ -6091,11 +6127,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         minimumWidth = 0
                         setPadding(0, 0, 0, 0)
                         setOnCheckedChangeListener { _, enabled ->
-                            if (enabled) chosen.putIfAbsent(id, DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS)
-                            else chosen.remove(id)
-                            redraw()
+                            if (!syncingChoices) {
+                                if (enabled) chosen.putIfAbsent(id,
+                                    DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS)
+                                else chosen.remove(id)
+                                refreshChoices()
+                            }
                         }
                     }
+                    choiceButtons.getOrPut(id) { mutableListOf() }.add(check)
                     row.addView(check, LinearLayout.LayoutParams(px(42), px(44)))
                     val itemText = LinearLayout(this).apply {
                         orientation = LinearLayout.VERTICAL
@@ -6154,6 +6194,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     list.addView(row, selectionRowParams(1))
                 }
             }
+            refreshChoices()
+            viewport.post { viewport.scrollTo(0, previousScroll) }
         }
         redraw()
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
