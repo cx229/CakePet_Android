@@ -747,6 +747,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 if (cleaned !== bitmap) cleaned.recycle()
                 bitmap.recycle()
             }
+            replacing?.let { touchedResourcePaths.add(it) }
             images()
             showWatermarkNotice(removed)
         }
@@ -1028,6 +1029,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
         setPadding(px(4), px(8), px(4), px(8))
     }
     private fun section(title: String, dest: String) {
+        // Resource edits refresh the existing list adapter. A same-page refresh
+        // must not destroy its RecyclerView, scroll anchor, drag helper or header.
+        if (screen == dest && dest in setOf("modes", "images", "thinkings") &&
+            modePageRecycler != null && resourcePageUpdater != null) {
+            panel.removeAllViews() // temporary new header; existing header stays mounted
+            return
+        }
+        resourcePageUpdater = null
         removeBulkBar()
         // Only the active page owns a vertical scroller. Restore normal page
         // ScrollView before creating ordinary editor pages.
@@ -1574,13 +1583,75 @@ open class RolePackEditorActivity : AppCompatActivity() {
      * catalog and frame lists. One expanded folder (including its children) is
      * a single movable item; fixed groups never enter the drag targets.
      */
+    private var resourcePageUpdater: ((List<Pair<String, LinearLayout>>) -> Unit)? = null
+    private val touchedResourcePaths = mutableSetOf<String>()
+
+    /** Stable group fingerprints let edits update only changed group cards. */
+    private fun resourceGroupSignature(page: String, key: String): String {
+        when (page) {
+            "modes" -> {
+                val members = if (key == "全部") ids()
+                    else if (key == "未分组") ids().filter { modeGroups(it).isEmpty() }
+                    else ids().filter { key in modeGroups(it) }
+                val modes = root.getJSONObject("modes")
+                return buildString {
+                    append(key in expandedModeGroups)
+                    members.forEach { id ->
+                        append('|').append(id).append(':').append(modes.optJSONObject(id))
+                    }
+                }
+            }
+            "thinkings" -> {
+                val members = if (key == "全部") allThinkingIds()
+                    else if (key == "未分组") allThinkingIds().filter { thinkingGroups(it).isEmpty() }
+                    else allThinkingIds().filter { key in thinkingGroups(it) }
+                return buildString {
+                    append(key in expandedThinkingGroups)
+                    members.forEach { id ->
+                        append('|').append(id).append(':').append(thinkingObject().opt(id))
+                        append(':').append(thinkingUses(id).joinToString { it.label(::functionPathName) })
+                    }
+                }
+            }
+            "images" -> {
+                val dir = if (key.startsWith("d:")) File(draft, key.removePrefix("d:")) else draft
+                val candidates = if (key.startsWith("u:")) {
+                    draft.listFiles().orEmpty().filter(::isImage).asSequence()
+                } else if (key.startsWith("f:")) {
+                    sequenceOf(File(draft, key.removePrefix("f:")))
+                } else dir.walkTopDown().filter { it.isFile }.asSequence()
+                val uses = imageUses()
+                return buildString {
+                    append(expandedResourceFolders.contains(
+                        if (key.startsWith("u:")) "__root_ungrouped__" else key.removePrefix("d:")))
+                    candidates.filter { it.isFile }.sortedBy { it.path }.forEach { file ->
+                        val path = file.relativeTo(draft).invariantSeparatorsPath
+                        append('|').append(path).append(':').append(file.length())
+                        append(':').append(uses[path].orEmpty())
+                        append(':').append(path in touchedResourcePaths)
+                    }
+                    if (key.startsWith("d:")) {
+                        expandedResourceFolders.filter { it == key.removePrefix("d:") ||
+                            it.startsWith(key.removePrefix("d:") + "/") }
+                            .sorted().forEach { append(':').append(it) }
+                    }
+                }
+            }
+        }
+        return key
+    }
+
     private fun sortableFolderRecycler(
         rows: List<Pair<String, LinearLayout>>,
         canMove: (String) -> Boolean,
         persist: (List<String>) -> Unit,
-        header: LinearLayout? = null
+        header: LinearLayout? = null,
+        incrementalPage: String? = null
     ): RecyclerView {
         val items = rows.toMutableList()
+        var signatures = if (incrementalPage != null)
+            items.associate { it.first to resourceGroupSignature(incrementalPage, it.first) }
+        else emptyMap()
         val recycler = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@RolePackEditorActivity)
             isNestedScrollingEnabled = false
@@ -1614,6 +1685,37 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         recycler.adapter = adapter
+        if (incrementalPage != null) {
+            recycler.itemAnimator = null
+            resourcePageUpdater = { fresh ->
+                val old = items.toList()
+                val oldSignatures = signatures
+                val nextSignatures = fresh.associate {
+                    it.first to resourceGroupSignature(incrementalPage, it.first)
+                }
+                val diff = androidx.recyclerview.widget.DiffUtil.calculateDiff(
+                    object : androidx.recyclerview.widget.DiffUtil.Callback() {
+                        override fun getOldListSize() = old.size
+                        override fun getNewListSize() = fresh.size
+                        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+                            old[oldItemPosition].first == fresh[newItemPosition].first
+                        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                            val key = old[oldItemPosition].first
+                            return oldSignatures[key] == nextSignatures[key]
+                        }
+                    }, true)
+                val previousViews = old.toMap()
+                items.clear()
+                fresh.forEach { (key, view) ->
+                    val reused = if (oldSignatures[key] == nextSignatures[key])
+                        previousViews[key] else null
+                    items.add(key to (reused ?: view))
+                }
+                signatures = nextSignatures
+                diff.dispatchUpdatesTo(adapter)
+                touchedResourcePaths.clear()
+            }
+        }
         var dirty = false
         touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
@@ -1651,13 +1753,21 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private fun installSortableFolderPage(rows: List<Pair<String, LinearLayout>>,
                                           canMove: (String) -> Boolean,
                                           persist: (List<String>) -> Unit) {
+        // On edits, preserve the existing recycler + its pinned toolbar and scroll.
+        // Only changed group views are replaced using DiffUtil.
+        if (modePageRecycler != null && resourcePageUpdater != null) {
+            resourcePageUpdater?.invoke(rows)
+            panel.removeAllViews()
+            return
+        }
         val heading = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         while (panel.childCount > 0) {
             val child = panel.getChildAt(0)
             panel.removeViewAt(0)
             heading.addView(child)
         }
-        val recycler = sortableFolderRecycler(rows, canMove, persist, heading)
+        val recycler = sortableFolderRecycler(rows, canMove, persist, heading,
+            incrementalPage = screen.takeIf { it in setOf("modes", "images", "thinkings") })
         recycler.isNestedScrollingEnabled = true
         val parent = scroll.parent as android.view.ViewGroup
         parent.addView(recycler, parent.indexOfChild(scroll) + 1,
