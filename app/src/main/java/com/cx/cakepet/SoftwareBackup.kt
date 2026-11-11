@@ -414,7 +414,7 @@ object SoftwareBackup {
                             bounds.updateBounds(page, bounds.getBlocking(page))
                         val selectedConfig = restoredConfigs.optJSONObject(id)?.let {
                             PreferenceCodec.compatible(it, config.exportSettings(),
-                                config.supportedPreferenceKeys())
+                                config.supportedPreferenceKeys(), config::acceptsImportedValue)
                         } ?: JSONObject()
                         val selectedBounds = restoredBounds.optJSONObject(id)?.let {
                             PreferenceCodec.compatible(it, bounds.exportSettings(),
