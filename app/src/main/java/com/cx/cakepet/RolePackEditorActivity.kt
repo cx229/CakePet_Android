@@ -1999,14 +1999,18 @@ open class RolePackEditorActivity : AppCompatActivity() {
         if (root.optJSONObject("modes")?.has(initialKey) != true) return
         var currentKey = initialKey
         lateinit var redraw: () -> Unit
+        lateinit var dialogPreview: RoleAnimationPreview
         val dialog = editor(initialKey, compact = true, readOnly = true,
             readOnlyActionLabel = "编辑动画 · ${root.getJSONObject("modes").getJSONObject(initialKey).getJSONArray("frames").length()}帧",
             extraAction = { openModeEditorFromDetail(currentKey) }) { form ->
+            // Preview is a stable child; only the property cards are redrawn.
+            dialogPreview = addDialogPreview(form, currentKey) { currentKey }
+            val properties = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            form.addView(properties, LinearLayout.LayoutParams(-1, -2))
             redraw = {
-                form.removeAllViews()
+                properties.removeAllViews()
                 val mode = root.optJSONObject("modes")?.optJSONObject(currentKey)
                 if (mode != null) {
-                    addDialogPreview(form, currentKey)
                     val loop = playbackKind(mode)
                     val duration = mode.optJSONObject("duration")
                     val summary = when (loop) {
@@ -2044,17 +2048,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             setPadding(0, px(8), 0, px(8))
                         })
                     }
-                    addDetailSection(form, playbackCard)
+                    addDetailSection(properties, playbackCard)
                     val functionCard = dialogSection()
                     functionCard.addView(detailSectionHeader("绑定功能", "${modeBindingCount(currentKey)} 个") {
                         linkedConsent { bindModeToFunctions(currentKey) { redraw() } }
                     })
-                    addDetailSection(form, functionCard)
+                    addDetailSection(properties, functionCard)
                     val thinkingCard = dialogSection()
                     thinkingCard.addView(detailSectionHeader("碎碎念配置", modeThinkingSummary(mode)) {
                         linkedConsent { thinkingConfigDialog(modeId = currentKey) { redraw() } }
                     })
-                    addDetailSection(form, thinkingCard)
+                    addDetailSection(properties, thinkingCard)
                 }
             }
             redraw()
@@ -2071,6 +2075,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     currentKey = renamed
                     refreshHeading()
                     redraw()
+                    // A renamed Mode needs a new playback clip using its new key.
+                    previewRefreshers[dialogPreview]?.invoke()
                     dialog.findViewById<TextView>(R.id.btn_positive).text =
                         "编辑动画 · ${root.getJSONObject("modes").getJSONObject(renamed).getJSONArray("frames").length()}帧"
                     if (screen == "modes") modes()
@@ -2690,11 +2696,12 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     /** Each dialog owns its playback clock, replay control, and cancellation. */
-    private fun addDialogPreview(parent: LinearLayout, key: String) {
+    private fun addDialogPreview(parent: LinearLayout, key: String,
+                                 currentKey: () -> String = { key }): RoleAnimationPreview {
         val preview = RoleAnimationPreview(this).apply {
             onModeClick = { selected ->
                 // Do not stack a duplicate dialog when its own mode is tapped.
-                if (selected != key && root.optJSONObject("modes")?.has(selected) == true)
+                if (selected != currentKey() && root.optJSONObject("modes")?.has(selected) == true)
                     modeDetails(selected)
             }
             contentDescription = "动画实时预览，点击动画链名称查看详情，右上角重新播放"
@@ -2721,25 +2728,26 @@ open class RolePackEditorActivity : AppCompatActivity() {
             cancel()
             if (!preview.isAttachedToWindow) return
             preview.resetReference()
+            val activeKey = currentKey()
             val manager = freshManager()
-            val clip = manager.createClip(key)
+            val clip = manager.createClip(activeKey)
             if (clip == null) {
                 preview.update(null, android.graphics.RectF(), 0 to 0, 0, 0,
                     manager.currentPack.anchorRes,
                     RoleAnimationPreview.State(
-                        chain = modeChain(key, root.getJSONObject("modes")),
-                        current = key, status = "无法播放"))
+                        chain = modeChain(activeKey, root.getJSONObject("modes")),
+                        current = activeKey, status = "无法播放"))
                 return
             }
             // New material configuration is already loaded; render immediately
             // before scheduling the next frame so a refreshed dialog never
             // displays an uninitialized canvas.
-            renderModePreview(preview, manager, clip, key, "播放中")
+            renderModePreview(preview, manager, clip, activeKey, "播放中")
             val runner = object : Runnable {
                 override fun run() {
-                    if (!preview.isAttachedToWindow) return
+                    if (!preview.isAttachedToWindow || currentKey() != activeKey) return
                     val step = clip.advance(50, allowModeSwitch = true)
-                    renderModePreview(preview, manager, clip, key, when {
+                    renderModePreview(preview, manager, clip, activeKey, when {
                         step.ended -> "已结束"
                         step.timerRequested -> "等待调度"
                         else -> "播放中"
@@ -2754,12 +2762,17 @@ open class RolePackEditorActivity : AppCompatActivity() {
         preview.onReplay = { replay() }
         previewRefreshers[preview] = { replay() }
         preview.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) { replay() }
+            override fun onViewAttachedToWindow(v: View) {
+                // Restore refresh registration after a temporary dialog detach.
+                previewRefreshers[preview] = { replay() }
+                replay()
+            }
             override fun onViewDetachedFromWindow(v: View) {
                 cancel()
                 previewRefreshers.remove(preview)
             }
         })
+        return preview
     }
     private fun stopAnimation() {
         animation?.let { handler.removeCallbacks(it) }
