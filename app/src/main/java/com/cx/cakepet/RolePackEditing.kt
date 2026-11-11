@@ -17,6 +17,11 @@ object RolePackEditing {
     @Synchronized private fun markChanged(id: String) {
         materialRevisions[id] = (materialRevisions[id] ?: 0L) + 1L
     }
+
+    /** Signal restored on-disk material to all preview caches on the next resume. */
+    fun invalidateImported(ids: Collection<String>) {
+        ids.forEach { markChanged(it) }
+    }
     /**
      * The same transparent host, dialog shell, cards and Mode links as the
      * existing "编辑功能/动画" entry. Only its leaf filter differs: no folders.
