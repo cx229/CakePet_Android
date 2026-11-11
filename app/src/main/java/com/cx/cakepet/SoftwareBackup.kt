@@ -98,6 +98,44 @@ object SoftwareBackup {
                 background.getStringSet("summoned_roles", emptySet()).orEmpty().sorted()))
     }
 
+    /** Validate optional global settings before the destructive confirmation.
+     * A malformed optional entry must not stop the running pets after approval.
+     */
+    private fun validateAppSettings(settings: JSONObject) {
+        settings.optJSONObject("personalization")?.let { p ->
+            val spawn = p.optString("summonPosition", PersonalizationPrefs.BOTTOM_CENTER)
+            require(spawn in listOf(PersonalizationPrefs.BOTTOM_CENTER, PersonalizationPrefs.RANDOM)) {
+                "召唤位置设置无效"
+            }
+            val source = p.optString("previewSource", PersonalizationPrefs.STATIC_POOL)
+            require(source in listOf(PersonalizationPrefs.PREVIEW, PersonalizationPrefs.STANDBY,
+                PersonalizationPrefs.STATIC_POOL, PersonalizationPrefs.BLANK)) {
+                "预览动画来源设置无效"
+            }
+            val mode = p.optString("homePreviewMode", PersonalizationPrefs.DYNAMIC)
+            require(mode in listOf(PersonalizationPrefs.ALWAYS, PersonalizationPrefs.DYNAMIC)) {
+                "召唤后预览方式无效"
+            }
+            if (p.has("previewPat")) require(p.opt("previewPat") is Boolean) {
+                "摸摸头设置类型无效"
+            }
+        }
+        settings.optJSONObject("watermark")?.let { w ->
+            if (w.has("enabled")) require(w.opt("enabled") is Boolean) {
+                "去水印开关类型无效"
+            }
+            if (w.has("level")) require(
+                ImportWatermark.Level.entries.any { it.name == w.optString("level") }) {
+                "去水印强度设置无效"
+            }
+        }
+        settings.optJSONArray("summonedRoles")?.let { arr ->
+            for (index in 0 until arr.length()) require(arr.opt(index) is String) {
+                "召唤角色列表格式无效"
+            }
+        }
+    }
+
     /** Restore through the preference APIs so their in-process caches update too. */
     private fun restoreAppSettings(ctx: Context, settings: JSONObject) {
         settings.optJSONObject("personalization")?.let { p ->
@@ -215,7 +253,7 @@ object SoftwareBackup {
             }
             // Backups from before the explicit app-wide settings record remain readable.
             File(root, "app-settings.json").takeIf { it.isFile }?.let {
-                JSONObject(it.readText())
+                validateAppSettings(JSONObject(it.readText()))
             }
             return root
         } catch (e: Exception) {
@@ -307,7 +345,10 @@ object SoftwareBackup {
                 if (restoredAppSettings != null) restoreAppSettings(ctx, restoredAppSettings)
                 previousMisc.deleteRecursively()
                 previousDir.deleteRecursively()
-                return "软件备份已恢复。素材包、角色设置及全局偏好已恢复；系统权限保持不变。"
+                return if (restoredAppSettings == null)
+                    "软件备份已恢复。素材包和角色设置已替换；此备份不含全局个性化及去水印设置；系统权限保持不变。"
+                else
+                    "软件备份已恢复。素材包、角色设置及全局偏好已恢复；系统权限保持不变。"
             } catch (problem: Exception) {
                 val rollback = runCatching {
                     if (assetsTouched) liveRoles.deleteRecursively()
