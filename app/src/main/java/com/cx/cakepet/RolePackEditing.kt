@@ -97,7 +97,7 @@ object RolePackEditing {
      * retain unknown JSON members, and back up unsupported source values.
      * Runtime readiness is checked separately when adding a role to home.
      */
-    fun prepareEditable(directory: File, id: String, suggestedName: String): JSONObject {
+    fun prepareEditable(directory: File, id: String, suggestedName: String, persist: Boolean = true): JSONObject {
         directory.mkdirs()
         val file = File(directory, "modes.jsonc")
         val source = if (file.isFile) file.readText() else ""
@@ -127,18 +127,18 @@ object RolePackEditing {
         if (source.isNotBlank() && (parseError != null || originVersion != RolePackageContract.VERSION ||
                 issues.any { it.type == "格式不支持" || it.type == "未定义" })) {
             val original = RolePackNormalizer.original(directory)
-            if (!original.exists()) original.writeText(source)
+            if (persist && !original.exists()) original.writeText(source)
         }
         normalizeThinkingPack(json)
         RolePackNormalizer.syncOrders(json, directory)
         cleanPackReferences(json)
-        if (parseError != null || issues.isNotEmpty() ||
-            !File(directory, RolePackNormalizer.REPORT_FILE).exists()) {
+        if (persist && (parseError != null || issues.isNotEmpty() ||
+            !File(directory, RolePackNormalizer.REPORT_FILE).exists())) {
             // Keep the first import report while ordinary saves/reopens change the repaired structure.
             val existing = File(directory, RolePackNormalizer.REPORT_FILE)
             if (!existing.exists()) RolePackNormalizer.writeReport(directory, originVersion, issues, parseError)
         }
-        file.writeText(CompactJsoncWriter.write(json, if (parsed == null) "" else source))
+        if (persist) file.writeText(CompactJsoncWriter.write(json, if (parsed == null) "" else source))
         return json
     }
 
@@ -162,28 +162,32 @@ object RolePackEditing {
         val errors = RolePackageContract.validate(json).errors + RolePackageContract.verifyAssets(directory, json)
         require(errors.isEmpty()) { errors.take(12).joinToString("\n") }
     }
-    fun draft(ctx: Context, id: String): File {
-        val out = File(ctx.cacheDir, "edit_${id}_${System.nanoTime()}")
-        check(dir(ctx, id).copyRecursively(out))
-        return out
-    }
-    fun commit(ctx: Context, id: String, draft: File, json: JSONObject) {
+    /** The editor works against the actual pack directory; it never clones its images. */
+    fun draft(ctx: Context, id: String): File = dir(ctx, id)
+
+    /** Only the JSONC manifest is saved. AtomicFile retains the old manifest on failure. */
+    fun commit(ctx: Context, id: String, directory: File, json: JSONObject, resourcesChanged: Boolean = false) {
         require(json.optString("id") == id) { "角色 ID 不可变更" }
-        RolePackNormalizer.syncOrders(json, draft)
+        RolePackNormalizer.syncOrders(json, directory)
         cleanPackReferences(json)
-        val configFile = File(draft, "modes.jsonc")
-        configFile.writeText(CompactJsoncWriter.write(json, configFile.readText()))
-        val live = dir(ctx, id)
-        val backup = File(live.parentFile, "$id.bak")
-        backup.deleteRecursively()
-        check(live.renameTo(backup)) { "无法备份素材包" }
-        if (!draft.renameTo(live)) { backup.renameTo(live); error("保存失败") }
-        backup.deleteRecursively()
+        val configFile = File(directory, "modes.jsonc")
+        val original = if (configFile.isFile) configFile.readText() else ""
+        val contents = CompactJsoncWriter.write(json, original).toByteArray(Charsets.UTF_8)
+        val atomic = android.util.AtomicFile(configFile)
+        val stream = atomic.startWrite()
+        try {
+            stream.write(contents)
+            atomic.finishWrite(stream)
+        } catch (failure: Exception) {
+            atomic.failWrite(stream)
+            throw failure
+        }
         RoleStore.updateUserRole(ctx, id, json.optString("name"), json.optString("shortName"), parseAuthors(json))
-        // Mark the specific pack stale after it has been durably replaced. Previews
-        // compare this token when next visible; an unchanged pack stays cached.
         markChanged(id)
-        if (validationErrors(live).isEmpty()) PetService.instance?.refreshMaterialPack(id)
+        // Validating every image on a text-only edit used to stall the UI.
+        // Resource changes still perform the asset-readiness check.
+        if (!resourcesChanged || validationErrors(directory).isEmpty())
+            PetService.instance?.refreshMaterialPack(id)
     }
     fun export(ctx: Context, role: RoleDescriptor, uri: Uri) {
         ctx.contentResolver.openOutputStream(uri)?.use { stream ->
