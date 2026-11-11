@@ -400,8 +400,8 @@ class MainActivity : AppCompatActivity() {
     private fun confirmResetSoftware() {
         showConfirmDialog(
             title = "重置软件",
-            bodyHtml = "将<b>本软件</b>的一切重置！！！！！",
-            subText = "素材删除，角色删除，设置删除。一切重置！",
+            bodyHtml = "将删除素材包、角色和所有软件设置，恢复首次安装的状态。",
+            subText = "此操作不可撤销；系统权限不会改变。",
             positiveText = "重置",
             titleColorRes = R.color.cp_danger
         ) { doResetSoftware() }
