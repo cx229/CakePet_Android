@@ -478,7 +478,7 @@
       "loop": false,
       "duration": {"min": 3000, "max": 25000},
       "finishCycle": true,
-      "nextMode": "摇头",
+      "nextMode": null,
       "groups": ["待机"],
       "frames": [
         {"res": "安静\/sit_clam-1.png", "delay": [2400, 10000], "verticalAlign": "top"},
@@ -535,7 +535,7 @@
       "loop": true,
       "duration": {"min": 1000, "max": 2000},
       "finishCycle": true,
-      "nextMode": null,
+      "nextMode": "炸毛",
       "groups": ["待机", "摸摸头"],
       "frames": [
         {"res": "摇头\/shake_head-1.png", "delay": [140, 180], "verticalAlign": "top"},
@@ -558,9 +558,9 @@
         }
       },
       "frames": [
-        {"res": "落地\/jump_down-1.png", "delay": [35, 40], "anchorY": -30, "verticalAlign": "top"},
-        {"res": "落地\/jump_down-2.png", "delay": [35, 40], "anchorY": -15, "verticalAlign": "top"},
-        {"res": "落地\/jump_down-3.png", "delay": [35, 40], "verticalAlign": "top"}
+        {"res": "落地\/jump_down-1.png", "delay": [80, 100], "anchorY": -30, "verticalAlign": "top"},
+        {"res": "落地\/jump_down-2.png", "delay": [80, 100], "anchorY": -15, "verticalAlign": "top"},
+        {"res": "落地\/jump_down-3.png", "delay": [80, 100], "verticalAlign": "top"}
       ]
     },
     "轻晃提起": {
