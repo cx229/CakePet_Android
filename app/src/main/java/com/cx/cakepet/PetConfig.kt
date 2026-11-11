@@ -362,6 +362,19 @@ class PetConfig private constructor(
         KEY_STATIC_BOTTOM_BOUND.name
     )
 
+    fun acceptsImportedValue(name: String, value: org.json.JSONObject): Boolean {
+        val selected = value.optString("value")
+        return when (name) {
+            KEY_IME_MODE.name -> AppBounds.KEYBOARD_MODES.any { it.second == selected }
+            KEY_INTERACTION_MODE.name -> AppBounds.RANGE_CHOICES.first {
+                it.key == "interactionMode"
+            }.options.any { it.second == selected }
+            KEY_ROTATION_ADAPT_MODE.name -> selected in listOf("screen", "device")
+            KEY_LANDSCAPE_RANGE_MODE.name -> selected in listOf("full", "portrait")
+            else -> true
+        }
+    }
+
     /** Serialize every stored preference, including fields not exposed in the current UI. */
     suspend fun exportSettings(): org.json.JSONObject = PreferenceCodec.snapshot(dataStore)
 
