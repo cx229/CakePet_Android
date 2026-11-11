@@ -106,13 +106,19 @@ class ExternalZipImportActivity : AppCompatActivity() {
                             .associateBy { it.fileName.replace('\\', '/').removePrefix("./") }
                         val backup = files["manifest.json"]
                         if (backup != null) {
-                            require(backup.uncompressedSize in 1..131072) {
+                            require(backup.uncompressedSize in 1L..131072L) {
                                 "软件备份标识文件异常"
                             }
-                            val text = zip.getInputStream(backup).use {
-                                it.readBytes().also { data ->
-                                    require(data.size <= 131072) { "软件备份标识文件过大" }
-                                }.toString(Charsets.UTF_8)
+                            val text = zip.getInputStream(backup).use { stream ->
+                                val limited = ByteArray(131073)
+                                var offset = 0
+                                while (offset < limited.size) {
+                                    val n = stream.read(limited, offset, limited.size - offset)
+                                    if (n < 0) break
+                                    offset += n
+                                }
+                                require(offset <= 131072) { "软件备份标识文件过大" }
+                                String(limited, 0, offset, Charsets.UTF_8)
                             }
                             require(JSONObject(text).optString("type") == "cakepet-backup") {
                                 "备份标识无效"
