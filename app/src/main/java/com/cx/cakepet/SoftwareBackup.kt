@@ -271,10 +271,11 @@ object SoftwareBackup {
                 fun json(name: String, obj: JSONObject) =
                     entry(name, obj.toString(2).toByteArray(Charsets.UTF_8))
                 json("manifest.json", manifest)
-                entry("README.txt", ("CakePet full persistent-data backup\n" +
-                    "Open as ordinary ZIP; images and JSONC resources are unchanged.\n" +
-                    "Device and permission information in manifest.json is diagnostic only.\n" +
-                    "Restore replaces the app's saved roles and settings, not system permissions.\n").toByteArray())
+                entry("README.txt", ("CakePet user-data archive\n" +
+                    "Open as ordinary ZIP; images, JSONC and unknown extras are preserved.\n" +
+                    "Import overlays only supported settings, packages and valid references.\n" +
+                    "Unrecognized misc data stays in the ZIP; import does not apply it.\n" +
+                    "Device and permission diagnostics are never restored.\n").toByteArray())
                 json("registries.json", registry)
                 json("role-config.json", config)
                 json("role-bounds.json", bounds)
@@ -341,13 +342,9 @@ object SoftwareBackup {
             } ?: error("无法打开备份")
             val meta = JSONObject(File(root, "manifest.json").readText())
             require(meta.optString("type") == "cakepet-backup") { "不是 CakePet 软件备份" }
-            for (name in listOf("registries.json", "role-config.json", "role-bounds.json", "user-habits.json")) {
-                JSONObject(File(root, name).readText())
-            }
-            // Backups from before the explicit app-wide settings record remain readable.
-            File(root, "app-settings.json").takeIf { it.isFile }?.let {
-                JSONObject(it.readText())
-            }
+            // Individual version-specific sections are optional. An unsupported
+            // section is skipped at import rather than rejecting the ZIP.
+            // The manifest and archive paths are the only mandatory structure.
             return root
         } catch (e: Exception) {
             root.deleteRecursively()
@@ -370,18 +367,18 @@ object SoftwareBackup {
     fun restore(ctx: Context, uri: Uri): String {
         val staged = extract(ctx, uri)
         val previousDir = File(ctx.cacheDir, "cakepet_previous_roles_" + System.nanoTime())
-        val previousMisc = File(ctx.cacheDir, "cakepet_previous_misc_" + System.nanoTime())
         val liveRoles = File(ctx.filesDir, "roles")
         var moved = false
         var assetsTouched = false
-        var miscTouched = false
         try {
-            val registry = JSONObject(File(staged, "registries.json").readText())
-            val restoredConfigs = JSONObject(File(staged, "role-config.json").readText())
-            val restoredBounds = JSONObject(File(staged, "role-bounds.json").readText())
-            val restoredHabits = JSONObject(File(staged, "user-habits.json").readText())
+            fun section(name: String): JSONObject =
+                runCatching { JSONObject(File(staged, name).readText()) }.getOrElse { JSONObject() }
+            val registry = section("registries.json")
+            val restoredConfigs = section("role-config.json")
+            val restoredBounds = section("role-bounds.json")
+            val restoredHabits = section("user-habits.json")
             val restoredApp = File(staged, "app-settings.json").takeIf { it.isFile }
-                ?.let { JSONObject(it.readText()) }
+                ?.let { runCatching { JSONObject(it.readText()) }.getOrNull() }
             val originals = runBlocking { RoleStore.exportRegistries(ctx) }
             val oldConfigs = runBlocking { configs(ctx) }
             val oldHabits = UserHabits.load(ctx)
@@ -439,19 +436,11 @@ object SoftwareBackup {
                     }
                 }
 
-                // Preserve every current misc file not present in the backup.
-                check(previousMisc.mkdirs()) { "无法创建恢复安全副本" }
-                val currentMisc = ctx.filesDir.listFiles().orEmpty().filter {
-                    it.name !in setOf("datastore", "roles", "user_habits.json")
-                }
-                currentMisc.forEach { copyTree(it, File(previousMisc, it.name)) }
-                miscTouched = true
-                File(staged, "misc").takeIf { it.isDirectory }?.listFiles().orEmpty()
-                    .filter { it.name !in setOf("datastore", "roles", "user_habits.json") }
-                    .forEach { copyTree(it, File(ctx.filesDir, it.name)) }
+                // Misc files are exported losslessly, but cannot be safely
+                // interpreted as current settings. Do not overwrite active or
+                // unknown files with unrecognized backup content.
                 if (restoredApp != null) settingsCount += restoreAppSettings(ctx, restoredApp)
 
-                previousMisc.deleteRecursively()
                 previousDir.deleteRecursively()
                 return "导入完成：处理 ${catalogChanges} 条素材/角色记录、${settingsCount} 项兼容设置；" +
                     "不兼容或缺失的内容已跳过，原有其他数据保留。系统权限未改变。"
@@ -460,16 +449,6 @@ object SoftwareBackup {
                     if (assetsTouched) liveRoles.deleteRecursively()
                     if (moved) check(previousDir.renameTo(liveRoles)) {
                         "无法还原原素材包"
-                    }
-                    if (miscTouched) {
-                        ctx.filesDir.listFiles().orEmpty().filter {
-                            it.name !in setOf("datastore", "roles", "user_habits.json")
-                        }.forEach { it.deleteRecursively() }
-                        previousMisc.listFiles().orEmpty().forEach { old ->
-                            check(old.renameTo(File(ctx.filesDir, old.name))) {
-                                "无法还原持久化文件：${old.name}"
-                            }
-                        }
                     }
                     runBlocking {
                         RoleStore.importRegistries(ctx, originals, replace = true)
