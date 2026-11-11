@@ -168,24 +168,8 @@ internal object RolePackNormalizer {
         groupOrder("modeGroups", root.optJSONObject("modes"))
         groupOrder("thinkingGroups", root.optJSONObject("thinkings"))
 
-        val previous = root.optJSONObject("resourceOrder")
-        val updated = JSONObject()
-        fun traverse(folder: File, relative: String) {
-            val actual = folder.listFiles().orEmpty()
-                .filter { it.isDirectory && !it.name.startsWith(".") }
-                .sortedBy { it.name.lowercase() }
-            val byName = actual.associateBy { it.name }
-            val ordered = LinkedHashSet(names(previous?.optJSONArray(relative))
-                .filter { it in byName })
-            actual.forEach { ordered.add(it.name) }
-            updated.put(relative, JSONArray().apply { ordered.forEach { put(it) } })
-            ordered.forEach { name ->
-                val childPath = if (relative.isEmpty()) name else "$relative/$name"
-                traverse(byName.getValue(name), childPath)
-            }
-        }
-        traverse(directory, "")
-        root.put("resourceOrder", updated)
+        // v1.10: nested folder objects; preserve source-text key order.
+        ResourceFolderOrder.sync(root, directory)
     }
 
     fun writeReport(directory: File, sourceVersion: String?, issues: List<Issue>, parseError: String? = null) {
