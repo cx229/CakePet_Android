@@ -52,7 +52,9 @@ object PreferenceCodec {
             if (type.isBlank() || type != expected.optJSONObject(name)?.optString("type")) continue
             val valid = when (type) {
                 "boolean" -> field.opt("value") is Boolean
-                "int", "long" -> field.opt("value") is Number
+                "int", "long" -> (field.opt("value") as? Number)?.toDouble()
+                    ?.let { it.isFinite() && kotlin.math.abs(it) <= 1e9 &&
+                        it == kotlin.math.floor(it) } == true
                 "float", "double" -> (field.opt("value") as? Number)?.toDouble()
                     ?.let { it.isFinite() && kotlin.math.abs(it) <= 1e9 } == true
                 "string" -> (field.opt("value") as? String)?.length?.let { it <= 2048 } == true
