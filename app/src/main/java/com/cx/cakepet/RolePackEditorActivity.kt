@@ -1200,6 +1200,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             functions()
             scroll.post { if (screen == "functions") scroll.scrollTo(0, previousScroll) }
         }
+        if (!linkedMode && screen == "modes") modes()
         functionDetailRefreshers.toMap().forEach { (dialog, refresh) ->
             if (dialog.isShowing) refresh() else functionDetailRefreshers.remove(dialog)
         }
@@ -1791,6 +1792,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     append(key in expandedModeGroups)
                     members.forEach { id ->
                         append('|').append(id).append(':').append(modes.optJSONObject(id))
+                        modeChain(id, modes).forEach { segment ->
+                            append(':').append(segment)
+                            if (segment != "∞" && segment != "◎") append(':').append(playableMode(segment))
+                        }
                     }
                 }
             }
@@ -2097,33 +2102,47 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     orientation = LinearLayout.VERTICAL
                     setPadding(px(8), 0, 0, 0)
                 }
-                val headline = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
+                val heading = SpannableStringBuilder(key)
+                val frameStart = heading.length
+                heading.append("·${frames.length()}帧")
+                heading.setSpan(android.text.style.AbsoluteSizeSpan(10, true),
+                    frameStart, heading.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                heading.setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.cp_note)),
+                    frameStart, heading.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                if (!playableMode(key)) {
+                    val warningStart = heading.length
+                    heading.append(" · 无效动画")
+                    heading.setSpan(android.text.style.AbsoluteSizeSpan(10, true),
+                        warningStart, heading.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    heading.setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.cp_danger)),
+                        warningStart, heading.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
-                headline.addView(text(key, 16f).apply { setPadding(0, 0, 0, 0) })
-                if (!playableMode(key)) headline.addView(text("  · 无效动画", 11f).apply {
-                    setTextColor(getColor(R.color.cp_danger))
+                label.addView(text("", 13f).apply {
+                    setText(heading, TextView.BufferType.SPANNABLE)
+                    setPadding(0, 0, 0, 0)
                 })
-                if (playbackKind(mode) != "infinite") {
-                    val nextMode = mode.optString("nextMode", "").takeUnless { it == "null" }.orEmpty()
-                    headline.addView(text("  →" + nextMode.ifBlank { "无" }, 11f).apply {
-                        setTextColor(getColor(R.color.cp_note))
-                        maxLines = 1
-                        ellipsize = TextUtils.TruncateAt.END
-                    }, LinearLayout.LayoutParams(0, -2, 1f))
-                }
-                label.addView(headline)
+                val kind = playbackKind(mode)
                 val duration = mode.optJSONObject("duration")
-                val playback = when (playbackKind(mode)) {
+                val playback = when (kind) {
                     "off" -> "播放一次"
                     "infinite" -> "无限循环"
-                    else -> "循环（${duration?.optLong("min", 3000) ?: 3000} ms-${duration?.optLong("max", 4000) ?: 4000} ms）"
+                    else -> {
+                        val min = duration?.optLong("min", 3000) ?: 3000
+                        val max = duration?.optLong("max", 4000) ?: 4000
+                        if (min == max) "定时循环（${min}ms）" else "定时循环（${min}–${max}ms）"
+                    }
                 }
-                label.addView(text("${frames.length()} 帧 · $playback", 12f).apply {
-                    setPadding(0, 0, 0, 0)
-                    setTextColor(getColor(R.color.cp_note))
+                label.addView(text(playback, 10f).apply {
+                    setPadding(0, px(3), 0, 0)
+                    setTextColor(getColor(R.color.cp_sub))
                 })
+                val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+                if (kind != "infinite" && next.isNotBlank()) {
+                    label.addView(linkedModeChains(listOf(key), root.getJSONObject("modes"),
+                        "", 10f) { target -> openModeFromDetail(target) }.apply {
+                        setPadding(0, px(3), 0, 0)
+                    })
+                }
                 content.addView(label, LinearLayout.LayoutParams(0, -2, 1f))
                 card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
                 rippleClick(card) { modeDetails(key) }
