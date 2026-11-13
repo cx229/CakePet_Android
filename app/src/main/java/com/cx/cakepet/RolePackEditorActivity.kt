@@ -189,6 +189,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun renderMissingLinkedCards(container: LinearLayout) {
         templateExamples.clear()
+        roleExamples.clear()
         linkedPaths.map { it.split("/") }.distinct().forEach { path ->
             // A setting may name several dependencies: show only those that
             // actually prevent the setting from taking effect right now.
@@ -468,8 +469,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
     private val openedFunctionFolders = mutableSetOf<String>()
-    // 仅缓存当前功能页的白酥静态图片；链路计算始终读取最新 modes JSON。
+    // 缓存当前页的小尺寸静态预览，素材修改后失效。
     private val templateExamples = mutableMapOf<String, android.graphics.Bitmap?>()
+    private val roleExamples = mutableMapOf<String, android.graphics.Bitmap?>()
     private val templateJson: JSONObject? by lazy {
         runCatching {
             assets.open("${RoleRegistry.DEFAULT.rootPath}/modes.jsonc")
@@ -582,7 +584,46 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
-    /** 白酥模板的相同功能路径，随机选链路及链路中的动作，最后随机选一帧。 */
+    /** 从候选动画链随机选帧，只解码卡片所需的缩略图。 */
+    private fun randomFunctionFrame(candidates: List<String>, modes: JSONObject,
+                                    assetRoot: String?): android.graphics.Bitmap? {
+        for (candidate in candidates.shuffled()) {
+            val chain = modeChain(candidate, modes).distinct().filter { modes.optJSONObject(it) != null }
+            for (mode in chain.shuffled()) {
+                val frames = modes.optJSONObject(mode)?.optJSONArray("frames") ?: continue
+                for (index in (0 until frames.length()).shuffled()) {
+                    val frame = frames.optJSONObject(index) ?: continue
+                    val res = frame.optString("res")
+                    if (res.isBlank() || res.startsWith("/") || res.contains('\\') ||
+                        res.split('/').any { it == ".." }) continue
+                    val bitmap = runCatching {
+                        if (assetRoot != null) {
+                            val path = "$assetRoot/$res"
+                            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            assets.open(path).use { BitmapFactory.decodeStream(it, null, bounds) }
+                            var sample = 1
+                            while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 224) sample *= 2
+                            assets.open(path).use {
+                                BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply {
+                                    inSampleSize = sample
+                                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+                                })
+                            }
+                        } else {
+                            val base = draft.canonicalFile
+                            val file = File(base, res).canonicalFile
+                            if (!file.toPath().startsWith(base.toPath())) null else thumb(file)
+                        }
+                    }.getOrNull() ?: continue
+                    val transformed = transformedThumb(bitmap, frame.optString("transform", "none"))
+                    if (transformed !== bitmap) bitmap.recycle()
+                    return transformed
+                }
+            }
+        }
+        return null
+    }
+
     private fun templateRandomFrame(path: List<String>): android.graphics.Bitmap? {
         val key = path.joinToString("/")
         if (templateExamples.containsKey(key)) return templateExamples[key]
@@ -590,38 +631,18 @@ open class RolePackEditorActivity : AppCompatActivity() {
         for (segment in path.dropLast(1)) cursor = cursor?.optJSONObject(segment)
         val candidates = cursor?.optJSONArray(path.last()) ?: cursor?.optJSONObject(path.last())?.optJSONArray("modes")
         val modes = templateJson?.optJSONObject("modes")
-        val sourcePaths = mutableListOf<List<String>>()
-        if (candidates != null && modes != null) {
-            for (i in 0 until candidates.length()) {
-                val chain = modeChain(candidates.optString(i), modes)
-                val valid = chain.distinct().filter { modes.optJSONObject(it) != null }
-                if (valid.isNotEmpty()) sourcePaths.add(valid)
-            }
-        }
-        var bitmap: android.graphics.Bitmap? = null
-        // 随机链路后随机动作、随机帧；有损坏帧时继续寻找其他有效资源。
-        for (chain in sourcePaths.shuffled()) {
-            if (bitmap != null) break
-            for (modeId in chain.shuffled()) {
-                val frames = modes?.optJSONObject(modeId)?.optJSONArray("frames") ?: continue
-                val names = (0 until frames.length()).mapNotNull { index ->
-                    frames.optJSONObject(index)?.optString("res")?.takeIf { res ->
-                        res.isNotBlank() && !res.startsWith("/") &&
-                            !res.contains('\\') && res.split('/').none { it == ".." }
-                    }
-                }
-                for (res in names.shuffled()) {
-                    bitmap = runCatching {
-                        assets.open("${RoleRegistry.DEFAULT.rootPath}/$res").use {
-                            BitmapFactory.decodeStream(it)
-                        }
-                    }.getOrNull()
-                    if (bitmap != null) break
-                }
-                if (bitmap != null) break
-            }
-        }
+        val bitmap = if (modes == null) null else
+            randomFunctionFrame(jsonStrings(candidates), modes, RoleRegistry.DEFAULT.rootPath)
         templateExamples[key] = bitmap
+        return bitmap
+    }
+
+    private fun roleRandomFrame(path: List<String>, valid: List<String>): android.graphics.Bitmap? {
+        val key = path.joinToString("/")
+        if (roleExamples.containsKey(key)) return roleExamples[key]
+        val bitmap = randomFunctionFrame(valid, root.getJSONObject("modes"),
+            if (linkedReadOnly) linkedPack.rootPath else null)
+        roleExamples[key] = bitmap
         return bitmap
     }
     private var modeId = ""
@@ -1108,6 +1129,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         RolePackEditing.commit(this, id, draft, candidate)
         root = candidate
         modeAvailability.clear()
+        roleExamples.clear()
         refreshLivePreviews()
         // JSON has changed, but existing View text and lists are not live bindings.
         // Refresh underlying cards without navigating or collapsing folders, then
@@ -4136,9 +4158,16 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER_VERTICAL
             }, LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
         }
+        val names = examplePath?.let(::functionAnimationsAt).orEmpty()
+        val validNames = names.filter(::playableMode)
         if (examplePath != null) {
-            val bitmap = templateRandomFrame(examplePath)
-            card.addView(ImageView(this).apply {
+            val isExample = validNames.isEmpty()
+            val bitmap = if (isExample) templateRandomFrame(examplePath) else roleRandomFrame(examplePath, validNames)
+            val preview = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+            preview.addView(ImageView(this).apply {
                 if (bitmap != null) setImageBitmap(bitmap)
                 else {
                     setImageResource(android.R.drawable.ic_menu_gallery)
@@ -4148,7 +4177,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 isClickable = false
                 isFocusable = false
-            }, LinearLayout.LayoutParams(px(52), px(52)).apply {
+            }, LinearLayout.LayoutParams(px(52), px(52)))
+            if (isExample && bitmap != null) preview.addView(text("示例效果", 6f).apply {
+                setTextColor(getColor(R.color.cp_note))
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setPadding(0, 0, 0, 0)
+            }, LinearLayout.LayoutParams(-1, -2))
+            card.addView(preview, LinearLayout.LayoutParams(px(52), -2).apply {
                 rightMargin = px(7)
             })
         }
@@ -4177,8 +4213,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.cp_note))
         })
         if (examplePath != null) {
-            val names = functionAnimationsAt(examplePath)
-            if (names.none(::playableMode)) {
+            if (validNames.isEmpty()) {
                 content.addView(text("无有效动画", 10f).apply {
                     setPadding(0, px(3), 0, 0)
                     setTextColor(getColor(R.color.cp_danger))
@@ -4451,6 +4486,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     private fun functions() {
         templateExamples.clear()
+        roleExamples.clear()
         section("功能映射", "functions")
         if (!standbyReady()) {
             val warning = functionItem(panel, "素材包必要动画缺失",
@@ -5074,6 +5110,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             RolePackEditing.commit(this, id, draft, candidate, resourcesChanged = true)
             root = candidate
             modeAvailability.clear()
+            roleExamples.clear()
             tx.finish()
         } catch (failure: Exception) {
             try { tx.rollback() }
