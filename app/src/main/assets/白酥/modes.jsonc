@@ -715,12 +715,12 @@
       "nextMode": "高兴",
       "groups": ["投喂"],
       "frames": [
-        {"res": "投食\/feed_fish-1.png", "delay": [90, 100], "anchorY": 1, "verticalAlign": "top"},
-        {"res": "投食\/feed_fish-2.png", "delay": [90, 100], "anchorY": 1, "verticalAlign": "top"},
-        {"res": "投食\/feed_fish-3.png", "delay": [90, 100], "anchorY": 1, "verticalAlign": "top"},
-        {"res": "投食\/feed_fish-4.png", "delay": [90, 100], "anchorY": 1, "verticalAlign": "top"},
-        {"res": "投食\/feed_fish-3.png", "delay": [90, 100], "anchorY": 1, "verticalAlign": "top"},
-        {"res": "投食\/feed_fish-3.png", "delay": [90, 100], "anchorY": 1, "verticalAlign": "top"}
+        {"res": "投食\/feed_fish-1.png", "delay": [90, 100], "verticalAlign": "top"},
+        {"res": "投食\/feed_fish-2.png", "delay": [90, 100], "verticalAlign": "top"},
+        {"res": "投食\/feed_fish-3.png", "delay": [90, 100], "verticalAlign": "top"},
+        {"res": "投食\/feed_fish-4.png", "delay": [90, 100], "verticalAlign": "top"},
+        {"res": "投食\/feed_fish-3.png", "delay": [90, 100], "verticalAlign": "top"},
+        {"res": "投食\/feed_fish-3.png", "delay": [90, 100], "verticalAlign": "top"}
       ]
     },
     "投食-探头": {
@@ -792,9 +792,9 @@
       "nextMode": null,
       "groups": ["投喂"],
       "frames": [
-        {"res": "投食\/feed_fish-5.png", "delay": [90, 100], "anchorY": 1, "verticalAlign": "top"},
-        {"res": "投食\/feed_fish-6.png", "delay": [90, 100], "anchorY": 1, "verticalAlign": "top"},
-        {"res": "投食\/feed_fish-7.png", "delay": [90, 100], "anchorY": 1, "verticalAlign": "top"}
+        {"res": "投食\/feed_fish-5.png", "delay": [90, 100], "verticalAlign": "top"},
+        {"res": "投食\/feed_fish-6.png", "delay": [90, 100], "verticalAlign": "top"},
+        {"res": "投食\/feed_fish-7.png", "delay": [90, 100], "verticalAlign": "top"}
       ]
     },
     "高兴-探头": {
