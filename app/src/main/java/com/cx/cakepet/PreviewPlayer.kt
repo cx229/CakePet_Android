@@ -27,7 +27,7 @@ class PreviewPlayer(
     private val boxPx = (64f * density).toInt().coerceAtLeast(1)
     // Same decoded frame + its declared anchor always produce the same preview.
     // Never key by resName alone: one resource may use different alignment/transform.
-    private val composedCache = mutableMapOf<Pair<Bitmap, Pair<Int, Int>>, Bitmap?>()
+    private val composedCache = mutableMapOf<Triple<Bitmap, Pair<Int, Int>, Pair<Int, Int>>, Bitmap?>()
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
     private var previewScene = ""
@@ -139,9 +139,10 @@ class PreviewPlayer(
         // Full-frame preview intentionally never consumes animation displacement.
         val frame = mgr.currentBitmap() ?: return
         val anchor = mgr.currentAnchor()
-        val key = frame to anchor
+        val logicalSize = mgr.currentBitmapSize()
+        val key = Triple(frame, anchor, logicalSize)
         val bmp = composedCache.getOrPut(key) {
-            composePreviewBitmap(frame, boxPx, anchor)
+            composePreviewBitmap(frame, boxPx, anchor, logicalSize)
         }
         if (bmp != null) imageView.setImageBitmap(bmp)
     }
@@ -153,14 +154,13 @@ class PreviewPlayer(
  * preview position. Frame dx/dy are intentionally ignored: previews only change
  * the image, never the preview pet's physical position.
  */
-private fun composePreviewBitmap(frame: Bitmap, boxPx: Int, anchor: Pair<Int, Int>): Bitmap? {
+private fun composePreviewBitmap(frame: Bitmap, boxPx: Int, anchor: Pair<Int, Int>,
+                                 logicalSize: Pair<Int, Int>): Bitmap? {
     return try {
-        // Engine anchor coordinates are logical 128-space; frame.width can be
-        // a higher-resolution decoded canvas (e.g. 256) without changing scale.
+        // Anchors and preview geometry use the same pack-defined logical canvas.
         val scale = 1.4f
-        val logicalToPreview = 128f / frame.width.coerceAtLeast(1) * scale
-        val width = frame.width * logicalToPreview
-        val height = frame.height * logicalToPreview
+        val width = logicalSize.first * scale
+        val height = logicalSize.second * scale
         val left = boxPx / 2f - anchor.first * scale
         val top = boxPx.toFloat() - anchor.second * scale
         val out = Bitmap.createBitmap(boxPx, boxPx, Bitmap.Config.ARGB_8888)

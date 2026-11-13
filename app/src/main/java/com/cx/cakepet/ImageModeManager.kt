@@ -13,13 +13,9 @@ import java.io.File
  * 图片资源包：抽象“不同套美术资源”的加载策略。
  * - [resolve]：帧图片相对路径（如 "安静/sit_clam-1.png"）解析为本素材包中的实际路径；
  *   所有帧图片在素材包导入校验时必须齐全，播放不使用替代图片。
- * - [decodeTarget]：物理解码目标边长(px)；0 = 保持原始尺寸（默认包，原生 128）。
- *   新包原图 1000×1000，设为 256 ⇒ 解码期超采样到 256（最长边），作 2x 抗锯齿源；
- *   但【逻辑/锚点/画布】空间仍由 [anchorRes]=128 决定，渲染时把 256 位图按 ratio 缩进 128 逻辑矩形，
- *   既复用现有 128 逻辑（JSON 锚点/边界/scaleFactor 零改动），又比硬压 128 清晰 2x。
- * - [anchorRes]：逻辑分辨率（锚点/画布/UI 坐标系的“1”单位，恒为 128）。
- *   与 decodeTarget 解耦：decodeTarget=256、anchorRes=128 ⇒ 解码超采样 2x、逻辑仍 128。
- *   默认包 decodeTarget=0（原生=128=逻辑），此字段不生效。
+ * - [decodeTarget]：物理解码画布边长；0 = 原图解码，统一物理画布取素材帧的最大原图边长。
+ * - [anchorRes]：独立的逻辑画布边长，决定锚点、位移及显示尺寸。
+ *   解码分辨率只影响物理位图的清晰度，不参与逻辑坐标系。
  * - 锚点完全由逐帧 anchorX/anchorY 决定（JSON 未给 anchorY 时回退贴底 0），不假设“图底中心”。
  */
 data class SpritePack(
@@ -29,7 +25,7 @@ data class SpritePack(
     val resolve: (String) -> String?,
     val configPath: String? = null,   // 本包 modes.jsonc 路径（assets 或私有角色包目录）
     val decodeTarget: Int = 0,         // 物理超采样解码边长（0=原生）；新包 256（由 modes.jsonc 覆盖）
-    val anchorRes: Int = 128,          // 逻辑分辨率（锚点/画布/UI 坐标系单位），恒 128（由 modes.jsonc 覆盖）
+    val anchorRes: Int = 128,          // 逻辑画布边长（由 modes.jsonc 覆盖）
     val name: String = "",             // 资源包中文名（modes.jsonc 指定，v1.0 必填），仅展示用
     val shortName: String = "",         // 资源包默认简称（modes.jsonc 指定，v1.0 必填）：每个角色各自定义，不全局写死
     // v1.02：所有功能路径均映射到通用 Mode ID；Mode 可用于角色、食物及其他动画。
@@ -195,7 +191,7 @@ class ImageModeManager(
         val id = if (root.has("id")) root.optString("id", currentPack.id) else currentPack.id
         val name = if (root.has("name")) root.optString("name", currentPack.name) else currentPack.name
         currentPack = currentPack.copy(
-            id = id, decodeTarget = decodeTarget, anchorRes = anchorRes, name = name
+            id = id, decodeTarget = decodeTarget.coerceAtLeast(0), anchorRes = anchorRes.coerceAtLeast(1), name = name
         )
         // 清空旧模式，按 JSON 重建
         modes.clear()
@@ -292,7 +288,12 @@ class ImageModeManager(
     }
 
     /** 模式图像显示结果。透明边缘裁剪属于可选的渲染变换，与角色/道具类型无关。 */
-    data class ModeVisual(val frames: Map<String, Bitmap>, val first: Bitmap)
+    data class ModeVisual(
+        val frames: Map<String, Bitmap>,
+        val first: Bitmap,
+        val logicalWidth: Float,
+        val logicalHeight: Float
+    )
 
     // 同一个素材包实例共享解码位图、各类渲染变换和透明边界；缓存键不含具体对象类型。
     private val modeVisualCache = mutableMapOf<Pair<String, Int?>, ModeVisual>()
@@ -315,7 +316,14 @@ class ImageModeManager(
                 Bitmap.createBitmap(bitmap, bounds.left, bounds.top, bounds.width(), bounds.height())
             }
         }
-        return ModeVisual(frames, frames.values.first()).also { modeVisualCache[key] = it }
+        val first = frames.values.first()
+        val full = source.values.first()
+        val (logicalW, logicalH) = currentBitmapSize()
+        // 裁剪只改变内容矩形，不改变物理像素到逻辑画布的比例。
+        return ModeVisual(frames, first,
+            first.width.toFloat() / full.width * logicalW,
+            first.height.toFloat() / full.height * logicalH
+        ).also { modeVisualCache[key] = it }
     }
 
     inner class ModeClip internal constructor(startMode: String) {
@@ -483,6 +491,7 @@ class ImageModeManager(
         val (w, h) = globalMaxSize()
         globalW = w
         globalH = h
+        physicalCanvasSide = resolvePhysicalCanvasSide()
     }
 
     fun frameBitmap(resName: String): Bitmap? = loadBitmap(resName)
@@ -494,78 +503,41 @@ class ImageModeManager(
      */
     fun previewFrame(resName: String): Bitmap? = loadBitmap(resName)
 
-    /** 当前帧【逻辑画布】尺寸（恒 128 基准；新包解码 256 超采样但画布逻辑仍为 128）。
-     *  窗口/锚点 X 居中/渲染矩形均以画布计，而非逐帧 bitmap 像素（256 超采样源）。 */
-    fun currentBitmapSize(): Pair<Int, Int> {
-        return if (globalW > 0 && globalH > 0) globalW to globalH else 160 to 160
-    }
+    /** 逻辑画布独立于位图解码分辨率。 */
+    fun currentBitmapSize(): Pair<Int, Int> = globalMaxSize()
 
-    /** 原始位图尺寸记忆化：同一 resName 只解一次，消除 currentAnchor() 每次调用都 open+decode 的 I/O 抖动。 */
+    // 只缓存原始图片头尺寸；逻辑尺寸始终由 anchorRes 换算。
     private val rawSizeCache = mutableMapOf<String, Pair<Int, Int>>()
 
-    /**
-     * 仅解码取原始位图尺寸（不进入 bitmapCache、不引用 globalW/globalH），
-     * 专供 init 阶段计算统一画布尺寸，避免与 globalW/globalH 的 init 形成初始化死循环。
-     * 结果按 resName 记忆化：同一帧尺寸只解一次，既消除重复 I/O，也保证“位置求锚点”与“显示求锚点”
-     * 取到的是同一份已缓存尺寸、不会因重读原始文件而错位。
-     */
-    // 取原图尺寸（用于锚点/ padding 计算）。缓存避免重复解码头。
-    // 新包：返回「保比例下采样」后的真实内容尺寸（最长边 = decodeTarget，如 1000×500 → 128×64），
-    // 而非原始的 1000×1000 也非方块 128×128（否则非正方形图锚点会算到错误处/脚落到透明区导致错位）。
     private fun rawBitmapSize(resName: String, transform: String = "none"): Pair<Int, Int> {
-        val size = sourceBitmapSize(resName)
+        val (w, h) = sourceBitmapSize(resName)
+        val size = scaledContentSize(w, h, currentPack.anchorRes.coerceAtLeast(1))
         return if (transform == "rotate90" || transform == "rotate270") size.second to size.first else size
     }
 
-    private fun sourceBitmapSize(resName: String): Pair<Int, Int> {
-        rawSizeCache[resName]?.let { return it }
-        val path = currentPack.resolve(resName)
-        if (path == null) {
-            rawSizeCache[resName] = 0 to 0
-            return 0 to 0
-        }
-        val r = if (currentPack.decodeTarget > 0) {
+    private fun sourceBitmapSize(resName: String): Pair<Int, Int> =
+        rawSizeCache.getOrPut(resName) {
+            val path = currentPack.resolve(resName) ?: return@getOrPut (0 to 0)
             try {
-                val istr = openPackStream(path)
                 val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeStream(istr, null, opts)
-                istr?.close()
-                // 逻辑尺寸：按【anchorRes=128】保比例算，而非物理 decodeTarget(256)。
-                // 锚点/画布/边界全部活在 128 逻辑空间，decodeTarget 只影响解码清晰度、不影响坐标。
-                scaledContentSize(opts.outWidth, opts.outHeight, currentPack.anchorRes)
-            } catch (_: Exception) {
-                0 to 0 // 素材包必须完整；无法读取的帧不伪装为有效图片尺寸
-            }
-        } else {
-            try {
-                val istr = openPackStream(path)
-                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeStream(istr, null, opts)
-                opts.outWidth to opts.outHeight
+                openPackStream(path)?.use { BitmapFactory.decodeStream(it, null, opts) }
+                opts.outWidth.coerceAtLeast(0) to opts.outHeight.coerceAtLeast(0)
             } catch (_: Exception) {
                 0 to 0
             }
         }
-        rawSizeCache[resName] = r
-        return r
-    }
 
-    /**
-     * 所有模式所有帧的全局最大【原始】尺寸（真实像素，未 padding）。用于固定统一画布尺寸，
-     * 保证任何动画帧（滚动、探头、落地和其他动画等）都能完整显示且窗口尺寸恒定 → 不重排。
-     * 用 rawBitmapSize（仅取边界）而非 loadBitmap，避免初始化期引用尚未赋值的 globalW/globalH。
-     */
-    fun globalMaxSize(): Pair<Int, Int> {
-        var mw = 0
-        var mh = 0
-        for (def in modes.values) {
-            for (f in def.frames) {
-                val (bw, bh) = rawBitmapSize(f.resName, f.transform)
-                if (bw > mw) mw = bw
-                if (bh > mh) mh = bh
-            }
-        }
-        return if (mw > 0 && mh > 0) mw to mh else currentBitmapSize()
+    /** 所有模式使用同一逻辑方形画布，与物理画布保持相同的纵横比。 */
+    fun globalMaxSize(): Pair<Int, Int> =
+        currentPack.anchorRes.coerceAtLeast(1).let { it to it }
+
+    /** 原图模式不做降采样；选最大原图边长作为本包统一物理画布。 */
+    private fun resolvePhysicalCanvasSide(): Int {
+        if (currentPack.decodeTarget > 0) return currentPack.decodeTarget
+        return modes.values.asSequence().flatMap { it.frames.asSequence() }
+            .map { sourceBitmapSize(it.resName) }
+            .map { (w, h) -> maxOf(w, h) }
+            .maxOrNull()?.takeIf { it > 0 } ?: currentPack.anchorRes.coerceAtLeast(1)
     }
 
     /**
@@ -602,9 +574,8 @@ class ImageModeManager(
 
     fun frameAnchor(resName: String, anchorX: Int, anchorY: Int?,
                     alignment: String = "bottom", transform: String = "none"): Pair<Int, Int> {
-        val (w, _) = currentBitmapSize()
-        val (_, rawH) = rawBitmapSize(resName, transform)
-        val axRaw = if (anchorX >= 0) anchorX else w / 2
+        val (rawW, rawH) = rawBitmapSize(resName, transform)
+        val axRaw = if (anchorX >= 0) anchorX else rawW / 2
         val ayRaw = rawH - (anchorY ?: 0)
         val (padX, padY) = padOf(resName, alignment, transform)
         return (axRaw + padX) to (ayRaw + padY)
@@ -621,10 +592,12 @@ class ImageModeManager(
      */
     var globalW: Int = 0
     var globalH: Int = 0
+    private var physicalCanvasSide: Int = 1
     init {
         val (w, h) = globalMaxSize()
         globalW = w
         globalH = h
+        physicalCanvasSide = resolvePhysicalCanvasSide()
     }
 
     /** Vertical alignment runs after orientation correction, before animation. */
@@ -680,13 +653,16 @@ class ImageModeManager(
         } catch (_: Exception) { null } ?: return null
         val transformed = transformBitmap(decoded, transform)
         if (transformed !== decoded) decoded.recycle()
-        val canvasRes = if (currentPack.decodeTarget > 0) currentPack.decodeTarget else globalW
+        val canvasRes = physicalCanvasSide
+        val (contentW, contentH) = scaledContentSize(transformed.width, transformed.height, canvasRes)
         val bitmap = if (transformed.width == canvasRes && transformed.height == canvasRes) {
             transformed
         } else {
-            val (x, y) = fillOffset(transformed.width, transformed.height, canvasRes, canvasRes, alignment)
+            val (x, y) = fillOffset(contentW, contentH, canvasRes, canvasRes, alignment)
             val out = Bitmap.createBitmap(canvasRes, canvasRes, Bitmap.Config.ARGB_8888)
-            android.graphics.Canvas(out).drawBitmap(transformed, x.toFloat(), y.toFloat(), null)
+            val target = android.graphics.Rect(x, y, x + contentW, y + contentH)
+            val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+            android.graphics.Canvas(out).drawBitmap(transformed, null, target, paint)
             transformed.recycle()
             out
         }

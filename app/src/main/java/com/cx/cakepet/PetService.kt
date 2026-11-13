@@ -142,7 +142,7 @@ class PetService : Service() {
         val time: Long = System.currentTimeMillis(),  // 投食（支鱼）掉落的时刻，供食物浮窗顶部展示
         val borderView: View? = null,   // 投喂边框开关开启时的红色真实窗口边框（NOT_TOUCHABLE）
         var expireRunnable: Runnable? = null,
-        var crop: Bitmap? = null,       // 当前 Mode 全部帧共用的固定大小画布，保证拖动/碰撞尺寸稳定
+        var visual: ImageModeManager.ModeVisual? = null, // 统一裁剪位图及其逻辑尺寸
         var animation: ImageModeManager.ModeClip? = null, // 每条食物自己的完整 Mode 播放位置
         var modeId: String = "",         // 素材作者自定的 Mode ID（由 Functions 获取，不由代码指定）
         val packId: Int = 1,
@@ -1299,9 +1299,9 @@ class PetService : Service() {
 
     /** 投喂实体的显示仍归引擎管理；图片及裁剪从通用 Mode 图像缓存取得。 */
     private fun fishFrame(layer: FishLayer): Bitmap? {
-        val clip = layer.animation ?: return layer.crop
-        return modeAssetsForRole(layer.roleId).modeVisual(layer.modeId, alphaTrimThreshold = 8)
-            ?.frames?.get(clip.currentVisualKey)
+        val visual = layer.visual ?: return null
+        val clip = layer.animation ?: return visual.first
+        return visual.frames[clip.currentVisualKey]
     }
 
     private fun tickFishModes(dtMs: Long) {
@@ -1317,13 +1317,11 @@ class PetService : Service() {
         return RoleStore.descriptorForInstance(this, roleId) ?: RoleRegistry.byId(roleId)
     }
 
-    // 支鱼显示尺寸：源已缩到 256（长边）仅作解码清晰度缓冲，1x 显示基准与宠物一致为 128（长边），
-    // 故在 256 空间像素上乘以 0.5 再乘倍率。
-    private fun fishDisplaySize(crop: Bitmap, c: PetConfigData): Pair<Int, Int> {
-        if (crop.width <= 0 || crop.height <= 0) return Pair(1, 1)
-        val scale = c.feedingFishScale.coerceAtLeast(0.01f) * 0.5f
-        val wpx = (crop.width * scale).toInt().coerceAtLeast(1)
-        val hpx = (crop.height * scale).toInt().coerceAtLeast(1)
+    // 食物倍率作用于图像管理器返回的裁剪后逻辑尺寸，而非解码位图像素。
+    private fun fishDisplaySize(visual: ImageModeManager.ModeVisual, c: PetConfigData): Pair<Int, Int> {
+        val scale = c.feedingFishScale.coerceAtLeast(0.01f)
+        val wpx = (visual.logicalWidth * scale).toInt().coerceAtLeast(1)
+        val hpx = (visual.logicalHeight * scale).toInt().coerceAtLeast(1)
         return wpx to hpx
     }
 
@@ -1342,10 +1340,10 @@ class PetService : Service() {
             val visual = manager.modeVisual(selected, alphaTrimThreshold = 8) ?: continue
             layer.modeId = selected
             layer.animation = manager.createClip(selected)
-            layer.crop = visual.first
+            layer.visual = visual
             layer.iv.setImageBitmap(fishFrame(layer))
             val c = roleConfig(layer.roleId)
-            val (w, h) = fishDisplaySize(visual.first, c)
+            val (w, h) = fishDisplaySize(visual, c)
             layer.lp.width = w
             layer.lp.height = h
             layer.iv.imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
@@ -1577,8 +1575,7 @@ class PetService : Service() {
         val modeId = manager.modeOf("feed", "food") ?: return
         val visual = manager.modeVisual(modeId, alphaTrimThreshold = 8) ?: return
         val clip = manager.createClip(modeId) ?: return
-        val crop = visual.first
-        val (wpx, hpx) = fishDisplaySize(crop, c)
+        val (wpx, hpx) = fishDisplaySize(visual, c)
         val iv = ImageView(this).apply {
             setImageBitmap(visual.frames[clip.currentVisualKey])
             scaleType = ImageView.ScaleType.FIT_XY
@@ -1627,7 +1624,7 @@ class PetService : Service() {
         }
         iv.setOnTouchListener(fishDragListener)
         try { windowManager.addView(iv, lp) } catch (_: Exception) { return }
-        val layer = FishLayer(iv, lp, crop = crop, animation = clip, modeId = modeId,
+        val layer = FishLayer(iv, lp, visual = visual, animation = clip, modeId = modeId,
             packId = descriptorForRole(roleId)?.packId ?: ConfigDefaults.DEFAULT_SPRITE_PACK, roleId = roleId)
         fishLayers.add(layer)
         if (c.feedingBorderShow) setFishBorder(layer, true)
@@ -1727,8 +1724,8 @@ class PetService : Service() {
     private fun applyFishScaleAlpha(rt: RoleRuntime) {
         val c = rt.config.getBlocking()
         for (layer in fishLayers.filter { it.roleId == rt.roleId }) {
-            val crop = layer.crop ?: continue
-            val (wpx, hpx) = fishDisplaySize(crop, c)
+            val visual = layer.visual ?: continue
+            val (wpx, hpx) = fishDisplaySize(visual, c)
             layer.lp.width = wpx
             layer.lp.height = hpx
             layer.iv.imageAlpha = (c.feedingFishAlpha / 100f * 255).toInt().coerceIn(0, 255)
