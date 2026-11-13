@@ -1285,25 +1285,35 @@ open class RolePackEditorActivity : AppCompatActivity() {
             bottomMargin = px(2)
         }
 
-    /** Group header shared by animation and thinking pickers: count stays on the title line. */
+    private data class PickerGroupHeader(val card: LinearLayout, val glyph: TextView, val counter: TextView)
+
+    /** Group header shared by animation and thinking pickers; checkbox belongs to its card. */
     private fun pickerGroupHeader(title: String, open: Boolean, selected: Int, total: Int,
-                                  toggle: () -> Unit): LinearLayout =
-        LinearLayout(this).apply {
+                                  toggle: () -> Unit): PickerGroupHeader {
+        val glyph = text(if (open) "▾ 📂" else "▸ 📁", folderHeadingSp)
+        val counter = text("$selected/$total", folderSubtitleSp).apply {
+            setTextColor(getColor(R.color.cp_note))
+            setPadding(px(6), 0, 0, 0)
+        }
+        val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             selectionSurface(this, isFolder = true)
             setPadding(px(12), px(6), px(8), px(6))
             minimumHeight = px(folderMinHeightDp)
-            addView(text(if (open) "▾ 📂" else "▸ 📁", folderHeadingSp),
-                LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
+            addView(glyph, LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
             addView(text(title, folderHeadingSp), LinearLayout.LayoutParams(0, -2, 1f))
-            addView(text("$selected/$total", folderSubtitleSp).apply {
-                setTextColor(getColor(R.color.cp_note))
-                setPadding(px(6), 0, 0, 0)
-            })
+            addView(counter)
             // Folder expansion is immediate; keep the ripple without delaying redraw.
             setOnClickListener { toggle() }
         }
+        return PickerGroupHeader(card, glyph, counter)
+    }
+
+    private fun insertPickerFolderCheckbox(card: LinearLayout, check: CheckBox, leftPaddingDp: Int) {
+        card.setPadding(px(leftPaddingDp), card.paddingTop, card.paddingRight, card.paddingBottom)
+        card.addView(check, 0, LinearLayout.LayoutParams(px(42), px(48)))
+    }
 
     /** Unified folder selection: unchecked / partially checked / fully checked.
      *  Call refresh after any leaf change; checked states never rebuild the picker.
@@ -4705,13 +4715,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 refreshFolder()
                                 counter.text = "${descendantPaths.count { it in selected }}/${descendantPaths.size}"
                             }
-                            val folderRow = LinearLayout(this).apply {
-                                orientation = LinearLayout.HORIZONTAL
-                                gravity = Gravity.CENTER_VERTICAL
-                            }
-                            folderRow.addView(folderCheck, LinearLayout.LayoutParams(px(42), px(48)))
-                            folderRow.addView(folder, LinearLayout.LayoutParams(0, -2, 1f))
-                            listing.addView(folderRow, selectionRowParams(depth).apply { height = -2 })
+                            insertPickerFolderCheckbox(folder, folderCheck, 10)
+                            listing.addView(folder, selectionRowParams(depth))
                             rippleClick(folder) {
                                 if (!expanded.add(key)) expanded.remove(key)
                                 redraw()
@@ -4912,7 +4917,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     }
                 }
             }
-            lateinit var header: LinearLayout
+            lateinit var header: PickerGroupHeader
             header = pickerGroupHeader(group, group in expanded,
                 candidates.count { it in selected }, candidates.size) {
                 // Do not rebuild the list or wait for the ripple to finish.
@@ -4925,10 +4930,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 }
                 if (open) fillChildren()
                 children.visibility = if (open) View.VISIBLE else View.GONE
-                (header.getChildAt(0) as TextView).text =
-                    if (open) "▾ 📂" else "▸ 📁"
+                header.glyph.text = if (open) "▾ 📂" else "▸ 📁"
             }
-            groupCounts[group] = header.getChildAt(2) as TextView
+            groupCounts[group] = header.counter
             if (!single) {
                 val (folderCheck, refreshCheck) = pickerFolderCheckbox(
                     group, candidates, { it in selected }) { all ->
@@ -4937,14 +4941,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     refreshSelection()
                 }
                 folderCheckRefreshers.add(refreshCheck)
-                val folderRow = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                }
-                folderRow.addView(folderCheck, LinearLayout.LayoutParams(px(42), px(48)))
-                folderRow.addView(header, LinearLayout.LayoutParams(0, -2, 1f))
-                listing.addView(folderRow, selectionRowParams())
-            } else listing.addView(header, selectionRowParams())
+                insertPickerFolderCheckbox(header.card, folderCheck, 10)
+            }
+            listing.addView(header.card, selectionRowParams())
             listing.addView(children)
             if (group in expanded) fillChildren()
         }
@@ -6307,7 +6306,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     if (!opened.add(group)) opened.remove(group)
                     redraw()
                 }
-                val counter = header.getChildAt(2) as TextView
+                val counter = header.counter
                 val (folderCheck, refreshFolder) = pickerFolderCheckbox(
                     group, ids, { it in chosen }) { all ->
                     if (all) ids.forEach {
@@ -6319,13 +6318,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
                     refreshFolder()
                     counter.text = "${ids.count { it in chosen }}/${ids.size}"
                 }
-                val folderRow = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                }
-                folderRow.addView(folderCheck, LinearLayout.LayoutParams(px(42), px(48)))
-                folderRow.addView(header, LinearLayout.LayoutParams(0, -2, 1f))
-                list.addView(folderRow, selectionRowParams())
+                insertPickerFolderCheckbox(header.card, folderCheck, 7)
+                list.addView(header.card, selectionRowParams())
                 if (group in opened) for (id in ids) {
                     val row = LinearLayout(this).apply {
                         orientation = LinearLayout.HORIZONTAL
