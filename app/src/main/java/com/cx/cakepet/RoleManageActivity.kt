@@ -28,6 +28,9 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import net.lingala.zip4j.ZipFile
 
 /**
@@ -138,7 +141,8 @@ class RoleManageActivity : AppCompatActivity() {
                 "删除" -> confirmDelete(role)
                 "导出 ZIP" -> {
                     exportRole = role
-                    exportZip.launch("${role.displayName}-v${RolePackageContract.VERSION}.zip")
+                    val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMddHHmm", Locale.ROOT))
+                    exportZip.launch("${role.displayName}-$timestamp-v${RolePackageContract.VERSION}.zip")
                 }
             }
         }
