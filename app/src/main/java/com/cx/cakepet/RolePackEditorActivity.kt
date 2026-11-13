@@ -5031,15 +5031,19 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 setPadding(px(12), px(6), px(8), px(6))
                                 minimumHeight = px(folderMinHeightDp)
                             }
-                            folder.addView(text(if (open) "▾ 📂" else "▸ 📁", folderHeadingSp),
-                                LinearLayout.LayoutParams(px(folderGlyphWidthDp), -2))
+                            folder.addView(text(if (open) "▾ 📂" else "▸ 📁", folderHeadingSp).apply {
+                                setPadding(0, 0, 0, 0)
+                                gravity = Gravity.CENTER_VERTICAL
+                                maxLines = 1
+                            }, LinearLayout.LayoutParams(px(34), -2))
                             val folderText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
                             val headingRow = LinearLayout(this).apply {
                                 orientation = LinearLayout.HORIZONTAL
                                 gravity = Gravity.CENTER_VERTICAL
                             }
-                            headingRow.addView(text(functionSegment(path), folderHeadingSp),
-                                LinearLayout.LayoutParams(0, -2, 1f))
+                            headingRow.addView(text(functionSegment(path), folderHeadingSp).apply {
+                                setPadding(0, 0, 0, 0)
+                            }, LinearLayout.LayoutParams(0, -2, 1f))
                             val counter = text(
                                 "${descendantPaths.count { it in selected }}/${descendantPaths.size}",
                                 folderSubtitleSp
@@ -5088,7 +5092,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 refreshFolder()
                                 counter.text = "${descendantPaths.count { it in selected }}/${descendantPaths.size}"
                             }
-                            insertPickerFolderCheckbox(folder, folderCheck, 10)
+                            insertPickerFolderCheckbox(folder, folderCheck, 6)
+                            folderCheck.layoutParams = LinearLayout.LayoutParams(px(32), px(48))
+                            folderCheck.minimumWidth = 0
+                            folderCheck.minWidth = 0
+                            folderCheck.setPadding(0, 0, 0, 0)
                             listing.addView(folder, selectionRowParams(depth))
                             rippleClick(folder) {
                                 if (!expanded.add(key)) expanded.remove(key)
