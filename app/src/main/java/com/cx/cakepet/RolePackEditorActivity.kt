@@ -2353,22 +2353,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     /** Count Functions leaves containing the animation, reading the canonical map. */
-    private fun modeBindingCount(modeKey: String): Int {
-        var count = 0
-        fun visit(node: JSONObject) {
-            node.keys().forEach { key ->
-                when (val value = node.opt(key)) {
-                    is JSONArray -> if ((0 until value.length()).any { value.optString(it) == modeKey }) count++
-                    is JSONObject -> if (value.has("modes")) {
-                        val choices = value.optJSONArray("modes")
-                        if (choices != null && (0 until choices.length()).any { choices.optString(it) == modeKey }) count++
-                    } else if (key != "thinking") visit(value)
-                }
-            }
-        }
-        visit(root.getJSONObject("functions"))
-        return count
-    }
+    private fun modeBindingCount(modeKey: String): Int =
+        RolePackNormalizer.supportedPaths.count { modeKey in functionAnimationsAt(it) }
 
     private fun modeThinkingSummary(mode: JSONObject): String {
         val thinking = mode.optJSONObject("thinking")
@@ -4520,21 +4506,27 @@ open class RolePackEditorActivity : AppCompatActivity() {
     private val folderHeadingSp = 15f
     private val folderSubtitleSp = 10f
 
-    private fun functionDescendantCount(node: JSONObject, parent: List<String>): Int {
-        var count = 0
-        node.keys().asSequence().filter { it !in setOf("thinking", "modes", "note", "usage") }.forEach { key ->
-            val path = parent + key
-            val value = node.opt(key)
-            when {
-                path !in RolePackNormalizer.supportedPaths &&
-                    RolePackNormalizer.supportedPaths.none { it.size > path.size && it.take(path.size) == path } -> Unit
-                value is JSONArray -> count++
-                value is JSONObject && value.has("modes") -> count++
-                value is JSONObject -> count += functionDescendantCount(value, path)
-            }
+    /** Both function trees use the same supported paths and sibling order.
+     * Empty supported animation pools remain leaves; unknown JSON keys never become choices.
+     */
+    private fun orderedFunctionChildren(parent: List<String>): List<String> {
+        val children = RolePackNormalizer.supportedPaths.asSequence()
+            .filter { it.size > parent.size && it.take(parent.size) == parent }
+            .map { it[parent.size] }.distinct().toList()
+        val priority = when (parent.joinToString("/")) {
+            "" -> functionFolderOrder
+            "touch" -> listOf("lift_up", "roll", "jump_down")
+            "feed" -> listOf("food", "eat")
+            "standby" -> listOf("pool", "static_pool")
+            else -> emptyList()
         }
-        return count
+        return priority.filter { it in children } + children.filter { it !in priority }.sorted()
     }
+
+    private fun functionDescendantCount(node: JSONObject, parent: List<String>): Int =
+        RolePackNormalizer.supportedPaths.count {
+            it.size > parent.size && it.take(parent.size) == parent
+        }
 
     private fun functionItem(node: LinearLayout, title: String, subtitle: String,
                              level: Int, immediate: Boolean = false, description: String = "",
@@ -4689,32 +4681,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
     }
 
     private fun functionTree(parent: LinearLayout, values: JSONObject, path: List<String>) {
-        val keys = values.keys().asSequence()
-            .filter { it != "thinking" && it != "modes" && it != "note" && it != "usage" }
-            .toList().let { existing ->
-                val priority = when (path.joinToString("/")) {
-                    "" -> functionFolderOrder
-                    "touch" -> listOf("lift_up", "roll", "jump_down")
-                    "feed" -> listOf("food", "eat")
-                    "standby" -> listOf("pool", "static_pool")
-                    else -> emptyList()
-                }
-                val ordered = priority.filter { it in existing } + existing.filter { it !in priority }.sorted()
-                ordered.sortedWith(compareBy { segment ->
-                    val next = path + segment
-                    next !in RolePackNormalizer.supportedPaths &&
-                        RolePackNormalizer.supportedPaths.none { it.size > next.size && it.take(next.size) == next }
-                })
-            }
+        val keys = orderedFunctionChildren(path)
         for (key in keys) {
             val currentPath = path + key
             val fullKey = currentPath.joinToString("/")
             val displayName = functionPathName(currentPath)
-            val undefined = currentPath !in RolePackNormalizer.supportedPaths &&
-                RolePackNormalizer.supportedPaths.none { known ->
-                    known.size > currentPath.size && known.take(currentPath.size) == currentPath
-                }
-            if (undefined) continue
             if (linkedMode && linkedPaths.none { allowed ->
                     fullKey == allowed || fullKey.startsWith(allowed + "/") ||
                     allowed.startsWith(fullKey + "/")
@@ -4722,13 +4693,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
             when (val child = values.opt(key)) {
                 is JSONObject -> if (child.has("modes")) {
                     val selected = jsonStrings(child.optJSONArray("modes"))
-                    functionItem(parent, (if (undefined) "未定义 · " else "") + displayName,
-                        if (undefined) "当前软件未定义此功能路径，原值已保留" else
-                            "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) },
-                        path.size, description = if (undefined) fullKey else functionDescription(currentPath),
-                        examplePath = if (undefined) null else currentPath) {
-                        if (undefined) unsupportedFunction(currentPath, child)
-                        else functionDetails(currentPath, selected)
+                    functionItem(parent, displayName,
+                        "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) },
+                        path.size, description = functionDescription(currentPath),
+                        examplePath = currentPath) {
+                        functionDetails(currentPath, selected)
                     }
                 } else {
                     val children = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -4758,13 +4727,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 is JSONArray -> {
                     val selected = (0 until child.length()).map { child.optString(it) }
                         .filter { it.isNotBlank() }
-                    functionItem(parent, (if (undefined) "未定义 · " else "") + displayName,
-                        if (undefined) "当前软件未定义此功能路径，原值已保留" else
-                            "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) },
-                        path.size, description = if (undefined) fullKey else functionDescription(currentPath),
-                        examplePath = if (undefined) null else currentPath) {
-                        if (undefined) unsupportedFunction(currentPath, child)
-                        else functionDetails(currentPath, selected)
+                    functionItem(parent, displayName,
+                        "当前动画：" + selected.joinToString("，") { modeChainText(it, root.getJSONObject("modes")) },
+                        path.size, description = functionDescription(currentPath),
+                        examplePath = currentPath) {
+                        functionDetails(currentPath, selected)
                     }
                 }
                 else -> {
@@ -4907,12 +4874,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         panel.addView(text("点击文件夹展开，点击功能卡片查看与编辑动画。", 12f).apply {
             setTextColor(getColor(R.color.cp_note))
         })
-        val all = root.getJSONObject("functions")
-        val canonical = JSONObject()
-        functionFolderOrder.forEach { key ->
-            all.optJSONObject(key)?.let { canonical.put(key, it) }
-        }
-        functionTree(panel, canonical, emptyList())
+        functionTree(panel, root.getJSONObject("functions"), emptyList())
         showUndefinedFolder(undefinedFunctions())
     }
 
@@ -4921,21 +4883,16 @@ open class RolePackEditorActivity : AppCompatActivity() {
      * The actual source of truth remains functions.jsonc; no duplicated Mode-side binding.
      */
     private fun bindModeToFunctions(modeId: String, onSaved: () -> Unit = {}) {
-        val functionsRoot = root.getJSONObject("functions")
         val leaves = linkedMapOf<String, Pair<List<String>, List<String>>>()
-        fun collect(node: JSONObject, parent: List<String>) {
-            node.keys().asSequence().filter { it != "thinking" && it != "modes" }.toList().forEach { segment ->
+        fun collect(parent: List<String>) {
+            orderedFunctionChildren(parent).forEach { segment ->
                 val path = parent + segment
-                when (val value = node.opt(segment)) {
-                    is JSONObject -> if (value.has("modes")) {
-                        leaves[path.joinToString("/")] = path to jsonStrings(value.optJSONArray("modes"))
-                    } else collect(value, path)
-                    is JSONArray -> leaves[path.joinToString("/")] = path to
-                        (0 until value.length()).map { value.optString(it) }.filter { it.isNotBlank() }
-                }
+                if (path in RolePackNormalizer.supportedPaths) {
+                    leaves[path.joinToString("/")] = path to functionAnimationsAt(path)
+                } else collect(path)
             }
         }
-        collect(functionsRoot, emptyList())
+        collect(emptyList())
         val selected = leaves.filterValues { modeId in it.second }.keys.toMutableSet()
         val expanded = mutableSetOf<String>()
         selected.forEach { key ->
@@ -5038,15 +4995,15 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 rippleClick(row) { check.isChecked = !check.isChecked }
             }
 
-            fun drawNode(node: JSONObject, parent: List<String>, depth: Int) {
-                node.keys().asSequence().filter { it != "thinking" && it != "modes" }.toList().forEach { segment ->
+            fun drawNode(parent: List<String>, depth: Int) {
+                orderedFunctionChildren(parent).forEach { segment ->
                     val path = parent + segment
                     val key = path.joinToString("/")
-                    when (val child = node.opt(segment)) {
-                        is JSONObject -> if (child.has("modes")) {
-                            drawLeaf(path, depth)
-                        } else {
+                    if (key in leaves) {
+                        drawLeaf(path, depth)
+                    } else {
                             val descendantPaths = leaves.keys.filter { it.startsWith("$key/") }
+                            if (descendantPaths.isEmpty()) return@forEach
                             val open = key in expanded
                             val folder = LinearLayout(this).apply {
                                 orientation = LinearLayout.HORIZONTAL
@@ -5118,13 +5075,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 if (!expanded.add(key)) expanded.remove(key)
                                 redraw()
                             }
-                            if (open) drawNode(child, path, depth + 1)
-                        }
-                        is JSONArray -> drawLeaf(path, depth)
+                            if (open) drawNode(path, depth + 1)
                     }
                 }
             }
-            drawNode(functionsRoot, emptyList(), 0)
+            drawNode(emptyList(), 0)
             refreshChoices()
             viewport.post { viewport.scrollTo(0, scrollPosition) }
         }
@@ -5144,12 +5099,14 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 change { json ->
                     val functions = json.getJSONObject("functions")
                     for ((key, pair) in leaves) {
-                        val (path, _) = pair
+                        val (path, previous) = pair
+                        if ((key in selected) == (modeId in previous)) continue
                         var node = functions
-                        path.dropLast(1).forEach { node = node.getJSONObject(it) }
-                        val original = node.optJSONArray(path.last()) ?: node.getJSONObject(path.last()).getJSONArray("modes")
-                        val oldModes = (0 until original.length()).map { original.optString(it) }
-                            .filter { it.isNotBlank() }
+                        path.dropLast(1).forEach { segment ->
+                            node = node.optJSONObject(segment) ?: JSONObject().also { node.put(segment, it) }
+                        }
+                        val original = node.optJSONArray(path.last()) ?: node.optJSONObject(path.last())?.optJSONArray("modes")
+                        val oldModes = jsonStrings(original)
                         val updated = oldModes.filter { it != modeId }.toMutableList()
                         if (key in selected && modeId !in updated) updated.add(modeId)
                         if (node.optJSONObject(path.last()) != null) node.getJSONObject(path.last()).put("modes", JSONArray().apply { updated.distinct().forEach { put(it) } })
