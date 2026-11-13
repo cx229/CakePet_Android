@@ -61,6 +61,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             runCatching {
                 draft = RolePackEditing.draft(this, id)
                 root = RolePackEditing.prepareEditable(draft, id, linkedPackName, persist = false)
+                invalidateChainThumbs()
                 linkedTreeContainer?.let { tree ->
                     tree.removeAllViews()
                     if (intent.getBooleanExtra("missing_only", false)) renderMissingLinkedCards(tree)
@@ -328,6 +329,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             selected.forEachIndexed { index, key ->
                 val row = detailListRow()
                 row.addView(detailNumber(index))
+                addChainThumbnail(row, key, modes, 24)
                 row.addView(linkedModeChains(listOf(key), modes, "", 13f) {
                     linkedReadonlyMode(it)
                 }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -586,7 +588,8 @@ open class RolePackEditorActivity : AppCompatActivity() {
 
     /** 从候选动画链随机选帧，只解码卡片所需的缩略图。 */
     private fun randomFunctionFrame(candidates: List<String>, modes: JSONObject,
-                                    assetRoot: String?): android.graphics.Bitmap? {
+                                    assetRoot: String?, sampleSize: Int = 112,
+                                     fileRoot: File? = null): android.graphics.Bitmap? {
         for (candidate in candidates.shuffled()) {
             val chain = modeChain(candidate, modes).distinct().filter { modes.optJSONObject(it) != null }
             for (mode in chain.shuffled()) {
@@ -602,7 +605,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                             assets.open(path).use { BitmapFactory.decodeStream(it, null, bounds) }
                             var sample = 1
-                            while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 224) sample *= 2
+                            while (maxOf(bounds.outWidth, bounds.outHeight) / sample > sampleSize * 2) sample *= 2
                             assets.open(path).use {
                                 BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply {
                                     inSampleSize = sample
@@ -610,9 +613,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                                 })
                             }
                         } else {
-                            val base = draft.canonicalFile
+                            val base = (fileRoot ?: draft).canonicalFile
                             val file = File(base, res).canonicalFile
-                            if (!file.toPath().startsWith(base.toPath())) null else thumb(file)
+                            if (!file.toPath().startsWith(base.toPath())) null else thumb(file, sampleSize)
                         }
                     }.getOrNull() ?: continue
                     val transformed = transformedThumb(bitmap, frame.optString("transform", "none"))
@@ -622,6 +625,63 @@ open class RolePackEditorActivity : AppCompatActivity() {
             }
         }
         return null
+    }
+
+    // Small static previews share the chain sampler, not the surrounding card layout.
+    private val chainThumbs = object : android.util.LruCache<String, android.graphics.Bitmap>(2 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: android.graphics.Bitmap): Int = value.byteCount
+    }
+    private val missingChainThumbs = mutableSetOf<String>()
+
+    private fun invalidateChainThumbs() {
+        chainThumbs.evictAll()
+        missingChainThumbs.clear()
+    }
+
+    private fun chainThumbnailBitmap(start: String, modes: JSONObject,
+                                     pack: RoleDescriptor? = null): android.graphics.Bitmap? {
+        val assetRoot = when {
+            pack != null -> if (pack.source == RoleSource.ASSETS) pack.rootPath else null
+            linkedReadOnly -> linkedPack.rootPath
+            else -> null
+        }
+        val fileRoot = if (pack != null && pack.source == RoleSource.FILES)
+            RolePackEditing.dir(this, pack.rootPath) else null
+        val key = "${pack?.id ?: id}:${assetRoot ?: fileRoot?.absolutePath.orEmpty()}:$start"
+        chainThumbs.get(key)?.let { return it }
+        if (key in missingChainThumbs) return null
+        val bitmap = randomFunctionFrame(listOf(start), modes, assetRoot, 48, fileRoot)
+        if (bitmap == null) missingChainThumbs.add(key) else chainThumbs.put(key, bitmap)
+        return bitmap
+    }
+
+    private fun bindChainThumbnail(view: ImageView, start: String, modes: JSONObject,
+                                   pack: RoleDescriptor? = null) {
+        val bitmap = chainThumbnailBitmap(start, modes, pack)
+        view.imageTintList = null
+        if (bitmap != null) {
+            view.setPadding(0, 0, 0, 0)
+            view.setImageBitmap(bitmap)
+        } else {
+            view.setPadding(px(4), px(4), px(4), px(4))
+            view.setImageResource(android.R.drawable.ic_menu_gallery)
+            view.imageTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.cp_note))
+        }
+    }
+
+    private fun addChainThumbnail(row: LinearLayout, start: String, modes: JSONObject,
+                                  sizeDp: Int, pack: RoleDescriptor? = null): ImageView {
+        val image = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        bindChainThumbnail(image, start, modes, pack)
+        row.addView(image, LinearLayout.LayoutParams(px(sizeDp), px(sizeDp)).apply {
+            rightMargin = px(if (sizeDp <= 24) 4 else 6)
+        })
+        return image
     }
 
     private fun templateRandomFrame(path: List<String>): android.graphics.Bitmap? {
@@ -1130,6 +1190,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         root = candidate
         modeAvailability.clear()
         roleExamples.clear()
+        invalidateChainThumbs()
         refreshLivePreviews()
         // JSON has changed, but existing View text and lists are not live bindings.
         // Refresh underlying cards without navigating or collapsing folders, then
@@ -3561,6 +3622,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         scaleType = ImageView.ScaleType.FIT_CENTER
                         runCatching { externalStream(pack, name).use { setImageBitmap(BitmapFactory.decodeStream(it)) } }
                     }, LinearLayout.LayoutParams(px(44), px(44)))
+                    if (kind == "mode") addChainThumbnail(row, name, modes, 36, pack)
                     val label = when (kind) {
                         "image" -> name.substringAfterLast('/')
                         "mode" -> modeChainText(name, modes)
@@ -5155,6 +5217,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
         // exactly as the main animation folder list does.
         val choiceButtons = mutableMapOf<String, MutableList<android.widget.CompoundButton>>()
         val chainLabels = mutableListOf<Pair<String, TextView>>()
+        val chainImages = mutableListOf<Pair<String, ImageView>>()
         val groupCounts = mutableMapOf<String, TextView>()
         val folderCheckRefreshers = mutableListOf<() -> Unit>()
         var automaticRadio: android.widget.RadioButton? = null
@@ -5187,6 +5250,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             listing.removeAllViews()
             choiceButtons.clear()
             chainLabels.clear()
+            chainImages.clear()
             groupCounts.clear()
             folderCheckRefreshers.clear()
             automaticRadio = null
@@ -5254,6 +5318,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                         }
                         choiceButtons.getOrPut(name) { mutableListOf() }.add(check)
                         row.addView(check, LinearLayout.LayoutParams(px(42), px(48)))
+                        chainImages.add(name to addChainThumbnail(row, name, root.getJSONObject("modes"), 36))
                         val chainLabel = linkedModeChains(listOf(name), root.getJSONObject("modes"),
                             "", 12f) { mode -> openModeFromDetail(mode) }.apply {
                             gravity = Gravity.CENTER_VERTICAL
@@ -5326,6 +5391,9 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 val latest = linkedModeChains(listOf(name), root.getJSONObject("modes"),
                     "", 12f) { mode -> openModeFromDetail(mode) }
                 label.setText(latest.text, TextView.BufferType.SPANNABLE)
+            }
+            chainImages.forEach { (name, image) ->
+                bindChainThumbnail(image, name, root.getJSONObject("modes"))
             }
         }
         dialog.setOnDismissListener {
@@ -5468,6 +5536,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
             root = candidate
             modeAvailability.clear()
             roleExamples.clear()
+            invalidateChainThumbs()
             tx.finish()
         } catch (failure: Exception) {
             try { tx.rollback() }
@@ -6464,6 +6533,7 @@ open class RolePackEditorActivity : AppCompatActivity() {
                 currentSelection.forEachIndexed { index, start ->
                     val row = detailListRow()
                     row.addView(detailNumber(index))
+                    addChainThumbnail(row, start, animations, 24)
                     row.addView(linkedModeChains(listOf(start), animations, "", 13f) { target ->
                         openModeFromDetail(target)
                     }.apply { setPadding(0, px(2), 0, px(2)) },
