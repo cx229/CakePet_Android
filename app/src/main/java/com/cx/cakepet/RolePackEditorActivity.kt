@@ -3406,6 +3406,315 @@ open class RolePackEditorActivity : AppCompatActivity() {
         }
     }
 
+
+    // External resources are copied only after the external selection is confirmed.
+    private fun externalRoot(pack: RoleDescriptor): JSONObject =
+        if (pack.source == RoleSource.ASSETS)
+            assets.open("${pack.rootPath}/modes.jsonc").bufferedReader().use { parseJsonc(it.readText()) }
+        else parseJsonc(File(RolePackEditing.dir(this, pack.rootPath), "modes.jsonc").readText())
+
+    private fun externalStream(pack: RoleDescriptor, relative: String): java.io.InputStream {
+        require(relative.isNotBlank() && !relative.startsWith("/") &&
+            relative.split('/').none { it == ".." || it == "." || it.isBlank() } &&
+            !relative.contains(92.toChar())) { "非法资源路径" }
+        if (pack.source == RoleSource.ASSETS) return assets.open("${pack.rootPath}/$relative")
+        val base = RolePackEditing.dir(this, pack.rootPath).canonicalFile
+        val file = File(base, relative).canonicalFile
+        require(file.toPath().startsWith(base.toPath()) && isImage(file)) { "无效图片资源" }
+        return file.inputStream()
+    }
+
+    private fun externalImages(pack: RoleDescriptor): List<String> {
+        if (pack.source == RoleSource.FILES) {
+            val base = RolePackEditing.dir(this, pack.rootPath)
+            return base.walkTopDown().filter(::isImage).map { it.relativeTo(base).invariantSeparatorsPath }.toList()
+        }
+        val result = mutableListOf<String>()
+        fun visit(relative: String) {
+            val full = if (relative.isEmpty()) pack.rootPath else "${pack.rootPath}/$relative"
+            assets.list(full).orEmpty().forEach { name ->
+                val child = if (relative.isEmpty()) name else "$relative/$name"
+                if (name.substringAfterLast('.', "").lowercase() in setOf("png", "webp", "jpg", "jpeg")) result.add(child)
+                else visit(child)
+            }
+        }
+        visit("")
+        return result
+    }
+
+    private fun externalPackButton(body: LinearLayout, kind: String, single: Boolean,
+                                   imported: (List<String>) -> Unit) {
+        body.addView(dialogButton("其他素材包 ›", primary = false) {
+            val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+            val (frame, content) = pickerShell(dialog, "选择素材包", "从其他素材包复制资源")
+            val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            content.addView(ScrollView(this).apply { addView(rows) },
+                LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * .48f).toInt()))
+            val packs = RoleStore.orderedCatalog(this).filter { it.id != id }
+            if (packs.isEmpty()) rows.addView(text("暂无其他素材包", 13f))
+            packs.forEach { pack ->
+                val row = detailListRow()
+                val image = ImageView(this).apply {
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    runCatching {
+                        val config = externalRoot(pack)
+                        val modes = config.optJSONObject("modes") ?: JSONObject()
+                        val preview = config.optJSONObject("functions")?.optJSONObject("menu")
+                            ?.optJSONObject("preview")?.optJSONArray("modes")?.optString(0)
+                        val mode = preview?.let { modes.optJSONObject(it) }
+                            ?: modes.optJSONObject(modes.keys().asSequence().firstOrNull().orEmpty())
+                        val res = mode?.optJSONArray("frames")?.optJSONObject(0)?.optString("res").orEmpty()
+                        if (res.isNotBlank()) externalStream(pack, res).use {
+                            setImageBitmap(BitmapFactory.decodeStream(it))
+                        }
+                    }
+                }
+                row.addView(image, LinearLayout.LayoutParams(px(56), px(56)))
+                row.addView(text(pack.displayName, 14f), LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text("›", 18f))
+                selectionSurface(row)
+                rippleClick(row) {
+                    attempt { showExternalResources(pack, kind, single, imported); dialog.dismiss() }
+                }
+                rows.addView(row, selectionRowParams())
+            }
+            dialog.setContentView(frame)
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.show()
+            dialog.window?.setLayout(-1, -2)
+        }, LinearLayout.LayoutParams(-1, px(44)))
+    }
+
+    private fun showExternalResources(pack: RoleDescriptor, kind: String, single: Boolean,
+                                      imported: (List<String>) -> Unit) {
+        val source = externalRoot(pack)
+        val modes = source.optJSONObject("modes") ?: JSONObject()
+        val thinkings = source.optJSONObject("thinkings") ?: JSONObject()
+        val names = when (kind) {
+            "image" -> externalImages(pack)
+            "mode" -> modes.keys().asSequence().toList()
+            else -> thinkings.keys().asSequence().toList()
+        }
+        val grouped = linkedMapOf<String, MutableList<String>>()
+        names.forEach { name ->
+            val groups = when (kind) {
+                "image" -> listOf(name.substringBeforeLast('/', "未分组"))
+                "mode" -> jsonStrings(modes.optJSONObject(name)?.optJSONArray("groups"))
+                else -> jsonStrings(thinkings.optJSONObject(name)?.optJSONArray("groups"))
+            }.ifEmpty { listOf("未分组") }
+            groups.forEach { grouped.getOrPut(it) { mutableListOf() }.add(name) }
+        }
+        val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
+        val (frame, body) = pickerShell(dialog, "选择并导入资源", pack.displayName)
+        body.addView(text("确认后复制到当前素材包，不会修改来源素材包。", 12f))
+        val selected = linkedSetOf<String>()
+        val expanded = mutableSetOf<String>()
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val scroll = ScrollView(this).apply { addView(list) }
+        body.addView(scroll, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * .50f).toInt()))
+        val refreshers = mutableListOf<() -> Unit>()
+        var syncing = false
+        fun refresh() {
+            syncing = true
+            try { refreshers.forEach { it() } } finally { syncing = false }
+        }
+        fun redraw() {
+            list.removeAllViews()
+            refreshers.clear()
+            grouped.forEach { (group, entries) ->
+                val header = pickerGroupHeader(group, group in expanded,
+                    entries.count { it in selected }, entries.size) {
+                    if (!expanded.add(group)) expanded.remove(group)
+                    redraw()
+                }
+                refreshers.add { header.counter.text = "${entries.count { it in selected }}/${entries.size}" }
+                if (!single) {
+                    val (check, update) = pickerFolderCheckbox(group, entries, { it in selected }) { all ->
+                        if (all) selected.addAll(entries) else selected.removeAll(entries.toSet())
+                        refresh()
+                    }
+                    insertPickerFolderCheckbox(header.card, check, 7)
+                    refreshers.add(update)
+                }
+                list.addView(header.card, selectionRowParams())
+                if (group in expanded) entries.forEach { name ->
+                    val row = detailListRow()
+                    val check: CompoundButton = if (single) RadioButton(this) else CheckBox(this)
+                    fun toggle() {
+                        if (single) { selected.clear(); selected.add(name) }
+                        else if (!selected.add(name)) selected.remove(name)
+                        refresh()
+                    }
+                    check.setOnClickListener { if (!syncing) toggle() }
+                    refreshers.add { check.isChecked = name in selected }
+                    row.addView(check, LinearLayout.LayoutParams(px(42), px(48)))
+                    if (kind == "image") row.addView(ImageView(this).apply {
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        runCatching { externalStream(pack, name).use { setImageBitmap(BitmapFactory.decodeStream(it)) } }
+                    }, LinearLayout.LayoutParams(px(44), px(44)))
+                    val label = when (kind) {
+                        "image" -> name.substringAfterLast('/')
+                        "mode" -> modeChainText(name, modes)
+                        else -> thinkings.optJSONObject(name)?.optString("text") ?: thinkings.optString(name)
+                    }
+                    row.addView(text(label, 13f), LinearLayout.LayoutParams(0, -2, 1f))
+                    selectionSurface(row)
+                    rippleClick(row) { toggle() }
+                    list.addView(row, selectionRowParams(1))
+                }
+            }
+            refresh()
+        }
+        redraw()
+        body.addView(dialogButton("导入并选择", primary = true) {
+            attempt {
+                require(selected.isNotEmpty()) { "请先选择资源" }
+                require(!linkedMode || !linkedReadOnly && linkedApproved) { "请先确认共享素材修改" }
+                val result = importExternalResources(pack, source, kind, selected.toList())
+                dialog.dismiss()
+                imported(result)
+            }
+        })
+        dialog.setContentView(frame)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+        dialog.window?.setLayout(-1, -2)
+    }
+
+    private fun importExternalResources(pack: RoleDescriptor, source: JSONObject,
+                                        kind: String, names: List<String>): List<String> {
+        val result = mutableListOf<String>()
+        val suffix = pack.displayName.map { if (it == '/' || it.code == 92 || it.code < 32 || it == ':') '_' else it }
+            .joinToString("").take(40).ifBlank { "导入" }
+        resourceChange { working, candidate, tx ->
+            val sourceModes = source.optJSONObject("modes") ?: JSONObject()
+            val sourceTexts = source.optJSONObject("thinkings") ?: JSONObject()
+            val targetModes = candidate.getJSONObject("modes")
+            val targetTexts = candidate.optJSONObject("thinkings") ?: JSONObject().also { candidate.put("thinkings", it) }
+            val images = mutableMapOf<String, String>()
+            val animations = mutableMapOf<String, String>()
+            val texts = mutableMapOf<String, String>()
+            fun addGroups(entry: JSONObject, field: String) {
+                val order = candidate.optJSONArray(field) ?: JSONArray().also { candidate.put(field, it) }
+                val existing = jsonStrings(order).toMutableSet()
+                jsonStrings(entry.optJSONArray("groups")).forEach { if (existing.add(it)) order.put(it) }
+            }
+            fun image(name: String): String = images.getOrPut(name) {
+                val bytes = externalStream(pack, name).use { it.readBytes() }
+                val original = File(working, name).canonicalFile
+                require(original.toPath().startsWith(working.canonicalFile.toPath())) { "非法资源路径" }
+                val parent = requireNotNull(original.parentFile)
+                val stem = original.nameWithoutExtension
+                val ext = original.extension
+                var target = original
+                var n = 1
+                while (target.exists() && (!target.isFile || !target.readBytes().contentEquals(bytes))) {
+                    val extra = if (n == 1) "" else "-$n"
+                    target = File(parent, "$stem-$suffix$extra.$ext")
+                    n++
+                }
+                if (!target.exists()) {
+                    tx.mkdir(parent)
+                    tx.created(target)
+                    target.writeBytes(bytes)
+                }
+                target.relativeTo(working.canonicalFile).invariantSeparatorsPath
+            }
+            fun thinking(name: String): String = texts.getOrPut(name) {
+                val raw = sourceTexts.opt(name) ?: error("缺失碎碎念：$name")
+                val entry = if (raw is JSONObject) JSONObject(raw.toString()) else JSONObject().put("text", raw.toString())
+                val body = entry.optString("text")
+                val existing = targetTexts.keys().asSequence().firstOrNull { key ->
+                    val value = targetTexts.opt(key)
+                    (if (value is JSONObject) value.optString("text") else value?.toString()) == body
+                }
+                if (existing != null) existing else {
+                    var target = name
+                    var n = 2
+                    while (targetTexts.has(target)) { target = "$name-${n++}" }
+                    targetTexts.put(target, entry)
+                    addGroups(entry, "thinkingGroups")
+                    target
+                }
+            }
+            // Reserve every reachable animation name before rewriting its successor; cycles terminate.
+            val reachable = linkedSetOf<String>()
+            fun collect(name: String) {
+                if (!reachable.add(name)) return
+                val mode = sourceModes.optJSONObject(name) ?: error("缺失动画：$name")
+                val next = mode.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+                if (next.isNotBlank() && sourceModes.has(next)) collect(next)
+            }
+            if (kind == "mode") names.forEach(::collect)
+            val prepared = linkedMapOf<String, JSONObject>()
+            reachable.forEach { name ->
+                val entry = JSONObject(sourceModes.getJSONObject(name).toString())
+                val frames = entry.optJSONArray("frames") ?: JSONArray()
+                for (i in 0 until frames.length()) {
+                    val frame = frames.getJSONObject(i)
+                    frame.put("res", image(frame.getString("res")))
+                }
+                entry.optJSONObject("thinking")?.let { config ->
+                    val pool = config.optJSONObject("pool")
+                    if (pool != null) {
+                        val mapped = JSONObject()
+                        pool.keys().asSequence().forEach { key -> mapped.put(thinking(key), pool.get(key)) }
+                        config.put("pool", mapped)
+                    }
+                }
+                prepared[name] = entry
+                var target = name
+                var n = 1
+                while (targetModes.has(target) || target in animations.values) {
+                    val existing = targetModes.optJSONObject(target)
+                    if (existing != null && existing.toString() == entry.toString() && target !in animations.values) break
+                    val extra = if (n == 1) "" else "-$n"
+                    target = "$name-$suffix$extra"
+                    n++
+                }
+                animations[name] = target
+            }
+            // Existing modes may be reused only if their final remapped definitions still match.
+            var changed: Boolean
+            do {
+                changed = false
+                prepared.forEach { (name, entry) ->
+                    val target = animations.getValue(name)
+                    val copy = JSONObject(entry.toString())
+                    val next = entry.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+                    if (next.isNotBlank()) copy.put("nextMode", animations[next] ?: JSONObject.NULL)
+                    val existing = targetModes.optJSONObject(target)
+                    if (existing != null && existing.toString() != copy.toString()) {
+                        var replacement = "$name-$suffix"
+                        var n = 2
+                        while (targetModes.has(replacement) || replacement in animations.values)
+                            replacement = "$name-$suffix-${n++}"
+                        animations[name] = replacement
+                        changed = true
+                    }
+                }
+            } while (changed)
+            prepared.forEach { (name, entry) ->
+                val next = entry.optString("nextMode").takeUnless { it == "null" }.orEmpty()
+                if (next.isNotBlank()) entry.put("nextMode", animations[next] ?: JSONObject.NULL)
+                val target = animations.getValue(name)
+                if (!targetModes.has(target)) {
+                    targetModes.put(target, entry)
+                    addGroups(entry, "modeGroups")
+                }
+            }
+            names.forEach { name ->
+                result.add(when (kind) {
+                    "image" -> image(name)
+                    "mode" -> animations.getValue(name)
+                    else -> thinking(name)
+                })
+            }
+        }
+        refreshLivePreviews()
+        return result
+    }
+
     private fun showImageChooser(request: ImagePickRequest, initial: List<String> = emptyList()) {
         val single = request.action == "batch"
         val selected = linkedSetOf<String>().apply {
@@ -3429,6 +3738,10 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
         val (outer, body) = pickerShell(dialog, "选择素材",
             "动画 · ${request.mode}" + if (request.index >= 0) " · 第 ${request.index} 帧" else "")
+        externalPackButton(body, "image", single) { imported ->
+            dialog.dismiss()
+            showImageChooser(request, if (single) imported else (selected + imported).toList())
+        }
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_note)) }
         body.addView(info)
         val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -4799,6 +5112,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val (frame, body) = pickerShell(dialog,
             headerTitle ?: if (single) "选择后续动画" else "选择功能动画",
             headerDescription)
+        externalPackButton(body, "mode", single) { imported ->
+            dialog.dismiss()
+            chooseModes(single, if (single) imported else (selected + imported).toList(),
+                headerTitle, headerDescription, footerNote, onConfirm)
+        }
         if (!footerNote.isNullOrBlank()) body.addView(text(footerNote, 11f).apply {
             setTextColor(getColor(R.color.cp_sub))
             setPadding(0, px(6), 0, px(8))
@@ -6267,6 +6585,11 @@ open class RolePackEditorActivity : AppCompatActivity() {
         val chosen = LinkedHashMap(initial)
         val dialog = android.app.Dialog(this, R.style.Theme_CakePet_ConfirmDialog)
         val (frame, body) = pickerShell(dialog, "选择碎碎念", subtitle)
+        externalPackButton(body, "thinking", false) { imported ->
+            imported.forEach { chosen.putIfAbsent(it, DEFAULT_THINKING_MIN_MS to DEFAULT_THINKING_MAX_MS) }
+            dialog.dismiss()
+            chooseThinkingPool(chosen, subtitle, confirm)
+        }
         val info = text("", 12f).apply { setTextColor(getColor(R.color.cp_sub)) }
         body.addView(info)
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
