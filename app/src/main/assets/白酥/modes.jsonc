@@ -13,7 +13,7 @@
       "pool": {
         "note": "普通待机的候选动作池。",
         "usage": "编辑 modes 数组来选择待机动画；thinking.pool 配置碎碎念 ID 及对应 min\/max 播放时长。",
-        "modes": ["静坐", "蠕动", "摇头", "趴着", "美白", "走路", "扒鱼"],
+        "modes": ["静坐", "蠕动", "摇头", "趴着", "走路", "扒鱼", "宕机"],
         "thinking": {
           "policy": "cycle",
           "pool": {
@@ -65,7 +65,7 @@
       },
       "static_pool": {
         "note": "移动关闭时使用的静止待机池。",
-        "modes": ["静坐", "炸毛", "摇头", "趴着", "美白"],
+        "modes": ["静坐", "炸毛", "摇头", "趴着", "宕机"],
         "thinking": {
           "policy": "cycle",
           "pool": {
@@ -455,7 +455,7 @@
     },
     "menu": {
       "note": "动作菜单中的候选动画池。",
-      "pool": ["静坐", "炸毛", "摇头", "趴着", "走路", "蠕动", "美白", "扒鱼", "探头中", "摸摸头", "滚动"],
+      "pool": ["静坐", "宕机", "摇头", "趴着", "扒鱼", "走路", "蠕动", "滚动", "高兴"],
       "preview": {
         "note": "首页角色卡片选择动画：预览时使用的动画池。",
         "modes": ["静坐"],
@@ -489,8 +489,8 @@
     },
     "静坐": {
       "note": "普通静坐及待机动作；由 frames 定义表情变化。",
-      "loopMode": "off",
-      "loop": false,
+      "loopMode": "timed",
+      "loop": true,
       "duration": {"min": 3000, "max": 25000},
       "finishCycle": true,
       "nextMode": null,
@@ -499,7 +499,8 @@
         {"res": "安静\/sit_clam-1.png", "delay": [2400, 10000], "verticalAlign": "top"},
         {"res": "安静\/sit_clam-2.png", "delay": [120, 160], "verticalAlign": "top"},
         {"res": "安静\/sit_clam-3.png", "delay": [120, 160], "verticalAlign": "top"},
-        {"res": "安静\/sit_clam-2.png", "delay": [120, 160], "verticalAlign": "top"}
+        {"res": "安静\/sit_clam-2.png", "delay": [120, 160], "verticalAlign": "top"},
+        {"res": "安静\/sit_clam-1.png", "delay": 120}
       ]
     },
     "炸毛": {
@@ -519,7 +520,7 @@
     "摸摸头": {
       "loopMode": "timed",
       "loop": true,
-      "duration": {"min": 3000, "max": 4000},
+      "duration": {"min": 2000, "max": 4000},
       "finishCycle": true,
       "nextMode": "摇头",
       "groups": ["摸摸头"],
@@ -534,13 +535,13 @@
     "摇头": {
       "loopMode": "timed",
       "loop": true,
-      "duration": {"min": 1000, "max": 2000},
+      "duration": {"min": 800, "max": 1500},
       "finishCycle": true,
       "nextMode": "炸毛",
       "groups": ["待机", "摸摸头"],
       "frames": [
-        {"res": "摇头\/shake_head-1.png", "delay": [140, 180], "verticalAlign": "top"},
-        {"res": "摇头\/shake_head-2.png", "delay": [140, 180], "verticalAlign": "top"}
+        {"res": "摇头\/shake_head-1.png", "delay": [100, 110], "verticalAlign": "top"},
+        {"res": "摇头\/shake_head-2.png", "delay": [100, 110], "verticalAlign": "top"}
       ]
     },
     "落地": {
@@ -550,9 +551,9 @@
       "nextMode": "走动短距离",
       "groups": ["拖动与抛掷"],
       "frames": [
-        {"res": "落地\/jump_down-1.png", "delay": [80, 100], "anchorY": -30, "verticalAlign": "top"},
-        {"res": "落地\/jump_down-2.png", "delay": [80, 100], "anchorY": -15, "verticalAlign": "top"},
-        {"res": "落地\/jump_down-3.png", "delay": [80, 100], "verticalAlign": "top"}
+        {"res": "落地\/jump_down-1.png", "delay": [60, 100], "anchorY": -30, "verticalAlign": "top"},
+        {"res": "落地\/jump_down-2.png", "delay": [40, 60], "anchorY": -15, "verticalAlign": "top"},
+        {"res": "落地\/jump_down-3.png", "delay": [100, 140], "verticalAlign": "top"}
       ]
     },
     "轻晃提起": {
@@ -636,9 +637,9 @@
       "nextMode": null,
       "groups": ["移动"],
       "frames": [
-        {"res": "走路\/walk-1.png", "delay": 100, "verticalAlign": "top", "dx": 9, "dy": 0},
-        {"res": "走路\/walk-2.png", "delay": 100, "verticalAlign": "top", "dx": 9, "dy": 0},
-        {"res": "走路\/walk-3.png", "delay": 100, "verticalAlign": "top", "dx": 9, "dy": 0}
+        {"res": "走路\/walk-1.png", "delay": [40, 60], "verticalAlign": "top", "dx": 4, "dy": 0},
+        {"res": "走路\/walk-2.png", "delay": [40, 60], "verticalAlign": "top", "dx": 4, "dy": 0},
+        {"res": "走路\/walk-3.png", "delay": [40, 60], "verticalAlign": "top", "dx": 4, "dy": 0}
       ]
     },
     "走路": {
@@ -650,9 +651,9 @@
       "nextMode": null,
       "groups": ["待机", "移动"],
       "frames": [
-        {"res": "走路\/walk-1.png", "delay": 100, "verticalAlign": "top", "dx": 9, "dy": 0},
-        {"res": "走路\/walk-2.png", "delay": 100, "verticalAlign": "top", "dx": 9, "dy": 0},
-        {"res": "走路\/walk-3.png", "delay": 100, "verticalAlign": "top", "dx": 9, "dy": 0}
+        {"res": "走路\/walk-1.png", "delay": [70, 90], "verticalAlign": "top", "dx": 7, "dy": 0},
+        {"res": "走路\/walk-2.png", "delay": [70, 90], "verticalAlign": "top", "dx": 7, "dy": 0},
+        {"res": "走路\/walk-3.png", "delay": [70, 90], "verticalAlign": "top", "dx": 7, "dy": 0}
       ]
     },
     "跳起": {
@@ -663,33 +664,21 @@
       "nextMode": null,
       "groups": ["移动"],
       "frames": [
-        {"res": "跳起\/jump-1.png", "delay": 400, "anchorX": -1, "anchorY": 0, "verticalAlign": "top"}
-      ]
-    },
-    "美白": {
-      "loopMode": "off",
-      "loop": false,
-      "nextMode": null,
-      "groups": ["待机"],
-      "frames": [
-        {"res": "美白\/walk_white-1.png", "delay": [200, 300], "verticalAlign": "top"},
-        {"res": "美白\/walk_white-2.png", "delay": [200, 300], "verticalAlign": "top"},
-        {"res": "美白\/walk_white-3.png", "delay": [200, 300], "verticalAlign": "top"},
-        {"res": "美白\/walk_white-4.png", "delay": [200, 300], "verticalAlign": "top"},
-        {"res": "美白\/walk_white-5.png", "delay": [5000, 10000], "verticalAlign": "top"}
+        {"res": "跳起\/jump-1.png", "delay": 400, "anchorY": 0, "verticalAlign": "top"}
       ]
     },
     "蠕动": {
       "note": "角色蠕动移动动作，可在待机池中选用。",
       "loopMode": "timed",
       "loop": true,
-      "duration": {"min": 3000, "max": 4000},
+      "duration": {"min": 2000, "max": 4000},
       "finishCycle": true,
       "nextMode": null,
       "groups": ["待机", "移动"],
       "frames": [
-        {"res": "蠕动\/wriggle-1.png", "delay": [250, 300], "verticalAlign": "top", "dx": 12, "dy": 0},
-        {"res": "蠕动\/wriggle-2.png", "delay": [250, 300], "verticalAlign": "top", "dx": 12, "dy": 0}
+        {"res": "蠕动\/wriggle-2.png", "delay": [40, 50], "verticalAlign": "top", "dy": 0, "dx": 1},
+        {"res": "蠕动\/wriggle-1.png", "delay": [200, 240], "verticalAlign": "top", "dx": 14, "dy": 0},
+        {"res": "蠕动\/wriggle-2.png", "delay": [180, 200], "dx": 1}
       ]
     },
     "探头中": {
@@ -750,12 +739,14 @@
       ]
     },
     "趴着": {
-      "loopMode": "off",
-      "loop": false,
+      "loopMode": "timed",
+      "loop": true,
+      "duration": {"min": 1000, "max": 4000},
+      "finishCycle": true,
       "nextMode": null,
       "groups": ["待机"],
       "frames": [
-        {"res": "蠕动\/wriggle-1.png", "delay": [3000, 7000], "verticalAlign": "top"}
+        {"res": "蠕动\/wriggle-1.png", "delay": 120, "verticalAlign": "top"}
       ]
     },
     "扒鱼": {
@@ -773,7 +764,7 @@
         {"res": "扒鱼\/pull_fish-6.png", "delay": 70, "dx": -130, "verticalAlign": "top"},
         {"res": "扒鱼\/pull_fish-6.png", "delay": 70, "dx": -125, "verticalAlign": "top"},
         {"res": "扒鱼\/pull_fish-6.png", "delay": 70, "dx": -120, "verticalAlign": "top"},
-        {"res": "蠕动\/wriggle-1.png", "delay": 500, "dx": -120, "verticalAlign": "top"}
+        {"res": "扒鱼\/pull_fish-7.png", "delay": 500, "dx": -120, "verticalAlign": "top"}
       ]
     },
     "探头": {
@@ -786,7 +777,10 @@
       "groups": ["探头"],
       "frames": [
         {"res": "探头\/probe_head-1.png", "delay": [1000, 5000], "anchorY": 11, "verticalAlign": "top"},
-        {"res": "探头\/probe_head-2.png", "delay": [150, 300], "anchorY": 11, "verticalAlign": "top"}
+        {"res": "探头\/probe_head-3.png", "delay": [30, 40], "anchorY": 11},
+        {"res": "探头\/probe_head-2.png", "delay": [150, 300], "anchorY": 11, "verticalAlign": "top"},
+        {"res": "探头\/probe_head-3.png", "delay": [30, 40], "anchorY": 11},
+        {"res": "探头\/probe_head-1.png", "delay": 120, "anchorY": 11}
       ]
     },
     "高兴": {
@@ -826,6 +820,34 @@
       "groups": ["角色展示"],
       "frames": [
         {"res": "外出\/out-1.png", "delay": 120}
+      ]
+    },
+    "宕机": {
+      "loopMode": "timed",
+      "loop": true,
+      "duration": {"min": 1000, "max": 5000},
+      "finishCycle": true,
+      "nextMode": null,
+      "groups": ["待机"],
+      "thinking": {
+        "policy": "hold",
+        "pool": {
+          "t003": {"min": 500, "max": 4000},
+          "t014": {"min": 500, "max": 4000},
+          "t017": {"min": 500, "max": 4000},
+          "t023": {"min": 500, "max": 4000},
+          "t029": {"min": 500, "max": 4000},
+          "t030": {"min": 500, "max": 4000},
+          "t033": {"min": 500, "max": 4000}
+        }
+      },
+      "frames": [
+        {"res": "思考\/sit_thinking-1.png", "delay": [60, 70]},
+        {"res": "思考\/sit_thinking-2.png", "delay": [60, 70]},
+        {"res": "思考\/sit_thinking-3.png", "delay": [60, 70]},
+        {"res": "思考\/sit_thinking-4.png", "delay": [60, 70]},
+        {"res": "思考\/sit_thinking-5.png", "delay": [60, 70]},
+        {"res": "思考\/sit_thinking-6.png", "delay": [60, 70]}
       ]
     }
   },
@@ -907,7 +929,6 @@
     "滚动": {},
     "炸毛": {},
     "看": {},
-    "美白": {},
     "落地": {},
     "蠕动": {},
     "走路": {},
